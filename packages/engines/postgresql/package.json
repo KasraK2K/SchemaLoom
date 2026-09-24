@@ -1,0 +1,40 @@
+{
+  "name": "@schemaloom/engine-postgresql",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    },
+    "./static": {
+      "import": { "types": "./dist/static.d.ts", "default": "./dist/static.js" },
+      "require": { "types": "./dist/static.d.cts", "default": "./dist/static.cjs" }
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@schemaloom/engine-sdk": "workspace:*",
+    "@schemaloom/schema-model": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@schemaloom/config": "workspace:*",
+    "eslint": "catalog:",
+    "libpg-query": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
