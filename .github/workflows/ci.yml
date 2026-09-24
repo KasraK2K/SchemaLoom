@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+# The `e2e` job from doc 01 §8.3 is deliberately absent until build-order step 22
+# creates `apps/web` and the `e2e` package. A job that is red from the first push
+# teaches people to ignore CI, which costs more than the missing coverage.
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version comes from packageManager
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo lint typecheck test build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      # Same images and healthchecks as docker-compose.yml, so a CI failure
+      # reproduces locally. Compose itself is never used in CI.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: schemaloom
+          POSTGRES_PASSWORD: schemaloom
+          POSTGRES_DB: schemaloom_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U schemaloom -d schemaloom_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      # DATABASE_URL is set to the same value as DATABASE_URL_TEST in this job
+      # only, because the Prisma CLI reads DATABASE_URL. There is no dev database
+      # in CI to damage.
+      DATABASE_URL: postgresql://schemaloom:schemaloom@localhost:5432/schemaloom_test
+      DATABASE_URL_TEST: postgresql://schemaloom:schemaloom@localhost:5432/schemaloom_test
+      REDIS_URL_TEST: redis://localhost:6379/1
+      REDIS_KEY_PREFIX: 'sl-test:'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      # migrate deploy, not migrate dev: non-interactive, no drift prompt, no
+      # shadow database.
+      - run: pnpm --filter @schemaloom/api run db:deploy
+      - run: pnpm turbo test:int
