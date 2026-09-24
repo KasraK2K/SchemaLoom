@@ -1,0 +1,13 @@
+{
+  "extends": "@schemaloom/config/tsconfig/nest.json",
+  "compilerOptions": {
+    // MUST stay here. A relative `outDir` in an extended config resolves against the
+    // file that DECLARES it, so nest.json's "./dist" means
+    // packages/config/tsconfig/dist — `nest build` succeeds and `pnpm start`
+    // (`node dist/main.js`) then fails on a missing file, with the emit having landed
+    // inside another package.
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts"],
+  "exclude": ["dist", "node_modules", "src/generated"]
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "entryFile": "main",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "tsConfigPath": "tsconfig.build.json",
+    "assets": [
+      {
+        "comment": "tsc emits .ts only. Prisma's query engine is a native binary the generated client resolves next to itself, so without this `pnpm build && pnpm start` dies on the first query.",
+        "include": "generated/**/*.node",
+        "outDir": "dist"
+      }
+    ]
+  }
+}
