@@ -128,3 +128,15 @@ export {
 } from './graph.js';
 
 export { validateModel, type ValidateOptions, type ValidationIssue } from './validate.js';
+
+export {
+  RawSchemaModel,
+  fieldVisibility,
+  fieldVisibilityIndex,
+  redact,
+  type FieldVisibility,
+  type FieldVisibilityIndex,
+  type RedactedModel,
+  type RestrictedFieldMode,
+  type VisibilityContext,
+} from './redact/index.js';
