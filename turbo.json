@@ -1,0 +1,55 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "tui",
+  "globalDependencies": ["pnpm-lock.yaml", "packages/config/**", ".nvmrc"],
+  "globalEnv": ["NODE_ENV"],
+  "globalPassThroughEnv": ["CI", "TURBO_*"],
+  "tasks": {
+    "db:generate": {
+      "inputs": ["prisma/schema.prisma", "prisma/migrations/**", "package.json"],
+      "outputs": ["src/generated/prisma/**"]
+    },
+    "build": {
+      "dependsOn": ["^build", "db:generate"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.spec.ts", "!**/*.spec.tsx", "!**/*.int.spec.ts"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_APP_URL"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build", "db:generate"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build", "db:generate"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build", "db:generate"],
+      "outputs": []
+    },
+    "test:int": {
+      "dependsOn": ["^build", "db:generate"],
+      "cache": false,
+      "env": ["DATABASE_URL_TEST", "REDIS_URL_TEST", "REDIS_KEY_PREFIX"]
+    },
+    "test:e2e": {
+      "dependsOn": ["@schemaloom/api#build", "@schemaloom/web#build"],
+      "cache": false,
+      "outputs": ["playwright-report/**", "test-results/**"],
+      "env": ["E2E_BASE_URL", "E2E_API_URL", "DATABASE_URL_E2E", "REDIS_KEY_PREFIX"]
+    },
+    "db:migrate": {
+      "cache": false,
+      "interactive": true
+    },
+    "db:seed": {
+      "dependsOn": ["db:migrate"],
+      "cache": false
+    }
+  }
+}

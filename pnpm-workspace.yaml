@@ -1,0 +1,29 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  - 'packages/engines/*'
+  - 'e2e'
+
+# Single source of truth for versions shared across packages.
+catalog:
+  typescript: ^5.9.0
+  zod: ^4.0.0
+  react: ^19.1.0
+  react-dom: ^19.1.0
+  '@types/react': ^19.1.0
+  tsup: ^8.5.0
+  vitest: ^3.2.0
+  eslint: ^9.35.0
+  prettier: ^3.6.0
+  libpg-query: ^17.0.0
+
+# pnpm 10 blocks lifecycle scripts unless listed.
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
+  - argon2
+  - esbuild
+  - '@swc/core'
+  - sharp
+  - libpg-query
