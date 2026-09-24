@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
+import { AccessModule } from './access/access.module';
+import { AuthModule, JwtAuthGuard } from './auth';
 import { pinoOptions } from './common/logger/pino.options';
 import { AppConfigModule } from './config/config.module';
 import type { AppEnv } from './config/env';
@@ -36,7 +39,17 @@ import { RedisModule } from './redis/redis.module';
     }),
     PrismaModule,
     RedisModule,
+    // @Global(); resolves PrismaService and REDIS_CACHE from the two above.
+    AccessModule,
+    AuthModule,
     HealthModule,
+  ],
+  providers: [
+    // Guard ORDER is load-bearing, not cosmetic: Nest runs global guards in
+    // registration order, and PermissionGuard (step 11) needs the subject that
+    // JwtAuthGuard puts on the request. PermissionGuard registers itself from
+    // inside AccessModule when it lands, which is why only one entry is here.
+    { provide: APP_GUARD, useExisting: JwtAuthGuard },
   ],
 })
 export class AppModule {}

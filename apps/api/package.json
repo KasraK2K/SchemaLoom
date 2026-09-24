@@ -36,7 +36,14 @@
     "nestjs-pino": "^4.4.0",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
-    "helmet": "^8.1.0"
+    "helmet": "^8.1.0",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.5",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "argon2": "^0.44.0",
+    "nodemailer": "^7.0.0",
+    "resend": "^6.0.0"
   },
   "devDependencies": {
     "@schemaloom/config": "workspace:*",
@@ -50,6 +57,8 @@
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.1.0",
     "@types/express": "^5.0.0",
-    "pino-pretty": "^13.0.0"
+    "pino-pretty": "^13.0.0",
+    "@types/passport-google-oauth20": "^2.0.16",
+    "@types/nodemailer": "^7.0.0"
   }
 }

@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { Logger, LoggerErrorInterceptor } from 'nestjs-pino';
 import { ZodValidationPipe, cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
+import { createCsrfMiddleware } from './auth';
 import { cookieMiddleware } from './common/cookies.middleware';
 import type { AppEnv } from './config/env';
 
@@ -32,9 +33,10 @@ async function bootstrap(): Promise<void> {
   // Before anything that reads a cookie: the auth guard and the CSRF middleware.
   app.use(cookieMiddleware);
 
-  // SEAM (doc 01 §4.5): the CSRF double-submit middleware mounts here, after cookie
-  // parsing, on every unsafe method. It ships with `AuthModule` (step 9), which owns
-  // `sl_csrf` issuance — a verifier with nothing issuing the cookie rejects every write.
+  // Doc 01 §4.5: verifies the sl_csrf double-submit token on every unsafe method.
+  // AuthModule owns issuance; this is the other half. Both ship together — a verifier
+  // with nothing issuing the cookie would reject every write.
+  app.use(createCsrfMiddleware(config.get('CSRF_SECRET', { infer: true })));
 
   app.enableCors({
     origin: config.get('CORS_ORIGINS', { infer: true }),
