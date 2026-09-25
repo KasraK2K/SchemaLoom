@@ -5,6 +5,7 @@
 export { AccessModule } from './access.module';
 export { PermissionResolver, type ProjectRow } from './permission-resolver.service';
 export { PermissionGuard } from './permission.guard';
+export { VisibilityFilter } from './visibility/visibility-filter.service';
 export { ResourceIndex } from './resource-index';
 export { getAccessContext, type AccessContext } from './access-context';
 export {

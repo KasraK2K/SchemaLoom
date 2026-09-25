@@ -4,6 +4,7 @@ import { PermissionGuard } from './permission.guard';
 import { PermissionResolver } from './permission-resolver.service';
 import { ResourceIndex } from './resource-index';
 import { RouteSweep } from './route-sweep';
+import { VisibilityFilter } from './visibility/visibility-filter.service';
 
 /**
  * Doc 05 §7.0 — `AccessModule`.
@@ -24,8 +25,10 @@ import { RouteSweep } from './route-sweep';
  * `RouteSweep` needs no wiring in `app.module.ts`: Nest calls `onApplicationBootstrap`
  * on every provider, and a throw there aborts `app.init()` and the process.
  *
- * **Not here yet, and deliberately so** — step 12 owns `VisibilityFilter` and
- * `SchemaLoader`, both of which plug in without changing the resolver or the guard.
+ * `VisibilityFilter` (step 12) is provided and exported here: it is a thin projection of
+ * `PermissionResolver` output onto the `VisibilityContext` that `schema-model`'s pure
+ * `redact()` consumes, so it belongs beside the resolver it reads. `SchemaLoader` (step
+ * 13) plugs in the same way, without changing the resolver or the guard.
  */
 @Global()
 @Module({
@@ -35,7 +38,8 @@ import { RouteSweep } from './route-sweep';
     ResourceIndex,
     RouteSweep,
     { provide: APP_GUARD, useClass: PermissionGuard },
+    VisibilityFilter,
   ],
-  exports: [PermissionResolver, ResourceIndex],
+  exports: [PermissionResolver, ResourceIndex, VisibilityFilter],
 })
 export class AccessModule {}
