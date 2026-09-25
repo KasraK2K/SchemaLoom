@@ -8,8 +8,13 @@
  * (`RedactedModel`, `RawSchemaModel`, `VisibilityContext`). They are NOT re-exported here:
  *   - `RestrictionMark` was deleted by RECONCILIATION R-1 — `IrBase` carries `restricted?: true`
  *     and `propsRedacted?: true` as two independent flags and there is no `level`.
- *   - the diff and redaction types land in schema-model at build-order steps 12 and 18. This
- *     file grows two lines then; nothing here depends on them.
+ *   - the diff types land in schema-model at build-order step 18. This file grows one line
+ *     then; nothing here depends on them.
+ *
+ * `RedactedModel` IS re-exported (step 12 landed it): §17's `ConformanceFixtures.redactedModel`
+ * is typed with it, and the phantom brand is the point — a fixture typed `RedactedModel` cannot
+ * be a hand-written imitation of a redacted model, only the real output of `redact`.
+ * `RawSchemaModel` and `VisibilityContext` stay out: nothing in this package produces one.
  */
 export type {
   Area,
@@ -30,6 +35,7 @@ export type {
   LinkEndpoint,
   Namespace,
   ObjectRefs,
+  RedactedModel,
   SchemaModel,
   TypeRef,
 } from '@schemaloom/schema-model';

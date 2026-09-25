@@ -1,5 +1,7 @@
 import type { EngineCapabilities } from './capabilities.js';
 import type { DiagnosticMessages, EngineId } from './diagnostics.js';
+import type { Exporter } from './exporter.js';
+import type { Importer } from './importer.js';
 import type { IrObject, IrObjectRef, SchemaModel } from './ir.js';
 import type { EnginePropsSchemas } from './props.js';
 import type { TerminologyBundle } from './terminology.js';
@@ -60,10 +62,10 @@ export interface EngineStaticFacet {
 export interface EngineDefinition extends EngineStaticFacet {
   /** step 8 — `EngineValidator` */
   readonly validator?: unknown;
-  /** step 9 — `Importer` */
-  readonly importer?: unknown;
-  /** step 10 — `Exporter` */
-  readonly exporter?: unknown;
+  /** step 21 — `Importer` (§9). Narrowed from `unknown` when the contract landed. */
+  readonly importer?: Importer;
+  /** step 20 — `Exporter` (§10). Narrowed from `unknown` when the contract landed. */
+  readonly exporter?: Exporter;
   /** step 11 — `annotateDiff(diff, before, after): AnnotatedDiff` */
   readonly annotateDiff?: unknown;
   /** phase-gated; presence must equal `features.migrations` */

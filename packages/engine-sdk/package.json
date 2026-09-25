@@ -10,6 +10,14 @@
     ".": {
       "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
       "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    },
+    "./ui": {
+      "import": { "types": "./dist/ui/index.d.ts", "default": "./dist/ui/index.js" },
+      "require": { "types": "./dist/ui/index.d.cts", "default": "./dist/ui/index.cjs" }
+    },
+    "./conformance": {
+      "import": { "types": "./dist/conformance/index.d.ts", "default": "./dist/conformance/index.js" },
+      "require": { "types": "./dist/conformance/index.d.cts", "default": "./dist/conformance/index.cjs" }
     }
   },
   "files": ["dist"],

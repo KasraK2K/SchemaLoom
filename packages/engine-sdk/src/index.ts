@@ -38,6 +38,7 @@ export type {
   Namespace,
   ObjectRefs,
   OpenKind,
+  RedactedModel,
   SchemaModel,
   TypeRef,
 } from './ir.js';
@@ -139,6 +140,32 @@ export {
   type LinkCheckReason,
 } from './links.js';
 
+// --- importer (§9) ---
+export {
+  IMPORT_STATEMENT_STATUSES,
+  type ImportContext,
+  type ImportOptions,
+  type ImportReport,
+  type ImportResult,
+  type ImportStatementReport,
+  type ImportStatementStatus,
+  type Importer,
+} from './importer.js';
+
+// --- exporter (§10) ---
+export {
+  EXPORT_PHASE_ORDER,
+  EXPORT_PHASE_RANK,
+  renderStatements,
+  type ExportInput,
+  type ExportOptions,
+  type ExportPhase,
+  type ExportResult,
+  type ExportStatement,
+  type Exporter,
+  type RenderStatementsOptions,
+} from './exporter.js';
+
 // --- the engine itself (§3) ---
 export type { EngineDefinition, EngineParadigm, EngineStaticFacet } from './definition.js';
 
@@ -153,6 +180,13 @@ export {
 
 // --- versioning (§15) ---
 export { compareEngineVersion, type EngineVersionVerdict } from './versioning.js';
+
+// --- conformance suite (§17) ---
+// NOT re-exported here, and the reason is load-bearing rather than tidiness: the suite calls
+// vitest's `describe`/`it`, so re-exporting it makes `vitest` a static import of THIS entry —
+// and `apps/api` is CommonJS, so `require('@schemaloom/engine-sdk')` then throws
+// "Vitest cannot be imported in a CommonJS module using require()" before a line of it runs.
+// It ships from `@schemaloom/engine-sdk/conformance`, exactly as §17 says.
 
 // --- errors (§14.1) ---
 export {
