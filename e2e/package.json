@@ -1,0 +1,21 @@
+{
+  "name": "@schemaloom/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@schemaloom/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@schemaloom/config": "workspace:*",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "@types/node": "^22.15.0"
+  }
+}
