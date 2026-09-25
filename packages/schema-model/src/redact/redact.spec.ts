@@ -56,23 +56,23 @@ describe('redact — the redacted model is a valid model', () => {
 describe('L1 — link endpoint ids are real, the name is not', () => {
   it('keeps the real endpoint entity id and blanks every name on the way', () => {
     const out = run(workflowModel());
-    const link = out.objects.link['lk_2'];
+    const link = out.objects.link.lk_2;
     expect(link?.from.entityId).toBe('en_3');
     expect(link?.name).toBe('');
-    expect(out.objects.entity['en_3']?.name).toBe('');
+    expect(out.objects.entity.en_3?.name).toBe('');
   });
 });
 
 describe('L2 — link and FK names', () => {
   it('blanks name and engineProps on a link touching a stub', () => {
-    const link = run(workflowModel()).objects.link['lk_2'];
+    const link = run(workflowModel()).objects.link.lk_2;
     expect(link?.name).toBe('');
     expect(link?.engineProps).toEqual({});
     expect(link?.restricted).toBe(true);
   });
 
   it('clears BOTH sides of fieldIds together, never one (LINK_ARITY)', () => {
-    const link = run(workflowModel()).objects.link['lk_2'];
+    const link = run(workflowModel()).objects.link.lk_2;
     expect(link?.from.fieldIds).toEqual([]);
     expect(link?.to.fieldIds).toEqual([]);
   });
@@ -96,7 +96,7 @@ describe('L2 — link and FK names', () => {
       ]),
     });
     const out = run(model, ctx({ visibleEntityIds: new Set(['ent_a', 'ent_b']) }));
-    const link = out.objects.link['lnk'];
+    const link = out.objects.link.lnk;
     expect(link?.from.fieldIds).toEqual(['fld_a']);
     expect(link?.to.fieldIds).toEqual(['fld_b']);
     expect(link?.name).toBe('');
@@ -109,11 +109,11 @@ describe('L3 — index definitions, including expression indexes', () => {
     // `CREATE INDEX … ON employees ((salary * 12)) WHERE salary > 100000` references no
     // field id at all. Nothing but `refs` can catch it, and once the only key column is
     // an expression there is nothing left to badge.
-    expect(run(workflowModel()).objects.index['ix_2']).toBeUndefined();
+    expect(run(workflowModel()).objects.index.ix_2).toBeUndefined();
   });
 
   it('keeps an index over a masked field, blank (∆21), so the badge still renders', () => {
-    const index = run(workflowModel()).objects.index['ix_1'];
+    const index = run(workflowModel()).objects.index.ix_1;
     expect(index).toBeDefined();
     expect(index?.name).toBe('');
     expect(index?.engineProps).toEqual({});
@@ -123,13 +123,13 @@ describe('L3 — index definitions, including expression indexes', () => {
 
   it('drops an index outright when a column it names is HIDDEN', () => {
     const out = run(workflowModel(), viewer({ restrictedFieldMode: 'hide' }));
-    expect(out.objects.index['ix_1']).toBeUndefined();
+    expect(out.objects.index.ix_1).toBeUndefined();
   });
 });
 
 describe('L4 — constraint expressions', () => {
   it('drops the CHECK body and the constraint name, keeps the badge', () => {
-    const constraint = run(workflowModel()).objects.constraint['cs_2'];
+    const constraint = run(workflowModel()).objects.constraint.cs_2;
     expect(constraint?.name).toBe('');
     expect(constraint?.engineProps).toEqual({});
     expect(constraint?.fieldIds).toEqual(['fd_5']);
@@ -137,7 +137,7 @@ describe('L4 — constraint expressions', () => {
   });
 
   it('leaves a primary key over visible columns entirely alone', () => {
-    const constraint = run(workflowModel()).objects.constraint['cs_1'];
+    const constraint = run(workflowModel()).objects.constraint.cs_1;
     expect(constraint?.name).toBe('employees_pkey');
     expect(constraint?.restricted).toBeUndefined();
   });
@@ -145,7 +145,7 @@ describe('L4 — constraint expressions', () => {
 
 describe('L5 / L6 — defaults and generated columns (R27)', () => {
   it('blanks the props of a VISIBLE field whose expression names a restricted column', () => {
-    const field = run(workflowModel()).objects.field['fd_6'];
+    const field = run(workflowModel()).objects.field.fd_6;
     expect(field?.name).toBe('bonus');
     expect(field?.engineProps).toEqual({});
     expect(field?.propsRedacted).toBe(true);
@@ -161,29 +161,29 @@ describe('R27 fails closed', () => {
     // `ent_emp.engineProps.tablespace` and the link's `onDelete` carry no `refs`. An
     // engine that forgets to populate them must not thereby ship them verbatim.
     const out = run(workflowModel());
-    expect(out.objects.entity['en_2']?.engineProps).toEqual({});
-    expect(out.objects.link['lk_1']?.engineProps).toEqual({});
-    expect(out.objects.link['lk_1']?.propsRedacted).toBe(true);
+    expect(out.objects.entity.en_2?.engineProps).toEqual({});
+    expect(out.objects.link.lk_1?.engineProps).toEqual({});
+    expect(out.objects.link.lk_1?.propsRedacted).toBe(true);
   });
 
   it('drops the props of an object whose engine returned EMPTY refs', () => {
     const model = workflowModel();
-    const entity = model.objects.entity['en_2'];
+    const entity = model.objects.entity.en_2;
     if (entity === undefined) throw new Error('fixture');
-    model.objects.entity['en_2'] = { ...entity, refs: { entityIds: [], fieldIds: [] } };
-    expect(run(model).objects.entity['en_2']?.engineProps).toEqual({});
+    model.objects.entity.en_2 = { ...entity, refs: { entityIds: [], fieldIds: [] } };
+    expect(run(model).objects.entity.en_2?.engineProps).toEqual({});
   });
 
   it('keeps props when the engine declared refs and every one of them is visible', () => {
     const model = workflowModel();
-    const entity = model.objects.entity['en_1'];
+    const entity = model.objects.entity.en_1;
     if (entity === undefined) throw new Error('fixture');
-    model.objects.entity['en_1'] = {
+    model.objects.entity.en_1 = {
       ...entity,
       engineProps: { fillfactor: 70 },
       refs: { entityIds: ['en_2'], fieldIds: ['fd_3'] },
     };
-    expect(run(model).objects.entity['en_1']?.engineProps).toEqual({ fillfactor: 70 });
+    expect(run(model).objects.entity.en_1?.engineProps).toEqual({ fillfactor: 70 });
   });
 
   it('is a no-op for a viewer with nothing hidden — props survive without refs', () => {
@@ -195,8 +195,8 @@ describe('R27 fails closed', () => {
         totalEntityCount: 3,
       }),
     );
-    expect(out.objects.entity['en_2']?.engineProps).toEqual({ tablespace: 'hr_fast' });
-    expect(out.objects.entity['en_2']?.propsRedacted).toBeUndefined();
+    expect(out.objects.entity.en_2?.engineProps).toEqual({ tablespace: 'hr_fast' });
+    expect(out.objects.entity.en_2?.propsRedacted).toBeUndefined();
   });
 });
 
@@ -227,9 +227,9 @@ describe('L22 / ∆15 — ordinal gaps', () => {
       model,
       ctx({ visibleEntityIds: new Set(['ent_a']), restrictedFieldMode: 'hide' }),
     );
-    expect(out.objects.field['fld_doc']?.ordinal).toBe(0);
-    expect(out.objects.field['fld_c0']?.ordinal).toBe(0);
-    expect(out.objects.field['fld_c2']?.ordinal).toBe(1);
+    expect(out.objects.field.fld_doc?.ordinal).toBe(0);
+    expect(out.objects.field.fld_c0?.ordinal).toBe(0);
+    expect(out.objects.field.fld_c2?.ordinal).toBe(1);
     expect(validateModel(out).filter((i) => i.severity === 'error')).toEqual([]);
   });
 
@@ -252,7 +252,7 @@ describe('L22 / ∆15 — ordinal gaps', () => {
 
 describe('∆4 — a masked field discloses no name and no type', () => {
   it('keeps only id, entityId, parentFieldId and ordinal', () => {
-    const field = run(workflowModel()).objects.field['fd_5'];
+    const field = run(workflowModel()).objects.field.fd_5;
     expect(field).toEqual({
       id: 'fd_5',
       name: '',
@@ -280,7 +280,7 @@ describe('∆4 — a masked field discloses no name and no type', () => {
 
 describe('R-2 — stubs, namespaces and the default namespace', () => {
   it('a stub carries the real id and kind but the DEFAULT namespaceId', () => {
-    const stub = run(workflowModel()).objects.entity['en_3'];
+    const stub = run(workflowModel()).objects.entity.en_3;
     expect(stub).toEqual({
       id: 'en_3',
       name: '',
@@ -298,16 +298,16 @@ describe('R-2 — stubs, namespaces and the default namespace', () => {
 
   it('a namespace holding only restricted entities does not appear', () => {
     const out = run(workflowModel());
-    expect(out.objects.namespace['ns_2']).toBeUndefined();
+    expect(out.objects.namespace.ns_2).toBeUndefined();
     expect(out.objects.namespace[DEFAULT_NS]).toBeDefined();
     expect(JSON.stringify(out)).not.toContain('payroll_private');
   });
 
   it('an invisible entity nothing surviving points at is absent, not stubbed', () => {
     const model = workflowModel();
-    delete model.objects.link['lk_2'];
+    delete model.objects.link.lk_2;
     const out = run(model);
-    expect(out.objects.entity['en_3']).toBeUndefined();
+    expect(out.objects.entity.en_3).toBeUndefined();
   });
 });
 
@@ -319,19 +319,19 @@ describe('§8.3 — areas', () => {
 
   it('keeps an empty area the subject holds an atom on (SPEC workflow #2)', () => {
     const out = run(workflowModel(), viewer({ areasWithAtoms: new Set(['ar_3']) }));
-    expect(out.objects.area['ar_3']).toBeDefined();
+    expect(out.objects.area.ar_3).toBeDefined();
   });
 
   it('a stub never keeps an area alive and never carries an areaId', () => {
     const out = run(workflowModel(), ctx({ visibleEntityIds: new Set(['en_2']) }));
-    expect(out.objects.entity['en_3']?.areaId).toBeNull();
+    expect(out.objects.entity.en_3?.areaId).toBeNull();
     expect(Object.keys(out.objects.area)).toEqual(['ar_2']);
   });
 });
 
 describe('R-1 — restricted and propsRedacted are independent', () => {
   it('a FULLY VISIBLE field carries propsRedacted and is not restricted', () => {
-    const field = run(workflowModel()).objects.field['fd_6'];
+    const field = run(workflowModel()).objects.field.fd_6;
     expect(field?.propsRedacted).toBe(true);
     expect(field?.restricted).toBeUndefined();
     // The exporter's rule is `skip if restricted && type === 'entity'`, `keep if
@@ -343,14 +343,14 @@ describe('R-1 — restricted and propsRedacted are independent', () => {
   it('an entity whose badges were degraded is marked propsRedacted, never restricted', () => {
     // doc 04 §10.2's closing rule, spelled per R-1: marking a VISIBLE entity `restricted`
     // would make the exporter skip a table the viewer can see.
-    const entity = run(workflowModel()).objects.entity['en_2'];
+    const entity = run(workflowModel()).objects.entity.en_2;
     expect(entity?.propsRedacted).toBe(true);
     expect(entity?.restricted).toBeUndefined();
     expect(entity?.name).toBe('employees');
   });
 
   it('leaves an untouched visible entity with neither flag', () => {
-    const entity = run(workflowModel()).objects.entity['en_1'];
+    const entity = run(workflowModel()).objects.entity.en_1;
     expect(entity?.restricted).toBeUndefined();
     expect(entity?.propsRedacted).toBeUndefined();
   });
@@ -359,7 +359,7 @@ describe('R-1 — restricted and propsRedacted are independent', () => {
 describe('§7.10 — field:viewRestricted is per entity', () => {
   it('unmasks the restricted column only on the entity the atom was granted on', () => {
     const out = run(workflowModel(), viewer({ restrictedOkEntityIds: new Set(['en_2']) }));
-    expect(out.objects.field['fd_5']?.name).toBe('salary');
-    expect(out.objects.index['ix_1']?.name).toBe('idx_employees_salary');
+    expect(out.objects.field.fd_5?.name).toBe('salary');
+    expect(out.objects.index.ix_1?.name).toBe('idx_employees_salary');
   });
 });

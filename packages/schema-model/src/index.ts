@@ -130,6 +130,29 @@ export {
 export { validateModel, type ValidateOptions, type ValidationIssue } from './validate.js';
 
 export {
+  RedactedDiffError,
+  deepDiff,
+  destructiveEntries,
+  diffModels,
+  entriesByEntity,
+  entriesOfType,
+  isCosmeticOnly,
+  isEmptyDiff,
+  opsFromDiff,
+  type ChangeType,
+  type DiffCounts,
+  type DiffEntry,
+  type DiffEntryOf,
+  type DiffOptions,
+  type PinnedRename,
+  type PropertyChange,
+  type PropertySeverity,
+  type RestoreOp,
+  type SchemaDiff,
+  type SnapshotRef,
+} from './diff/index.js';
+
+export {
   RawSchemaModel,
   fieldVisibility,
   fieldVisibilityIndex,
