@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AccessModule } from './access/access.module';
 import { AuthModule, JwtAuthGuard } from './auth';
+import { EnginesModule } from './engines';
 import { pinoOptions } from './common/logger/pino.options';
 import { AppConfigModule } from './config/config.module';
 import type { AppEnv } from './config/env';
@@ -22,7 +23,11 @@ import { RedisModule } from './redis/redis.module';
  * - `AppModule.onApplicationBootstrap()` gains §4.1's mandatory route sweep at the same
  *   time: every route under `/api/**` carries exactly one of the five markers and is
  *   classified against `SHARE_LINK_ROUTES`, or the process refuses to start.
- * - `EnginesModule` (step 15) `@Global()`, fed from the `ENGINE_DEFINITION` multi-token.
+ * - `EnginesModule` (step 15) `@Global()`, fed from `engines.manifest.ts`. NOT a
+ *   multi-provider token: Nest has no multi-providers (that is Angular; APP_GUARD's
+ *   behaviour comes from a special token, not a general mechanism), so the registry
+ *   factory reads the manifest directly. The property that mattered still holds —
+ *   the manifest names the engines and `engines.module.ts` names none.
  * - `APP_FILTER` (AllExceptionsFilter) and `APP_INTERCEPTOR` (request id) land with the
  *   `common/` step.
  */
@@ -41,6 +46,7 @@ import { RedisModule } from './redis/redis.module';
     RedisModule,
     // @Global(); resolves PrismaService and REDIS_CACHE from the two above.
     AccessModule,
+    EnginesModule,
     AuthModule,
     HealthModule,
   ],
