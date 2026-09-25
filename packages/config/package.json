@@ -11,9 +11,16 @@
     "./eslint": "./eslint/index.js",
     "./eslint/react": "./eslint/react.js",
     "./tsup": "./tsup/index.js",
-    "./vitest": "./vitest/index.js"
+    "./vitest": "./vitest/index.js",
+    "./tailwind/theme.css": "./tailwind/theme.css"
   },
-  "files": ["tsconfig", "eslint", "tsup", "vitest"],
+  "files": [
+    "eslint",
+    "tailwind",
+    "tsconfig",
+    "tsup",
+    "vitest"
+  ],
   "dependencies": {
     "@eslint/js": "^9.35.0",
     "eslint-config-prettier": "^10.1.0",
@@ -26,8 +33,14 @@
     "vitest": "catalog:"
   },
   "peerDependenciesMeta": {
-    "eslint": { "optional": true },
-    "tsup": { "optional": true },
-    "vitest": { "optional": true }
+    "eslint": {
+      "optional": true
+    },
+    "tsup": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
   }
 }

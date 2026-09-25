@@ -1,0 +1,229 @@
+/**
+ * SchemaLoom design tokens. Tailwind v4, CSS-first — there is no tailwind.config.ts
+ * anywhere in this repo.
+ *
+ * Structure, and why:
+ *
+ *   1. RAW SCALES (--slate-*, --indigo-*, ...) are Radix Colors values, inlined rather
+ *      than `@import`ed from @radix-ui/colors. Inlining keeps this file resolvable from
+ *      any package without a CSS-side node_modules lookup, and it lets us ship only the
+ *      six scales actually used instead of all thirty.
+ *   2. SEMANTIC TOKENS (--color-surface, --color-accent, ...) map scales onto meaning.
+ *      Components only ever reference these. Swapping the accent is one line here, not a
+ *      find-and-replace across the UI.
+ *   3. Dark mode redefines step 3 only. Radix scales are designed so the same STEP NUMBER
+ *      carries the same semantic weight in light and dark — step 3 is always a subtle
+ *      background, step 11 always a readable foreground — which is why the semantic layer
+ *      needs no per-theme conditionals of its own.
+ *
+ * Dark is the default for the canvas (spec section 7) and follows the system setting, so
+ * the cascade is: :root = light, prefers-color-scheme: dark = dark, and an explicit
+ * .dark / .light class wins over both for the in-app theme switcher.
+ */
+
+@theme {
+  /* ---- Typography ------------------------------------------------------- */
+  /* Inter for UI. JetBrains Mono for types, identifiers and SQL — anywhere a
+     character-for-character reading matters and l/1/I must not collide. */
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ---- Raw scales: Radix Colors ----------------------------------------- */
+  /* Slate — neutral surfaces and text. */
+  --slate-1: #fcfcfd;
+  --slate-2: #f9f9fb;
+  --slate-3: #f0f0f3;
+  --slate-4: #e8e8ec;
+  --slate-5: #e0e1e6;
+  --slate-6: #d9d9e0;
+  --slate-7: #cdced6;
+  --slate-8: #b9bbc6;
+  --slate-9: #8b8d98;
+  --slate-10: #80838d;
+  --slate-11: #60646c;
+  --slate-12: #1c2024;
+
+  /* Indigo — the single accent. */
+  --indigo-1: #fdfdfe;
+  --indigo-3: #f0f4ff;
+  --indigo-4: #e6edfe;
+  --indigo-5: #d9e2fc;
+  --indigo-6: #c6d4f9;
+  --indigo-7: #aec0f5;
+  --indigo-8: #8da4ef;
+  --indigo-9: #3e63dd;
+  --indigo-10: #3358d4;
+  --indigo-11: #3a5bc7;
+  --indigo-12: #1f2d5c;
+
+  /* Red — destructive. Amber — warning. Green — success. Steps 3/9/11 only: the
+     others are unused, and a token nothing reads is a token that rots. */
+  --red-3: #ffefef;
+  --red-9: #e5484d;
+  --red-11: #ce2c31;
+  --amber-3: #fff7c2;
+  --amber-9: #ffc53d;
+  --amber-11: #ab6400;
+  --green-3: #e9f9ee;
+  --green-9: #30a46c;
+  --green-11: #218358;
+
+  /* ---- Semantic tokens: light ------------------------------------------- */
+  --color-canvas: var(--slate-2);
+  --color-surface: #ffffff;
+  --color-surface-raised: var(--slate-1);
+  --color-surface-sunken: var(--slate-3);
+  --color-surface-hover: var(--slate-4);
+
+  --color-border: var(--slate-6);
+  --color-border-strong: var(--slate-8);
+
+  --color-text: var(--slate-12);
+  --color-text-muted: var(--slate-11);
+  --color-text-subtle: var(--slate-10);
+
+  --color-accent: var(--indigo-9);
+  --color-accent-hover: var(--indigo-10);
+  --color-accent-text: var(--indigo-11);
+  --color-accent-subtle: var(--indigo-3);
+  --color-accent-border: var(--indigo-7);
+  --color-on-accent: #ffffff;
+
+  --color-danger: var(--red-9);
+  --color-danger-text: var(--red-11);
+  --color-danger-subtle: var(--red-3);
+  --color-warning: var(--amber-9);
+  --color-warning-text: var(--amber-11);
+  --color-warning-subtle: var(--amber-3);
+  --color-success: var(--green-9);
+  --color-success-text: var(--green-11);
+  --color-success-subtle: var(--green-3);
+
+  /* ---- Area colours ------------------------------------------------------ */
+  /* Soft, distinct hues for Areas ("Billing", "Identity", ...). Eight, because past
+     that they stop being distinguishable at canvas zoom and a ninth area is better
+     served by a label than by a colour nobody can name. Assigned round-robin by area
+     index, so the same area keeps its colour across sessions without storing one. */
+  --color-area-1: #e6edfe;
+  --color-area-2: #e9f9ee;
+  --color-area-3: #fff7c2;
+  --color-area-4: #ffefef;
+  --color-area-5: #f3e7fc;
+  --color-area-6: #e0f8f3;
+  --color-area-7: #ffe8d7;
+  --color-area-8: #fee9f5;
+
+  /* ---- Elevation and motion --------------------------------------------- */
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 12px rgb(0 0 0 / 0.06);
+  --shadow-popover: 0 8px 28px rgb(0 0 0 / 0.12);
+  --shadow-node: 0 1px 2px rgb(0 0 0 / 0.06), 0 2px 6px rgb(0 0 0 / 0.04);
+
+  /* Panels and popovers. Kept short — the canvas is a direct-manipulation surface and
+     anything slower than this reads as lag rather than as polish. */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --duration-fast: 120ms;
+  --duration-panel: 180ms;
+}
+
+/**
+ * Dark mode. Radix's dark scales are NOT inversions of the light ones — they are tuned
+ * separately so contrast ratios hold — so the raw values are redeclared rather than
+ * flipped, and the semantic layer above is reused untouched.
+ */
+@layer base {
+  .dark {
+    --slate-1: #111113;
+    --slate-2: #18191b;
+    --slate-3: #212225;
+    --slate-4: #272a2d;
+    --slate-5: #2e3135;
+    --slate-6: #363a3f;
+    --slate-7: #43484e;
+    --slate-8: #5a6169;
+    --slate-9: #696e77;
+    --slate-10: #777b84;
+    --slate-11: #b0b4ba;
+    --slate-12: #edeef0;
+
+    --indigo-3: #182449;
+    --indigo-4: #1d2e62;
+    --indigo-5: #253974;
+    --indigo-6: #304384;
+    --indigo-7: #3a4f97;
+    --indigo-8: #435db1;
+    --indigo-9: #3e63dd;
+    --indigo-10: #5472e4;
+    --indigo-11: #9eb1ff;
+    --indigo-12: #d6e1ff;
+
+    --red-3: #3b1219;
+    --red-9: #e5484d;
+    --red-11: #ff9592;
+    --amber-3: #302008;
+    --amber-9: #ffc53d;
+    --amber-11: #ffca16;
+    --green-3: #0f2e22;
+    --green-9: #30a46c;
+    --green-11: #3dd68c;
+
+    /* The three that are not just a scale swap. The canvas sits BELOW its panels in
+       dark mode — the opposite of light — because a raised card reads as nearer, and
+       on a dark ground that is what separates a table from the grid behind it. */
+    --color-canvas: var(--slate-1);
+    --color-surface: var(--slate-2);
+    --color-surface-raised: var(--slate-3);
+    --color-surface-sunken: var(--slate-1);
+    --color-on-accent: #ffffff;
+
+    /* Area fills are near-black tints in dark mode: the light pastels above would
+       glow against the canvas and pull the eye away from the schema itself. */
+    --color-area-1: #1d2e62;
+    --color-area-2: #0f2e22;
+    --color-area-3: #302008;
+    --color-area-4: #3b1219;
+    --color-area-5: #2b1b45;
+    --color-area-6: #0d2d2a;
+    --color-area-7: #331e0b;
+    --color-area-8: #3b1a2e;
+
+    --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.35);
+    --shadow-popover: 0 8px 28px rgb(0 0 0 / 0.5);
+    --shadow-node: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 6px rgb(0 0 0 / 0.25);
+  }
+
+  /* System preference, unless an explicit .light has overridden it. */
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+      color-scheme: dark;
+    }
+  }
+
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
+
+  /* WCAG AA asks for a visible focus indicator that is not colour alone. Two rings —
+     accent over surface — so it stays visible on top of an Area fill too. */
+  :where(:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* Respect a reduced-motion preference everywhere rather than per-component, where it
+     would be forgotten in exactly the animations that trigger vestibular symptoms. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
