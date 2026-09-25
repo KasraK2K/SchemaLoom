@@ -1,0 +1,122 @@
+@import 'tailwindcss';
+@import '@schemaloom/config/tailwind/theme.css';
+
+/**
+ * Tailwind v4 scans the project it is built from. It does NOT follow a workspace
+ * symlink on its own, so without these directives every utility that only ever
+ * appears inside a sibling package is treated as unused and stripped from the
+ * bundle — the components render with their class attributes intact and no styles.
+ *
+ * One line per workspace package whose source contains class names.
+ */
+@source '../../../../packages/ui/src';
+@source '../../../../packages/engines/postgresql-ui/src';
+
+@layer base {
+  html {
+    /* The theme class (.light / .dark) is written onto <html> by the inline script in
+       layout.tsx before first paint. theme.css keys every semantic token off it. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/**
+ * ── React Flow, wearing the app's tokens ──────────────────────────────────────────
+ *
+ * DELIBERATELY NOT IN A `@layer`. `@xyflow/react/dist/style.css` is unlayered, and in
+ * the cascade an unlayered rule beats every layered one no matter how specific — a
+ * `@layer components` version of this block loses to React Flow's own defaults and the
+ * controls render as white buttons on a dark canvas.
+ *
+ * `div.react-flow` rather than `.react-flow` for the same reason one level down: it
+ * outranks React Flow's own selector, so the import order of two stylesheets cannot
+ * decide whether the app has a theme.
+ *
+ * These are the library's `-default` variables, which is its documented theming hook.
+ * Because they resolve to the SEMANTIC tokens, the canvas follows the light/dark switch
+ * with no `colorMode` prop and no second source of truth about which theme is active —
+ * React Flow's own `colorMode="system"` would read the OS preference and disagree with
+ * the user's explicit choice.
+ */
+div.react-flow {
+  --xy-background-color-default: var(--color-canvas);
+  --xy-background-pattern-color-default: var(--color-border);
+
+  --xy-edge-stroke-default: var(--color-border-strong);
+  --xy-edge-stroke-selected-default: var(--color-accent);
+  --xy-connectionline-stroke-default: var(--color-accent);
+
+  --xy-controls-button-background-color-default: var(--color-surface);
+  --xy-controls-button-background-color-hover-default: var(--color-surface-hover);
+  --xy-controls-button-color-default: var(--color-text-muted);
+  --xy-controls-button-color-hover-default: var(--color-text);
+  --xy-controls-button-border-color-default: var(--color-border);
+  --xy-controls-box-shadow-default: var(--shadow-panel);
+
+  --xy-minimap-background-color-default: var(--color-surface-sunken);
+  --xy-minimap-mask-background-color-default: color-mix(
+    in srgb,
+    var(--color-canvas) 72%,
+    transparent
+  );
+  --xy-minimap-mask-stroke-color-default: var(--color-border-strong);
+  --xy-minimap-node-background-color-default: var(--color-border);
+  --xy-minimap-node-stroke-color-default: transparent;
+
+  --xy-selection-background-color-default: color-mix(
+    in srgb,
+    var(--color-accent) 12%,
+    transparent
+  );
+  --xy-selection-border-default: 1px dotted var(--color-accent);
+  --xy-node-boxshadow-selected-default: none;
+  --xy-attribution-background-color-default: transparent;
+}
+
+/**
+ * Connection handles. React Flow's default is a dark dot with a white border and no idea
+ * the app has a theme. Unlayered and two classes deep so it outranks
+ * `.react-flow__handle`.
+ *
+ * Invisible until the card is hovered: fifteen rows is thirty handles per card, and 300
+ * cards of permanently visible dots is noise, not affordance.
+ */
+.react-flow .sl-handle {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-surface-raised);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+/* The hit area, which is not the dot. A handle is drawn in canvas space, so at 0.3 zoom
+   an 8px dot is under 3 real pixels and nobody can start a link from it. The pseudo
+   element enlarges what the pointer can grab without enlarging what the eye sees. */
+.react-flow .sl-handle::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+.react-flow .react-flow__node:hover .sl-handle,
+.react-flow .react-flow__node.selected .sl-handle,
+.react-flow .sl-handle.connectingfrom,
+.react-flow .sl-handle.connectingto {
+  opacity: 1;
+}
+
+/* The card-level pair only ever anchors an edge; it is never a drag target the user
+   should aim at, so it stays invisible and non-interactive at either end. */
+.react-flow .sl-handle--node,
+.react-flow .react-flow__node:hover .sl-handle--node {
+  opacity: 0;
+  pointer-events: none;
+}
