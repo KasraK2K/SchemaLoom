@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from '../fixtures/api';
 import { fetchIr } from '../fixtures/ir';
-import { SEED } from '../fixtures/seed-ids';
+import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 /**
  * SPEC §8 workflow #4 — a guest opens an invite link, sees only the shared tables, and
@@ -16,7 +16,7 @@ import { SEED } from '../fixtures/seed-ids';
  */
 test.describe('workflow 4 — hidden neighbours render as stubs, not as holes', () => {
   test('a link into a hidden table survives as a nameless stub', async () => {
-    const dana = await signIn(SEED.users.freelancer);
+    const dana = await signIn(SEED_EMAILS.freelancer);
     const ir = await fetchIr(dana, SEED.projectId);
 
     // `order_items.product_id -> products`: order_items is in Billing and visible,
@@ -37,7 +37,7 @@ test.describe('workflow 4 — hidden neighbours render as stubs, not as holes', 
   });
 
   test('a stub has no fields, and the edge to it is badged, not named', async () => {
-    const dana = await signIn(SEED.users.freelancer);
+    const dana = await signIn(SEED_EMAILS.freelancer);
     const ir = await fetchIr(dana, SEED.projectId);
 
     const stubFields = Object.values(ir.objects.field).filter(
@@ -54,7 +54,7 @@ test.describe('workflow 4 — hidden neighbours render as stubs, not as holes', 
   });
 
   test('an entity with no surviving edge is absent entirely, not stubbed', async () => {
-    const dana = await signIn(SEED.users.freelancer);
+    const dana = await signIn(SEED_EMAILS.freelancer);
     const ir = await fetchIr(dana, SEED.projectId);
 
     // `employees` is in no area and nothing visible links to it. A stub for it would be

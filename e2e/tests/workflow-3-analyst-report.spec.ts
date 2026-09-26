@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { signedInPage, signIn } from '../fixtures/api';
 import { fetchIr, fieldsOf } from '../fixtures/ir';
-import { SEED } from '../fixtures/seed-ids';
+import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 /**
  * SPEC §8 workflow #3 — the analyst logs in, sees only permitted content, selects
@@ -14,7 +14,7 @@ import { SEED } from '../fixtures/seed-ids';
  */
 test.describe('workflow 3 — the analyst asks for a report', () => {
   test('logs in and lands on the project canvas', async ({ browser }) => {
-    const page = await signedInPage(browser, SEED.users.analyst);
+    const page = await signedInPage(browser, SEED_EMAILS.analyst);
     await page.goto(`/${SEED.orgSlug}/p/${SEED.projectId}`);
 
     // The canvas renders the entity names it was served; `employees` is one of them,
@@ -24,7 +24,7 @@ test.describe('workflow 3 — the analyst asks for a report', () => {
   });
 
   test('sees only permitted content: salary is a nameless slot, not a column', async () => {
-    const alex = await signIn(SEED.users.analyst);
+    const alex = await signIn(SEED_EMAILS.analyst);
     const ir = await fetchIr(alex, SEED.projectId);
 
     const named = fieldsOf(ir, SEED.entities.employees).map((f) => f.name);
@@ -33,7 +33,7 @@ test.describe('workflow 3 — the analyst asks for a report', () => {
   });
 
   test('can select the two tables the report is about', async () => {
-    const alex = await signIn(SEED.users.analyst);
+    const alex = await signIn(SEED_EMAILS.analyst);
     const ir = await fetchIr(alex, SEED.projectId);
 
     for (const id of [SEED.entities.orders, SEED.entities.customers]) {

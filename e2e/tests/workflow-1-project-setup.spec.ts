@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { API_URL, signIn, write, type Session } from '../fixtures/api';
 import { fetchIr } from '../fixtures/ir';
-import { SEED } from '../fixtures/seed-ids';
+import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 /**
  * SPEC §8 workflow #1 — sign up, create an org, create a PostgreSQL project, import SQL,
@@ -49,7 +49,7 @@ test.describe('workflow 1 — from sign-up to a laid-out, grouped project', () =
   });
 
   test('auto-layout moves every card, and the new position is served back', async () => {
-    const owner = await signIn(SEED.users.owner);
+    const owner = await signIn(SEED_EMAILS.owner);
     const before = await fetchIr(owner, SEED.projectId);
     const ids = Object.keys(before.objects.entity);
     expect(ids.length).toBeGreaterThan(0);
@@ -71,7 +71,7 @@ test.describe('workflow 1 — from sign-up to a laid-out, grouped project', () =
   });
 
   test('tables are grouped into a new Area', async () => {
-    const owner = await signIn(SEED.users.owner);
+    const owner = await signIn(SEED_EMAILS.owner);
     const areaId = `are_e2e_group_00000001`;
 
     const created = await applyOps(owner, 'create-area', [

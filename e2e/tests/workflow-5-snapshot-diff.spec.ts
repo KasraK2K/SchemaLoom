@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { signIn, write, type Session } from '../fixtures/api';
 import { fetchIr } from '../fixtures/ir';
-import { SEED } from '../fixtures/seed-ids';
+import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 /**
  * SPEC §8 workflow #5 — an editor changes the schema, saves a snapshot, views the diff,
@@ -30,7 +30,7 @@ async function snapshot(session: Session, name: string): Promise<SnapshotSummary
 
 test.describe('workflow 5 — change, snapshot, diff, export', () => {
   test('an editor changes the schema, snapshots it, and reads the diff back', async () => {
-    const owner = await signIn(SEED.users.owner);
+    const owner = await signIn(SEED_EMAILS.owner);
 
     const before = await snapshot(owner, uniq('before'));
 
@@ -80,7 +80,7 @@ test.describe('workflow 5 — change, snapshot, diff, export', () => {
   });
 
   test('a read-only subject cannot snapshot, and cannot read history', async () => {
-    const alex = await signIn(SEED.users.analyst);
+    const alex = await signIn(SEED_EMAILS.analyst);
 
     const created = await alex.api.post(`/api/projects/${SEED.projectId}/snapshots`, {
       headers: write(alex),

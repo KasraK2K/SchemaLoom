@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { signIn, write } from '../fixtures/api';
 import { entityNames, fetchIr, fieldsOf } from '../fixtures/ir';
-import { HIDDEN_FROM_FREELANCER, SEED } from '../fixtures/seed-ids';
+import { HIDDEN_FROM_FREELANCER, SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 /**
  * SPEC §8 workflow #2 — the owner shares only the "Billing" Area with a freelancer as
@@ -25,7 +25,7 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
   });
 
   test('the freelancer sees Billing and nothing from Catalog', async () => {
-    const dana = await signIn(SEED.users.freelancer);
+    const dana = await signIn(SEED_EMAILS.freelancer);
     const ir = await fetchIr(dana, SEED.projectId);
 
     expect(entityNames(ir)).toEqual(['customers', 'order_items', 'orders']);
@@ -37,7 +37,7 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
   });
 
   test('no hidden name reaches the freelancer, anywhere in the payload', async () => {
-    const dana = await signIn(SEED.users.freelancer);
+    const dana = await signIn(SEED_EMAILS.freelancer);
     const response = await dana.api.get(`/api/projects/${SEED.projectId}/ir`);
     const bytes = await response.text();
 
@@ -49,7 +49,7 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
   });
 
   test('the freelancer may edit inside Billing', async () => {
-    const dana = await signIn(SEED.users.freelancer);
+    const dana = await signIn(SEED_EMAILS.freelancer);
     const ir = await fetchIr(dana, SEED.projectId);
     const orders = ir.objects.entity[SEED.entities.orders];
     expect(orders).toBeDefined();
@@ -74,7 +74,7 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
   });
 
   test('editing a Catalog table is a 404, not a 403 — existence is not disclosed', async () => {
-    const dana = await signIn(SEED.users.freelancer);
+    const dana = await signIn(SEED_EMAILS.freelancer);
     const response = await dana.api.post(`/api/projects/${SEED.projectId}/schema/ops`, {
       headers: write(dana),
       data: {
@@ -98,7 +98,7 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
   });
 
   test('the analyst sees every table, with salary masked and nameless', async () => {
-    const alex = await signIn(SEED.users.analyst);
+    const alex = await signIn(SEED_EMAILS.analyst);
     const ir = await fetchIr(alex, SEED.projectId);
 
     expect(entityNames(ir)).toEqual([
@@ -121,7 +121,7 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
   });
 
   test('the analyst is read-only: 403 on edit, not 404', async () => {
-    const alex = await signIn(SEED.users.analyst);
+    const alex = await signIn(SEED_EMAILS.analyst);
     const ir = await fetchIr(alex, SEED.projectId);
     const orders = ir.objects.entity[SEED.entities.orders];
 
