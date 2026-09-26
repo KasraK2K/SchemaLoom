@@ -1,17 +1,21 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
+import { AuthForm } from '@/features/auth/auth-form';
 
 export const metadata: Metadata = { title: 'Sign in' };
 
 /**
- * Placeholder. The real form arrives with the auth feature (`src/features/auth`); it
- * posts to the API through `apiFetch`, never through a Next Server Action — the API
- * already owns auth and a second hop would be a second place to re-implement it.
+ * `AuthForm` reads `?next=` with `useSearchParams`, which Next requires to sit under a
+ * Suspense boundary or the whole route opts out of static rendering with a build error.
  */
 export default function LoginPage() {
   return (
     <>
       <h1 className="text-base font-semibold text-text">Sign in</h1>
-      <p className="mt-2 text-sm text-text-muted">The sign-in form is not built yet.</p>
+      <p className="mt-2 text-sm text-text-muted">Welcome back.</p>
+      <Suspense fallback={<p className="mt-6 text-sm text-text-subtle">Loading…</p>}>
+        <AuthForm mode="sign-in" />
+      </Suspense>
     </>
   );
 }

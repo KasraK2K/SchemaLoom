@@ -1,18 +1,19 @@
 import { SchemaModelSchema, type Id, type SchemaModel } from '@schemaloom/schema-model';
 import { QueryClient, dehydrate, type DehydratedState } from '@tanstack/react-query';
-import { headers } from 'next/headers';
-import { clientEnv } from '@/env.client';
+import { serverFetch } from '@/lib/server-api';
 import { irQueryKey } from './ir-query';
 
 /**
  * The RSC half of doc 01 §5.2: the canvas route prefetches the IR query and dehydrates
  * ONLY that query, so first paint is not a client waterfall.
  *
- * It cannot reuse `apiFetch`. That module exists for the browser — `credentials:
- * 'include'` and a CSRF echo read from `document.cookie` — and on the server there is no
- * document and no ambient cookie jar, so the request would go out anonymous and come back
- * 401. Forwarding the incoming `cookie` header is the server-side equivalent, and it is
- * the only difference between the two fetchers.
+ * It cannot reuse `apiFetch` — that module is the browser's, with `credentials: 'include'`
+ * and a CSRF echo read from `document.cookie`, neither of which exists on the server. It
+ * goes through `serverFetch` instead, which forwards the incoming `cookie` header.
+ *
+ * It used to hand-roll that fetch, and hand-rolled it WITHOUT the `/api` prefix, so the
+ * prefetch 404'd against a healthy API on every render and silently fell back to the
+ * client fetch it exists to avoid. One fetcher, one place the prefix is applied.
  *
  * The failure is swallowed deliberately. A dead API at render time degrades to a client
  * fetch with the query's own retry policy, rather than a 500 on a page that would
@@ -28,11 +29,5 @@ export async function dehydrateIr(projectId: Id): Promise<DehydratedState> {
 }
 
 async function fetchIr(projectId: Id): Promise<SchemaModel> {
-  const cookie = (await headers()).get('cookie');
-  const response = await fetch(`${clientEnv.NEXT_PUBLIC_API_URL}/projects/${projectId}/ir`, {
-    headers: cookie === null ? { Accept: 'application/json' } : { Accept: 'application/json', cookie },
-    cache: 'no-store',
-  });
-  if (!response.ok) throw new Error(`IR fetch failed with status ${String(response.status)}`);
-  return SchemaModelSchema.parse(await response.json());
+  return SchemaModelSchema.parse(await serverFetch<unknown>(`/projects/${projectId}/ir`));
 }

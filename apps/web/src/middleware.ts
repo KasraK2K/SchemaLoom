@@ -20,6 +20,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * If you are about to add a permission test here, it belongs in the API instead.
  */
 const PRESENCE_COOKIE = 'sl_presence';
+export const PATHNAME_HEADER = 'x-sl-pathname';
 
 /** The `(auth)` route group. Reachable without the cookie; redundant with it. */
 const AUTH_ROUTES = [
@@ -50,14 +51,20 @@ export function middleware(request: NextRequest): NextResponse {
     return NextResponse.redirect(url, 307);
   }
 
-  if (hasPresence && onAuthRoute) {
+  // `?expired=1` is the way OUT of a dead session: `sl_presence` (30 days) outlives
+  // `sl_access` (15 minutes), and bouncing this back to `/` would loop forever.
+  const expired = request.nextUrl.searchParams.get('expired') === '1';
+  if (hasPresence && onAuthRoute && !expired) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     url.search = '';
     return NextResponse.redirect(url, 307);
   }
 
-  return NextResponse.next();
+  // Server Components cannot see the URL; `serverFetch` needs it for `?next=` on a 401.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(PATHNAME_HEADER, `${pathname}${search}`);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

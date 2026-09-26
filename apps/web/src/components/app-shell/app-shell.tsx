@@ -4,6 +4,8 @@ import { TopBar } from '@/components/app-shell/top-bar';
 
 interface AppShellProps {
   nav: readonly NavItem[];
+  /** The organisation the visitor is currently inside, shown above the nav. */
+  orgLabel?: string;
   breadcrumb?: ReactNode;
   /** Route-owned top-bar controls, e.g. the project's "Who has access" dialog. */
   actions?: ReactNode;
@@ -18,12 +20,19 @@ interface AppShellProps {
  * `h-dvh` with `min-h-0` on the scrolling row: the canvas owns its own scroll and the
  * page itself must never scroll, or the viewport drifts under a dragged node.
  */
-export function AppShell({ nav, breadcrumb, actions, rightPanel, children }: AppShellProps) {
+export function AppShell({
+  nav,
+  orgLabel,
+  breadcrumb,
+  actions,
+  rightPanel,
+  children,
+}: AppShellProps) {
   return (
     <div className="flex h-dvh flex-col">
       <TopBar breadcrumb={breadcrumb} actions={actions} />
       <div className="flex min-h-0 flex-1">
-        <Sidebar items={nav} />
+        <Sidebar items={nav} orgLabel={orgLabel} />
         <main className="min-w-0 flex-1 overflow-auto">{children}</main>
         {rightPanel !== undefined && (
           <aside

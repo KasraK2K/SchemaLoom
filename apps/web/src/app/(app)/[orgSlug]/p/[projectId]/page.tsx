@@ -1,4 +1,5 @@
 import { HydrationBoundary } from '@tanstack/react-query';
+import Link from 'next/link';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
 import { CanvasClient } from '@/features/canvas/canvas-client';
@@ -30,7 +31,14 @@ export default async function ProjectCanvasPage({
     <HydrationBoundary state={state}>
       <AppShell
         nav={orgNavItems(orgSlug)}
-        breadcrumb={<span className="truncate">{orgSlug} / project</span>}
+        orgLabel={orgSlug}
+        breadcrumb={
+          // A link, not text: this is the way back out of a project, and for a while it
+          // was the only screen in the app you could not navigate away from.
+          <Link href={`/${orgSlug}`} className="truncate hover:text-text">
+            {orgSlug} / project
+          </Link>
+        }
         actions={<ProjectShareButton projectId={projectId} />}
         rightPanel={<InspectorPanel projectId={projectId} />}
       >

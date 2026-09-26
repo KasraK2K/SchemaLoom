@@ -1,4 +1,4 @@
-import { Database, LayoutGrid, ScrollArea, Settings, Users, type LucideIcon } from '@schemaloom/ui';
+import { Database, ScrollArea, type LucideIcon } from '@schemaloom/ui';
 import Link from 'next/link';
 
 interface NavItem {
@@ -10,14 +10,23 @@ interface NavItem {
 /**
  * Server Component: the list is rendered from server data (doc 01 §5.2). Filtering and
  * reordering become a client island under it when there is anything to filter.
+ *
+ * `orgLabel` is the organisation the visitor is currently inside. Without it the sidebar
+ * looks identical in every org, which is the kind of ambiguity that gets someone editing
+ * the wrong schema.
  */
-export function Sidebar({ items }: { items: readonly NavItem[] }) {
+export function Sidebar({ items, orgLabel }: { items: readonly NavItem[]; orgLabel?: string }) {
   return (
     <nav
       aria-label="Primary"
       className="hidden w-60 shrink-0 border-r border-border bg-surface md:block"
     >
       <ScrollArea className="h-full">
+        {orgLabel !== undefined && (
+          <p className="truncate border-b border-border px-3 py-2 text-xs font-medium tracking-wide text-text-subtle uppercase">
+            {orgLabel}
+          </p>
+        )}
         <ul className="flex flex-col gap-0.5 p-2">
           {items.map((item) => (
             <li key={item.href}>
@@ -36,13 +45,19 @@ export function Sidebar({ items }: { items: readonly NavItem[] }) {
   );
 }
 
+/**
+ * ONE entry, and the reason is that only one org route exists.
+ *
+ * This used to list Overview → `/:org`, Projects → `/:org/w/default`, Members and
+ * Settings. Three of those four had no page behind them, and `/w/default` never existed
+ * at all — a sidebar whose links 404 is the same dead end as a sidebar with no links,
+ * plus the false promise. `/:org` IS the project list, so "Overview" and "Projects" were
+ * always going to resolve to the same page.
+ *
+ * Add a row back when its route lands, not before.
+ */
 export function orgNavItems(orgSlug: string): readonly NavItem[] {
-  return [
-    { href: `/${orgSlug}`, label: 'Overview', icon: LayoutGrid },
-    { href: `/${orgSlug}/w/default`, label: 'Projects', icon: Database },
-    { href: `/${orgSlug}/settings/members`, label: 'Members', icon: Users },
-    { href: `/${orgSlug}/settings/general`, label: 'Settings', icon: Settings },
-  ];
+  return [{ href: `/${orgSlug}`, label: 'Projects', icon: Database }];
 }
 
 export type { NavItem };

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiFetch, CSRF_HEADER, readCookie } from './api-client';
+import { API_PREFIX, ApiError, apiFetch, apiUrl, CSRF_HEADER, readCookie } from './api-client';
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -95,9 +95,13 @@ describe('apiFetch request shape', () => {
     expect(lastRequestInit().credentials).toBe('include');
   });
 
-  it('prefixes the configured API origin', async () => {
+  it('prefixes the configured API origin AND the global route prefix', async () => {
+    // This assertion used to read `http://localhost:3001/me`, which passed while being
+    // wrong: the API mounts everything under `/api`, so a prefixless URL 404s. The
+    // canvas shipped exactly that and the test agreed with it. A URL assertion is only
+    // worth having if it encodes the route the server actually serves.
     await apiFetch('/me');
-    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('http://localhost:3001/me');
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('http://localhost:3001/api/me');
   });
 
   it('serialises the body as JSON and sets the content type', async () => {
@@ -141,5 +145,99 @@ describe('apiFetch responses', () => {
       status: 502,
       code: 'unknown',
     });
+  });
+});
+
+describe('apiUrl', () => {
+  it('prefixes a bare route', () => {
+    expect(apiUrl('/projects/p1/ir')).toBe(`http://localhost:3001${API_PREFIX}/projects/p1/ir`);
+    expect(apiUrl('/auth/login')).toBe(`http://localhost:3001${API_PREFIX}/auth/login`);
+  });
+
+  it('does not double-prefix a route that already carries it', () => {
+    expect(apiUrl('/api/auth/login')).toBe('http://localhost:3001/api/auth/login');
+  });
+
+  it('keeps the query string intact', () => {
+    expect(apiUrl('/projects/p1/access?explain=1')).toBe(
+      'http://localhost:3001/api/projects/p1/access?explain=1',
+    );
+  });
+});
+
+/** `RequestInfo | URL` is a union of three shapes; `String()` on a Request gives
+ *  "[object Object]" and the assertion would silently never match. */
+function urlOf(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
+describe('apiFetch refresh on 401', () => {
+  /** 401 once, then whatever `after` says, so a retry can be observed. */
+  function expireThen(after: () => Response, refreshOk = true): void {
+    let seenRefresh = false;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = urlOf(input);
+      if (url.endsWith('/auth/refresh')) {
+        seenRefresh = true;
+        return Promise.resolve(new Response(null, { status: refreshOk ? 204 : 401 }));
+      }
+      if (!seenRefresh) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: { code: 'unauthorized', message: 'nope' } }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(after());
+    });
+  }
+
+  const ok = () =>
+    new Response(JSON.stringify({ id: 'p1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  it('refreshes once and retries the original request', async () => {
+    expireThen(ok);
+    await expect(apiFetch<{ id: string }>('/projects/p1/ir')).resolves.toEqual({ id: 'p1' });
+
+    const urls = fetchMock.mock.calls.map((c) => urlOf(c[0]));
+    expect(urls.filter((u) => u.endsWith('/auth/refresh'))).toHaveLength(1);
+    // original, refresh, retry
+    expect(urls).toHaveLength(3);
+  });
+
+  it('does not try to refresh the refresh route itself', async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: { code: 'unauthorized', message: 'nope' } }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+    await expect(apiFetch('/auth/refresh', { method: 'POST' })).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(fetchMock.mock.calls).toHaveLength(1);
+  });
+
+  it('shares ONE refresh across concurrent 401s, so the family is not revoked', async () => {
+    // N simultaneous 401s must not rotate the refresh token N times — the API reads
+    // concurrent rotations as token reuse and revokes the whole family.
+    expireThen(ok);
+    await Promise.all([
+      apiFetch('/projects/p1/ir'),
+      apiFetch('/projects/p1/snapshots'),
+      apiFetch('/organizations'),
+    ]);
+    const refreshes = fetchMock.mock.calls
+      .map((c) => urlOf(c[0]))
+      .filter((u) => u.endsWith('/auth/refresh'));
+    expect(refreshes).toHaveLength(1);
   });
 });
