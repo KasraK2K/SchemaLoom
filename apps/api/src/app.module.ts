@@ -5,6 +5,11 @@ import { LoggerModule } from 'nestjs-pino';
 import { AccessModule } from './access/access.module';
 import { AuthModule, JwtAuthGuard } from './auth';
 import { EnginesModule } from './engines';
+import { JobsModule } from './jobs';
+import { OrganizationsModule } from './organizations';
+import { ProjectsModule } from './projects';
+import { SchemaModule } from './schema';
+import { SnapshotsModule } from './snapshots';
 import { pinoOptions } from './common/logger/pino.options';
 import { AppConfigModule } from './config/config.module';
 import type { AppEnv } from './config/env';
@@ -48,6 +53,15 @@ import { RedisModule } from './redis/redis.module';
     AccessModule,
     EnginesModule,
     AuthModule,
+    // The domain modules. Each was built and unit-tested in isolation, which is
+    // exactly why forgetting one here is invisible until the app is booted and its
+    // routes are missing from the router table — unit tests mount the module
+    // directly and never consult this list.
+    OrganizationsModule,
+    ProjectsModule,
+    SchemaModule,
+    SnapshotsModule,
+    JobsModule,
     HealthModule,
   ],
   providers: [

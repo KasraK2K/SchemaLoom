@@ -4,7 +4,7 @@
   "sourceRoot": "src",
   "entryFile": "main",
   "compilerOptions": {
-    "deleteOutDir": true,
+    "deleteOutDir": false,
     "tsConfigPath": "tsconfig.build.json",
     "assets": [
       {
@@ -12,6 +12,7 @@
         "include": "generated/**/*.node",
         "outDir": "dist"
       }
-    ]
+    ],
+    "watchAssets": false
   }
 }

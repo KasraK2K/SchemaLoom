@@ -1,7 +1,22 @@
-import { BUILTIN_ROLE_IDS } from '@schemaloom/contracts';
+import { resolve } from 'node:path';
+import { BUILTIN_ROLE_IDS, DEMO_PASSWORD, SEED } from '@schemaloom/contracts';
+import { config as loadEnv } from 'dotenv';
 import { hashPassword } from '../src/auth/password';
+import { deriveDatabaseUrl } from '../src/config/database-url';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { OrgRole, PrincipalType, ResourceType } from '../src/generated/prisma/enums';
+
+/**
+ * This runs under plain `tsx`, NOT the Prisma CLI — so `prisma.config.ts` is never
+ * loaded and nothing else reads the root `.env`. Without these two lines the script
+ * dies on "Environment variable not found: DATABASE_URL" against a `.env` that is
+ * perfectly correct, which reads like a broken database rather than a missing import.
+ *
+ * `deriveDatabaseUrl` is the SAME function `src/config/env.ts` uses, so the seed can
+ * never connect somewhere the running API would not.
+ */
+loadEnv({ path: resolve(__dirname, '../../../.env'), quiet: true });
+process.env.DATABASE_URL = deriveDatabaseUrl(process.env);
 
 /**
  * SPEC §10 — "Seed script with a demo org, users of every role, and a sample e-commerce
@@ -24,31 +39,10 @@ import { OrgRole, PrincipalType, ResourceType } from '../src/generated/prisma/en
 
 const prisma = new PrismaClient();
 
-export const DEMO_PASSWORD = 'SchemaLoom!demo1';
+export { DEMO_PASSWORD } from '@schemaloom/contracts';
 
 /** Fixed ids. Principal ids must match `^[A-Za-z0-9_-]{16,64}$` (migration 0002). */
-export const SEED = {
-  orgId: 'org_seed_demo_acme_000001',
-  workspaceId: 'wsp_seed_demo_commerce_01',
-  projectId: 'prj_seed_demo_storefront1',
-  namespaceId: 'nsp_seed_demo_public_0001',
-  users: {
-    owner: { id: 'usr_seed_demo_owner_0001', email: 'owner@acme.test', name: 'Olivia Owner' },
-    admin: { id: 'usr_seed_demo_admin_0001', email: 'admin@acme.test', name: 'Adam Admin' },
-    member: { id: 'usr_seed_demo_member_001', email: 'analyst@acme.test', name: 'Alex Analyst' },
-    guest: { id: 'usr_seed_demo_guest_0001', email: 'dana@contractor.test', name: 'Dana Designer' },
-  },
-  areas: { billing: 'are_seed_demo_billing_01', catalog: 'are_seed_demo_catalog_01' },
-  entities: {
-    customers: 'ent_seed_demo_customers1',
-    orders: 'ent_seed_demo_orders_0001',
-    orderItems: 'ent_seed_demo_orderitem1',
-    products: 'ent_seed_demo_products_01',
-    employees: 'ent_seed_demo_employees1',
-  },
-  /** The Restricted column SPEC workflow #2 is built around. */
-  salaryFieldId: 'fld_seed_demo_salary_0001',
-} as const;
+// SEED now lives in @schemaloom/contracts — see the import above.
 
 // ---------------------------------------------------------------------------------------
 // The sample e-commerce schema, as data. One table per row, one column per tuple.

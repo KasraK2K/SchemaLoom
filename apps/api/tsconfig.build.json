@@ -1,4 +1,26 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["dist", "node_modules", "src/generated", "**/*.spec.ts", "**/*.int.spec.ts", "test"]
+  "compilerOptions": {
+    // Pin it. Without this, tsc infers rootDir from the widest include, and adding
+    // `prisma/**/*.ts` to tsconfig.json silently shifts the whole tree down a level
+    // (dist/src/main.js), breaking `start` and every Dockerfile CMD referring to it.
+    "rootDir": "./src",
+    // MUST live inside dist. nest-cli's `deleteOutDir` wipes dist but would leave a
+    // sibling .tsbuildinfo behind, after which tsc believes every output is current
+    // and emits NOTHING — a build that exits 0 and produces no JS. Keeping the cache
+    // inside dist means deleting dist invalidates it, which is the only correct
+    // relationship between an output directory and its own incremental cache.
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
+  // `prisma/seed.ts` runs under tsx and must NOT be compiled into the deployed
+  // artifact: it deletes and reseeds the database. It is a dev fixture, not app code.
+  "exclude": [
+    "dist",
+    "node_modules",
+    "src/generated",
+    "prisma",
+    "**/*.spec.ts",
+    "**/*.int.spec.ts",
+    "test"
+  ]
 }

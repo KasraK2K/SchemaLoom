@@ -46,3 +46,9 @@ export {
  * for transport-adjacent constants.
  */
 export { MAX_FIELD_DEPTH } from '@schemaloom/schema-model';
+
+/**
+ * Demo/e2e fixture ids. Exported from the shared package so `apps/api/prisma/seed.ts`
+ * and the e2e suite cannot drift — see the file header for why every id is opaque.
+ */
+export { DEMO_PASSWORD, HIDDEN_FROM_FREELANCER, SEED, SEED_EMAILS } from './fixtures.js';
