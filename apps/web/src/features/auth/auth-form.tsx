@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useId, useState } from 'react';
 import { useForm, type FieldError } from 'react-hook-form';
 import { z } from 'zod';
+import { clientEnv } from '@/env.client';
 import { ApiError, apiFetch } from '@/lib/api-client';
 import { safeNextPath, signIn, signUp } from './auth-api';
 
@@ -86,14 +87,17 @@ function messageFor(error: unknown): string {
       case 'email_taken':
         return 'An account with that email already exists.';
       case 'rate_limited':
+      case 'too_many_requests':
         return 'Too many attempts. Wait a moment and try again.';
       default:
         return error.message;
     }
   }
   if (error instanceof TypeError) {
-    // fetch() rejects with TypeError when it cannot reach the host at all.
-    return 'Cannot reach the API. Is it running on port 3001?';
+    // fetch() rejects with TypeError when the request never completes: the API is down,
+    // OR the browser blocked it (CORS from a different origin, an extension, a stale
+    // service worker). The browser does not say which, so the message names both.
+    return `Cannot reach the API at ${clientEnv.NEXT_PUBLIC_API_URL}. If it is running, something in this browser is blocking it — try a private window.`;
   }
   return 'Something went wrong. Try again.';
 }
