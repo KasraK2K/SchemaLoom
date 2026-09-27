@@ -33,8 +33,8 @@ describe('issueCsrfToken / verifyCsrfToken', () => {
   });
 });
 
-function call(method: string, cookie: string | undefined, header?: string) {
-  const req = { method, headers: { cookie, [CSRF_HEADER]: header } } as unknown as Request;
+function call(method: string, cookie: string | undefined, header?: string, path = '/api/x') {
+  const req = { method, path, headers: { cookie, [CSRF_HEADER]: header } } as unknown as Request;
   const res = { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis() };
   const next = vi.fn();
   createCsrfMiddleware(SECRET)(req, res as unknown as Response, next);
@@ -81,5 +81,12 @@ describe('csrf middleware', () => {
     const { next, res } = call('POST', `${COOKIE_NAMES.session}=whatever`);
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('exempts exactly the share-link unlock, which the rate limiter guards instead', () => {
+    const cookie = `${COOKIE_NAMES.session}=from-another-link`;
+    expect(call('POST', cookie, undefined, '/api/s/tok123/unlock').next).toHaveBeenCalled();
+    expect(call('POST', cookie, undefined, '/api/s/tok123/unlock/x').next).not.toHaveBeenCalled();
+    expect(call('POST', cookie, undefined, '/api/s/a/b/unlock').next).not.toHaveBeenCalled();
   });
 });

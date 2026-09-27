@@ -8,6 +8,15 @@ export const CSRF_HEADER = 'x-csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
+ * Doc 01 §5.4: `POST /s/:token/unlock` is protected by its per-IP and per-link rate
+ * limits, not CSRF. It must be reachable by a visitor who still holds an `sl_session`
+ * from ANOTHER link — that cookie is authority, and without this the second link they
+ * open is a 403. The worst a forged unlock does is swap in a view-only session for a
+ * link the attacker already holds; a user session still wins in `JwtAuthGuard`.
+ */
+const SHARE_UNLOCK = /^\/api\/s\/[^/]+\/unlock$/;
+
+/**
  * Doc 01 §4.5 — the verifier half. Mounted in `main.ts` after `cookieMiddleware`;
  * `AuthModule` owns issuance. Both halves ship together because a verifier with
  * nothing issuing the cookie rejects every write in the product.
@@ -30,7 +39,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  */
 export function createCsrfMiddleware(secret: string): RequestHandler {
   return function verifyCsrf(req: Request, res: Response, next: NextFunction): void {
-    if (SAFE_METHODS.has(req.method)) {
+    if (SAFE_METHODS.has(req.method) || SHARE_UNLOCK.test(req.path)) {
       next();
       return;
     }

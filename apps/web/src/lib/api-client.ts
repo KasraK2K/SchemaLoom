@@ -130,6 +130,13 @@ function refreshSession(): Promise<boolean> {
  */
 function abandonSession(): void {
   if (typeof window === 'undefined') return;
+  // A share-link visitor has no account to sign in to. Their `sl_session` lasts at most
+  // 12 hours; the way back is the link's own unlock page, which mints a fresh one.
+  const share = /^\/s\/([^/]+)/.exec(window.location.pathname);
+  if (share !== null) {
+    window.location.assign(`/s/${share[1] ?? ''}`);
+    return;
+  }
   const next = `${window.location.pathname}${window.location.search}`;
   window.location.assign(`/login?expired=1&next=${encodeURIComponent(next)}`);
 }

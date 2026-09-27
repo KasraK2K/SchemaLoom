@@ -72,9 +72,16 @@ interface Move {
 export function CanvasSurface({
   projectId,
   model,
+  readOnly = false,
 }: {
   readonly projectId: Id;
   readonly model: SchemaModel;
+  /**
+   * A share-link visitor (doc 05 §7.12): pan, zoom, select and inspect, but no gesture
+   * that writes. The API would 404 every write anyway (R21); this stops the UI offering
+   * them and then reporting a failed save.
+   */
+  readonly readOnly?: boolean;
 }) {
   const facet = useEngine();
   const ui = useEngineUi();
@@ -283,13 +290,15 @@ export function CanvasSurface({
 
   useCanvasShortcuts({
     undo: () => {
-      applyPositions(undoMove() ?? []);
+      if (!readOnly) applyPositions(undoMove() ?? []);
     },
     redo: () => {
-      applyPositions(redoMove() ?? []);
+      if (!readOnly) applyPositions(redoMove() ?? []);
     },
     clearSelection,
-    autoLayout: runLayout,
+    autoLayout: () => {
+      if (!readOnly) runLayout();
+    },
     fitView,
   });
 
@@ -297,7 +306,7 @@ export function CanvasSurface({
     const entityId = menu?.entityId ?? null;
     if (entityId === null) {
       return [
-        { id: 'layout', label: 'Auto-layout', onSelect: runLayout },
+        ...(readOnly ? [] : [{ id: 'layout', label: 'Auto-layout', onSelect: runLayout }]),
         { id: 'fit', label: 'Fit to view', onSelect: fitView },
       ];
     }
@@ -317,9 +326,17 @@ export function CanvasSurface({
         },
       },
     ];
-  }, [menu, runLayout, fitView, toggleCollapse, flow]);
+  }, [menu, runLayout, fitView, toggleCollapse, flow, readOnly]);
 
-  if (nodes.length === 0) return <CanvasEmptyState projectId={projectId} />;
+  if (nodes.length === 0) {
+    return readOnly ? (
+      <div className="flex h-full items-center justify-center text-sm text-text-subtle">
+        Nothing is shared here yet.
+      </div>
+    ) : (
+      <CanvasEmptyState projectId={projectId} />
+    );
+  }
 
   return (
     <div className="relative size-full">
@@ -331,6 +348,8 @@ export function CanvasSurface({
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        nodesDraggable={!readOnly}
+        nodesConnectable={!readOnly}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onSelectionChange={onSelectionChange}
@@ -365,12 +384,14 @@ export function CanvasSurface({
           style={{ backgroundColor: 'var(--color-surface-sunken)' }}
         />
         <Controls showInteractive={false} />
-        <Panel position="top-right">
-          <Button variant="outline" size="sm" onClick={runLayout}>
-            <LayoutGrid className="size-3.5" aria-hidden="true" />
-            Auto-layout
-          </Button>
-        </Panel>
+        {readOnly ? null : (
+          <Panel position="top-right">
+            <Button variant="outline" size="sm" onClick={runLayout}>
+              <LayoutGrid className="size-3.5" aria-hidden="true" />
+              Auto-layout
+            </Button>
+          </Panel>
+        )}
         {message === null ? null : (
           <Panel position="bottom-center">
             <button

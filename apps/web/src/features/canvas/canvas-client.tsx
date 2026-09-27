@@ -19,7 +19,14 @@ const CanvasRoot = dynamic(() => import('./canvas-root'), {
   loading: () => <CanvasSkeleton />,
 });
 
-export function CanvasClient({ projectId }: { readonly projectId: Id }) {
+export function CanvasClient({
+  projectId,
+  readOnly = false,
+}: {
+  readonly projectId: Id;
+  /** Share-link visitors — see `CanvasSurface`. */
+  readonly readOnly?: boolean;
+}) {
   // Selection, collapse and the undo stack are about THIS project. The store is module
   // level (see its header), so switching projects without this leaves the previous
   // project's undo entries pointing at ids that no longer exist.
@@ -31,7 +38,7 @@ export function CanvasClient({ projectId }: { readonly projectId: Id }) {
 
   return (
     <EngineGate projectId={projectId} fallback={<CanvasSkeleton />}>
-      <CanvasRoot projectId={projectId} />
+      <CanvasRoot projectId={projectId} readOnly={readOnly} />
     </EngineGate>
   );
 }

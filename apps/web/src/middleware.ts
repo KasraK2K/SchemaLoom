@@ -68,7 +68,7 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Phase 3 adds `|s` to this lookahead: a share-link visitor has no sl_presence
-  // cookie and must reach /s/[token] without being bounced to /login.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|sw\\.js|fonts|.*\\.(?:svg|png|webp)$).*)'],
+  // `s/`: a share-link visitor has no sl_presence cookie and must reach /s/[token]
+  // without being bounced to /login (doc 01 §5.4).
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|sw\\.js|fonts|s/|.*\\.(?:svg|png|webp)$).*)'],
 };

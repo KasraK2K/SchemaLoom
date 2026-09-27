@@ -11,11 +11,17 @@ import { irQueryOptions } from './ir-query';
  * because importing it there would pull React Flow into the main bundle and undo the
  * `ssr: false` dynamic import that exists to keep it out.
  */
-export function CanvasRoot({ projectId }: { readonly projectId: Id }) {
+export function CanvasRoot({
+  projectId,
+  readOnly = false,
+}: {
+  readonly projectId: Id;
+  readonly readOnly?: boolean;
+}) {
   const { data } = useSuspenseQuery(irQueryOptions(projectId));
   return (
     <ReactFlowProvider>
-      <CanvasSurface projectId={projectId} model={data} />
+      <CanvasSurface projectId={projectId} model={data} readOnly={readOnly} />
     </ReactFlowProvider>
   );
 }
