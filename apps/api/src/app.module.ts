@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AccessModule } from './access/access.module';
 import { AuthModule, JwtAuthGuard } from './auth';
@@ -10,6 +10,7 @@ import { OrganizationsModule } from './organizations';
 import { ProjectsModule } from './projects';
 import { SchemaModule } from './schema';
 import { SnapshotsModule } from './snapshots';
+import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { pinoOptions } from './common/logger/pino.options';
 import { AppConfigModule } from './config/config.module';
 import type { AppEnv } from './config/env';
@@ -33,8 +34,7 @@ import { RedisModule } from './redis/redis.module';
  *   behaviour comes from a special token, not a general mechanism), so the registry
  *   factory reads the manifest directly. The property that mattered still holds —
  *   the manifest names the engines and `engines.module.ts` names none.
- * - `APP_FILTER` (AllExceptionsFilter) and `APP_INTERCEPTOR` (request id) land with the
- *   `common/` step.
+ * - `APP_INTERCEPTOR` (request id) lands with the `common/` step.
  */
 @Module({
   imports: [
@@ -70,6 +70,7 @@ import { RedisModule } from './redis/redis.module';
     // JwtAuthGuard puts on the request. PermissionGuard registers itself from
     // inside AccessModule when it lands, which is why only one entry is here.
     { provide: APP_GUARD, useExisting: JwtAuthGuard },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
 export class AppModule {}

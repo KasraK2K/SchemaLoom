@@ -93,8 +93,8 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
     });
     // §10.3 step 8: a 403 here would confirm the row exists.
     expect(response.status()).toBe(404);
-    const body = (await response.json()) as { code?: string };
-    expect(body.code).toBe('not_found');
+    const { error } = (await response.json()) as { error: { code: string } };
+    expect(error.code).toBe('not_found');
   });
 
   test('the analyst sees every table, with salary masked and nameless', async () => {
@@ -144,8 +144,10 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
     // 403 is right HERE and only here: the analyst can SEE `orders`, so refusing with a
     // 404 would be a lie the client cannot act on.
     expect(response.status(), await response.text()).toBe(403);
-    const body = (await response.json()) as { code?: string; atom?: string };
-    expect(body.code).toBe('forbidden');
-    expect(body.atom).toBe('schema:edit');
+    const { error } = (await response.json()) as {
+      error: { code: string; details?: { atom?: string } };
+    };
+    expect(error.code).toBe('forbidden');
+    expect(error.details?.atom).toBe('schema:edit');
   });
 });
