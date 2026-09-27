@@ -1,5 +1,6 @@
-import { Button, LayoutGrid } from '@schemaloom/ui';
+import { LayoutGrid } from '@schemaloom/ui';
 import Link from 'next/link';
+import { CreateOrganization } from './create-organization';
 import type { OrganizationSummary } from './projects-api';
 
 /**
@@ -34,11 +35,6 @@ export function OrgList({ orgs }: { orgs: readonly OrganizationSummary[] }) {
 /**
  * Zero organisations is a real state — the window between registering and joining a
  * first one — so it gets a prompt rather than an error.
- *
- * The button is `disabled` rather than absent because there is no `POST /organizations`
- * yet: an enabled control would be a link to a 404, which teaches the user less than a
- * control that is visibly not ready. Same reasoning, and same shape, as the canvas's own
- * teaching empty state.
  */
 export function NoOrganizations() {
   return (
@@ -48,9 +44,7 @@ export function NoOrganizations() {
         Projects live inside an organisation. Create one to start designing, or ask a
         colleague to invite you to theirs.
       </p>
-      <Button variant="primary" size="sm" className="mt-4" disabled>
-        New organisation
-      </Button>
+      <CreateOrganization />
     </div>
   );
 }

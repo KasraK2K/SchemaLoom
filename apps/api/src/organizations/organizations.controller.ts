@@ -1,9 +1,10 @@
-import { Controller, Get, Param, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UnauthorizedException } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Authenticated } from '../access';
 import { getPrincipal } from '../auth';
 import type { ProjectSummary } from '../projects';
+import { CreateOrganizationDto } from './organizations.dto';
 import { OrganizationsService } from './organizations.service';
 import type { OrganizationSummary } from './organizations.types';
 
@@ -35,6 +36,22 @@ export class OrganizationsController {
   @Get()
   async list(@Req() req: Request): Promise<OrganizationSummary[]> {
     return this.organizations.listForUser(this.userId(req));
+  }
+
+  /**
+   * `@Authenticated()` for the same reason as the list: the caller this exists for is the
+   * one with no organisation yet, whom every org-scoped marker would 404. The session's
+   * `orgId` claim is NOT updated here — the client refreshes its session afterwards, and
+   * refresh re-resolves the active org.
+   */
+  @ApiOperation({ summary: 'Create an organisation owned by the caller' })
+  @Authenticated()
+  @Post()
+  async create(
+    @Req() req: Request,
+    @Body() dto: CreateOrganizationDto,
+  ): Promise<OrganizationSummary> {
+    return this.organizations.create(this.userId(req), dto.name);
   }
 
   /**

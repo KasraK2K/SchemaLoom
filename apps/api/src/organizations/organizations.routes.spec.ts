@@ -49,10 +49,11 @@ function sweep(): SweptRoute[] {
 describe('OrganizationsController route markers', () => {
   const routes = sweep();
 
-  it('registers the org list and the per-org project list', () => {
+  it('registers the org list, org creation and the per-org project list', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       'GET /api/organizations',
       'GET /api/organizations/:orgSlug/projects',
+      'POST /api/organizations',
     ]);
   });
 
@@ -63,7 +64,7 @@ describe('OrganizationsController route markers', () => {
     for (const route of routes) expect(route.markers).toHaveLength(1);
   });
 
-  it('marks both @Authenticated(), never @RequireOrgRole', () => {
+  it('marks every route @Authenticated(), never @RequireOrgRole', () => {
     // `@RequireOrgRole` compares `subject.orgId` with its locator and 404s on a mismatch,
     // so it can only admit the session's ACTIVE org — which makes it unable to express
     // either route. It would also turn "you belong to no org yet" into a 404 instead of
@@ -71,7 +72,7 @@ describe('OrganizationsController route markers', () => {
     for (const route of routes) expect(route.markers).toEqual([AUTHENTICATED_META]);
   });
 
-  it('exposes neither route to a share-link subject (R21)', () => {
+  it('exposes no route to a share-link subject (R21)', () => {
     // A link subject never reaches the @Authenticated() marker: PermissionGuard 404s any
     // route outside SHARE_LINK_ROUTES for a link session before the marker is read.
     expect(routes.filter((r) => isShareLinkRoute(r.method, r.path))).toEqual([]);

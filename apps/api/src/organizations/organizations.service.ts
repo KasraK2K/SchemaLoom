@@ -1,8 +1,23 @@
+import { randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { PermissionResolver, type Subject } from '../access';
 import { PrismaService } from '../prisma/prisma.service';
 import { toSummary, type ProjectSummary } from '../projects';
 import type { OrganizationSummary } from './organizations.types';
+
+/** PostgreSQL 23505 on the partial `lower(slug)` index, surfaced by Prisma as P2002. */
+const UNIQUE_VIOLATION = 'P2002';
+
+/** `Acme Corp!` → `acme-corp`. Empty for a name with no latin letters or digits. */
+export function slugify(name: string): string {
+  return name
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
 
 @Injectable()
 export class OrganizationsService {
@@ -37,6 +52,30 @@ export class OrganizationsService {
       name: row.organization.name,
       orgRole: row.role,
     }));
+  }
+
+  /**
+   * A new org with the caller as its `owner`, in one transaction — an org with no owner
+   * is unreachable by anyone.
+   *
+   * The slug is derived, not asked for. On a clash (or a name with nothing slug-able in
+   * it) a random suffix is appended and the insert retried; the unique index is the
+   * arbiter, so two concurrent creates of "Acme" cannot both win the bare slug.
+   */
+  async create(userId: string, name: string): Promise<OrganizationSummary> {
+    const base = slugify(name) || 'org';
+    for (let attempt = 0; ; attempt++) {
+      const slug = attempt === 0 ? base : `${base}-${randomBytes(3).toString('hex')}`;
+      try {
+        const org = await this.prisma.organization.create({
+          data: { name, slug, members: { create: { userId, role: 'owner' } } },
+          select: { id: true, slug: true, name: true },
+        });
+        return { ...org, orgRole: 'owner' };
+      } catch (error) {
+        if ((error as { code?: unknown }).code !== UNIQUE_VIOLATION || attempt >= 3) throw error;
+      }
+    }
   }
 
   /**

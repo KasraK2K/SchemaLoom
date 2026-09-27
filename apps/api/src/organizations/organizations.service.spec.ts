@@ -2,7 +2,7 @@ import type { PermissionAtom } from '@schemaloom/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { canOpenProject, type PermissionResolver, type ProjectPermissionMap } from '../access';
 import type { PrismaService } from '../prisma/prisma.service';
-import { OrganizationsService } from './organizations.service';
+import { OrganizationsService, slugify } from './organizations.service';
 
 /**
  * No Docker, no Redis. Everything these two routes must get right is a rule about WHICH
@@ -177,5 +177,34 @@ describe('OrganizationsService.listProjects', () => {
     const h = harness({ membership: { organizationId: ORG }, projects: [] });
     await expect(h.service.listProjects(USER, 'acme')).resolves.toEqual([]);
     expect(h.resolveProjects).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrganizationsService.create', () => {
+  it('slugifies the name, falling back when nothing survives', () => {
+    expect(slugify('  Acme Corp!  ')).toBe('acme-corp');
+    expect(slugify('Café Ünïcode')).toBe('cafe-unicode');
+    expect(slugify('شرکت')).toBe('');
+  });
+
+  it('makes the caller owner, and retries with a suffix on a slug clash', async () => {
+    const create = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('dup'), { code: 'P2002' }))
+      .mockImplementation(({ data }: { data: { slug: string; name: string } }) =>
+        Promise.resolve({ id: 'org_new', slug: data.slug, name: data.name }),
+      );
+    const service = new OrganizationsService(
+      { organization: { create } } as unknown as PrismaService,
+      {} as PermissionResolver,
+    );
+
+    const org = await service.create(USER, 'Acme');
+
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      data: { slug: 'acme', members: { create: { userId: USER, role: 'owner' } } },
+    });
+    expect(org.slug).toMatch(/^acme-[0-9a-f]{6}$/);
+    expect(org.orgRole).toBe('owner');
   });
 });
