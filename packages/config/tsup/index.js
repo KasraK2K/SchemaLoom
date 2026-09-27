@@ -10,16 +10,20 @@ import { defineConfig } from 'tsup';
  * @param {import('tsup').Options} overrides
  */
 export function libraryConfig(overrides = {}) {
-  return defineConfig({
+  return defineConfig((options) => ({
     format: ['esm', 'cjs'],
     dts: true,
     sourcemap: true,
-    clean: true,
+    // Never in watch mode. `turbo dev` runs `^build` first and then `tsup --watch`
+    // alongside `nest start --watch`; a cleaning watcher deletes the `.d.ts` files the
+    // build just wrote, nest compiles in that gap, fails on TS7016, and — watching only
+    // `src/` — never retries. The API then simply never listens on 3001.
+    clean: !options.watch,
     treeshake: true,
     target: 'es2022',
     outDir: 'dist',
     ...overrides,
-  });
+  }));
 }
 
 export default libraryConfig;
