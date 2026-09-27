@@ -1,0 +1,59 @@
+import { resourceTypeSchema } from '@schemaloom/contracts';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+
+/**
+ * Wire shapes for the sharing routes, mirroring `apps/web/src/features/sharing/model.ts`
+ * and `sharing-api.ts`. The web half parses every response with zod, so a drift here
+ * fails loudly in the browser rather than rendering a wrong access list.
+ */
+
+const id = z.string().min(1).max(64);
+
+/**
+ * `email_invite` is accepted by the schema because the UI sends it, and refused by the
+ * service with a named code: R11 (doc 05 §6.4) is Phase 3 — a pending grant needs the
+ * `Invitation` row, the email and the acceptance transaction, none of which exist yet.
+ */
+export const createGrantSchema = z.object({
+  principalKind: z.enum(['user', 'group', 'email_invite']),
+  principalId: z.string().trim().min(1).max(320),
+  resourceType: resourceTypeSchema,
+  resourceId: id,
+  roleKey: z.string().min(1).max(64),
+  canUseAi: z.boolean(),
+  canViewRestricted: z.boolean(),
+});
+export class CreateGrantDto extends createZodDto(createGrantSchema) {}
+
+export const updateGrantSchema = createGrantSchema.pick({
+  roleKey: true,
+  canUseAi: true,
+  canViewRestricted: true,
+});
+export class UpdateGrantDto extends createZodDto(updateGrantSchema) {}
+
+export const createShareLinkSchema = z.object({
+  resourceType: resourceTypeSchema,
+  resourceId: id,
+  expiresAt: z.iso.datetime({ offset: true }).nullable(),
+  password: z.string().min(8).max(200).nullable(),
+});
+export class CreateShareLinkDto extends createZodDto(createShareLinkSchema) {}
+
+export const requestAccessSchema = z.object({
+  projectId: id,
+  resourceType: resourceTypeSchema,
+  resourceId: id,
+  requestedRoleKey: z.string().min(1).max(64).optional(),
+  message: z.string().trim().max(1000).optional(),
+});
+export class RequestAccessDto extends createZodDto(requestAccessSchema) {}
+
+export const approveAccessRequestSchema = z.object({ roleKey: z.string().min(1).max(64) });
+export class ApproveAccessRequestDto extends createZodDto(approveAccessRequestSchema) {}
+
+export const denyAccessRequestSchema = z.object({
+  decisionNote: z.string().trim().max(1000).nullable(),
+});
+export class DenyAccessRequestDto extends createZodDto(denyAccessRequestSchema) {}

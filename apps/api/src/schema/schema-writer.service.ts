@@ -78,7 +78,11 @@ export class SchemaWriter {
     this.assertPermissions(batch.ops, ctx);
 
     const ops = sortOps(batch.ops);
-    return this.prisma.$transaction(async (tx) => this.run(tx, ops, batch, ctx));
+    const result = await this.prisma.$transaction(async (tx) => this.run(tx, ops, batch, ctx));
+    // Doc 05 §9.3: commit, THEN drop the keys. Correctness rides on the bumped `pg` in the
+    // cache key; the DEL only stops dead entries lingering until their TTL.
+    if (changesSkeleton(ops, result.removed)) await this.resolver.invalidate({ project: ctx.projectId });
+    return result;
   }
 
   /**
@@ -157,9 +161,15 @@ export class SchemaWriter {
     // Per-project monotonic, assigned INSIDE this transaction so a client can detect a
     // gap and refetch (§8.7). It cannot be `max(version)`: a maximum does not move when
     // a non-maximal object is edited and falls when its holder is deleted.
+    // Doc 05 §9.3 + R29: a batch that changes what the skeleton says bumps `pg` exactly
+    // once, in this transaction. Without it the cached skeleton outlives the write and a
+    // new area is invisible even to the org owner.
     const project = await tx.project.update({
       where: { id: projectId },
-      data: { schemaRevision: { increment: 1 } },
+      data: {
+        schemaRevision: { increment: 1 },
+        ...(changesSkeleton(ops, removed) ? { permGeneration: { increment: 1 } } : {}),
+      },
       select: { schemaRevision: true },
     });
 
@@ -328,6 +338,23 @@ export class SchemaWriter {
     }
     return object;
   }
+}
+
+/**
+ * Doc 05 §9.3 — the only schema writes that move `Project.permGeneration`: entity or area
+ * create/delete (including cascades), an entity's `areaId`, and `field.isRestricted`.
+ */
+export function changesSkeleton(
+  ops: readonly SchemaOperation[],
+  removed: readonly { type: IrObjectType }[],
+): boolean {
+  if (removed.some((r) => r.type === 'entity' || r.type === 'area')) return true;
+  return ops.some((op) => {
+    if (op.op === 'create' || op.op === 'delete') return op.type === 'entity' || op.type === 'area';
+    if (op.op !== 'update') return false;
+    const patch = op.patch as Record<string, unknown>;
+    return (op.type === 'entity' && 'areaId' in patch) || (op.type === 'field' && 'isRestricted' in patch);
+  });
 }
 
 /**

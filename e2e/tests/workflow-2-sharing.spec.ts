@@ -73,28 +73,34 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
     expect(response.status(), await response.text()).toBe(201);
   });
 
-  test('editing a Catalog table is a 404, not a 403 — existence is not disclosed', async () => {
+  // Doc 05 §7.10: 404 vs 403 follows DISCLOSURE, not the grant. `employees` is linked to
+  // nothing Dana can see, so it is absent from her model and must 404 like a wrong id.
+  // `products` is linked from Billing's order_items and reaches her as a stub (workflow
+  // 4), so she already knows it exists and 403 is the honest answer.
+  const danaEdits = async (entityId: string) => {
     const dana = await signIn(SEED_EMAILS.freelancer);
-    const response = await dana.api.post(`/api/projects/${SEED.projectId}/schema/ops`, {
+    return dana.api.post(`/api/projects/${SEED.projectId}/schema/ops`, {
       headers: write(dana),
       data: {
         batchId: `bat_e2e_dana_denied_${String(Date.now())}`,
         projectId: SEED.projectId,
-        ops: [
-          {
-            op: 'update',
-            type: 'entity',
-            id: SEED.entities.products,
-            expectedVersion: 0,
-            patch: { color: 'amber' },
-          },
-        ],
+        ops: [{ op: 'update', type: 'entity', id: entityId, expectedVersion: 0, patch: { color: 'amber' } }],
       },
     });
-    // §10.3 step 8: a 403 here would confirm the row exists.
-    expect(response.status()).toBe(404);
+  };
+
+  test('editing a hidden table is a 404, not a 403 — existence is not disclosed', async () => {
+    const response = await danaEdits(SEED.entities.employees);
+    expect(response.status(), await response.text()).toBe(404);
     const { error } = (await response.json()) as { error: { code: string } };
     expect(error.code).toBe('not_found');
+  });
+
+  test('editing a stubbed Catalog table is a 403 — the stub already disclosed it', async () => {
+    const response = await danaEdits(SEED.entities.products);
+    expect(response.status(), await response.text()).toBe(403);
+    const { error } = (await response.json()) as { error: { code: string } };
+    expect(error.code).toBe('object_redacted');
   });
 
   test('the analyst sees every table, with salary masked and nameless', async () => {

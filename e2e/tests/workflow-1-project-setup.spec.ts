@@ -86,20 +86,28 @@ test.describe('workflow 1 — from sign-up to a laid-out, grouped project', () =
     const ir = await fetchIr(owner, SEED.projectId);
     expect(ir.objects.area[areaId]?.name).toBe('Fulfilment');
 
-    const entity = ir.objects.entity[SEED.entities.orderItems];
-    expect(entity, 'order_items must be visible to the org owner').toBeDefined();
+    // `employees`, not a Billing table: it is in no area, so moving it changes nobody's
+    // grant. Regrouping `order_items` would pull it out of Dana's Billing share and break
+    // workflows 2 and 4, which read the seed after this file runs.
+    const entity = ir.objects.entity[SEED.entities.employees];
+    expect(entity, 'employees must be visible to the org owner').toBeDefined();
 
     const moved = await applyOps(owner, 'regroup', [
       {
         op: 'update',
         type: 'entity',
-        id: SEED.entities.orderItems,
+        id: SEED.entities.employees,
         // C7 — echo the version the server just served, never a guess.
         expectedVersion: entity?.version ?? 0,
         patch: { areaId },
       },
     ]);
     expect(moved.status(), await moved.text()).toBe(201);
+
+    // Doc 05 §9.3: an area create and an `areaId` move both bump the project generation,
+    // so the next read must not come from a stale cached skeleton.
+    const after = await fetchIr(owner, SEED.projectId);
+    expect(after.objects.entity[SEED.entities.employees]?.areaId).toBe(areaId);
   });
 });
 

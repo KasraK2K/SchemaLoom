@@ -47,7 +47,10 @@ const world = (): Partial<Store> =>
 
 const resolver = (): { spy: ReturnType<typeof vi.fn>; service: PermissionResolver } => {
   const spy = vi.fn();
-  return { spy, service: { assertAll: spy } as unknown as PermissionResolver };
+  return {
+    spy,
+    service: { assertAll: spy, invalidate: vi.fn() } as unknown as PermissionResolver,
+  };
 };
 
 function harness(store: Partial<Store> = world()): {
@@ -338,6 +341,28 @@ describe('SchemaWriter — batch mechanics', () => {
     expect(result.batchId).toBe('btc_1');
     expect(result.actorUserId).toBe('usr_ana');
     expect(prisma.callsTo('project', 'update')).toHaveLength(1);
+  });
+
+  // Doc 05 §9.3: the cached skeleton is keyed by `pg`, so a write that changes what the
+  // skeleton says and does not bump it serves a stale area/entity list until TTL.
+  it('bumps permGeneration once for a skeleton-changing batch, and not for a rename', async () => {
+    const { prisma, writer, context } = harness();
+    const generation = (): unknown => prisma.store.project?.[0]?.permGeneration;
+
+    await writer.apply(
+      batch([{ op: 'update', type: 'entity', id: 'ent_orders', expectedVersion: 2, patch: { name: 'orders2' } }]),
+      await context(),
+    );
+    expect(generation()).toBe(0);
+
+    await writer.apply(
+      batch([
+        { op: 'create', type: 'area', object: { id: 'are_a', name: 'A', engineProps: {}, color: 'amber', ordinal: 0 } },
+        { op: 'create', type: 'area', object: { id: 'are_b', name: 'B', engineProps: {}, color: 'amber', ordinal: 1 } },
+      ]),
+      await context(),
+    );
+    expect(generation(), 'R29: one bump per batch, not per object').toBe(1);
   });
 
   it('refuses a batch whose body names a different project', async () => {

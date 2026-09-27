@@ -25,6 +25,7 @@ export const projectRow = (over: Row = {}): Row => ({
   engineId: 'postgresql',
   engineVersion: '16',
   schemaRevision: 41n,
+  permGeneration: 0,
   deletedAt: null,
   ...over,
 });

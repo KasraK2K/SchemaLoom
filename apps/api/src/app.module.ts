@@ -9,6 +9,7 @@ import { JobsModule } from './jobs';
 import { OrganizationsModule } from './organizations';
 import { ProjectsModule } from './projects';
 import { SchemaModule } from './schema';
+import { SharingModule } from './sharing';
 import { SnapshotsModule } from './snapshots';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { pinoOptions } from './common/logger/pino.options';
@@ -61,6 +62,7 @@ import { RedisModule } from './redis/redis.module';
     ProjectsModule,
     SchemaModule,
     SnapshotsModule,
+    SharingModule,
     JobsModule,
     HealthModule,
   ],
