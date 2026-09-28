@@ -29,3 +29,6 @@ npm-debug.log*
 !.vscode/extensions.json
 
 .memsearch/
+
+# graphify knowledge graph: rebuilt locally by the post-commit/post-checkout hooks
+graphify-out/
