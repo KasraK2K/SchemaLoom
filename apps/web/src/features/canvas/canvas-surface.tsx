@@ -117,7 +117,14 @@ export function CanvasSurface({
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
-    setNodes(builtNodes);
+    // Keep the selection across an IR refetch: rebuilt nodes carry no `selected`, and React
+    // Flow would report an empty selection, closing the inspector after every edit.
+    const { selection } = useCanvasStore.getState();
+    setNodes(
+      selection.size === 0
+        ? builtNodes
+        : builtNodes.map((node) => (selection.has(node.id) ? { ...node, selected: true } : node)),
+    );
   }, [builtNodes, setNodes]);
   useEffect(() => {
     setEdges(builtEdges);

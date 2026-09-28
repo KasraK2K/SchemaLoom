@@ -7,17 +7,15 @@ import { useState } from 'react';
 import { useEngine, useEngineUi, useTerminology } from '@/engines';
 import { irQueryOptions } from '@/features/canvas/ir-query';
 import { deleteLinkOp, postOps } from '@/features/canvas/schema-ops';
+import { ColumnRow, EntityEditor } from './column-editor';
 import { useCanvasStore } from '@/features/canvas/store';
 
 /**
  * What the canvas selection is, in words.
  *
- * READ-ONLY in this step. The engine's `PropertyPanelSection` components are the natural
- * contents of these tabs, but every one of them is driven by `onChange`, and the contract
- * says that callback is "the ONLY mutation path: core owns optimistic update, version bump
- * (C7) and rollback". None of that exists yet — the canvas's one write is geometry, which
- * deliberately has no version at all — so mounting the sections behind a no-op `onChange`
- * would be an editor that silently discards edits. They land with the ops mutation.
+ * The entity and field tabs edit through `column-editor.tsx` (core IR only: names, types,
+ * nullability, primary key). The engine's `PropertyPanelSection`s for `engineProps` are
+ * still not mounted; they need the same ops path wired to their `onChange`.
  *
  * Nouns come from `useTerminology`: "Select a table to see its details" for PostgreSQL,
  * "Select a collection…" for MongoDB, from one string in the core catalogue.
@@ -54,15 +52,28 @@ export function InspectorBody({ projectId }: { readonly projectId: Id }) {
         ) : entity === undefined ? (
           <Empty text={t.msg('list.count', 'entity', { count: selection.size })} />
         ) : (
-          <EntityDetails entity={entity} kindLabel={kindLabel} fieldCount={fieldCount} />
+          <>
+            {kindLabel === null ? null : (
+              <p className="px-2 text-xs text-text-subtle">{kindLabel}</p>
+            )}
+            {entity.restricted === true ? (
+              <EntityDetails entity={entity} kindLabel={kindLabel} fieldCount={fieldCount} />
+            ) : (
+              <EntityEditor projectId={projectId} model={model} entity={entity} />
+            )}
+          </>
         )}
       </TabsContent>
 
       <TabsContent value="field" className="space-y-2 overflow-auto text-sm">
         {field === undefined ? (
           <Empty text={t.msg('inspector.noSelection', 'field')} />
-        ) : (
+        ) : entity === undefined || field.restricted === true || entity.restricted === true ? (
           <FieldDetails field={field} />
+        ) : (
+          <ul className="p-2">
+            <ColumnRow projectId={projectId} model={model} entity={entity} field={field} />
+          </ul>
         )}
       </TabsContent>
 
