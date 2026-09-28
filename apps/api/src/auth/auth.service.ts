@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   NotFoundException,
   Injectable,
@@ -13,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { issueCsrfToken } from './csrf';
 import { burnPasswordTime, hashPassword, verifyPassword } from './password';
 import { TokensService, type SessionContext } from './tokens.service';
+import { PER_CHALLENGE, TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
 
 /** Uniqueness is `users_email_uq ON users (lower(email))`; normalise-on-write is the convenience. */
@@ -40,6 +42,17 @@ export interface SessionBundle {
   readonly refreshTtlSec: number;
 }
 
+/** First factor proven, second owed: the controller sets `sl_mfa` instead of the session. */
+export interface MfaChallenge {
+  readonly mfaChallenge: string;
+}
+
+export type LoginOutcome = SessionBundle | MfaChallenge;
+
+export function isMfaChallenge(outcome: LoginOutcome): outcome is MfaChallenge {
+  return 'mfaChallenge' in outcome;
+}
+
 export interface OAuthProfile {
   readonly provider: string;
   readonly providerAccountId: string;
@@ -56,6 +69,7 @@ export interface MeResponse {
   readonly avatarUrl: string | null;
   readonly theme: string;
   readonly emailVerified: boolean;
+  readonly twoFactorEnabled: boolean;
   readonly organizationId: string | null;
 }
 
@@ -67,6 +81,7 @@ export class AuthService implements OnModuleInit {
     private readonly verification: VerificationService,
     private readonly mail: MailService,
     private readonly config: ConfigService<AppEnv, true>,
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   /** Fails the boot rather than the first login when a TTL string is malformed. */
@@ -79,7 +94,42 @@ export class AuthService implements OnModuleInit {
 
   // ------------------------------------------------------------------ sessions
 
+  /**
+   * THE login gate. Password, magic link, Google, GitHub and registration all end here,
+   * so this is the one place that can refuse to hand a 2FA user a session on their first
+   * factor alone. They get a 5-minute challenge instead, and `completeMfa` — the only
+   * other caller of `openSession` — trades it plus a code for the real thing.
+   */
   async issueSession(
+    userId: string,
+    ctx: SessionContext,
+    preferredOrgId?: string,
+  ): Promise<LoginOutcome> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { totpConfirmedAt: true },
+    });
+    if (user?.totpConfirmedAt) return { mfaChallenge: await this.tokens.issueMfaChallenge(userId) };
+    return this.openSession(userId, ctx, preferredOrgId);
+  }
+
+  /** `POST /auth/2fa/verify`. Five guesses per challenge, then the first factor is owed again. */
+  async completeMfa(
+    challengeToken: string,
+    code: string,
+    ctx: SessionContext,
+    preferredOrgId?: string,
+  ): Promise<SessionBundle> {
+    const challenge = await this.tokens.verifyMfaChallenge(challengeToken);
+    if (!challenge) throw new UnauthorizedException({ code: 'MFA_CHALLENGE_INVALID' });
+    await this.twoFactor.throttle(`mfa:challenge:${challenge.challengeId}`, PER_CHALLENGE);
+    if (!(await this.twoFactor.verifySecondFactor(challenge.userId, code))) {
+      throw new BadRequestException({ code: 'INVALID_CODE' });
+    }
+    return this.openSession(challenge.userId, ctx, preferredOrgId);
+  }
+
+  private async openSession(
     userId: string,
     ctx: SessionContext,
     preferredOrgId?: string,
@@ -269,12 +319,72 @@ export class AuthService implements OnModuleInit {
     await this.tokens.revokeAllForUser(consumed.userId);
   }
 
+  // --------------------------------------------------------------- magic link
+
+  /**
+   * Always 202 at the controller. An unknown address still gets a link: consuming it
+   * proves the mailbox, which is all a magic-link account is. Whether mail was sent to
+   * an existing account or a new one is not this route's to tell.
+   */
+  async requestMagicLink(rawEmail: string): Promise<void> {
+    const email = normalizeEmail(rawEmail);
+    const user = await this.prisma.user.findFirst({ where: { email }, select: { id: true } });
+    const token = await this.verification.issue(
+      VerificationPurpose.magic_link,
+      email,
+      user?.id ?? null,
+    );
+    await this.mail.sendMagicLinkEmail(email, token);
+  }
+
+  /** Returns the user to open a session for. The link proves the address, so it verifies it. */
+  async consumeMagicLink(token: string): Promise<string> {
+    const consumed = await this.verification.consume(token, VerificationPurpose.magic_link);
+    const now = new Date();
+    if (consumed.userId) {
+      await this.prisma.user.updateMany({
+        where: { id: consumed.userId, emailVerifiedAt: null },
+        data: { emailVerifiedAt: now },
+      });
+      return consumed.userId;
+    }
+    // Issued to an address with no account. One may have been registered since.
+    const existing = await this.prisma.user.findFirst({
+      where: { email: consumed.email },
+      select: { id: true, emailVerifiedAt: true },
+    });
+    if (existing) {
+      if (existing.emailVerifiedAt === null) {
+        await this.prisma.user.update({ where: { id: existing.id }, data: { emailVerifiedAt: now } });
+      }
+      return existing.id;
+    }
+    try {
+      const created = await this.prisma.user.create({
+        data: { email: consumed.email, name: consumed.email.split('@')[0] ?? consumed.email, emailVerifiedAt: now },
+        select: { id: true },
+      });
+      return created.id;
+    } catch (error) {
+      // Registered between the read and the write — the token was single-use, so this
+      // is the same person racing themselves. Their account wins.
+      if (!isUniqueViolation(error)) throw error;
+      const raced = await this.prisma.user.findFirst({
+        where: { email: consumed.email },
+        select: { id: true },
+      });
+      if (!raced) throw error;
+      return raced.id;
+    }
+  }
+
   // ------------------------------------------------------------------- oauth
 
   /**
-   * Account linking by verified email. Google asserts `email_verified`; the strategy
-   * refuses the profile without it, so this can never attach a Google identity to a
-   * SchemaLoom account whose address the OAuth user has not proven they own.
+   * Account linking by verified email. Google asserts `email_verified` and GitHub marks
+   * each address `verified`; both strategies refuse a profile without one, so this can
+   * never attach an OAuth identity to a SchemaLoom account whose address the OAuth user
+   * has not proven they own.
    */
   async upsertOAuthUser(profile: OAuthProfile): Promise<string> {
     const email = normalizeEmail(profile.email);
@@ -326,6 +436,7 @@ export class AuthService implements OnModuleInit {
         avatarUrl: true,
         theme: true,
         emailVerifiedAt: true,
+        totpConfirmedAt: true,
       },
     });
     if (!user) throw new UnauthorizedException({ code: 'USER_NOT_FOUND' });
@@ -336,6 +447,7 @@ export class AuthService implements OnModuleInit {
       avatarUrl: user.avatarUrl,
       theme: user.theme,
       emailVerified: user.emailVerifiedAt !== null,
+      twoFactorEnabled: user.totpConfirmedAt !== null,
       organizationId: await this.resolveOrgId(user.id),
     };
   }

@@ -1,8 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
+  NotFoundException,
+  Param,
   Post,
   Req,
   Res,
@@ -14,15 +17,25 @@ import { ApiCookieAuth, ApiExcludeEndpoint } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { parseCookieHeader } from '../common/cookies.middleware';
 import type { AppEnv } from '../config/env';
-import { AuthService, type MeResponse, type SessionBundle } from './auth.service';
+import {
+  AuthService,
+  isMfaChallenge,
+  type LoginOutcome,
+  type MeResponse,
+  type SessionBundle,
+} from './auth.service';
 import {
   COOKIE_NAMES,
+  clearMfaChallengeCookie,
   clearUserSessionCookies,
   cookieOptionsFor,
   cookiePolicyFrom,
+  setMfaChallengeCookie,
   setUserSessionCookies,
 } from './cookies';
 import {
+  CodeDto,
+  DisableTwoFactorDto,
   EmailOnlyDto,
   LoginDto,
   RegisterDto,
@@ -31,10 +44,13 @@ import {
   TokenDto,
 } from './auth.dto';
 import { Authenticated } from '../access/route-markers';
+import { GitHubAuthGuard } from './github-auth.guard';
+import { isGitHubConfigured } from './github.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
-import type { OAuthUser } from './google.strategy';
+import { isGoogleConfigured, type OAuthUser } from './google.strategy';
 import { Public } from './public.decorator';
-import { TokensService } from './tokens.service';
+import { MFA_CHALLENGE_TTL_SEC, TokensService, type DeviceSession } from './tokens.service';
+import { TwoFactorService } from './two-factor.service';
 
 function sessionContext(req: Request): { userAgent?: string; ip?: string } {
   return { userAgent: req.headers['user-agent'], ip: req.ip };
@@ -46,12 +62,26 @@ function preferredOrg(req: Request): string | undefined {
   return value === '' ? undefined : value;
 }
 
+function cookie(req: Request, name: string): string | undefined {
+  return parseCookieHeader(req.headers.cookie)[name];
+}
+
+function userIdOf(req: Request): string {
+  const principal = req.auth;
+  if (principal?.kind !== 'user') throw new UnauthorizedException({ code: 'NOT_AUTHENTICATED' });
+  return principal.userId;
+}
+
+/** A finished login, or — for a 2FA user — the instruction to go and fetch a code. */
+type LoginResponse = { csrfToken: string; user: MeResponse } | { mfaRequired: true };
+
 @ApiCookieAuth('sl_access')
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly tokens: TokensService,
+    private readonly twoFactor: TwoFactorService,
     private readonly config: ConfigService<AppEnv, true>,
   ) {}
 
@@ -62,16 +92,38 @@ export class AuthController {
     return { csrfToken: bundle.csrfToken };
   }
 
+  /** Every first-factor route answers through here, so none can skip the 2FA branch. */
+  private async respond(res: Response, outcome: LoginOutcome): Promise<LoginResponse> {
+    if (isMfaChallenge(outcome)) {
+      const policy = cookiePolicyFrom(this.config);
+      setMfaChallengeCookie(res, policy, outcome.mfaChallenge, MFA_CHALLENGE_TTL_SEC);
+      return { mfaRequired: true };
+    }
+    return { ...this.write(res, outcome), user: await this.auth.me(outcome.userId) };
+  }
+
+  /** OAuth callbacks are top-level navigations, so their 2FA branch is a redirect. */
+  private redirectAfterOAuth(res: Response, outcome: LoginOutcome): void {
+    const web = this.config.get('WEB_PUBLIC_URL', { infer: true });
+    if (isMfaChallenge(outcome)) {
+      const policy = cookiePolicyFrom(this.config);
+      setMfaChallengeCookie(res, policy, outcome.mfaChallenge, MFA_CHALLENGE_TTL_SEC);
+      res.redirect(`${web.replace(/\/+$/, '')}/two-factor`);
+      return;
+    }
+    this.write(res, outcome);
+    res.redirect(web);
+  }
+
   @Public()
   @Post('register')
   async register(
     @Body() dto: RegisterDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<{ csrfToken: string; user: MeResponse }> {
+  ): Promise<LoginResponse> {
     const userId = await this.auth.register(dto);
-    const bundle = await this.auth.issueSession(userId, sessionContext(req));
-    return { ...this.write(res, bundle), user: await this.auth.me(userId) };
+    return this.respond(res, await this.auth.issueSession(userId, sessionContext(req)));
   }
 
   @Public()
@@ -81,10 +133,12 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<{ csrfToken: string; user: MeResponse }> {
+  ): Promise<LoginResponse> {
     const userId = await this.auth.login(dto);
-    const bundle = await this.auth.issueSession(userId, sessionContext(req), preferredOrg(req));
-    return { ...this.write(res, bundle), user: await this.auth.me(userId) };
+    return this.respond(
+      res,
+      await this.auth.issueSession(userId, sessionContext(req), preferredOrg(req)),
+    );
   }
 
   /**
@@ -100,7 +154,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ csrfToken: string }> {
-    const token = parseCookieHeader(req.headers.cookie)[COOKIE_NAMES.refresh];
+    const token = cookie(req, COOKIE_NAMES.refresh);
     if (!token) throw new UnauthorizedException({ code: 'REFRESH_TOKEN_MISSING' });
     return this.write(res, await this.auth.refresh(token, sessionContext(req), preferredOrg(req)));
   }
@@ -119,10 +173,8 @@ export class AuthController {
     @Body() dto: SwitchOrgDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ orgId: string }> {
-    const principal = req.auth;
-    if (principal?.kind !== 'user') throw new UnauthorizedException({ code: 'NOT_AUTHENTICATED' });
     const { accessToken, accessTtlSec } = await this.auth.switchOrg(
-      principal.userId,
+      userIdOf(req),
       dto.organizationId,
     );
     const policy = cookiePolicyFrom(this.config);
@@ -143,7 +195,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    const token = parseCookieHeader(req.headers.cookie)[COOKIE_NAMES.refresh];
+    const token = cookie(req, COOKIE_NAMES.refresh);
     if (token) await this.tokens.revokeByRefreshToken(token);
     clearUserSessionCookies(res, cookiePolicyFrom(this.config));
   }
@@ -185,9 +237,134 @@ export class AuthController {
   @Authenticated()
   @Get('me')
   async me(@Req() req: Request): Promise<MeResponse> {
-    const principal = req.auth;
-    if (principal?.kind !== 'user') throw new UnauthorizedException({ code: 'NOT_AUTHENTICATED' });
-    return this.auth.me(principal.userId);
+    return this.auth.me(userIdOf(req));
+  }
+
+  /** Which OAuth buttons the login page draws. A provider with no credentials has no route. */
+  @Public()
+  @Get('providers')
+  providers(): { google: boolean; github: boolean } {
+    return { google: isGoogleConfigured(this.config), github: isGitHubConfigured(this.config) };
+  }
+
+  // --------------------------------------------------------------- magic link
+
+  /** Always 202 — the same answer for a known address, an unknown one and a new one. */
+  @Public()
+  @Post('magic-link')
+  @HttpCode(202)
+  async requestMagicLink(@Body() dto: EmailOnlyDto): Promise<void> {
+    await this.auth.requestMagicLink(dto.email);
+  }
+
+  /** A POST from the SPA page, never a GET from the email — see `MailService`. */
+  @Public()
+  @Post('magic-link/consume')
+  @HttpCode(200)
+  async consumeMagicLink(
+    @Body() dto: TokenDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LoginResponse> {
+    const userId = await this.auth.consumeMagicLink(dto.token);
+    return this.respond(
+      res,
+      await this.auth.issueSession(userId, sessionContext(req), preferredOrg(req)),
+    );
+  }
+
+  // ---------------------------------------------------------------------- 2FA
+
+  /** The second half of a 2FA login. `sl_mfa` is the credential; see `cookies.ts`. */
+  @Public()
+  @Post('2fa/verify')
+  @HttpCode(200)
+  async verifyTwoFactor(
+    @Body() dto: CodeDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LoginResponse> {
+    const challenge = cookie(req, COOKIE_NAMES.mfa);
+    if (!challenge) throw new UnauthorizedException({ code: 'MFA_CHALLENGE_INVALID' });
+    const bundle = await this.auth.completeMfa(
+      challenge,
+      dto.code,
+      sessionContext(req),
+      preferredOrg(req),
+    );
+    clearMfaChallengeCookie(res, cookiePolicyFrom(this.config));
+    return this.respond(res, bundle);
+  }
+
+  @Authenticated()
+  @Post('2fa/enrol')
+  @HttpCode(200)
+  enrolTwoFactor(@Req() req: Request): Promise<{ secret: string; otpauthUri: string }> {
+    return this.twoFactor.enrol(userIdOf(req));
+  }
+
+  @Authenticated()
+  @Post('2fa/confirm')
+  @HttpCode(200)
+  async confirmTwoFactor(
+    @Req() req: Request,
+    @Body() dto: CodeDto,
+  ): Promise<{ recoveryCodes: string[] }> {
+    const recoveryCodes = await this.twoFactor.confirm(userIdOf(req), dto.code, sessionContext(req));
+    return { recoveryCodes };
+  }
+
+  @Authenticated()
+  @Post('2fa/disable')
+  @HttpCode(204)
+  async disableTwoFactor(@Req() req: Request, @Body() dto: DisableTwoFactorDto): Promise<void> {
+    await this.twoFactor.disable(userIdOf(req), dto, sessionContext(req));
+  }
+
+  @Authenticated()
+  @Post('2fa/recovery-codes')
+  @HttpCode(200)
+  async regenerateRecoveryCodes(
+    @Req() req: Request,
+    @Body() dto: CodeDto,
+  ): Promise<{ recoveryCodes: string[] }> {
+    const recoveryCodes = await this.twoFactor.regenerateRecoveryCodes(userIdOf(req), dto.code);
+    return { recoveryCodes };
+  }
+
+  // ------------------------------------------------------------ device sessions
+
+  /** Under `/api/auth` so `sl_refresh` rides along and "this device" can be flagged. */
+  @Authenticated()
+  @Get('sessions')
+  async listSessions(
+    @Req() req: Request,
+  ): Promise<{ sessions: (DeviceSession & { current: boolean })[] }> {
+    const current = await this.currentFamily(req);
+    const devices = await this.tokens.listDevices(userIdOf(req));
+    return { sessions: devices.map((d) => ({ ...d, current: d.familyId === current })) };
+  }
+
+  /** Someone else's device is a 404, the same as one that does not exist. */
+  @Authenticated()
+  @Delete('sessions/:familyId')
+  @HttpCode(204)
+  async revokeSession(@Req() req: Request, @Param('familyId') familyId: string): Promise<void> {
+    if (!(await this.tokens.revokeFamilyForUser(userIdOf(req), familyId))) {
+      throw new NotFoundException({ code: 'not_found' });
+    }
+  }
+
+  @Authenticated()
+  @Post('sessions/revoke-others')
+  @HttpCode(204)
+  async revokeOtherSessions(@Req() req: Request): Promise<void> {
+    await this.tokens.revokeOtherFamilies(userIdOf(req), await this.currentFamily(req));
+  }
+
+  private async currentFamily(req: Request): Promise<string | null> {
+    const token = cookie(req, COOKIE_NAMES.refresh);
+    return token ? this.tokens.familyOf(token) : null;
   }
 
   // ------------------------------------------------------------------- google
@@ -208,10 +385,36 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
+    await this.finishOAuth(req, res);
+  }
+
+  // ------------------------------------------------------------------- github
+
+  @Public()
+  @Get('github')
+  @UseGuards(GitHubAuthGuard)
+  @ApiExcludeEndpoint()
+  startGitHub(): void {
+    // The guard redirects to GitHub; this body never runs.
+  }
+
+  @Public()
+  @Get('github/callback')
+  @UseGuards(GitHubAuthGuard)
+  @ApiExcludeEndpoint()
+  async githubCallback(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.finishOAuth(req, res);
+  }
+
+  private async finishOAuth(req: Request, res: Response): Promise<void> {
     const user = req.user as OAuthUser | undefined;
     if (!user?.userId) throw new UnauthorizedException({ code: 'OAUTH_FAILED' });
-    const bundle = await this.auth.issueSession(user.userId, sessionContext(req), preferredOrg(req));
-    this.write(res, bundle);
-    res.redirect(this.config.get('WEB_PUBLIC_URL', { infer: true }));
+    this.redirectAfterOAuth(
+      res,
+      await this.auth.issueSession(user.userId, sessionContext(req), preferredOrg(req)),
+    );
   }
 }

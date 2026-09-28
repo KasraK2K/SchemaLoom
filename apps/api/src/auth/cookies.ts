@@ -13,6 +13,12 @@ import type { AppEnv } from '../config/env';
  * | `sl_csrf`     | `${COOKIE_DOMAIN}` | **no**   | `/`         | = `sl_refresh`      |
  * | `sl_session`  | host-only          | yes      | `/`         | min(expiresAt, 12h) |
  * | `sl_org`      | host-only          | yes      | `/api/auth` | = `sl_refresh`      |
+ * | `sl_mfa`      | host-only          | yes      | `/api/auth` | 5 minutes           |
+ *
+ * `sl_mfa` is the half-login a 2FA user holds between their first factor and their
+ * code. It is not in `AUTHORITY_COOKIES`: it is issued before there is any `sl_csrf` to
+ * echo, and a forged cross-site POST carrying it still has to supply the victim's TOTP
+ * code — at which point the forger already has what they would be stealing.
  *
  * `sl_org` is a PREFERENCE, not authority: the active organisation the last
  * `POST /auth/switch-org` chose, which refresh and login honour only after re-checking
@@ -30,6 +36,7 @@ export const COOKIE_NAMES = {
   csrf: 'sl_csrf',
   session: 'sl_session',
   org: 'sl_org',
+  mfa: 'sl_mfa',
 } as const;
 
 export type CookieName = (typeof COOKIE_NAMES)[keyof typeof COOKIE_NAMES];
@@ -83,7 +90,10 @@ export function cookieOptionsFor(
     httpOnly: name !== COOKIE_NAMES.csrf,
     secure: policy.secure,
     sameSite: 'lax',
-    path: name === COOKIE_NAMES.refresh || name === COOKIE_NAMES.org ? REFRESH_COOKIE_PATH : '/',
+    path:
+      name === COOKIE_NAMES.refresh || name === COOKIE_NAMES.org || name === COOKIE_NAMES.mfa
+        ? REFRESH_COOKIE_PATH
+        : '/',
     ...(scoped && policy.domain ? { domain: policy.domain } : {}),
     maxAge: maxAgeSec * 1000,
   };
@@ -115,6 +125,20 @@ export function setUserSessionCookies(
   res.cookie(COOKIE_NAMES.csrf, c.csrfToken, {
     ...cookieOptionsFor(COOKIE_NAMES.csrf, policy, c.refreshTtlSec),
   });
+}
+
+export function setMfaChallengeCookie(
+  res: Response,
+  policy: CookiePolicy,
+  token: string,
+  ttlSec: number,
+): void {
+  res.cookie(COOKIE_NAMES.mfa, token, cookieOptionsFor(COOKIE_NAMES.mfa, policy, ttlSec));
+}
+
+export function clearMfaChallengeCookie(res: Response, policy: CookiePolicy): void {
+  const { maxAge: _maxAge, ...options } = cookieOptionsFor(COOKIE_NAMES.mfa, policy, 0);
+  res.clearCookie(COOKIE_NAMES.mfa, options);
 }
 
 /** The share-link visitor cookie (doc 05 §7.12). Stateless — there is no `sessions` row. */

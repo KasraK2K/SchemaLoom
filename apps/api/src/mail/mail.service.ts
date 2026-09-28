@@ -73,6 +73,35 @@ export class MailService {
     });
   }
 
+  /** No name: the address may not belong to an account yet. */
+  async sendMagicLinkEmail(to: string, token: string): Promise<void> {
+    const url = this.link('/magic-link', token);
+    await this.send({
+      to,
+      subject: 'Your SchemaLoom sign-in link',
+      text: `Sign in to SchemaLoom:\n${url}\n\nThe link works once and expires in 15 minutes. If you did not ask for this, ignore this email.`,
+      html: layout(
+        'Hi,',
+        'Sign in to SchemaLoom. The link works once and expires in 15 minutes. If you did not ask for this, ignore this email.',
+        url,
+        'Sign in',
+      ),
+    });
+  }
+
+  /** Doc 05 §6.4 (R11). The page GETs the invite and POSTs the accept once signed in. */
+  async sendInvitationEmail(to: string, inviterName: string, orgName: string, token: string): Promise<void> {
+    const base = this.config.get('WEB_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
+    const url = `${base}/invite/${encodeURIComponent(token)}`;
+    const body = `${inviterName} shared a schema in ${orgName} with you on SchemaLoom. The invitation expires in 7 days.`;
+    await this.send({
+      to,
+      subject: `${inviterName} invited you to ${orgName} on SchemaLoom`,
+      text: `Hi,\n\n${body}\n${url}`,
+      html: layout('Hi,', body, url, 'Open the invitation'),
+    });
+  }
+
   /**
    * A dead SMTP box must not 500 a registration that already committed. The token row
    * exists either way and "resend verification" is one click, so the failure is logged

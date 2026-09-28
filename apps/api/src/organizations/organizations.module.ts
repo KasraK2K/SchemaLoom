@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
+import { RolesService } from './roles.service';
 
 /**
  * `PrismaModule` and `AccessModule` are `@Global()` (doc 01 §4), so `PrismaService` and
@@ -10,7 +11,7 @@ import { OrganizationsService } from './organizations.service';
  */
 @Module({
   controllers: [OrganizationsController],
-  providers: [OrganizationsService],
+  providers: [OrganizationsService, RolesService],
   exports: [OrganizationsService],
 })
 export class OrganizationsModule {}

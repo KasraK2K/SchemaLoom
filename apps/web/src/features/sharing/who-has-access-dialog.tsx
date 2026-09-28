@@ -11,6 +11,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTerminology } from '@/engines';
+import { ApiError } from '@/lib/api-client';
 import { AccessRequestsPanel } from './access-requests-panel';
 import { AddGrantForm } from './add-grant-form';
 import { ancestorChain, decidingOwnGrant } from './effective';
@@ -170,6 +171,7 @@ function AccessBody({ projectId }: { readonly projectId: string }) {
   };
 
   const stagedProposal = staged === null ? null : proposalFor(staged);
+  const failure = write.error ?? remove.error;
 
   return (
     <div className="mt-3 flex flex-col gap-4">
@@ -220,6 +222,12 @@ function AccessBody({ projectId }: { readonly projectId: string }) {
             className="text-xs text-text-muted"
           />
         </div>
+      )}
+
+      {failure !== null && (
+        <p role="alert" className="text-xs text-danger-text">
+          {writeErrorMessage(failure)}
+        </p>
       )}
 
       {staged !== null && stagedProposal !== null && (
@@ -303,4 +311,17 @@ function AccessBody({ projectId }: { readonly projectId: string }) {
       )}
     </div>
   );
+}
+
+/** The API's own message is written for people; a few codes get a sentence of context. */
+function writeErrorMessage(error: Error): string {
+  if (!(error instanceof ApiError)) return 'That change could not be saved.';
+  if (error.code === 'guest_invites_disabled') {
+    return 'This organisation does not allow inviting people from outside it.';
+  }
+  if (error.code === 'guest_cannot_manage') {
+    return 'People outside the organisation cannot be given sharing rights.';
+  }
+  if (error.code === 'invalid_email') return 'That does not look like an email address.';
+  return error.message;
 }

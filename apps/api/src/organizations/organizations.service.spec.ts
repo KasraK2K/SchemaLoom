@@ -141,6 +141,16 @@ describe('OrganizationsService.listProjects', () => {
     expect(listed[1]?.role).toBeNull();
   });
 
+  it('shows a guest (an accepted email invite) only the projects it was granted', async () => {
+    const guest = new Map<string, ProjectPermissionMap>([
+      ['prj_open', mapOf('prj_open', { orgRole: 'guest', projectAtoms: new Set<PermissionAtom>(['schema:view', 'export:run']) })],
+      ['prj_closed', mapOf('prj_closed', { orgRole: 'guest' })],
+      ['prj_area', mapOf('prj_area', { orgRole: 'guest' })],
+    ]);
+    const h = harness({ membership: { organizationId: ORG }, projects: rows, maps: guest });
+    expect((await h.service.listProjects(USER, 'acme')).map((p) => p.id)).toEqual(['prj_open']);
+  });
+
   it('resolves every candidate in ONE batch call, never one per project', async () => {
     const h = harness({ membership: { organizationId: ORG }, projects: rows, maps });
 

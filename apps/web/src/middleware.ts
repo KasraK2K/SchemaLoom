@@ -31,19 +31,29 @@ const AUTH_ROUTES = [
   '/verify-email',
   '/magic-link',
   '/two-factor',
-  '/invite',
 ];
 
+/**
+ * Reachable with OR without the cookie, and never bounced. An invite link (R11) is opened
+ * by people with no account and by people already signed in; the second must stay on the
+ * page to accept it, not be sent to `/`.
+ */
+const OPEN_ROUTES = ['/invite'];
+
+const under = (routes: readonly string[], pathname: string): boolean =>
+  routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
 function isAuthRoute(pathname: string): boolean {
-  return AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  return under(AUTH_ROUTES, pathname);
 }
 
 export function middleware(request: NextRequest): NextResponse {
   const hasPresence = request.cookies.has(PRESENCE_COOKIE);
   const { pathname, search } = request.nextUrl;
   const onAuthRoute = isAuthRoute(pathname);
+  const onOpenRoute = under(OPEN_ROUTES, pathname);
 
-  if (!hasPresence && !onAuthRoute) {
+  if (!hasPresence && !onAuthRoute && !onOpenRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.search = '';

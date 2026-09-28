@@ -1,11 +1,12 @@
 import { Button, Search } from '@schemaloom/ui';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { UserMenu } from '@/components/app-shell/user-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 /**
- * Server Component. The only client islands are the theme toggle and, later, the
- * command palette — the bar itself is static chrome.
+ * Server Component. The only client islands are the theme toggle, the account menu and,
+ * later, the command palette — the bar itself is static chrome.
  */
 export function TopBar({
   breadcrumb,
@@ -34,6 +35,7 @@ export function TopBar({
           <kbd className="rounded border border-border px-1 font-mono text-[0.625rem]">⌘K</kbd>
         </Button>
         <ThemeToggle />
+        <UserMenu />
       </div>
     </header>
   );

@@ -13,7 +13,7 @@ import { Prisma } from '../generated/prisma/client';
 import { AccessRequestStatus, PrincipalType } from '../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_RATELIMIT } from '../redis/redis.tokens';
-import { AccessWriter, assertNotGuestManager, assertVisible, builtInRole, type Tx } from './access-write';
+import { AccessWriter, assertNotGuestManager, assertVisible, grantableRole, type Tx } from './access-write';
 import type { RequestAccessDto } from './sharing.dto';
 
 type UserSubject = Subject & { kind: 'user' };
@@ -72,7 +72,11 @@ export class AccessRequestsService {
     const role = body.requestedRoleKey === undefined
       ? null
       : await this.prisma.role.findFirst({
-          where: { key: body.requestedRoleKey, organizationId: null, isBuiltIn: true, isArchived: false },
+          where: {
+            key: body.requestedRoleKey,
+            isArchived: false,
+            OR: [{ organizationId: null, isBuiltIn: true }, { organizationId: project.organizationId }],
+          },
           select: { id: true },
         });
 
@@ -153,7 +157,7 @@ export class AccessRequestsService {
    */
   async approve(subject: UserSubject, requestId: string, roleKey: string): Promise<void> {
     const request = await this.pending(subject, requestId);
-    const role = await builtInRole(this.prisma, roleKey);
+    const role = await grantableRole(this.prisma, request.project.organizationId, roleKey);
     const ref = { type: request.resourceType, id: request.resourceId };
 
     await this.writer.write(subject, request.projectId, async ({ tx, map, skel }) => {

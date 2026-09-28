@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -16,8 +17,9 @@ import {
   type Subject,
 } from '../access';
 import { PrincipalType } from '../generated/prisma/enums';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessWriter, assertNotGuestManager, assertVisible, builtInRole } from './access-write';
+import { AccessWriter, assertNotGuestManager, assertVisible, grantableRole } from './access-write';
 import type { CreateGrantDto, UpdateGrantDto } from './sharing.dto';
 
 type UserSubject = Subject & { kind: 'user' };
@@ -63,6 +65,14 @@ export interface AccessList {
 }
 
 const CANDIDATE_LIMIT = 10;
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** The shape `access_grants_email_shape_ck` enforces, checked first so it is a 400. */
+const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** Same scheme as `VerificationService`: only `sha256(token)` is stored. */
+export function hashInviteToken(raw: string): string {
+  return createHash('sha256').update(raw).digest('hex');
+}
 
 /**
  * Doc 05 §7.7 ("Who has access"), §7.14 (the grant write path) and R4/R4a.
@@ -78,6 +88,7 @@ export class GrantsService {
     private readonly prisma: PrismaService,
     private readonly resolver: PermissionResolver,
     private readonly writer: AccessWriter,
+    private readonly mail: MailService,
   ) {}
 
   async accessList(projectId: string, map: ProjectPermissionMap): Promise<AccessList> {
@@ -86,8 +97,11 @@ export class GrantsService {
     if (map.orgRole === 'guest') throw new ForbiddenException({ code: 'sharing_not_permitted' });
 
     const skel = await this.resolver.skeleton(projectId);
-    const [project, areas, entities, roles] = await Promise.all([
-      this.prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { name: true } }),
+    const project = await this.prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { name: true, organizationId: true },
+    });
+    const [areas, entities, roles] = await Promise.all([
       this.prisma.area.findMany({
         where: { projectId },
         select: { id: true, name: true },
@@ -98,7 +112,7 @@ export class GrantsService {
         select: { id: true, name: true, areaId: true },
         orderBy: { name: 'asc' },
       }),
-      this.builtInRoles(),
+      this.pickerRoles(project.organizationId),
     ]);
 
     const sees = (ref: ResourceRef): boolean => atomsAt(map, skel, ref).has('schema:view');
@@ -182,14 +196,10 @@ export class GrantsService {
    * know whether a direct grant already exists at the scope it is showing.
    */
   async create(subject: UserSubject, projectId: string, body: CreateGrantDto): Promise<{ id: string }> {
-    if (body.principalKind === 'email_invite') {
-      // R11 is Phase 3: a pending grant needs the Invitation row, the email and the
-      // acceptance transaction. Refused by name so the UI can say so.
-      throw new BadRequestException({ code: 'email_invite_not_available' });
-    }
     const { organizationId } = await this.projectOrg(projectId);
+    if (body.principalKind === 'email_invite') return this.invite(subject, projectId, organizationId, body);
     await this.assertPrincipalInOrg(body.principalKind, body.principalId, organizationId);
-    const role = await builtInRole(this.prisma, body.roleKey);
+    const role = await grantableRole(this.prisma, organizationId, body.roleKey);
     const ref = { type: body.resourceType, id: body.resourceId };
     const principalType = PrincipalType[body.principalKind];
 
@@ -231,7 +241,7 @@ export class GrantsService {
   /** `PATCH /grants/:id` — role and the two toggles; R4 measured at the grant's resource. */
   async update(subject: UserSubject, grantId: string, body: UpdateGrantDto): Promise<{ id: string }> {
     const grant = await this.editableGrant(subject, grantId);
-    const role = await builtInRole(this.prisma, body.roleKey);
+    const role = await grantableRole(this.prisma, grant.organizationId, body.roleKey);
     const ref = refOf(grant);
 
     return this.writer.write(subject, grant.projectId, async ({ tx, map, skel }) => {
@@ -255,7 +265,106 @@ export class GrantsService {
     });
   }
 
-  /** `DELETE /grants/:id` — R4a: subject to R5 only, never to R4. */
+  /**
+   * R11 — a pending `email_invite` grant plus its `Invitation`, through the same R4 checks
+   * as any grant. An address that already belongs to an org member is not an invite at
+   * all: it becomes that member's ordinary user grant. Anyone else joins as a `guest`.
+   * A second invite to the same (resource, email) updates the grant and re-sends with a
+   * fresh token — the old link stops working, which is what "resend" should mean.
+   */
+  private async invite(
+    subject: UserSubject,
+    projectId: string,
+    organizationId: string,
+    body: CreateGrantDto,
+  ): Promise<{ id: string }> {
+    const email = body.principalId.trim().toLowerCase();
+    if (!EMAIL_SHAPE.test(email)) throw new BadRequestException({ code: 'invalid_email' });
+
+    const member = await this.prisma.orgMember.findFirst({
+      where: { organizationId, user: { email } },
+      select: { userId: true },
+    });
+    if (member !== null) {
+      const { resourceType, resourceId, roleKey, canUseAi, canViewRestricted } = body;
+      return this.create(subject, projectId, {
+        principalKind: 'user',
+        principalId: member.userId,
+        resourceType,
+        resourceId,
+        roleKey,
+        canUseAi,
+        canViewRestricted,
+      });
+    }
+
+    const org = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { name: true, settings: true },
+    });
+    // orgSettings (doc 02 §7): `allowGuestInvites` defaults to true when unset.
+    const settings = org.settings as { allowGuestInvites?: unknown } | null;
+    if (settings?.allowGuestInvites === false) {
+      throw new ForbiddenException({ code: 'guest_invites_disabled' });
+    }
+
+    const role = await grantableRole(this.prisma, organizationId, body.roleKey);
+    const ref = { type: body.resourceType, id: body.resourceId };
+    const token = randomBytes(32).toString('base64url');
+
+    const result = await this.writer.write(subject, projectId, async ({ tx, map, skel }) => {
+      assertVisible(map, skel, ref);
+      const proposed = materialise({ atoms: role.atoms, canUseAi: body.canUseAi, canViewRestricted: body.canViewRestricted });
+      this.resolver.assertMayGrant(map, skel, ref, proposed);
+      await assertNotGuestManager(tx, organizationId, { type: PrincipalType.email_invite, id: email }, proposed);
+
+      const key = {
+        resourceType: ref.type,
+        resourceId: ref.id,
+        principalType: PrincipalType.email_invite,
+        principalId: email,
+      };
+      const before = await tx.accessGrant.findUnique({
+        where: { resourceType_resourceId_principalType_principalId: key },
+      });
+      const modifiers = { roleId: role.id, canUseAi: body.canUseAi, canViewRestricted: body.canViewRestricted };
+      const after = await tx.accessGrant.upsert({
+        where: { resourceType_resourceId_principalType_principalId: key },
+        update: modifiers,
+        create: { ...key, ...modifiers, organizationId, projectId, createdById: subject.userId },
+      });
+      const invitation = {
+        tokenHash: hashInviteToken(token),
+        expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+        invitedById: subject.userId,
+        revokedAt: null,
+      };
+      await tx.invitation.upsert({
+        where: { accessGrantId: after.id },
+        update: invitation,
+        create: { ...invitation, organizationId, email, orgRole: 'guest', accessGrantId: after.id },
+      });
+      await this.writer.audit(tx, subject, projectId, organizationId, {
+        action: before === null ? 'grant.created' : 'grant.updated',
+        resourceType: ref.type,
+        resourceId: ref.id,
+        metadata: { grantId: after.id, invited: email, before: snapshot(before), after: snapshot(after) },
+      });
+      const inviter = await tx.user.findUniqueOrThrow({
+        where: { id: subject.userId },
+        select: { name: true, email: true },
+      });
+      return { id: after.id, inviterName: inviter.name || inviter.email };
+    });
+
+    await this.mail.sendInvitationEmail(email, result.inviterName, org.name, token);
+    return { id: result.id };
+  }
+
+  /**
+   * `DELETE /grants/:id` — R4a: subject to R5 only, never to R4. For a pending invite this
+   * is also the revoke: `invitations.access_grant_id` cascades, so the token dies with it.
+   */
   async remove(subject: UserSubject, grantId: string): Promise<void> {
     const grant = await this.editableGrant(subject, grantId);
     const ref = refOf(grant);
@@ -283,7 +392,7 @@ export class GrantsService {
       await this.prisma.accessGrant.findMany({
         where: {
           projectId,
-          principalType: { in: [PrincipalType.user, PrincipalType.group] },
+          principalType: { in: [PrincipalType.user, PrincipalType.group, PrincipalType.email_invite] },
           OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
         include: { role: { select: { key: true, name: true, atoms: true } } },
@@ -356,6 +465,15 @@ export class GrantsService {
     };
 
     for (const g of grants) {
+      if (g.principalType === 'email_invite') {
+        // A pending invite (R11): the principal id IS the lowercased address.
+        const key = `email_invite:${g.principalId}`;
+        const principal: PrincipalRef = { kind: 'email_invite', id: g.principalId, label: g.principalId };
+        const entry: AccessEntry = entries.get(key) ?? { principal, orgRole: null, email: g.principalId, grants: [] };
+        entry.grants.push(wire(g, principal));
+        entries.set(key, entry);
+        continue;
+      }
       if (g.principalType === 'user') {
         const entry = userEntry(g.principalId);
         entry?.grants.push(wire(g, entry.principal));
@@ -374,16 +492,26 @@ export class GrantsService {
     return [...entries.values()];
   }
 
-  private async builtInRoles(): Promise<AccessList['roles']> {
+  /** The five built-ins in R2 order, then this org's live custom roles by name (R3). */
+  private async pickerRoles(organizationId: string): Promise<AccessList['roles']> {
     const rows = await this.prisma.role.findMany({
-      where: { organizationId: null, isBuiltIn: true, isArchived: false },
-      select: { key: true, name: true, atoms: true },
+      where: {
+        isArchived: false,
+        OR: [{ organizationId: null, isBuiltIn: true }, { organizationId }],
+      },
+      select: { key: true, name: true, atoms: true, isBuiltIn: true },
+      orderBy: { name: 'asc' },
     });
     const order = BUILT_IN_ROLE_ORDER as readonly string[];
-    return rows
-      .filter((r) => order.includes(r.key))
-      .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key))
-      .map((r) => ({ ...r, builtIn: true }));
+    const builtIns = rows
+      .filter((r) => r.isBuiltIn && order.includes(r.key))
+      .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+    return [...builtIns, ...rows.filter((r) => !r.isBuiltIn)].map((r) => ({
+      key: r.key,
+      name: r.name,
+      atoms: r.atoms,
+      builtIn: r.isBuiltIn,
+    }));
   }
 
   private managesAnything(map: ProjectPermissionMap, skel: ProjectSkeleton): boolean {

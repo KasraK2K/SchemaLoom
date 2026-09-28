@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { safeNextPath } from './auth-api';
+import { afterFirstFactor, safeNextPath } from './auth-api';
 
 /**
  * `?next=` is attacker-controlled: it is read straight off the URL of a page anyone can
@@ -32,5 +32,12 @@ describe('safeNextPath', () => {
 
   it('honours an explicit fallback', () => {
     expect(safeNextPath('https://evil.test', '/dashboard')).toBe('/dashboard');
+  });
+});
+
+describe('afterFirstFactor', () => {
+  it('sends a 2FA login to the code prompt, carrying a SAFE next', () => {
+    expect(afterFirstFactor({ mfaRequired: true }, '/acme')).toBe('/two-factor?next=%2Facme');
+    expect(afterFirstFactor({ mfaRequired: true }, 'https://evil.test')).toBe('/two-factor?next=%2F');
   });
 });

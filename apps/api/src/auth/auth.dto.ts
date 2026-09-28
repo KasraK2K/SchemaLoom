@@ -31,3 +31,16 @@ export class ResetPasswordDto extends createZodDto(resetPasswordSchema) {}
 
 export const switchOrgSchema = z.object({ organizationId: z.string().min(1).max(64) });
 export class SwitchOrgDto extends createZodDto(switchOrgSchema) {}
+
+/** A 6-digit TOTP code or a recovery code; `TwoFactorService` tells them apart. */
+const code = z.string().trim().min(6).max(32);
+
+export const codeSchema = z.object({ code });
+export class CodeDto extends createZodDto(codeSchema) {}
+
+export const disableTwoFactorSchema = z
+  .object({ code: code.optional(), password: z.string().min(1).max(128).optional() })
+  .refine((v) => v.code !== undefined || v.password !== undefined, {
+    message: 'code or password is required',
+  });
+export class DisableTwoFactorDto extends createZodDto(disableTwoFactorSchema) {}

@@ -105,14 +105,24 @@ test.describe('sharing API — who has access, grants, links and requests', () =
     }
   });
 
-  test('email invites are Phase 3 and refused by name', async () => {
+  test('an email invite is a pending grant, listed by address, and removing it revokes it', async () => {
     const owner = await signIn(SEED_EMAILS.owner);
     const response = await grant(owner, {
-      principalKind: 'email_invite', principalId: 'new@example.test',
+      principalKind: 'email_invite', principalId: 'New@Example.test',
       resourceType: 'project', resourceId: P, roleKey: 'viewer',
     });
-    expect(response.status()).toBe(400);
-    expect(await errorCode(response)).toBe('email_invite_not_available');
+    expect(response.status(), await response.text()).toBe(201);
+    const { id } = (await response.json()) as { id: string };
+
+    try {
+      const pending = (await accessOf(owner)).entries.find((e) => e.principal.kind === 'email_invite');
+      expect(pending?.principal.id).toBe('new@example.test');
+      expect(pending?.grants.map((g) => g.roleKey)).toEqual(['viewer']);
+    } finally {
+      const removed = await owner.api.delete(`/api/grants/${id}`, { headers: write(owner) });
+      expect(removed.status()).toBe(204);
+    }
+    expect((await accessOf(owner)).entries.some((e) => e.principal.kind === 'email_invite')).toBe(false);
   });
 
   test('a share link is returned once, listed without its token, and revoked with its grant', async () => {

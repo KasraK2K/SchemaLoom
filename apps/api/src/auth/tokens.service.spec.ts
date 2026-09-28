@@ -26,6 +26,9 @@ function fakePrisma() {
   const matches = (row: SessionRow, where: Partial<SessionRow>): boolean =>
     Object.entries(where).every(([key, value]) => {
       const actual = row[key as keyof SessionRow];
+      if (typeof value === 'object' && value !== null && 'not' in value) {
+        return actual !== (value as { not: unknown }).not;
+      }
       return actual instanceof Date && value instanceof Date
         ? actual.getTime() === value.getTime()
         : actual === value;
@@ -199,5 +202,36 @@ describe('access and share-link tokens', () => {
     expect(
       (await tokens.issueShareSession(claims, new Date('2026-01-01T00:30:00Z'), now)).ttlSec,
     ).toBe(1800);
+  });
+});
+
+describe('2FA challenge', () => {
+  it('is its own audience: neither an access token nor a challenge stands in for the other', async () => {
+    const challenge = await tokens.issueMfaChallenge('u1');
+    const access = await tokens.issueAccessToken({ userId: 'u1', orgId: null });
+    expect(await tokens.verifyAccessToken(challenge)).toBeNull();
+    expect(await tokens.verifyMfaChallenge(access)).toBeNull();
+    expect(await tokens.verifyMfaChallenge(challenge)).toMatchObject({ userId: 'u1' });
+  });
+});
+
+describe('device sessions', () => {
+  it('revoking a family makes its refresh fail, and only the owner can revoke it', async () => {
+    const laptop = await tokens.startSession('u1');
+    expect(await tokens.revokeFamilyForUser('intruder', laptop.familyId)).toBe(false);
+    await expect(tokens.rotate(laptop.refreshToken)).resolves.toMatchObject({ userId: 'u1' });
+
+    const phone = await tokens.startSession('u1');
+    expect(await tokens.revokeFamilyForUser('u1', phone.familyId)).toBe(true);
+    await expect(tokens.rotate(phone.refreshToken)).rejects.toThrow();
+    expect(await tokens.familyOf(phone.refreshToken)).toBeNull();
+  });
+
+  it('"log out other devices" keeps the current family alive', async () => {
+    const here = await tokens.startSession('u1');
+    const there = await tokens.startSession('u1');
+    await tokens.revokeOtherFamilies('u1', here.familyId);
+    await expect(tokens.rotate(there.refreshToken)).rejects.toThrow();
+    await expect(tokens.rotate(here.refreshToken)).resolves.toMatchObject({ userId: 'u1' });
   });
 });

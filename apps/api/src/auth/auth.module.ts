@@ -4,10 +4,13 @@ import { PassportModule } from '@nestjs/passport';
 import { MailModule } from '../mail/mail.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { GitHubAuthGuard } from './github-auth.guard';
+import { githubStrategyProvider } from './github.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { googleStrategyProvider } from './google.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { TokensService } from './tokens.service';
+import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
 
 /**
@@ -21,14 +24,11 @@ import { VerificationService } from './verification.service';
  * used by mistake.
  *
  * `PassportModule` with no default strategy and no session: passport is here only to
- * run the Google redirect dance. Everything else is cookies and `JwtAuthGuard`.
+ * run the Google and GitHub redirect dances. Everything else is cookies and `JwtAuthGuard`.
  *
- * NOT built in Phase 1 (open question Q28, accepted): magic link, GitHub OAuth, TOTP,
- * recovery codes, device-session management. Their seams: `VerificationPurpose.magic_link`
- * already has a TTL in `VERIFICATION_TTL_SEC`; a GitHub strategy is a copy of
- * `googleStrategyProvider` with the other two env vars; the device list is a
- * `DISTINCT ON (family_id)` query over the rows `TokensService` already writes, and
- * "log out other devices" is `revokeAllForUser` minus the current family.
+ * Phase 3 (Q28's deferred set): magic link, GitHub OAuth, TOTP + recovery codes and the
+ * device list. Every login path still ends in `AuthService.issueSession`, which is where
+ * the 2FA gate sits.
  */
 @Module({
   imports: [PassportModule.register({ session: false }), JwtModule.register({}), MailModule],
@@ -38,8 +38,11 @@ import { VerificationService } from './verification.service';
     TokensService,
     VerificationService,
     JwtAuthGuard,
+    TwoFactorService,
     GoogleAuthGuard,
     googleStrategyProvider,
+    GitHubAuthGuard,
+    githubStrategyProvider,
   ],
   exports: [JwtAuthGuard, AuthService, TokensService],
 })

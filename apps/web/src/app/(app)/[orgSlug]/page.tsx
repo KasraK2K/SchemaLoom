@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
@@ -44,7 +45,17 @@ export default async function OrgProjectsPage({
       breadcrumb={<span className="truncate">{org.name}</span>}
     >
       <div className="mx-auto max-w-3xl p-8">
-        <h1 className="text-lg font-semibold text-text">Projects</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-text">Projects</h1>
+          {(org.orgRole === 'owner' || org.orgRole === 'admin') && (
+            <Link
+              href={`/${orgSlug}/settings/roles`}
+              className="text-sm text-text-muted hover:text-text"
+            >
+              Roles
+            </Link>
+          )}
+        </div>
         <p className="mt-1 text-sm text-text-muted">
           {projects.length === 0
             ? 'Nothing here you can open yet.'

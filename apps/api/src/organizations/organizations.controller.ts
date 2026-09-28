@@ -1,17 +1,37 @@
-import { Body, Controller, Get, Param, Post, Req, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Authenticated } from '../access';
 import { getPrincipal } from '../auth';
 import type { ProjectSummary } from '../projects';
-import { CreateOrganizationDto, CreateWorkspaceDto } from './organizations.dto';
+import {
+  CreateOrganizationDto,
+  CreateRoleDto,
+  CreateWorkspaceDto,
+  UpdateRoleDto,
+} from './organizations.dto';
 import { OrganizationsService } from './organizations.service';
 import type { OrganizationSummary, WorkspaceSummary } from './organizations.types';
+import { RolesService, type RoleView } from './roles.service';
 
 @ApiTags('organizations')
 @Controller('organizations')
 export class OrganizationsController {
-  constructor(private readonly organizations: OrganizationsService) {}
+  constructor(
+    private readonly organizations: OrganizationsService,
+    private readonly roles: RolesService,
+  ) {}
 
   /**
    * MARKER: `@Authenticated()` on both routes, and the alternative was considered and is
@@ -90,6 +110,54 @@ export class OrganizationsController {
     @Body() dto: CreateWorkspaceDto,
   ): Promise<WorkspaceSummary> {
     return this.organizations.createWorkspace(this.userId(req), orgSlug, dto.name);
+  }
+
+  /**
+   * Doc 05 §4 — custom roles. Same marker and membership-first rule as the workspace
+   * routes: `@RequireOrgRole` locates an org by id and admits only the session's active
+   * one, and these are addressed by slug. `RolesService` applies V1 (owner/admin) to every
+   * write; the list answers any non-guest member, because the role picker needs it.
+   */
+  @ApiOperation({ summary: 'Built-in and custom roles of the organisation' })
+  @Authenticated()
+  @Get(':orgSlug/roles')
+  async listRoles(@Req() req: Request, @Param('orgSlug') orgSlug: string): Promise<RoleView[]> {
+    return this.roles.list(this.userId(req), orgSlug);
+  }
+
+  @ApiOperation({ summary: 'Create a custom role (owner or admin)' })
+  @Authenticated()
+  @Post(':orgSlug/roles')
+  async createRole(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Body() dto: CreateRoleDto,
+  ): Promise<RoleView> {
+    return this.roles.create(this.userId(req), orgSlug, dto);
+  }
+
+  @ApiOperation({ summary: 'Edit, archive or unarchive a custom role (owner or admin)' })
+  @Authenticated()
+  @Patch(':orgSlug/roles/:roleId')
+  async updateRole(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('roleId') roleId: string,
+    @Body() dto: UpdateRoleDto,
+  ): Promise<RoleView> {
+    return this.roles.update(this.userId(req), orgSlug, roleId, dto);
+  }
+
+  @ApiOperation({ summary: 'Delete an unused custom role (owner or admin)' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete(':orgSlug/roles/:roleId')
+  async deleteRole(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('roleId') roleId: string,
+  ): Promise<void> {
+    await this.roles.remove(this.userId(req), orgSlug, roleId);
   }
 
   /**

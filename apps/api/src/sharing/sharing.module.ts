@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth';
+import { MailModule } from '../mail/mail.module';
 import { AccessRequestsService } from './access-requests.service';
 import { AccessWriter } from './access-write';
 import { GrantsService } from './grants.service';
+import { InvitationsController } from './invitations.controller';
+import { InvitationsService } from './invitations.service';
 import { ShareLinkRedeemController } from './share-link-redeem.controller';
 import { ShareLinkRedeemService } from './share-link-redeem.service';
 import { ShareLinksService } from './share-links.service';
@@ -13,15 +16,17 @@ import { SharingController } from './sharing.controller';
  * global, so their providers resolve from the root injector (see `ProjectsModule`).
  */
 @Module({
-  // `TokensService` mints the `sl_session` a redeemed link hands out.
-  imports: [AuthModule],
-  controllers: [SharingController, ShareLinkRedeemController],
+  // `TokensService` mints the `sl_session` a redeemed link hands out; `MailService` sends
+  // email invites (R11).
+  imports: [AuthModule, MailModule],
+  controllers: [SharingController, ShareLinkRedeemController, InvitationsController],
   providers: [
     AccessWriter,
     GrantsService,
     ShareLinksService,
     AccessRequestsService,
     ShareLinkRedeemService,
+    InvitationsService,
   ],
 })
 export class SharingModule {}

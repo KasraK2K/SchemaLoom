@@ -82,7 +82,16 @@ export function apiUrl(path: string): string {
 }
 
 /** Routes that must never trigger a refresh attempt — refreshing them is circular. */
-const NO_REFRESH = new Set(['/auth/refresh', '/auth/login', '/auth/register', '/auth/logout']);
+const NO_REFRESH = new Set([
+  '/auth/refresh',
+  '/auth/login',
+  '/auth/register',
+  '/auth/logout',
+  '/auth/magic-link/consume',
+  // A 401 here is an expired 2FA challenge, not an expired session. Refreshing would
+  // bounce the visitor to /login?expired=1 with a misleading message.
+  '/auth/2fa/verify',
+]);
 
 /**
  * In flight refresh, shared by every caller.

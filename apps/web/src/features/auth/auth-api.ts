@@ -22,6 +22,7 @@ export const AuthUserSchema = z.object({
   avatarUrl: z.string().nullable(),
   theme: z.string(),
   emailVerified: z.boolean(),
+  twoFactorEnabled: z.boolean(),
   organizationId: z.string().nullable(),
 });
 export type AuthUser = z.infer<typeof AuthUserSchema>;
@@ -32,12 +33,57 @@ const SessionSchema = z.object({
   user: AuthUserSchema,
 });
 
-export async function signIn(email: string, password: string): Promise<AuthUser> {
+/**
+ * Every first-factor login (password, magic link) either finishes or, for an account
+ * with 2FA, answers `{ mfaRequired: true }` and leaves a short-lived challenge cookie
+ * for `/two-factor` to spend.
+ */
+const LoginResultSchema = z.union([
+  z.object({ mfaRequired: z.literal(true) }),
+  SessionSchema.transform(({ user }) => ({ mfaRequired: false as const, user })),
+]);
+export type LoginResult = z.infer<typeof LoginResultSchema>;
+
+export async function signIn(email: string, password: string): Promise<LoginResult> {
   const data = await apiFetch<unknown>('/auth/login', {
     method: 'POST',
     body: { email, password },
   });
-  return SessionSchema.parse(data).user;
+  return LoginResultSchema.parse(data);
+}
+
+/** Always 202 from the API, known address or not. */
+export async function requestMagicLink(email: string): Promise<void> {
+  await apiFetch<unknown>('/auth/magic-link', { method: 'POST', body: { email } });
+}
+
+export async function consumeMagicLink(token: string): Promise<LoginResult> {
+  const data = await apiFetch<unknown>('/auth/magic-link/consume', {
+    method: 'POST',
+    body: { token },
+  });
+  return LoginResultSchema.parse(data);
+}
+
+/** A 6-digit TOTP code or a recovery code, against the challenge cookie. */
+export async function verifyTwoFactor(code: string): Promise<void> {
+  await apiFetch<unknown>('/auth/2fa/verify', { method: 'POST', body: { code } });
+}
+
+const ProvidersSchema = z.object({ google: z.boolean(), github: z.boolean() });
+export type OAuthProviders = z.infer<typeof ProvidersSchema>;
+
+export async function fetchOAuthProviders(): Promise<OAuthProviders> {
+  return ProvidersSchema.parse(await apiFetch<unknown>('/auth/providers'));
+}
+
+/**
+ * Where to send the browser after a first factor: straight on, or to the code prompt
+ * carrying the same `next` so the second factor lands where the first was headed.
+ */
+export function afterFirstFactor(result: LoginResult, next: string | null): string {
+  const target = safeNextPath(next);
+  return result.mfaRequired ? `/two-factor?next=${encodeURIComponent(target)}` : target;
 }
 
 export async function signUp(input: {

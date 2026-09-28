@@ -51,7 +51,16 @@ export function GrantRow({
   const chain = ancestorChain(resources, scope);
   const deciding = decidingOwnGrant(entry, chain);
   const direct = deciding?.resourceId === scope.id ? deciding : undefined;
-  const role = roles.find((option) => option.key === deciding?.roleKey) ?? roles[0];
+  // An archived custom role is not offered by the picker but still decides existing
+  // grants; show it as the current value rather than silently showing roles[0].
+  const options =
+    deciding !== undefined && !roles.some((option) => option.key === deciding.roleKey)
+      ? [
+          ...roles,
+          { key: deciding.roleKey, name: `${deciding.roleName} (archived)`, atoms: deciding.atoms, builtIn: false },
+        ]
+      : roles;
+  const role = options.find((option) => option.key === deciding?.roleKey) ?? options[0];
   // A grant this principal holds higher up the chain. Editing it here would silently
   // create a NARROWING grant, so the toggles stay read-only until a role is set at this
   // scope and the row says where the access actually comes from.
@@ -76,7 +85,7 @@ export function GrantRow({
             )}
             {entry.principal.kind === 'email_invite' && (
               <span className="ml-1.5 rounded bg-surface-sunken px-1 text-[10px] text-text-subtle">
-                Invited
+                Invite pending
               </span>
             )}
           </p>
@@ -97,7 +106,7 @@ export function GrantRow({
             onRoleChange(event.target.value);
           }}
         >
-          {roles.map((option) => (
+          {options.map((option) => (
             <option key={option.key} value={option.key}>
               {option.name}
             </option>

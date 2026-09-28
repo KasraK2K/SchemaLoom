@@ -11,9 +11,8 @@ import { z } from 'zod';
 const id = z.string().min(1).max(64);
 
 /**
- * `email_invite` is accepted by the schema because the UI sends it, and refused by the
- * service with a named code: R11 (doc 05 §6.4) is Phase 3 — a pending grant needs the
- * `Invitation` row, the email and the acceptance transaction, none of which exist yet.
+ * For `email_invite` the `principalId` is the address (R11, doc 05 §6.4); the service
+ * lowercases and shape-checks it, and `roleKey` may name a built-in or an org custom role.
  */
 export const createGrantSchema = z.object({
   principalKind: z.enum(['user', 'group', 'email_invite']),

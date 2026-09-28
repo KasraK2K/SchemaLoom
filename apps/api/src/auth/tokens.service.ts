@@ -7,15 +7,36 @@ import { PrismaService } from '../prisma/prisma.service';
 import { parseDurationSec } from './duration';
 
 /**
- * Two audiences on one secret. `sl_access` and `sl_session` are both httpOnly cookies on
- * the API origin, so without an audience claim a share-link visitor's cookie would
- * verify as an access token and vice versa. The audience is checked on verify, so
- * neither can stand in for the other.
+ * Three audiences on one secret. `sl_access`, `sl_session` and `sl_mfa` are all httpOnly
+ * cookies on the API origin, so without an audience claim a share-link visitor's cookie
+ * would verify as an access token and vice versa — and a half-finished 2FA login would
+ * be a whole one. The audience is checked on verify, so none can stand in for another.
  */
 export const JWT_AUDIENCE = {
   access: 'sl_access',
   shareSession: 'sl_session',
+  mfa: 'sl_mfa',
 } as const;
+
+/** Password, magic link or OAuth proven; the second factor is still owed. */
+export const MFA_CHALLENGE_TTL_SEC = 5 * 60;
+
+export interface MfaChallengeClaims {
+  readonly userId: string;
+  /** Per-challenge id, so attempts can be counted against this challenge alone. */
+  readonly challengeId: string;
+}
+
+/** One row of the device list: a refresh family, described by its newest row. */
+export interface DeviceSession {
+  readonly familyId: string;
+  readonly userAgent: string | null;
+  readonly ip: string | null;
+  /** The family's first row: when this device logged in. */
+  readonly signedInAt: Date;
+  /** The newest row: every refresh inserts one, so this is the last time it was used. */
+  readonly lastActiveAt: Date;
+}
 
 export interface AccessClaims {
   readonly userId: string;
@@ -133,6 +154,29 @@ export class TokensService {
     return shareLinkId ? { shareLinkId, projectId: pid, resourceId: rid } : null;
   }
 
+  // ------------------------------------------------------------ 2FA challenge
+
+  issueMfaChallenge(userId: string): Promise<string> {
+    return this.jwt.signAsync(
+      {},
+      {
+        subject: userId,
+        jwtid: randomUUID(),
+        secret: this.accessSecret,
+        expiresIn: MFA_CHALLENGE_TTL_SEC,
+        audience: JWT_AUDIENCE.mfa,
+      },
+    );
+  }
+
+  async verifyMfaChallenge(token: string): Promise<MfaChallengeClaims | null> {
+    const payload = await this.verifyJwt(token, JWT_AUDIENCE.mfa);
+    if (!payload) return null;
+    const { sub, jti } = payload;
+    if (typeof sub !== 'string' || typeof jti !== 'string') return null;
+    return { userId: sub, challengeId: jti };
+  }
+
   private async verifyJwt(
     token: string,
     audience: string,
@@ -237,7 +281,59 @@ export class TokensService {
     if (row) await this.revokeFamily(row.familyId);
   }
 
-  /** Password reset and, in Phase 3, "log out other devices". */
+  // ------------------------------------------------------------ device sessions
+
+  /** The family a refresh token belongs to, if it is still live — "this device". */
+  async familyOf(rawToken: string): Promise<string | null> {
+    const row = await this.prisma.session.findUnique({
+      where: { refreshTokenHash: hashRefreshToken(rawToken) },
+      select: { familyId: true, revokedAt: true },
+    });
+    return row?.revokedAt === null ? row.familyId : null;
+  }
+
+  /**
+   * One row per family, not per rotation — doc 02's query. The newest row carries the
+   * latest user agent and IP. A rotated row is only a predecessor, so the filter is on
+   * the newest row alone: unrevoked and unexpired.
+   */
+  listDevices(userId: string, now = new Date()): Promise<DeviceSession[]> {
+    return this.prisma.$queryRaw<DeviceSession[]>`
+      SELECT "familyId", "userAgent", ip, "signedInAt", "lastActiveAt" FROM (
+        SELECT DISTINCT ON (family_id)
+               family_id AS "familyId", user_agent AS "userAgent", ip,
+               MIN(created_at) OVER (PARTITION BY family_id) AS "signedInAt",
+               created_at AS "lastActiveAt", revoked_at, expires_at
+          FROM sessions
+         WHERE user_id = ${userId}
+         ORDER BY family_id, created_at DESC
+      ) latest
+      WHERE revoked_at IS NULL AND expires_at > ${now}
+      ORDER BY "lastActiveAt" DESC`;
+  }
+
+  /** Scoped to the user: someone else's family id revokes nothing (the caller 404s). */
+  async revokeFamilyForUser(userId: string, familyId: string): Promise<boolean> {
+    const revoked = await this.prisma.session.updateMany({
+      where: { userId, familyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return revoked.count > 0;
+  }
+
+  /** "Log out other devices": `revokeAllForUser` minus the current family. */
+  async revokeOtherFamilies(userId: string, keepFamilyId: string | null): Promise<void> {
+    await this.prisma.session.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+        ...(keepFamilyId === null ? {} : { familyId: { not: keepFamilyId } }),
+      },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  /** Password reset. */
   async revokeAllForUser(userId: string, now = new Date()): Promise<void> {
     await this.prisma.session.updateMany({
       where: { userId, revokedAt: null },

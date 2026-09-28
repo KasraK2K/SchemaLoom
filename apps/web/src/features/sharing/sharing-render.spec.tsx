@@ -82,6 +82,12 @@ describe('<GrantRow>', () => {
     expect(html).toContain('always included in Analyst');
   });
 
+  it('shows an archived custom role as the current value, not roles[0]', () => {
+    const archived = { ...grant(ANA, BILLING, 'viewer'), roleKey: 'old-analyst', roleName: 'Old analyst' };
+    const html = renderToStaticMarkup(<GrantRow {...rowProps} entry={entry(ANA, [archived])} />);
+    expect(html).toContain('<option value="old-analyst" selected="">Old analyst (archived)</option>');
+  });
+
   it('leaves a free toggle unchecked and enabled', () => {
     const html = renderToStaticMarkup(
       <GrantRow {...rowProps} entry={entry(ANA, [grant(ANA, BILLING, 'editor')])} />,

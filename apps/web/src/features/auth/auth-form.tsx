@@ -1,15 +1,23 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, cn } from '@schemaloom/ui';
+import { Button, buttonVariants, cn } from '@schemaloom/ui';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useId, useState } from 'react';
 import { useForm, type FieldError } from 'react-hook-form';
 import { z } from 'zod';
 import { clientEnv } from '@/env.client';
-import { ApiError, apiFetch } from '@/lib/api-client';
-import { safeNextPath, signIn, signUp } from './auth-api';
+import { ApiError, apiFetch, apiUrl } from '@/lib/api-client';
+import {
+  afterFirstFactor,
+  fetchOAuthProviders,
+  requestMagicLink,
+  safeNextPath,
+  signIn,
+  signUp,
+  type OAuthProviders,
+} from './auth-api';
 
 /**
  * One component for both sign-in and sign-up. They differ by one field and one endpoint;
@@ -77,7 +85,7 @@ function Field({ label, type, autoComplete, error, registration }: FieldProps) {
 }
 
 /** What the user should actually read when the API refuses. */
-function messageFor(error: unknown): string {
+export function messageFor(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'invalid_credentials':
@@ -86,6 +94,12 @@ function messageFor(error: unknown): string {
         return 'That email and password do not match.';
       case 'email_taken':
         return 'An account with that email already exists.';
+      case 'invalid_code':
+        return 'That code is not right. Codes change every 30 seconds.';
+      case 'token_invalid':
+        return 'That link has expired or was already used. Ask for a new one.';
+      case 'mfa_challenge_invalid':
+        return 'That sign-in took too long. Start again.';
       case 'rate_limited':
       case 'too_many_requests':
         return 'Too many attempts. Wait a moment and try again.';
@@ -106,6 +120,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   const isSignUp = mode === 'sign-up';
   const params = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
+  const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
 
   // `?expired=1` means a Server Component hit a 401 it could not refresh itself. The
   // refresh token usually still works, so spend it here and go straight back; only a
@@ -132,20 +147,34 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
     try {
+      let destination = safeNextPath(params.get('next'));
       if (isSignUp) {
         await signUp({ email: values.email, password: values.password, name: values.name });
       } else {
-        await signIn(values.email, values.password);
+        destination = afterFirstFactor(await signIn(values.email, values.password), params.get('next'));
       }
       // A FULL navigation, not router.push: the API just set `sl_presence` on this
       // domain and the Next middleware has to see it. A client-side push can re-run
       // middleware against a request the browser built before the Set-Cookie landed,
       // which bounces straight back to /login and looks like a failed sign-in.
-      window.location.assign(safeNextPath(params.get('next')));
+      window.location.assign(destination);
     } catch (error) {
       setFormError(messageFor(error));
     }
   });
+
+  // Validates the email field alone: the password is irrelevant to a sign-in link.
+  const sendLink = async () => {
+    setFormError(null);
+    if (!(await form.trigger('email'))) return;
+    const email = form.getValues('email');
+    try {
+      await requestMagicLink(email);
+      setLinkSentTo(email);
+    } catch (error) {
+      setFormError(messageFor(error));
+    }
+  };
 
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="mt-6 flex flex-col gap-4" noValidate>
@@ -181,9 +210,23 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
         </p>
       )}
 
+      {linkSentTo !== null && (
+        <p role="status" className="rounded-md bg-surface-sunken px-3 py-2 text-sm text-text">
+          If {linkSentTo} can sign in, a link is on its way. It works once, for 15 minutes.
+        </p>
+      )}
+
       <Button type="submit" disabled={isSubmitting} className="mt-1">
         {isSubmitting ? 'Working…' : isSignUp ? 'Create account' : 'Sign in'}
       </Button>
+
+      {!isSignUp && (
+        <Button type="button" variant="outline" onClick={() => void sendLink()}>
+          Email me a sign-in link
+        </Button>
+      )}
+
+      <OAuthButtons />
 
       <p className="text-sm text-text-muted">
         {isSignUp ? 'Already have an account? ' : 'No account yet? '}
@@ -195,5 +238,42 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
         </Link>
       </p>
     </form>
+  );
+}
+
+const PROVIDER_LABELS: Record<keyof OAuthProviders, string> = {
+  google: 'Continue with Google',
+  github: 'Continue with GitHub',
+};
+
+/**
+ * Drawn only for the providers the API has credentials for — an unconfigured provider's
+ * route is a 404, so a button for it would be a dead end. Plain links: OAuth is a
+ * top-level navigation to the API, which redirects back here when it is done.
+ */
+function OAuthButtons() {
+  const [providers, setProviders] = useState<OAuthProviders | null>(null);
+  useEffect(() => {
+    fetchOAuthProviders()
+      .then(setProviders)
+      .catch(() => { setProviders(null); });
+  }, []);
+  if (providers === null) return null;
+  const enabled = (Object.keys(PROVIDER_LABELS) as (keyof OAuthProviders)[]).filter(
+    (p) => providers[p],
+  );
+  if (enabled.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      {enabled.map((provider) => (
+        <a
+          key={provider}
+          href={apiUrl(`/auth/${provider}`)}
+          className={buttonVariants({ variant: 'outline' })}
+        >
+          {PROVIDER_LABELS[provider]}
+        </a>
+      ))}
+    </div>
   );
 }
