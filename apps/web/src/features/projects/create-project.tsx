@@ -34,14 +34,14 @@ const ImportedSchema = z.object({
     ),
   }),
 });
-type Imported = z.infer<typeof ImportedSchema>;
+export type Imported = z.infer<typeof ImportedSchema>;
 type Skipped = Imported['report']['statements'];
 
 /**
  * Up to 5 MB inline; above that the source is queued as `text/plain` and the job polled
  * until BullMQ reports it done. Both paths answer the same `{ report, existing }`.
  */
-async function importInto(projectId: string, source: string): Promise<Imported> {
+export async function importInto(projectId: string, source: string): Promise<Imported> {
   const base = `/projects/${encodeURIComponent(projectId)}/import`;
   if (new Blob([source]).size <= SYNC_IMPORT_MAX_BYTES) {
     return ImportedSchema.parse(await apiFetch<unknown>(base, { method: 'POST', body: { source } }));

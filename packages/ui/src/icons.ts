@@ -16,6 +16,7 @@ export {
   FilePlus2,
   LayoutGrid,
   Monitor,
+  MoreHorizontal,
   Moon,
   PanelRight,
   Search,
