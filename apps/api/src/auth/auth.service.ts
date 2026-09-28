@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  NotFoundException,
   Injectable,
   UnauthorizedException,
   type OnModuleInit,
@@ -78,16 +79,24 @@ export class AuthService implements OnModuleInit {
 
   // ------------------------------------------------------------------ sessions
 
-  async issueSession(userId: string, ctx: SessionContext): Promise<SessionBundle> {
-    const orgId = await this.resolveOrgId(userId);
+  async issueSession(
+    userId: string,
+    ctx: SessionContext,
+    preferredOrgId?: string,
+  ): Promise<SessionBundle> {
+    const orgId = await this.resolveOrgId(userId, preferredOrgId);
     const issued = await this.tokens.startSession(userId, ctx);
     return this.bundle(userId, orgId, issued.refreshToken, issued.expiresAt);
   }
 
   /** `POST /auth/refresh`. Reuse detection lives in `TokensService.rotate`. */
-  async refresh(rawRefreshToken: string, ctx: SessionContext): Promise<SessionBundle> {
+  async refresh(
+    rawRefreshToken: string,
+    ctx: SessionContext,
+    preferredOrgId?: string,
+  ): Promise<SessionBundle> {
     const rotated = await this.tokens.rotate(rawRefreshToken, ctx);
-    const orgId = await this.resolveOrgId(rotated.userId);
+    const orgId = await this.resolveOrgId(rotated.userId, preferredOrgId);
     return this.bundle(rotated.userId, orgId, rotated.refreshToken, rotated.expiresAt);
   }
 
@@ -112,17 +121,46 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
-   * SEAM: the active organisation is the user's first membership. An org switcher
-   * (Phase 2) replaces this with an explicit claim set at login and at switch time;
-   * everything downstream already reads `orgId` off the access token, not off this call.
+   * The active organisation: the one `sl_org` prefers if the user is still a member of
+   * it, otherwise their first membership. Everything downstream reads `orgId` off the
+   * access token, not off this call.
    */
-  async resolveOrgId(userId: string): Promise<string | null> {
+  async resolveOrgId(userId: string, preferredOrgId?: string): Promise<string | null> {
+    if (preferredOrgId !== undefined && (await this.isMember(userId, preferredOrgId))) {
+      return preferredOrgId;
+    }
     const membership = await this.prisma.orgMember.findFirst({
       where: { userId },
       orderBy: { joinedAt: 'asc' },
       select: { organizationId: true },
     });
     return membership?.organizationId ?? null;
+  }
+
+  /**
+   * `POST /auth/switch-org` — a fresh access token for another org the user belongs to.
+   * The refresh token is NOT rotated: the device and its family are unchanged, only the
+   * `org` claim is. A non-member gets the same 404 as an org that does not exist.
+   */
+  async switchOrg(
+    userId: string,
+    organizationId: string,
+  ): Promise<{ accessToken: string; accessTtlSec: number }> {
+    if (!(await this.isMember(userId, organizationId))) {
+      throw new NotFoundException({ code: 'not_found' });
+    }
+    return {
+      accessToken: await this.tokens.issueAccessToken({ userId, orgId: organizationId }),
+      accessTtlSec: this.tokens.accessTtlSec,
+    };
+  }
+
+  private async isMember(userId: string, organizationId: string): Promise<boolean> {
+    const row = await this.prisma.orgMember.findFirst({
+      where: { userId, organizationId, organization: { deletedAt: null } },
+      select: { organizationId: true },
+    });
+    return row !== null;
   }
 
   // ------------------------------------------------------------ password auth

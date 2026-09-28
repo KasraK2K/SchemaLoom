@@ -9,7 +9,9 @@ export { SnapshotsModule } from './snapshots.module';
 export { SnapshotsController } from './snapshots.controller';
 export {
   SnapshotsService,
+  SYNC_IMPORT_MAX_BYTES,
   type CreateSnapshotInput,
+  type ImportOutcome,
   type SnapshotContext,
   type SnapshotSummary,
   type SnapshotView,

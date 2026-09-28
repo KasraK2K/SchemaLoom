@@ -39,7 +39,7 @@ import {
   type LinkEdge as LinkEdgeType,
 } from './graph';
 import { parseHandleId } from './handles';
-import { GRID_SIZE, autoLayout } from './layout';
+import { GRID_SIZE, autoLayout, unstack } from './layout';
 import { LinkEdge } from './link-edge';
 import { useCanvasStore } from './store';
 import { useCanvasShortcuts } from './use-canvas-shortcuts';
@@ -286,19 +286,34 @@ export function CanvasSurface({
   }, [flow, recordMove, applyPositions]);
 
   // An imported model arrives with every entity at the origin (the importer leaves layout
-  // to the canvas), so lay it out once, after React Flow has measured the nodes.
+  // to the canvas), so place it once, after React Flow has measured the nodes: a fresh
+  // import gets a full layout, tables merged into a laid-out project only get unpiled.
   const measured = useNodesInitialized();
   const laidOut = useRef(false);
   useEffect(() => {
     if (!measured || laidOut.current || readOnly) return;
     laidOut.current = true;
-    const [first, ...rest] = flow.getNodes();
-    if (first === undefined || rest.length === 0) return;
-    const stacked = rest.every(
-      (node) => node.position.x === first.position.x && node.position.y === first.position.y,
+    const current = flow.getNodes();
+    const placement = unstack(
+      current.map((node) => ({
+        id: node.id,
+        position: node.position,
+        width: node.measured?.width ?? node.width ?? FALLBACK_NODE_WIDTH,
+        height: node.measured?.height ?? node.height ?? FALLBACK_NODE_HEIGHT,
+      })),
     );
-    if (stacked) runLayout();
-  }, [measured, readOnly, flow, runLayout]);
+    if (placement === 'all') {
+      runLayout();
+      return;
+    }
+    const moves = current.flatMap((node) => {
+      const after = placement.get(node.id);
+      return after === undefined ? [] : [{ id: node.id, before: node.position, after }];
+    });
+    if (moves.length === 0) return;
+    recordMove(moves);
+    applyPositions(moves.map((move) => ({ id: move.id, position: move.after })));
+  }, [measured, readOnly, flow, runLayout, recordMove, applyPositions]);
 
   const fitView = useCallback(() => {
     void flow.fitView({ padding: 0.2 });

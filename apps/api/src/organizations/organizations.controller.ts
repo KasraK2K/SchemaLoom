@@ -4,9 +4,9 @@ import type { Request } from 'express';
 import { Authenticated } from '../access';
 import { getPrincipal } from '../auth';
 import type { ProjectSummary } from '../projects';
-import { CreateOrganizationDto } from './organizations.dto';
+import { CreateOrganizationDto, CreateWorkspaceDto } from './organizations.dto';
 import { OrganizationsService } from './organizations.service';
-import type { OrganizationSummary } from './organizations.types';
+import type { OrganizationSummary, WorkspaceSummary } from './organizations.types';
 
 @ApiTags('organizations')
 @Controller('organizations')
@@ -67,6 +67,29 @@ export class OrganizationsController {
     @Param('orgSlug') orgSlug: string,
   ): Promise<ProjectSummary[]> {
     return this.organizations.listProjects(this.userId(req), orgSlug);
+  }
+
+  /** Same marker and the same membership-first rule as the project list; the role rules
+   *  (doc 05 §3.2) are the service's, because no locator here names the active org. */
+  @ApiOperation({ summary: 'Workspaces in the organisation' })
+  @Authenticated()
+  @Get(':orgSlug/workspaces')
+  async workspaces(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+  ): Promise<WorkspaceSummary[]> {
+    return this.organizations.listWorkspaces(this.userId(req), orgSlug);
+  }
+
+  @ApiOperation({ summary: 'Create a workspace (owner or admin)' })
+  @Authenticated()
+  @Post(':orgSlug/workspaces')
+  async createWorkspace(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Body() dto: CreateWorkspaceDto,
+  ): Promise<WorkspaceSummary> {
+    return this.organizations.createWorkspace(this.userId(req), orgSlug, dto.name);
   }
 
   /**

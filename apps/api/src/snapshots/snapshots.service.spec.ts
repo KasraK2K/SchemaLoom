@@ -7,7 +7,12 @@ import {
   type VisibilityContext,
 } from '@schemaloom/schema-model';
 import { describe, expect, it, vi, type Mock } from 'vitest';
-import type { ProjectPermissionMap, ProjectSkeleton, VisibilityFilter } from '../access';
+import type {
+  PermissionResolver,
+  ProjectPermissionMap,
+  ProjectSkeleton,
+  VisibilityFilter,
+} from '../access';
 import { EngineGate } from '../engines';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SchemaOperationBatch, SchemaWriter } from '../schema';
@@ -134,6 +139,10 @@ function harness(
             },
           }) as unknown as EngineDefinition,
       } as unknown as EngineRegistry,
+      {
+        resolveProject: () => Promise.resolve(CTX.map),
+        skeleton: () => Promise.resolve(CTX.skel),
+      } as unknown as PermissionResolver,
     ),
     apply,
     rows,
@@ -350,12 +359,29 @@ describe('SnapshotsService.importSource', () => {
     ]);
   });
 
-  it('refuses a project that already has tables (no merge rules yet)', async () => {
-    const h = harness(storeOf({ entity: [entityRow('ent_b')] }), { imported: await importedModel() });
+  it('merges into a project that already has tables, touching nothing that exists', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a'), entityRow('ent_b')] }), {
+      imported: await importedModel(),
+    });
 
-    await expect(h.service.importSource(CTX, 'CREATE TABLE a ();')).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    const { existing } = await h.service.importSource(CTX, 'CREATE TABLE ent_a ();');
+
+    expect(existing).toEqual(['ent_a']);
     expect(h.apply).not.toHaveBeenCalled();
+  });
+
+  it('re-resolves the skeleton between batches, so batch 2 can see batch 1’s tables', async () => {
+    const entity = Array.from({ length: 1500 }, (_, i) => entityRow(`ent_${String(i)}`));
+    const field = entity.map((e, i) => fieldRow(`fld_${String(i)}`, e.id as string));
+    const imported = await liveFrom(storeOf({ entity, field }));
+    const h = harness(storeOf(), { imported });
+    const skeleton = vi.fn(() => Promise.resolve(CTX.skel));
+    (h.service as unknown as { resolver: { skeleton: typeof skeleton } }).resolver.skeleton =
+      skeleton;
+
+    await h.service.importSource(CTX, 'CREATE TABLE …');
+
+    expect(h.apply.mock.calls.map(([batch]) => batch.ops.length)).toEqual([2000, 1000]);
+    expect(skeleton).toHaveBeenCalledTimes(1);
   });
 });

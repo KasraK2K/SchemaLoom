@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
@@ -138,6 +139,16 @@ export class StorageService implements OnModuleInit {
       new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }),
       { expiresIn },
     );
+  }
+
+  /** A queued SQL import's source (doc 00 Q22), read back by the import job. */
+  async get(key: string): Promise<Buffer> {
+    const out = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    return Buffer.from((await out.Body?.transformToByteArray()) ?? []);
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
   /** The download link for a finished `export_jobs` row. */

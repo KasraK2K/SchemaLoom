@@ -68,6 +68,8 @@ export class ApiError extends Error {
 export interface ApiRequestInit extends Omit<RequestInit, 'body'> {
   /** Serialised as JSON. Pass a `BodyInit` through `fetch` directly if you need one. */
   body?: unknown;
+  /** Sent as-is as `text/plain` instead of `body` — the large SQL import takes raw text. */
+  text?: string;
 }
 
 /**
@@ -142,12 +144,13 @@ function abandonSession(): void {
 }
 
 async function send(path: string, init: ApiRequestInit): Promise<Response> {
-  const { body, headers, method = 'GET', ...rest } = init;
+  const { body, text, headers, method = 'GET', ...rest } = init;
   const upperMethod = method.toUpperCase();
 
   const requestHeaders = new Headers(headers);
   requestHeaders.set('Accept', 'application/json');
   if (body !== undefined) requestHeaders.set('Content-Type', 'application/json');
+  if (text !== undefined) requestHeaders.set('Content-Type', 'text/plain; charset=utf-8');
 
   if (UNSAFE_METHODS.has(upperMethod)) {
     // Re-read per attempt: a refresh rotates sl_csrf, so the retry must not reuse the
@@ -161,7 +164,7 @@ async function send(path: string, init: ApiRequestInit): Promise<Response> {
     method: upperMethod,
     headers: requestHeaders,
     credentials: 'include',
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: text ?? (body === undefined ? undefined : JSON.stringify(body)),
   });
 }
 

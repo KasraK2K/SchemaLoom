@@ -12,6 +12,11 @@ import type { AppEnv } from '../config/env';
  * | `sl_presence` | `${COOKIE_DOMAIN}` | yes      | `/`         | = `sl_refresh`      |
  * | `sl_csrf`     | `${COOKIE_DOMAIN}` | **no**   | `/`         | = `sl_refresh`      |
  * | `sl_session`  | host-only          | yes      | `/`         | min(expiresAt, 12h) |
+ * | `sl_org`      | host-only          | yes      | `/api/auth` | = `sl_refresh`      |
+ *
+ * `sl_org` is a PREFERENCE, not authority: the active organisation the last
+ * `POST /auth/switch-org` chose, which refresh and login honour only after re-checking
+ * membership. Forging it names an org; it cannot join one.
  *
  * `COOKIE_DOMAIN` is applied to `sl_presence` and `sl_csrf` ONLY. Giving it to
  * `sl_access`/`sl_refresh` hands a refresh token to every subdomain of
@@ -24,6 +29,7 @@ export const COOKIE_NAMES = {
   presence: 'sl_presence',
   csrf: 'sl_csrf',
   session: 'sl_session',
+  org: 'sl_org',
 } as const;
 
 export type CookieName = (typeof COOKIE_NAMES)[keyof typeof COOKIE_NAMES];
@@ -77,7 +83,7 @@ export function cookieOptionsFor(
     httpOnly: name !== COOKIE_NAMES.csrf,
     secure: policy.secure,
     sameSite: 'lax',
-    path: name === COOKIE_NAMES.refresh ? REFRESH_COOKIE_PATH : '/',
+    path: name === COOKIE_NAMES.refresh || name === COOKIE_NAMES.org ? REFRESH_COOKIE_PATH : '/',
     ...(scoped && policy.domain ? { domain: policy.domain } : {}),
     maxAge: maxAgeSec * 1000,
   };

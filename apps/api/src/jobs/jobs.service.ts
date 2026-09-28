@@ -2,11 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { JobsOptions, Queue } from 'bullmq';
 import {
   JOB_EMAIL_SEND,
+  JOB_IMPORT_SQL,
   JOB_EXPORT_RENDER,
   JOB_VALIDATE_MODEL,
   type EmailJobData,
   type ExportJobData,
   type ExportJobResult,
+  type ImportJobData,
+  type ImportJobResult,
   type ValidateJobData,
 } from './queues';
 
@@ -17,6 +20,15 @@ export interface JobQueues {
   readonly export: Queue<ExportJobData, ExportJobResult>;
   readonly email: Queue<EmailJobData, void>;
   readonly validate: Queue<ValidateJobData>;
+  readonly import: Queue<ImportJobData, ImportJobResult>;
+}
+
+export interface ImportJobStatus {
+  readonly id: string;
+  /** BullMQ's own state: `waiting` / `active` / `delayed` / `completed` / `failed`. */
+  readonly state: string;
+  readonly result: ImportJobResult | null;
+  readonly error: string | null;
 }
 
 /**
@@ -51,5 +63,37 @@ export class JobsService {
 
   async enqueueValidation(data: ValidateJobData): Promise<void> {
     await this.queues.validate.add(JOB_VALIDATE_MODEL, data, DEFAULT_JOB_OPTIONS);
+  }
+
+  /** One attempt: a failed import is a bad source far more often than a flaky worker, and
+   *  a retry of a half-applied import would only re-add what is still missing anyway. */
+  async enqueueImport(data: ImportJobData): Promise<string> {
+    const job = await this.queues.import.add(JOB_IMPORT_SQL, data, {
+      ...DEFAULT_JOB_OPTIONS,
+      attempts: 1,
+    });
+    return job.id ?? '';
+  }
+
+  /**
+   * No `import_jobs` table: BullMQ keeps the state and the return value for the retention
+   * window, which is as long as a client polls. `null` for a job that is not this
+   * project's — or not this user's — so a guessed id reads as absent.
+   */
+  async importStatus(projectId: string, userId: string, id: string): Promise<ImportJobStatus | null> {
+    const job = await this.queues.import.getJob(id);
+    const owner = job?.data.subject;
+    if (job?.data.projectId !== projectId || owner?.kind !== 'user' || owner.userId !== userId) {
+      return null;
+    }
+    // BullMQ types both as always present; they are unset until the job completes/fails.
+    const result = job.returnvalue as ImportJobResult | null | undefined;
+    const failed = job.failedReason as string | undefined;
+    return {
+      id,
+      state: await job.getState(),
+      result: result ?? null,
+      error: failed === undefined || failed === '' ? null : failed,
+    };
   }
 }

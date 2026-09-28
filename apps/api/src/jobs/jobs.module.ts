@@ -4,19 +4,25 @@ import type { Redis } from 'ioredis';
 import { MailModule } from '../mail/mail.module';
 import { REDIS_QUEUE } from '../redis/redis.tokens';
 import { SchemaModule } from '../schema';
+import { SnapshotsModule } from '../snapshots';
 import { StorageModule } from '../storage';
 import { adoptQueueClient, type BullConnection } from './bull-connection';
 import { EmailProcessor } from './email.processor';
 import { ExportProcessor } from './export.processor';
+import { ImportJobsController } from './import-jobs.controller';
+import { ImportProcessor } from './import.processor';
 import { JOB_QUEUES, JobsService, type JobQueues } from './jobs.service';
 import { JOB_WORKERS, JobsRuntime, type Closable } from './jobs.runtime';
 import {
   QUEUE_EMAIL,
   QUEUE_EXPORT,
+  QUEUE_IMPORT,
   QUEUE_VALIDATE,
   type EmailJobData,
   type ExportJobData,
   type ExportJobResult,
+  type ImportJobData,
+  type ImportJobResult,
   type ValidateJobData,
 } from './queues';
 import { ValidateProcessor } from './validate.processor';
@@ -38,6 +44,7 @@ const queuesProvider: Provider = {
     export: new Queue<ExportJobData, ExportJobResult>(QUEUE_EXPORT, bull),
     email: new Queue<EmailJobData, void>(QUEUE_EMAIL, bull),
     validate: new Queue<ValidateJobData>(QUEUE_VALIDATE, bull),
+    import: new Queue<ImportJobData, ImportJobResult>(QUEUE_IMPORT, bull),
   }),
 };
 
@@ -48,12 +55,13 @@ const queuesProvider: Provider = {
  */
 const workersProvider: Provider = {
   provide: JOB_WORKERS,
-  inject: [BULL_CONNECTION, ExportProcessor, EmailProcessor, ValidateProcessor],
+  inject: [BULL_CONNECTION, ExportProcessor, EmailProcessor, ValidateProcessor, ImportProcessor],
   useFactory: (
     bull: BullConnection,
     exporter: ExportProcessor,
     mailer: EmailProcessor,
     validator: ValidateProcessor,
+    importer: ImportProcessor,
   ): Closable[] => [
     new Worker<ExportJobData, ExportJobResult>(
       QUEUE_EXPORT,
@@ -72,6 +80,11 @@ const workersProvider: Provider = {
       },
       bull,
     ),
+    new Worker<ImportJobData, ImportJobResult>(
+      QUEUE_IMPORT,
+      (job: Job<ImportJobData>) => importer.run(job.data),
+      bull,
+    ),
   ],
 };
 
@@ -84,13 +97,15 @@ const workersProvider: Provider = {
  * providers and a second permission cache.
  */
 @Module({
-  imports: [SchemaModule, StorageModule, MailModule],
+  imports: [SchemaModule, SnapshotsModule, StorageModule, MailModule],
+  controllers: [ImportJobsController],
   providers: [
     connectionProvider,
     queuesProvider,
     ExportProcessor,
     EmailProcessor,
     ValidateProcessor,
+    ImportProcessor,
     workersProvider,
     JobsService,
     JobsRuntime,

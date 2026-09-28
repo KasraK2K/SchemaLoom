@@ -34,6 +34,16 @@ export const ProjectSummarySchema = z.object({
 });
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 
+export const WorkspaceSummarySchema = z.object({ id: z.string(), name: z.string(), slug: z.string() });
+export type WorkspaceSummary = z.infer<typeof WorkspaceSummarySchema>;
+
+/** `[]` for a guest or a non-member, exactly like the project list. */
+export async function listWorkspaces(orgSlug: string): Promise<WorkspaceSummary[]> {
+  return WorkspaceSummarySchema.array().parse(
+    await serverFetch<unknown>(`/organizations/${encodeURIComponent(orgSlug)}/workspaces`),
+  );
+}
+
 /** The subset of `GET /engines` the create form reads. `comingSoon` engines are not offered. */
 const EngineOptionSchema = z.object({
   id: z.string(),

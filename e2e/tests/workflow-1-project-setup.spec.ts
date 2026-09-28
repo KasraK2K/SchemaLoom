@@ -7,12 +7,8 @@ import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
  * SPEC §8 workflow #1 — sign up, create an org, create a PostgreSQL project, import SQL,
  * auto-layout, group tables into Areas.
  *
- * Phase 1 ships both ends of that chain and not the middle: the api exposes `auth`,
- * `engines`, `projects/:id/ir`, `projects/:id/schema/*` and `projects/:id/snapshots`, and
- * no controller for organizations, projects or DDL import. The steps that have a route
- * are tested; the three that do not are `test.fixme` naming the route they wait for, so
- * this file goes green by deleting a marker rather than by someone rediscovering the
- * workflow from the spec a year from now.
+ * The first half runs through the real UI with a fresh account and org, so it never
+ * touches the shared seed; the layout and area steps use the seeded project.
  */
 
 const batchId = (tag: string): string => `bat_e2e_${tag}_${String(Date.now())}`;
@@ -35,17 +31,72 @@ test.describe('workflow 1 — from sign-up to a laid-out, grouped project', () =
     expect(((await me.json()) as MeResponse).email).toBe(email);
   });
 
-  test.fixme('creates an organization', () => {
-    // Needs POST /api/organizations — not in Phase 1's route table.
-  });
+  test('signs up, creates an org, imports SQL and lands on a laid-out canvas', async ({ page }) => {
+    test.setTimeout(120_000);
+    // A click that lands before React hydrates does nothing; retry until the form opens.
+    const open = async (button: string, field: string) => {
+      await expect(async () => {
+        await page.getByRole('button', { name: button, exact: true }).click();
+        await expect(page.getByLabel(field, { exact: true })).toBeVisible({ timeout: 1_000 });
+      }).toPass({ timeout: 30_000 });
+    };
+    const stamp = String(Date.now());
+    await page.goto('/signup');
+    await page.getByLabel('Name', { exact: true }).fill('Import Tester');
+    await page.getByLabel('Email').fill(`import-${stamp}@acme.test`);
+    await page.getByLabel('Password').fill('SchemaLoom!demo1');
+    await page.getByRole('button', { name: 'Create account' }).click();
 
-  test.fixme('creates a PostgreSQL project in that organization', () => {
-    // Needs POST /api/projects. The engine list it picks from IS live: GET /api/engines.
-  });
+    await open('New organisation', 'Organisation name');
+    await page.getByLabel('Organisation name').fill(`Import Co ${stamp}`);
+    await page.getByRole('button', { name: 'Create organisation' }).click();
 
-  test.fixme('imports a SQL file and gets entities back', () => {
-    // Needs POST /api/projects/:id/import. The importer itself is finished and unit
-    // tested in packages/engines/postgresql; only the route is missing.
+    await open('Import', 'Target version');
+    await page.getByLabel('Name', { exact: true }).fill('Shop');
+    await page.getByLabel('Target version').fill('16');
+    await page
+      .getByRole('textbox', { name: 'SQL' })
+      .fill(
+        'CREATE TABLE customers (id uuid PRIMARY KEY, name text NOT NULL);\n' +
+          'CREATE TABLE orders (id uuid PRIMARY KEY, customer_id uuid REFERENCES customers (id));',
+      );
+    await page.getByRole('button', { name: 'Create and import' }).click();
+
+    await expect(page).toHaveURL(/\/p\/[^/]+$/, { timeout: 60_000 });
+    await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 30_000 });
+
+    // Two tables imported at the origin must not stay stacked: the canvas lays them out and
+    // saves the positions. Read them back from the API — once laid out, React Flow stops
+    // rendering whichever card scrolled off-screen, so the DOM cannot answer this.
+    // ELK is loaded on demand, so the first layout can take a while on a cold server.
+    const projectId = page.url().split('/p/')[1] ?? '';
+    const positions = async (): Promise<number> => {
+      const ir = await page.request.get(`${API_URL}/api/projects/${projectId}/ir`);
+      const { objects } = (await ir.json()) as {
+        objects: { entity: Record<string, { position: { x: number; y: number } }> };
+      };
+      return new Set(Object.values(objects.entity).map((e) => `${String(e.position.x)},${String(e.position.y)}`))
+        .size;
+    };
+    await expect.poll(positions, { timeout: 30_000 }).toBe(2);
+
+    // Re-importing into the same project merges: existing tables are kept, new ones added.
+    const csrf = (await page.context().cookies()).find((c) => c.name === 'sl_csrf')?.value ?? '';
+    const merged = await page.request.post(`${API_URL}/api/projects/${projectId}/import`, {
+      headers: { 'x-csrf-token': csrf },
+      data: {
+        source:
+          'CREATE TABLE customers (id uuid PRIMARY KEY, name text NOT NULL);\n' +
+          'CREATE TABLE invoices (id uuid PRIMARY KEY);',
+      },
+    });
+    expect(merged.status(), await merged.text()).toBe(201);
+    expect(((await merged.json()) as { existing: string[] }).existing).toEqual(['customers']);
+    const ir = await page.request.get(`${API_URL}/api/projects/${projectId}/ir`);
+    const names = Object.values(
+      ((await ir.json()) as { objects: { entity: Record<string, { name: string }> } }).objects.entity,
+    ).map((e) => e.name);
+    expect(names.sort()).toEqual(['customers', 'invoices', 'orders']);
   });
 
   test('auto-layout moves every card, and the new position is served back', async () => {

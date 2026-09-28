@@ -208,3 +208,38 @@ describe('OrganizationsService.create', () => {
     expect(org.orgRole).toBe('owner');
   });
 });
+
+describe('OrganizationsService workspaces', () => {
+  const service = (role: string | null) => {
+    const create = vi.fn(({ data }: { data: { name: string; position: number } }) =>
+      Promise.resolve({ id: 'ws_1', name: data.name, slug: 'x', position: data.position }),
+    );
+    const prisma = {
+      orgMember: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValue(role === null ? null : { organizationId: ORG, role }),
+      },
+      workspace: {
+        findMany: vi.fn().mockResolvedValue([{ id: 'ws_0', name: 'General', slug: 'general' }]),
+        findFirst: vi.fn().mockResolvedValue({ position: 0 }),
+        create,
+      },
+    } as unknown as PrismaService;
+    return { svc: new OrganizationsService(prisma, {} as PermissionResolver), create };
+  };
+
+  it('lists for members, and answers [] to guests and non-members', async () => {
+    expect(await service('member').svc.listWorkspaces(USER, 'acme')).toHaveLength(1);
+    expect(await service('guest').svc.listWorkspaces(USER, 'acme')).toEqual([]);
+    expect(await service(null).svc.listWorkspaces(USER, 'acme')).toEqual([]);
+  });
+
+  it('lets only owners and admins create, appended after the last workspace', async () => {
+    const admin = service('admin');
+    await admin.svc.createWorkspace(USER, 'acme', 'Data');
+    expect(admin.create.mock.calls[0]?.[0].data.position).toBe(1);
+    await expect(service('member').svc.createWorkspace(USER, 'acme', 'Data')).rejects.toThrow();
+    await expect(service(null).svc.createWorkspace(USER, 'acme', 'Data')).rejects.toThrow();
+  });
+});

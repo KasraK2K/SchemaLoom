@@ -47,6 +47,7 @@ export class JobsRuntime implements OnModuleDestroy {
       this.queues.export,
       this.queues.email,
       this.queues.validate,
+      this.queues.import,
     ];
     await Promise.allSettled(queues.map((queue) => queue.close()));
   }

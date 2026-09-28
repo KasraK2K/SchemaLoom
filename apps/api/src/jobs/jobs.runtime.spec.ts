@@ -19,11 +19,12 @@ function fakeQueues(close: () => Promise<void> = () => Promise.resolve()): {
   queues: JobQueues;
   closes: CloseSpy[];
 } {
-  const closes = [vi.fn(close), vi.fn(close), vi.fn(close)];
+  const closes = [vi.fn(close), vi.fn(close), vi.fn(close), vi.fn(close)];
   const queues = {
     export: { close: closes[0] },
     email: { close: closes[1] },
     validate: { close: closes[2] },
+    import: { close: closes[3] },
   } as unknown as JobQueues;
   return { queues, closes };
 }
@@ -69,6 +70,6 @@ describe('graceful shutdown', () => {
 
     await new JobsRuntime([w.closable], q.queues).onModuleDestroy();
 
-    expect(order).toEqual(['worker', 'queue', 'queue', 'queue']);
+    expect(order).toEqual(['worker', 'queue', 'queue', 'queue', 'queue']);
   });
 });

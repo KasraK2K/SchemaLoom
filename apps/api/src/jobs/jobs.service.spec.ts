@@ -19,11 +19,26 @@ function harness(): { service: JobsService; add: (queue: keyof JobQueues) => Add
     export: vi.fn((..._args: AddCall) => Promise.resolve({ id: 'bull_1' })),
     email: vi.fn((..._args: AddCall) => Promise.resolve({ id: 'bull_2' })),
     validate: vi.fn((..._args: AddCall) => Promise.resolve({ id: 'bull_3' })),
+    import: vi.fn((..._args: AddCall) => Promise.resolve({ id: 'bull_4' })),
+  };
+  const importJob = {
+    data: {
+      projectId: 'prj_shop',
+      subject: { kind: 'user', userId: 'usr_ana', orgId: 'org_acme' },
+      storageKey: 'k',
+    },
+    returnvalue: { report: {}, existing: [] },
+    failedReason: undefined,
+    getState: () => Promise.resolve('completed'),
   };
   const queues = {
     export: { add: spies.export },
     email: { add: spies.email },
     validate: { add: spies.validate },
+    import: {
+      add: spies.import,
+      getJob: (id: string) => Promise.resolve(id === 'bull_4' ? importJob : undefined),
+    },
   } as unknown as JobQueues;
 
   return { service: new JobsService(queues), add: (queue) => spies[queue].mock.calls };
@@ -90,5 +105,16 @@ describe('JobsService', () => {
     expect(DEFAULT_JOB_OPTIONS.removeOnComplete).toBeDefined();
     expect(DEFAULT_JOB_OPTIONS.removeOnFail).toBeDefined();
     expect(DEFAULT_JOB_OPTIONS.attempts).toBe(3);
+  });
+
+  it('reports an import job only to its owner, in its own project', async () => {
+    const { service } = harness();
+    expect(await service.importStatus('prj_shop', 'usr_ana', 'bull_4')).toMatchObject({
+      state: 'completed',
+      error: null,
+    });
+    expect(await service.importStatus('prj_other', 'usr_ana', 'bull_4')).toBeNull();
+    expect(await service.importStatus('prj_shop', 'usr_bob', 'bull_4')).toBeNull();
+    expect(await service.importStatus('prj_shop', 'usr_ana', 'nope')).toBeNull();
   });
 });

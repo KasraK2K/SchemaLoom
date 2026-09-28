@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PermissionResolver, type Subject } from '../access';
 import { PrismaService } from '../prisma/prisma.service';
 import { toSummary, type ProjectSummary } from '../projects';
-import type { OrganizationSummary } from './organizations.types';
+import type { OrganizationSummary, WorkspaceSummary } from './organizations.types';
 
 /** PostgreSQL 23505 on the partial `lower(slug)` index, surfaced by Prisma as P2002. */
 const UNIQUE_VIOLATION = 'P2002';
@@ -125,4 +125,54 @@ export class OrganizationsService {
       return [toSummary(row, map)];
     });
   }
+
+  /**
+   * Doc 05 §3.2: owner, admin and member may LIST workspaces; a guest's access comes only
+   * from grants and workspaces are not grantable, so a guest (like a non-member) gets `[]`.
+   */
+  async listWorkspaces(userId: string, orgSlug: string): Promise<WorkspaceSummary[]> {
+    const member = await this.membership(userId, orgSlug);
+    if (member === null || member.role === 'guest') return [];
+    return this.prisma.workspace.findMany({
+      where: { organizationId: member.organizationId },
+      select: WORKSPACE,
+      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  /** §3.2: owner and admin only. A non-member gets the same 404 as a missing org. */
+  async createWorkspace(userId: string, orgSlug: string, name: string): Promise<WorkspaceSummary> {
+    const member = await this.membership(userId, orgSlug);
+    if (member === null) throw new NotFoundException({ code: 'not_found' });
+    if (member.role !== 'owner' && member.role !== 'admin') {
+      throw new ForbiddenException({ code: 'forbidden' });
+    }
+    const organizationId = member.organizationId;
+    const last = await this.prisma.workspace.findFirst({
+      where: { organizationId },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    const base = slugify(name) || 'workspace';
+    for (let attempt = 0; ; attempt++) {
+      const slug = attempt === 0 ? base : `${base}-${randomBytes(3).toString('hex')}`;
+      try {
+        return await this.prisma.workspace.create({
+          data: { organizationId, name, slug, position: (last?.position ?? -1) + 1 },
+          select: WORKSPACE,
+        });
+      } catch (error) {
+        if ((error as { code?: unknown }).code !== UNIQUE_VIOLATION || attempt >= 3) throw error;
+      }
+    }
+  }
+
+  private membership(userId: string, orgSlug: string) {
+    return this.prisma.orgMember.findFirst({
+      where: { userId, organization: { slug: orgSlug, deletedAt: null } },
+      select: { organizationId: true, role: true },
+    });
+  }
 }
+
+const WORKSPACE = { id: true, name: true, slug: true } as const;

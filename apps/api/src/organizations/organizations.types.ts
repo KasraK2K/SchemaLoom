@@ -12,3 +12,9 @@ export interface OrganizationSummary {
   readonly name: string;
   readonly orgRole: OrgRole;
 }
+
+export interface WorkspaceSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+}

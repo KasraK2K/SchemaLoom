@@ -28,6 +28,8 @@ async function bootstrap(): Promise<void> {
   // Doc 00 Q22: SQL import is synchronous up to 5 MB of source, which arrives JSON-encoded.
   // Express's 100 KB default also rejected large `schema/ops` batches (MAX_OPS_PER_BATCH).
   app.useBodyParser('json', { limit: '6mb' });
+  // Larger sources go to the import job as raw `text/plain` (`import-jobs.controller.ts`).
+  app.useBodyParser('text', { limit: '50mb' });
   app.useLogger(app.get(Logger));
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
 

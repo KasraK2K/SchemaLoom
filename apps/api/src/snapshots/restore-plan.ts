@@ -10,6 +10,8 @@ import {
 import {
   MAX_OPS_PER_BATCH,
   SchemaOperationBatchSchema,
+  SchemaOperationSchema,
+  sortOps,
   type SchemaOperationBatch,
 } from '../schema';
 import type { LiveIr } from './live-ir';
@@ -103,4 +105,39 @@ export function planRestore(
     });
   }
   return SchemaOperationBatchSchema.parse({ batchId, projectId: live.projectId, ops, label });
+}
+
+/**
+ * SQL import's plan. Unlike a restore it may exceed `MAX_OPS_PER_BATCH` (§8.2: "a DDL
+ * import arrives as several batches"), so the ops are dependency-sorted ONCE across the
+ * whole import and cut into consecutive batches — every entity is created before any of
+ * its fields, whichever batch each lands in. `[]` when there is nothing to write.
+ *
+ * ponytail: the batches commit one by one, so a failure part-way leaves the earlier ones
+ * applied. An import only ever creates (see `mergeImport`), so what is left is a valid,
+ * smaller schema; one transaction across batches needs `SchemaWriter` to take a client.
+ */
+export function planImport(
+  live: LiveIr,
+  imported: LiveIr,
+  batchId: () => string,
+  label: string,
+): SchemaOperationBatch[] {
+  const ops = sortOps(
+    opsFromDiff(restoreDiff(live, imported, { kind: 'import', label }), live).map((op) =>
+      SchemaOperationSchema.parse(toOperation(op, {})),
+    ),
+  );
+  const batches: SchemaOperationBatch[] = [];
+  for (let i = 0; i < ops.length; i += MAX_OPS_PER_BATCH) {
+    batches.push(
+      SchemaOperationBatchSchema.parse({
+        batchId: batchId(),
+        projectId: live.projectId,
+        ops: ops.slice(i, i + MAX_OPS_PER_BATCH),
+        label,
+      }),
+    );
+  }
+  return batches;
 }

@@ -6,7 +6,9 @@ export {
   listEngines,
   listOrganizations,
   listProjects,
+  listWorkspaces,
   type OrganizationSummary,
   type ProjectSummary,
+  type WorkspaceSummary,
 } from './projects-api';
 export { relativeTime } from './relative-time';

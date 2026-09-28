@@ -11,8 +11,9 @@ import type { Subject } from '../access';
 export const QUEUE_EXPORT = 'export';
 export const QUEUE_EMAIL = 'email';
 export const QUEUE_VALIDATE = 'validate';
+export const QUEUE_IMPORT = 'import';
 
-export const QUEUE_NAMES = [QUEUE_EXPORT, QUEUE_EMAIL, QUEUE_VALIDATE] as const;
+export const QUEUE_NAMES = [QUEUE_EXPORT, QUEUE_EMAIL, QUEUE_VALIDATE, QUEUE_IMPORT] as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[number];
 
@@ -24,6 +25,7 @@ export type QueueName = (typeof QUEUE_NAMES)[number];
 export const JOB_EXPORT_RENDER = 'export.render';
 export const JOB_EMAIL_SEND = 'email.send';
 export const JOB_VALIDATE_MODEL = 'validate.model';
+export const JOB_IMPORT_SQL = 'import.sql';
 
 /**
  * The export job carries a `(projectId, subject)` pair, never a model.
@@ -59,4 +61,21 @@ export type EmailJobData =
 export interface ValidateJobData {
   readonly projectId: string;
   readonly subject: Subject;
+}
+
+/**
+ * Doc 00 Q22 — an import over the synchronous 5 MB cap. The source waits in object storage
+ * (a 50 MB payload in Redis would sit in a `noeviction` instance), and permissions are
+ * re-resolved when the job runs, exactly as for an export.
+ */
+export interface ImportJobData {
+  readonly projectId: string;
+  readonly subject: Subject;
+  readonly storageKey: string;
+}
+
+/** What `GET .../import/jobs/:id` hands back once the job is done. */
+export interface ImportJobResult {
+  readonly report: unknown;
+  readonly existing: readonly string[];
 }

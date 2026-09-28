@@ -28,3 +28,6 @@ export class TokenDto extends createZodDto(tokenSchema) {}
 
 export const resetPasswordSchema = z.object({ token: z.string().min(1).max(512), password });
 export class ResetPasswordDto extends createZodDto(resetPasswordSchema) {}
+
+export const switchOrgSchema = z.object({ organizationId: z.string().min(1).max(64) });
+export class SwitchOrgDto extends createZodDto(switchOrgSchema) {}

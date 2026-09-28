@@ -5,10 +5,10 @@ import type { Request } from 'express';
 import { RequirePermission, getAccessContext } from '../access';
 import { getSubject } from '../auth';
 import type { SchemaOperationResult } from '../schema';
-import type { ImportReport } from '@schemaloom/engine-sdk';
 import { CreateSnapshotDto, ImportSourceDto } from './snapshots.dto';
 import {
   SnapshotsService,
+  type ImportOutcome,
   type SnapshotContext,
   type SnapshotSummary,
   type SnapshotView,
@@ -131,14 +131,14 @@ function snapshotContext(req: Request, projectId: string): SnapshotContext {
 export class ImportController {
   constructor(private readonly snapshots: SnapshotsService) {}
 
-  @ApiOperation({ summary: 'Import SQL DDL into an empty project' })
+  @ApiOperation({ summary: 'Import SQL DDL, adding what the project does not have yet' })
   @RequirePermission('schema:edit', { project: 'projectId' })
   @Post()
   importSource(
     @Req() req: Request,
     @Param('projectId') projectId: string,
     @Body() body: ImportSourceDto,
-  ): Promise<{ result: SchemaOperationResult; report: ImportReport }> {
+  ): Promise<ImportOutcome> {
     return this.snapshots.importSource(snapshotContext(req, projectId), body.source);
   }
 }

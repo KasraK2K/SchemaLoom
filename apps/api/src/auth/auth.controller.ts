@@ -18,6 +18,7 @@ import { AuthService, type MeResponse, type SessionBundle } from './auth.service
 import {
   COOKIE_NAMES,
   clearUserSessionCookies,
+  cookieOptionsFor,
   cookiePolicyFrom,
   setUserSessionCookies,
 } from './cookies';
@@ -26,6 +27,7 @@ import {
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
+  SwitchOrgDto,
   TokenDto,
 } from './auth.dto';
 import { Authenticated } from '../access/route-markers';
@@ -36,6 +38,12 @@ import { TokensService } from './tokens.service';
 
 function sessionContext(req: Request): { userAgent?: string; ip?: string } {
   return { userAgent: req.headers['user-agent'], ip: req.ip };
+}
+
+/** The `sl_org` preference (see `cookies.ts`), re-checked by `AuthService` before use. */
+function preferredOrg(req: Request): string | undefined {
+  const value = parseCookieHeader(req.headers.cookie)[COOKIE_NAMES.org];
+  return value === '' ? undefined : value;
 }
 
 @ApiCookieAuth('sl_access')
@@ -75,7 +83,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ csrfToken: string; user: MeResponse }> {
     const userId = await this.auth.login(dto);
-    const bundle = await this.auth.issueSession(userId, sessionContext(req));
+    const bundle = await this.auth.issueSession(userId, sessionContext(req), preferredOrg(req));
     return { ...this.write(res, bundle), user: await this.auth.me(userId) };
   }
 
@@ -94,7 +102,37 @@ export class AuthController {
   ): Promise<{ csrfToken: string }> {
     const token = parseCookieHeader(req.headers.cookie)[COOKIE_NAMES.refresh];
     if (!token) throw new UnauthorizedException({ code: 'REFRESH_TOKEN_MISSING' });
-    return this.write(res, await this.auth.refresh(token, sessionContext(req)));
+    return this.write(res, await this.auth.refresh(token, sessionContext(req), preferredOrg(req)));
+  }
+
+  /**
+   * Makes another of the caller's organisations the active one: a new `sl_access` with
+   * that `org` claim, and `sl_org` so the next refresh keeps it. Org-gated routes
+   * (`@RequireOrgRole`) only ever admit the active org, so this is what lets a user in
+   * two orgs create a project in the second.
+   */
+  @Authenticated()
+  @Post('switch-org')
+  @HttpCode(200)
+  async switchOrg(
+    @Req() req: Request,
+    @Body() dto: SwitchOrgDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ orgId: string }> {
+    const principal = req.auth;
+    if (principal?.kind !== 'user') throw new UnauthorizedException({ code: 'NOT_AUTHENTICATED' });
+    const { accessToken, accessTtlSec } = await this.auth.switchOrg(
+      principal.userId,
+      dto.organizationId,
+    );
+    const policy = cookiePolicyFrom(this.config);
+    res.cookie(COOKIE_NAMES.access, accessToken, cookieOptionsFor(COOKIE_NAMES.access, policy, accessTtlSec));
+    res.cookie(
+      COOKIE_NAMES.org,
+      dto.organizationId,
+      cookieOptionsFor(COOKIE_NAMES.org, policy, this.tokens.refreshTtlSec),
+    );
+    return { orgId: dto.organizationId };
   }
 
   /** Idempotent: the cookies are cleared whether or not the token was still live. */
@@ -172,7 +210,7 @@ export class AuthController {
   ): Promise<void> {
     const user = req.user as OAuthUser | undefined;
     if (!user?.userId) throw new UnauthorizedException({ code: 'OAUTH_FAILED' });
-    const bundle = await this.auth.issueSession(user.userId, sessionContext(req));
+    const bundle = await this.auth.issueSession(user.userId, sessionContext(req), preferredOrg(req));
     this.write(res, bundle);
     res.redirect(this.config.get('WEB_PUBLIC_URL', { infer: true }));
   }

@@ -64,3 +64,34 @@ export async function autoLayout(
   }
   return positions;
 }
+
+const GAP = 48;
+const COLUMNS = 4;
+
+/**
+ * An import merged into a laid-out project adds its new tables at the origin (the importer
+ * leaves layout to the canvas). Re-laying out everything would throw away the user's
+ * arrangement, so only the pile is moved: into a grid below everything else.
+ *
+ * @returns `'all'` when every node is in the pile (a fresh import — lay out the lot),
+ *   otherwise the new positions of the piled nodes; empty when there is no pile.
+ */
+export function unstack(
+  nodes: readonly (LayoutNode & { readonly position: Point })[],
+): 'all' | Map<Id, Point> {
+  const pile = nodes.filter((n) => n.position.x === 0 && n.position.y === 0);
+  if (pile.length < 2) return new Map();
+  if (pile.length === nodes.length) return 'all';
+
+  const placed = nodes.filter((n) => !pile.includes(n));
+  const left = Math.min(...placed.map((n) => n.position.x));
+  const top = Math.max(...placed.map((n) => n.position.y + n.height)) + GAP;
+  const cell = Math.max(...pile.map((n) => n.width)) + GAP;
+  const row = Math.max(...pile.map((n) => n.height)) + GAP;
+  return new Map(
+    pile.map((n, i) => [
+      n.id,
+      { x: snap(left + (i % COLUMNS) * cell), y: snap(top + Math.floor(i / COLUMNS) * row) },
+    ]),
+  );
+}

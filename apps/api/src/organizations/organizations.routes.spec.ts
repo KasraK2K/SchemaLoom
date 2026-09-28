@@ -49,11 +49,13 @@ function sweep(): SweptRoute[] {
 describe('OrganizationsController route markers', () => {
   const routes = sweep();
 
-  it('registers the org list, org creation and the per-org project list', () => {
+  it('registers the org list, org creation, and the per-org project and workspace routes', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       'GET /api/organizations',
       'GET /api/organizations/:orgSlug/projects',
+      'GET /api/organizations/:orgSlug/workspaces',
       'POST /api/organizations',
+      'POST /api/organizations/:orgSlug/workspaces',
     ]);
   });
 
