@@ -1,7 +1,13 @@
 import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
-import { NoProjects, ProjectList, listOrganizations, listProjects } from '@/features/projects';
+import {
+  NoProjects,
+  ProjectList,
+  listEngines,
+  listOrganizations,
+  listProjects,
+} from '@/features/projects';
 
 /**
  * The org's project list — every row links into the canvas.
@@ -20,7 +26,11 @@ export default async function OrgProjectsPage({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  const [orgs, projects] = await Promise.all([listOrganizations(), listProjects(orgSlug)]);
+  const [orgs, projects, engines] = await Promise.all([
+    listOrganizations(),
+    listProjects(orgSlug),
+    listEngines(),
+  ]);
 
   const org = orgs.find((candidate) => candidate.slug === orgSlug);
   if (org === undefined) notFound();
@@ -39,7 +49,7 @@ export default async function OrgProjectsPage({
             : 'Everything in this organisation you have access to.'}
         </p>
         {projects.length === 0 ? (
-          <NoProjects />
+          <NoProjects orgId={org.id} orgSlug={orgSlug} engines={engines} />
         ) : (
           <ProjectList orgSlug={orgSlug} projects={projects} />
         )}

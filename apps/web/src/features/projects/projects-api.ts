@@ -34,6 +34,31 @@ export const ProjectSummarySchema = z.object({
 });
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 
+/** The subset of `GET /engines` the create form reads. `comingSoon` engines are not offered. */
+const EngineOptionSchema = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  capabilities: z.object({
+    importFormats: z.array(z.object({ id: z.string(), fileExtensions: z.array(z.string()) })),
+  }),
+});
+export interface EngineOption {
+  id: string;
+  displayName: string;
+  importFormats: { id: string; fileExtensions: string[] }[];
+}
+
+export async function listEngines(): Promise<EngineOption[]> {
+  const { available } = z
+    .object({ available: EngineOptionSchema.array() })
+    .parse(await serverFetch<unknown>('/engines'));
+  return available.map((engine) => ({
+    id: engine.id,
+    displayName: engine.displayName,
+    importFormats: engine.capabilities.importFormats,
+  }));
+}
+
 export async function listOrganizations(): Promise<OrganizationSummary[]> {
   return OrganizationSummarySchema.array().parse(await serverFetch<unknown>('/organizations'));
 }

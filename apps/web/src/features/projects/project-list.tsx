@@ -1,4 +1,4 @@
-import { Button, Database, FilePlus2, Upload } from '@schemaloom/ui';
+import { Database } from '@schemaloom/ui';
 import Link from 'next/link';
 import type { ProjectSummary } from './projects-api';
 import { relativeTime } from './relative-time';
@@ -44,50 +44,6 @@ export function ProjectList({
               {project.role ?? 'scoped'}
             </span>
           </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-const STARTING_POINTS = [
-  {
-    icon: FilePlus2,
-    title: 'Start blank',
-    body: 'An empty canvas. Drop a first table and grow the schema by hand.',
-    action: 'New project',
-  },
-  {
-    icon: Upload,
-    title: 'Import SQL',
-    body: 'Paste a dump or a migration file and start from the schema you already run.',
-    action: 'Import',
-  },
-] as const;
-
-/**
- * A teaching empty state, not a placeholder: "No projects" tells a new user nothing about
- * which ways in exist.
- *
- * Both buttons are `disabled`. `POST /api/projects` exists, but it needs a `workspaceId`
- * and no route lists workspaces yet, so a create form here could not fill its own body.
- * Disabled rather than absent keeps the shape of the screen stable for the change that
- * turns them on.
- */
-export function NoProjects() {
-  return (
-    <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-      {STARTING_POINTS.map((point) => (
-        <li
-          key={point.title}
-          className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 shadow-panel"
-        >
-          <point.icon className="size-5 text-accent-text" aria-hidden="true" />
-          <h2 className="text-sm font-medium text-text">{point.title}</h2>
-          <p className="text-sm text-text-muted">{point.body}</p>
-          <Button variant="outline" size="sm" className="mt-auto self-start" disabled>
-            {point.action}
-          </Button>
         </li>
       ))}
     </ul>

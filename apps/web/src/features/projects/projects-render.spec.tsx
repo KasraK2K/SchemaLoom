@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { NoOrganizations, OrgList } from './org-list';
-import { NoProjects, ProjectList } from './project-list';
+import { NoProjects } from './create-project';
+import { ProjectList } from './project-list';
 import { homeDestination, type OrganizationSummary, type ProjectSummary } from './projects-api';
 import { relativeTime } from './relative-time';
 
@@ -97,9 +98,17 @@ describe('<ProjectList>', () => {
 
 describe('<NoProjects>', () => {
   it('teaches the two ways in instead of saying "no projects"', () => {
-    const html = renderToStaticMarkup(<NoProjects />);
+    const html = renderToStaticMarkup(
+      <NoProjects
+        orgId="org_1"
+        orgSlug="acme"
+        engines={[{ id: 'pg', displayName: 'PG', importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }] }]}
+      />,
+    );
     expect(html).toContain('Start blank');
     expect(html).toContain('Import SQL');
+    // Both starting points are live once an engine is available.
+    expect(html).not.toContain('disabled=""');
   });
 });
 

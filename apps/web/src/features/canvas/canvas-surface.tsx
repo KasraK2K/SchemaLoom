@@ -12,6 +12,7 @@ import {
   Panel,
   ReactFlow,
   useEdgesState,
+  useNodesInitialized,
   useNodesState,
   useReactFlow,
   type Connection,
@@ -283,6 +284,21 @@ export function CanvasSurface({
         setMessage('Auto-layout failed.');
       });
   }, [flow, recordMove, applyPositions]);
+
+  // An imported model arrives with every entity at the origin (the importer leaves layout
+  // to the canvas), so lay it out once, after React Flow has measured the nodes.
+  const measured = useNodesInitialized();
+  const laidOut = useRef(false);
+  useEffect(() => {
+    if (!measured || laidOut.current || readOnly) return;
+    laidOut.current = true;
+    const [first, ...rest] = flow.getNodes();
+    if (first === undefined || rest.length === 0) return;
+    const stacked = rest.every(
+      (node) => node.position.x === first.position.x && node.position.y === first.position.y,
+    );
+    if (stacked) runLayout();
+  }, [measured, readOnly, flow, runLayout]);
 
   const fitView = useCallback(() => {
     void flow.fitView({ padding: 0.2 });
