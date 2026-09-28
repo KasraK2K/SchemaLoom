@@ -4,6 +4,7 @@ import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
 import { CanvasClient } from '@/features/canvas/canvas-client';
 import { dehydrateIr } from '@/features/canvas/ir-prefetch';
+import { ProjectTabs } from '@/features/history/project-tabs';
 import { InspectorPanel } from '@/features/inspector/inspector-panel';
 import { ProjectShareButton } from '@/features/sharing';
 
@@ -35,9 +36,12 @@ export default async function ProjectCanvasPage({
         breadcrumb={
           // A link, not text: this is the way back out of a project, and for a while it
           // was the only screen in the app you could not navigate away from.
-          <Link href={`/${orgSlug}`} className="truncate hover:text-text">
-            {orgSlug} / project
-          </Link>
+          <span className="flex min-w-0 items-center gap-3">
+            <Link href={`/${orgSlug}`} className="truncate hover:text-text">
+              {orgSlug} / project
+            </Link>
+            <ProjectTabs orgSlug={orgSlug} projectId={projectId} />
+          </span>
         }
         actions={<ProjectShareButton projectId={projectId} />}
         rightPanel={<InspectorPanel projectId={projectId} />}

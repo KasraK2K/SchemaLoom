@@ -11,6 +11,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccessScope, PermissionResolver, VisibilityFilter } from '../access';
 import { SHARE_LINK_ROUTES } from '../access/share-link-allowlist';
 import type { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import type { CommentTarget, CommentsService } from '../comments';
+import type { NotificationsService } from '../notifications';
 import type { AuthPrincipal } from '../auth/subject';
 import type { PrismaService } from '../prisma/prisma.service';
 import { SchemaCommits, type SchemaLoader, type SchemaOperationResult } from '../schema';
@@ -65,6 +67,8 @@ function harness() {
   const contexts = new Map<string, VisibilityContext>();
   const accessChanged = new Channel<AccessScope>();
   const commits = new SchemaCommits();
+  const commentsChanged = new Channel<CommentTarget>();
+  const notificationCreated = new Channel<{ userId: string; id: string }>();
   const keyOf = (s: { kind: string; userId?: string; shareLinkId?: string }) =>
     s.kind === 'user' ? `u:${String(s.userId)}` : `sl:${String(s.shareLinkId)}`;
 
@@ -80,7 +84,19 @@ function harness() {
             : context([], { canOpenProject: false }),
         ),
     } as unknown as VisibilityFilter,
-    { accessChanged, skeleton: () => Promise.resolve({ generation: 4 }) } as unknown as PermissionResolver,
+    {
+      accessChanged,
+      skeleton: () => Promise.resolve({ generation: 4 }),
+      // The comments filter reads atoms at the entity; derive them from the same contexts.
+      resolveProject: (subject: { kind: string }) => Promise.resolve({ subjectKey: keyOf(subject) }),
+      atomsAt: (map: { subjectKey: string }, _skel: unknown, ref: { id: string }) => {
+        const ctx = contexts.get(map.subjectKey);
+        const atoms = new Set<string>();
+        if (ctx?.visibleEntityIds.has(ref.id) === true) atoms.add('schema:view');
+        if (ctx?.restrictedOkEntityIds.has(ref.id) === true) atoms.add('field:viewRestricted');
+        return atoms;
+      },
+    } as unknown as PermissionResolver,
     {
       load: () => (model === null ? Promise.reject(new Error('gone')) : Promise.resolve(new RawSchemaModel(model))),
     } as unknown as SchemaLoader,
@@ -93,6 +109,8 @@ function harness() {
       user: { findFirst: () => Promise.resolve({ name: 'Ana' }) },
     } as unknown as PrismaService,
     { get: () => [ORIGIN] } as never,
+    { changed: commentsChanged } as unknown as CommentsService,
+    { created: notificationCreated } as unknown as NotificationsService,
   );
   gateway.onModuleInit();
 
@@ -105,6 +123,7 @@ function harness() {
       data: undefined,
     } as unknown as RealtimeSocket & { emit: ReturnType<typeof vi.fn> };
     await gateway.authenticate(socket);
+    gateway.handleConnection(socket);
     return socket;
   };
   const events = (socket: { emit: ReturnType<typeof vi.fn> }, name: string): unknown[] =>
@@ -115,6 +134,8 @@ function harness() {
     contexts,
     accessChanged,
     commits,
+    commentsChanged,
+    notificationCreated,
     connect,
     events,
     setModel: (m: SchemaModel | null) => {
@@ -263,6 +284,61 @@ describe('presence (L16)', () => {
     // …and a share-link subject cannot send it either.
     h.gateway.presence(link, { selection: ['en_open'] });
     expect(h.events(ana, SERVER_EVENTS.presence)).toEqual([]);
+  });
+});
+
+describe('comments:changed (Phase 4 §3.1)', () => {
+  const target = (over: Partial<CommentTarget> = {}): CommentTarget => ({
+    projectId: PROJECT,
+    targetType: 'entity',
+    targetId: 'en_secret',
+    entityId: 'en_secret',
+    restricted: false,
+    ...over,
+  });
+
+  it('reaches only user sockets that can see the target — never a share link', async () => {
+    const ana = await h.connect('ana');
+    const bob = await h.connect('bob');
+    const link = await h.connect('link');
+    for (const s of [ana, bob, link]) await h.gateway.subscribe(s, { projectId: PROJECT });
+
+    h.commentsChanged.next(target());
+    await settle();
+    expect(h.events(ana, SERVER_EVENTS.commentsChanged)).toEqual([{ targetType: 'entity', targetId: 'en_secret' }]);
+    expect(h.events(bob, SERVER_EVENTS.commentsChanged)).toEqual([]);
+
+    await h.gateway.commentsChanged(target({ targetId: 'en_open', entityId: 'en_open' }));
+    expect(h.events(bob, SERVER_EVENTS.commentsChanged)).toEqual([{ targetType: 'entity', targetId: 'en_open' }]);
+    expect(h.events(link, SERVER_EVENTS.commentsChanged)).toEqual([]);
+  });
+
+  it('a restricted column needs field:viewRestricted', async () => {
+    h.contexts.set('u:bob', context(['en_open'], { restrictedOkEntityIds: new Set() }));
+    const ana = await h.connect('ana');
+    const bob = await h.connect('bob');
+    for (const s of [ana, bob]) await h.gateway.subscribe(s, { projectId: PROJECT });
+    await h.gateway.commentsChanged(
+      target({ targetType: 'field', targetId: 'fd_open', entityId: 'en_open', restricted: true }),
+    );
+    expect(h.events(ana, SERVER_EVENTS.commentsChanged)).toHaveLength(1);
+    expect(h.events(bob, SERVER_EVENTS.commentsChanged)).toEqual([]);
+  });
+});
+
+describe('notification:new (Phase 4 §4)', () => {
+  it('goes to the recipient’s user room only, with no project subscription needed', async () => {
+    const ana = await h.connect('ana');
+    const bob = await h.connect('bob');
+    const link = await h.connect('link');
+    h.notificationCreated.next({ userId: 'ana', id: 'ntf_1' });
+    expect(h.events(ana, SERVER_EVENTS.notification)).toEqual([{ id: 'ntf_1' }]);
+    expect(h.events(bob, SERVER_EVENTS.notification)).toEqual([]);
+    expect(h.events(link, SERVER_EVENTS.notification)).toEqual([]);
+
+    h.gateway.handleDisconnect(ana);
+    h.gateway.notificationCreated('ana', 'ntf_2');
+    expect(h.events(ana, SERVER_EVENTS.notification)).toHaveLength(1);
   });
 });
 

@@ -39,6 +39,9 @@ const MODELS = [
   'doc',
   'savedQuery',
   'savedQueryEntity',
+  'comment',
+  'notification',
+  'user',
 ] as const;
 
 /** `parent.create({ data: { columns: { create: [...] } } })` → which table the children
@@ -178,7 +181,15 @@ export function fakePrisma(seed: Partial<Store> = {}, options: FakeOptions = {})
           }
         }
         // Prisma's `@default(cuid())`, for the models whose id the caller never sends.
-        if (!('id' in data) && model === 'savedQuery') data.id = `${model}_${String(rowsOf(model).length + 1)}`;
+        if (!('id' in data) && (model === 'savedQuery' || model === 'notification')) {
+          data.id = `${model}_${String(rowsOf(model).length + 1)}`;
+        }
+        if (model === 'comment' || model === 'notification') {
+          data.createdAt ??= new Date();
+          data.updatedAt ??= new Date();
+          data.readAt ??= null;
+          data.version ??= 0;
+        }
         rowsOf(model).push(data);
         return Promise.resolve(data);
       },

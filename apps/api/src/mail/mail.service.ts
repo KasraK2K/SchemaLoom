@@ -103,6 +103,21 @@ export class MailService {
   }
 
   /**
+   * Phase 4 §4 — one in-app notification, mirrored by email when the recipient's pref is
+   * on. `title` is templated from ids (doc 05 L7/L17) and never quotes schema text.
+   */
+  async sendNotificationEmail(to: string, name: string, title: string, path: string | null): Promise<void> {
+    const base = this.config.get('WEB_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
+    const url = `${base}${path ?? '/'}`;
+    await this.send({
+      to,
+      subject: title,
+      text: `Hi ${name},\n\n${title}.\n${url}\n\nChange which emails you get under Account settings.`,
+      html: layout(`Hi ${name},`, `${title}.`, url, 'Open SchemaLoom'),
+    });
+  }
+
+  /**
    * A dead SMTP box must not 500 a registration that already committed. The token row
    * exists either way and "resend verification" is one click, so the failure is logged
    * and swallowed. Password reset is the same shape: the caller answers 204 regardless,

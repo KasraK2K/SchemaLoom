@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth';
 import { MailModule } from '../mail/mail.module';
+import { NotificationsModule } from '../notifications';
 import { AccessRequestsService } from './access-requests.service';
 import { AccessWriter } from './access-write';
 import { GrantsService } from './grants.service';
@@ -18,7 +19,7 @@ import { SharingController } from './sharing.controller';
 @Module({
   // `TokensService` mints the `sl_session` a redeemed link hands out; `MailService` sends
   // email invites (R11).
-  imports: [AuthModule, MailModule],
+  imports: [AuthModule, MailModule, NotificationsModule],
   controllers: [SharingController, ShareLinkRedeemController, InvitationsController],
   providers: [
     AccessWriter,

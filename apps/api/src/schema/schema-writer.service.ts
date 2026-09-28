@@ -65,6 +65,12 @@ export interface WriteContext {
    * no unredacted model in scope that a future conflict body could leak.
    */
   readonly redacted: RedactedModel;
+  /**
+   * Runs inside the batch's transaction, after the version checks and before the first
+   * write — Phase 4 Q4's automatic snapshot before an import or a restore. It writes no
+   * schema row; a throw rolls the batch back with it.
+   */
+  readonly beforeWrite?: (tx: SchemaDb) => Promise<void>;
 }
 
 /**
@@ -151,6 +157,7 @@ export class SchemaWriter {
   ): Promise<SchemaOperationResult> {
     const { projectId } = ctx;
     await this.assertVersions(tx, ops, ctx);
+    await ctx.beforeWrite?.(tx);
 
     const touched: { type: IrObjectType; id: Id }[] = [];
     const removed: { type: IrObjectType; id: Id }[] = [];

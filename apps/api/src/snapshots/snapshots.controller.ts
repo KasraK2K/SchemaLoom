@@ -1,14 +1,26 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { SchemaDiff } from '@schemaloom/schema-model';
 import type { Request } from 'express';
 import { RequirePermission, getAccessContext } from '../access';
 import { getSubject } from '../auth';
 import type { SchemaOperationResult } from '../schema';
-import { CreateSnapshotDto, ImportSourceDto } from './snapshots.dto';
+import { CreateSnapshotDto, ImportPreviewDto, ImportSourceDto } from './snapshots.dto';
 import {
   SnapshotsService,
+  type HistoryDiff,
   type ImportOutcome,
+  type ImportPreview,
+  type LiveHistoryDiff,
   type SnapshotContext,
   type SnapshotSummary,
   type SnapshotView,
@@ -68,6 +80,22 @@ export class SnapshotsController {
     return this.snapshots.read(snapshotContext(req, projectId), snapshotId);
   }
 
+  /**
+   * Phase 4 §1.1 — snapshot → current live IR, both redacted with the CURRENT context.
+   * Declared BEFORE `:fromId/diff/:toId`: Nest registers in method order, and the generic
+   * route would otherwise read `live` as a snapshot id.
+   */
+  @ApiOperation({ summary: 'Diff a snapshot against the current schema' })
+  @RequirePermission('history:view', { project: 'projectId' })
+  @Get(':snapshotId/diff/live')
+  liveDiff(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Param('snapshotId') snapshotId: string,
+  ): Promise<LiveHistoryDiff> {
+    return this.snapshots.liveDiff(snapshotContext(req, projectId), snapshotId);
+  }
+
   /** Two snapshots, both redacted first (L18), diffed by step 18's `diffModels`. */
   @ApiOperation({ summary: 'Diff two snapshots of this project' })
   @RequirePermission('history:view', { project: 'projectId' })
@@ -77,7 +105,7 @@ export class SnapshotsController {
     @Param('projectId') projectId: string,
     @Param('fromId') fromId: string,
     @Param('toId') toId: string,
-  ): Promise<SchemaDiff> {
+  ): Promise<HistoryDiff> {
     return this.snapshots.diff(snapshotContext(req, projectId), fromId, toId);
   }
 
@@ -91,6 +119,19 @@ export class SnapshotsController {
     @Param('snapshotId') snapshotId: string,
   ): Promise<SchemaOperationResult> {
     return this.snapshots.restore(snapshotContext(req, projectId), snapshotId);
+  }
+
+  /** §7.8 — manual snapshots only; automatic ones age out (Phase 4 Q4). */
+  @ApiOperation({ summary: 'Delete a manual snapshot' })
+  @RequirePermission('schema:edit', { project: 'projectId' })
+  @Delete(':snapshotId')
+  @HttpCode(204)
+  remove(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Param('snapshotId') snapshotId: string,
+  ): Promise<void> {
+    return this.snapshots.remove(snapshotContext(req, projectId), snapshotId);
   }
 }
 
@@ -139,6 +180,25 @@ export class ImportController {
     @Param('projectId') projectId: string,
     @Body() body: ImportSourceDto,
   ): Promise<ImportOutcome> {
-    return this.snapshots.importSource(snapshotContext(req, projectId), body.source);
+    return this.snapshots.importSource(
+      snapshotContext(req, projectId),
+      body.source,
+      undefined,
+      body.renames,
+    );
+  }
+
+  /** Phase 4 §2.1 — what the import would do, with rename proposals. Same atom and R21′
+   *  as the import itself (L19); nothing is written. */
+  @ApiOperation({ summary: 'Preview a SQL import: creates, existing tables, rename candidates' })
+  @RequirePermission('schema:edit', { project: 'projectId' })
+  @Post('preview')
+  @HttpCode(200)
+  preview(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: ImportPreviewDto,
+  ): Promise<ImportPreview> {
+    return this.snapshots.preview(snapshotContext(req, projectId), body.source);
   }
 }

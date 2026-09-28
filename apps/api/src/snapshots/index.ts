@@ -11,12 +11,16 @@ export {
   SnapshotsService,
   SYNC_IMPORT_MAX_BYTES,
   type CreateSnapshotInput,
+  type HistoryDiff,
+  type ImportPreview,
+  type LiveHistoryDiff,
   type ImportOutcome,
   type SnapshotContext,
   type SnapshotSummary,
   type SnapshotView,
 } from './snapshots.service';
-export { CreateSnapshotDto, CreateSnapshotSchema } from './snapshots.dto';
+export { ConfirmedRenamesSchema, CreateSnapshotDto, CreateSnapshotSchema } from './snapshots.dto';
+export type { ConfirmedRename } from './import-renames';
 export {
   SnapshotEngineMismatchException,
   assertFullProjectView,

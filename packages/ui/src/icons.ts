@@ -9,12 +9,14 @@
  * Add an icon here when a consumer needs one. Do not add "just in case".
  */
 export {
+  Bell,
   Check,
   ChevronDown,
   ChevronRight,
   Database,
   FilePlus2,
   LayoutGrid,
+  MessageSquare,
   Monitor,
   MoreHorizontal,
   Moon,

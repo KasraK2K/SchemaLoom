@@ -18,6 +18,7 @@ import {
 } from '../access';
 import { PrincipalType } from '../generated/prisma/enums';
 import { MailService } from '../mail/mail.service';
+import { NotificationsService, type CreatedNotification } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessWriter, assertNotGuestManager, assertVisible, grantableRole } from './access-write';
 import type { CreateGrantDto, UpdateGrantDto } from './sharing.dto';
@@ -65,6 +66,7 @@ export interface AccessList {
 }
 
 const CANDIDATE_LIMIT = 10;
+const SHARED_NOUN: Record<ResourceType, string> = { project: 'a project', area: 'an area', entity: 'a table' };
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** The shape `access_grants_email_shape_ck` enforces, checked first so it is a 400. */
 const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -89,6 +91,7 @@ export class GrantsService {
     private readonly resolver: PermissionResolver,
     private readonly writer: AccessWriter,
     private readonly mail: MailService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async accessList(projectId: string, map: ProjectPermissionMap): Promise<AccessList> {
@@ -202,8 +205,9 @@ export class GrantsService {
     const role = await grantableRole(this.prisma, organizationId, body.roleKey);
     const ref = { type: body.resourceType, id: body.resourceId };
     const principalType = PrincipalType[body.principalKind];
+    const url = await this.notifications.projectUrl(projectId);
 
-    return this.writer.write(subject, projectId, async ({ tx, map, skel }) => {
+    const result = await this.writer.write(subject, projectId, async ({ tx, map, skel }) => {
       assertVisible(map, skel, ref);
       const proposed = materialise({ atoms: role.atoms, canUseAi: body.canUseAi, canViewRestricted: body.canViewRestricted });
       this.resolver.assertMayGrant(map, skel, ref, proposed);
@@ -234,8 +238,28 @@ export class GrantsService {
         resourceId: ref.id,
         metadata: { grantId: after.id, before: snapshot(before), after: snapshot(after) },
       });
-      return { id: after.id };
+      // Phase 4 §4 `resource.shared` — a NEW grant to a person, never to yourself. The title
+      // names the kind of resource only (L7); the grant itself is what makes it visible.
+      let sent: CreatedNotification[] = [];
+      if (before === null && principalType === PrincipalType.user && body.principalId !== subject.userId) {
+        const actor = await tx.user.findUniqueOrThrow({ where: { id: subject.userId }, select: { name: true } });
+        sent = await this.notifications.create(tx, [
+          {
+            userId: body.principalId,
+            actorUserId: subject.userId,
+            organizationId,
+            projectId,
+            type: 'resource.shared',
+            title: `${actor.name} shared ${SHARED_NOUN[ref.type]} with you`,
+            url,
+            data: { grantId: after.id, resourceType: ref.type, resourceId: ref.id },
+          },
+        ]);
+      }
+      return { id: after.id, sent };
     });
+    await this.notifications.deliver(result.sent);
+    return { id: result.id };
   }
 
   /** `PATCH /grants/:id` — role and the two toggles; R4 measured at the grant's resource. */

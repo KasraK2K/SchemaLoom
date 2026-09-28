@@ -31,8 +31,13 @@ export function CanvasClient({
   // level (see its header), so switching projects without this leaves the previous
   // project's undo entries pointing at ids that no longer exist.
   useEffect(() => {
-    const { reset } = useCanvasStore.getState();
+    const { reset, select } = useCanvasStore.getState();
     reset();
+    // History's "Show on canvas" links here with `?select=<entityId>`. Read once, on the
+    // project switch, straight off `location`: `useSearchParams` would need a Suspense
+    // boundary around the whole canvas for a one-shot read.
+    const ids = new URLSearchParams(window.location.search).get('select');
+    if (ids !== null && ids !== '') select(ids.split(','));
     return reset;
   }, [projectId]);
 

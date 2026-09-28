@@ -10,7 +10,8 @@ import {
   type PermissionRequirement,
   type SweptRoute,
 } from '../access';
-import { SnapshotsController } from './snapshots.controller';
+import { ImportJobsController } from '../jobs/import-jobs.controller';
+import { ImportController, SnapshotsController } from './snapshots.controller';
 
 /**
  * Doc 01 §4.1 — the boot sweep ABORTS THE PROCESS for a route under `/api/**` that carries
@@ -23,9 +24,9 @@ interface Swept extends SweptRoute {
   readonly requirement: PermissionRequirement | undefined;
 }
 
-function sweep(): Swept[] {
-  const prototype: object = SnapshotsController.prototype;
-  const controllerPath = String(Reflect.getMetadata(PATH_METADATA, SnapshotsController) ?? '');
+function sweep(controller: abstract new (...args: never[]) => object = SnapshotsController): Swept[] {
+  const prototype: object = controller.prototype;
+  const controllerPath = String(Reflect.getMetadata(PATH_METADATA, controller) ?? '');
   const routes: Swept[] = [];
 
   for (const name of Object.getOwnPropertyNames(prototype)) {
@@ -43,9 +44,9 @@ function sweep(): Swept[] {
         .replace(/\/$/, ''),
       markers: markerKeysOn(
         (key) =>
-          Reflect.getMetadata(key, handler) ?? Reflect.getMetadata(key, SnapshotsController),
+          Reflect.getMetadata(key, handler) ?? Reflect.getMetadata(key, controller),
       ),
-      source: `SnapshotsController.${name}`,
+      source: `${controller.name}.${name}`,
       handler: name,
       requirement: Reflect.getMetadata(PERM_META, handler) as PermissionRequirement | undefined,
     });
@@ -58,14 +59,26 @@ describe('SnapshotsController route markers', () => {
   const atomOf = (handler: string): string | undefined =>
     routes.find((r) => r.handler === handler)?.requirement?.atom;
 
-  it('registers the five routes step 19 owns', () => {
+  it('registers step 19’s five routes plus Phase 4’s live diff and delete', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
+      'DELETE /api/projects/:projectId/snapshots/:snapshotId',
       'GET /api/projects/:projectId/snapshots',
       'GET /api/projects/:projectId/snapshots/:fromId/diff/:toId',
       'GET /api/projects/:projectId/snapshots/:snapshotId',
+      'GET /api/projects/:projectId/snapshots/:snapshotId/diff/live',
       'POST /api/projects/:projectId/snapshots',
       'POST /api/projects/:projectId/snapshots/:snapshotId/restore',
     ]);
+  });
+
+  it('declares diff/live BEFORE :fromId/diff/:toId, or `live` would be read as an id', () => {
+    const order = routes.map((r) => r.handler);
+    expect(order.indexOf('liveDiff')).toBeLessThan(order.indexOf('diff'));
+  });
+
+  it('live diff reads with history:view; delete needs schema:edit', () => {
+    expect(atomOf('liveDiff')).toBe('history:view');
+    expect(atomOf('remove')).toBe('schema:edit');
   });
 
   it('passes the boot sweep: exactly one marker each', () => {
@@ -100,6 +113,31 @@ describe('SnapshotsController route markers', () => {
   });
 
   it('exposes nothing to a share-link subject (R21)', () => {
+    expect(routes.filter((r) => isShareLinkRoute(r.method, r.path))).toEqual([]);
+  });
+});
+
+describe('ImportController and ImportJobsController route markers', () => {
+  const routes = [...sweep(ImportController), ...sweep(ImportJobsController)];
+
+  it('registers import, preview and the queued path', () => {
+    expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
+      'GET /api/projects/:projectId/import/jobs/:jobId',
+      'POST /api/projects/:projectId/import',
+      'POST /api/projects/:projectId/import/jobs',
+      'POST /api/projects/:projectId/import/preview',
+    ]);
+  });
+
+  it('passes the boot sweep, and preview carries the same atom as import (L19)', () => {
+    expect(() => {
+      assertRouteTable(routes);
+    }).not.toThrow();
+    for (const route of routes) {
+      expect(route.markers).toHaveLength(1);
+      expect(route.requirement?.atom).toBe('schema:edit');
+      expect(route.requirement?.wheres).toEqual([{ project: 'projectId' }]);
+    }
     expect(routes.filter((r) => isShareLinkRoute(r.method, r.path))).toEqual([]);
   });
 });

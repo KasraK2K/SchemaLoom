@@ -1,7 +1,7 @@
 # Phase 4 — history & diff, rename on import, comments, notifications
 
-Status: **draft for approval.** Realtime (decision 105) is already designed and is being built
-in parallel; this document covers the three parts that had no design. Permission rules are not
+Status: **approved 2026-09-28, with the recommendation on every question in §6.** Realtime
+(decision 105) is built; this document covers the three parts that had no design. Permission rules are not
 re-decided here: they are doc 05's L15–L19, R21′ and §7.8, and each section names the one it
 applies. Five questions at the end need an answer before build.
 

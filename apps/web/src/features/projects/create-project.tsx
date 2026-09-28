@@ -41,13 +41,21 @@ type Skipped = Imported['report']['statements'];
  * Up to 5 MB inline; above that the source is queued as `text/plain` and the job polled
  * until BullMQ reports it done. Both paths answer the same `{ report, existing }`.
  */
-export async function importInto(projectId: string, source: string): Promise<Imported> {
+export async function importInto(
+  projectId: string,
+  source: string,
+  renames: readonly ConfirmedRename[] = [],
+): Promise<Imported> {
   const base = `/projects/${encodeURIComponent(projectId)}/import`;
   if (new Blob([source]).size <= SYNC_IMPORT_MAX_BYTES) {
-    return ImportedSchema.parse(await apiFetch<unknown>(base, { method: 'POST', body: { source } }));
+    return ImportedSchema.parse(
+      await apiFetch<unknown>(base, { method: 'POST', body: { source, renames } }),
+    );
   }
+  // The queued body is the raw SQL, so confirmed renames ride as a query parameter.
+  const query = renames.length === 0 ? '' : `?renames=${encodeURIComponent(JSON.stringify(renames))}`;
   const { id } = CreatedSchema.parse(
-    await apiFetch<unknown>(`${base}/jobs`, { method: 'POST', text: source }),
+    await apiFetch<unknown>(`${base}/jobs${query}`, { method: 'POST', text: source }),
   );
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
@@ -57,6 +65,54 @@ export async function importInto(projectId: string, source: string): Promise<Imp
       throw new ApiError(422, 'import_failed', job.error ?? 'The import failed.');
     }
   }
+}
+
+/** Phase 4 §2.1 — a rename the user confirmed in the import dialog. */
+export interface ConfirmedRename {
+  readonly type: 'entity' | 'field';
+  readonly fromId: string;
+  readonly toName: string;
+}
+
+const RenameCandidateSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('entity'),
+    fromId: z.string(),
+    fromName: z.string(),
+    toName: z.string(),
+    reason: z.string(),
+  }),
+  z.object({
+    type: z.literal('field'),
+    entityId: z.string(),
+    entityName: z.string(),
+    fromId: z.string(),
+    fromName: z.string(),
+    toName: z.string(),
+    reason: z.string(),
+  }),
+]);
+export type RenameCandidate = z.infer<typeof RenameCandidateSchema>;
+
+const PreviewSchema = z.object({
+  creates: z.array(z.string()),
+  existing: z.array(z.string()),
+  renameCandidates: z.array(RenameCandidateSchema),
+});
+export type ImportPreview = z.infer<typeof PreviewSchema>;
+
+/**
+ * What an import would do, with rename proposals. `null` above the synchronous cap: the
+ * preview takes a JSON body, so a queued-size source imports without rename cards.
+ */
+export async function previewImport(projectId: string, source: string): Promise<ImportPreview | null> {
+  if (new Blob([source]).size > SYNC_IMPORT_MAX_BYTES) return null;
+  return PreviewSchema.parse(
+    await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/import/preview`, {
+      method: 'POST',
+      body: { source },
+    }),
+  );
 }
 
 const STARTING_POINTS = [

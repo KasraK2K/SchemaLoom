@@ -5,6 +5,7 @@ import {
   MessageBody,
   SubscribeMessage,
   WebSocketGateway,
+  type OnGatewayConnection,
   type OnGatewayDisconnect,
   type OnGatewayInit,
 } from '@nestjs/websockets';
@@ -13,6 +14,8 @@ import type { Subscription } from 'rxjs';
 import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
 import { PermissionResolver, VisibilityFilter, type AccessScope, type Subject } from '../access';
+import { CommentsService, seesTarget, type CommentTarget } from '../comments';
+import { NotificationsService } from '../notifications';
 import { isShareLinkRoute } from '../access/share-link-allowlist';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { toSubject, type AuthPrincipal } from '../auth/subject';
@@ -38,6 +41,10 @@ export const SERVER_EVENTS = {
   presence: 'presence:update',
   /** Doc 05 §12.2: sent right before the socket is dropped; the client shows "not available". */
   closed: 'project:closed',
+  /** `{ targetType, targetId }`, only to user sockets that can see the target; refetch it. */
+  commentsChanged: 'comments:changed',
+  /** `{ id }` to the recipient's `user:<id>` room. Never to share-link sockets. */
+  notification: 'notification:new',
 } as const;
 
 /** §12.2 — the recipient's recomputed context can no longer open the project. */
@@ -83,10 +90,12 @@ export type RealtimeSocket = Pick<Socket, 'id' | 'emit' | 'disconnect' | 'handsh
  */
 @WebSocketGateway({ transports: ['websocket'] })
 export class RealtimeGateway
-  implements OnGatewayInit, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(RealtimeGateway.name);
   private readonly rooms = new Map<string, Set<RealtimeSocket>>();
+  /** `user:<id>` → that user's sockets, joined on connect (Phase 4 §4 `notification:new`). */
+  private readonly userRooms = new Map<string, Set<RealtimeSocket>>();
   /** Per-project serialisation: two commits must not interleave their `view` updates. */
   private readonly chains = new Map<string, Promise<unknown>>();
   private readonly subscriptions: Subscription[] = [];
@@ -99,6 +108,8 @@ export class RealtimeGateway
     private readonly commits: SchemaCommits,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnv, true>,
+    private readonly comments: CommentsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   onModuleInit(): void {
@@ -108,6 +119,12 @@ export class RealtimeGateway
       this.resolver.accessChanged.subscribe(
         (scope) => void this.accessChanged(scope).catch(() => undefined),
       ),
+      this.comments.changed.subscribe(
+        (target) => void this.commentsChanged(target).catch(() => undefined),
+      ),
+      this.notifications.created.subscribe((n) => {
+        this.notificationCreated(n.userId, n.id);
+      }),
     );
   }
 
@@ -153,8 +170,22 @@ export class RealtimeGateway
     };
   }
 
+  /** Share-link sockets have no user room: they get no notifications (R21). */
+  handleConnection(socket: RealtimeSocket): void {
+    const userId = socket.data.principal.kind === 'user' ? socket.data.userId : null;
+    if (userId === null) return;
+    const key = `user:${userId}`;
+    const room = this.userRooms.get(key) ?? new Set<RealtimeSocket>();
+    room.add(socket);
+    this.userRooms.set(key, room);
+  }
+
   handleDisconnect(socket: RealtimeSocket): void {
     this.leave(socket);
+    const key = `user:${socket.data.userId ?? ''}`;
+    const room = this.userRooms.get(key);
+    room?.delete(socket);
+    if (room?.size === 0) this.userRooms.delete(key);
   }
 
   // ===================================================================================
@@ -258,6 +289,31 @@ export class RealtimeGateway
         }),
       ),
     );
+  }
+
+  /**
+   * Phase 4 §3.1 — a comment on `target` changed. Each subscribed user socket gets the
+   * bare `{ targetType, targetId }` only if ITS subject can see the target right now, so
+   * a restricted column's thread never pings a reader without `field:viewRestricted`.
+   */
+  async commentsChanged(target: CommentTarget): Promise<void> {
+    const sockets = [...(this.rooms.get(target.projectId) ?? [])];
+    if (sockets.length === 0) return;
+    const skel = await this.resolver.skeleton(target.projectId);
+    const ref = { type: 'entity' as const, id: target.entityId };
+    for (const socket of sockets) {
+      const { subject } = socket.data;
+      if (subject?.kind !== 'user') continue;
+      const map = await this.resolver.resolveProject(subject, target.projectId);
+      if (!seesTarget(this.resolver.atomsAt(map, skel, ref), target)) continue;
+      socket.emit(SERVER_EVENTS.commentsChanged, { targetType: target.targetType, targetId: target.targetId });
+    }
+  }
+
+  notificationCreated(userId: string, id: string): void {
+    for (const socket of this.userRooms.get(`user:${userId}`) ?? []) {
+      socket.emit(SERVER_EVENTS.notification, { id });
+    }
   }
 
   // ===================================================================================

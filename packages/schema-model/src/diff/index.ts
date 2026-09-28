@@ -8,6 +8,14 @@
 export { deepDiff } from './deep-diff.js';
 export { diffModels, isCosmeticOnly } from './diff-models.js';
 export { RedactedDiffError, opsFromDiff, type RestoreOp } from './ops-from-diff.js';
+export {
+  nameSimilarity,
+  renameCandidates,
+  type EntityRenameCandidate,
+  type FieldRenameCandidate,
+  type RenameCandidate,
+  type RenameCandidateOptions,
+} from './rename-candidates.js';
 export { destructiveEntries, entriesByEntity, entriesOfType, isEmptyDiff } from './selectors.js';
 export type {
   ChangeType,

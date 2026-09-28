@@ -10,21 +10,33 @@ import type { EngineRegistry, ImportReport } from '@schemaloom/engine-sdk';
 import {
   RawSchemaModel,
   diffModels,
+  renameCandidates,
   type RedactedModel,
+  type RenameCandidate,
   type SchemaDiff,
+  type SchemaModel,
   type SnapshotRef,
 } from '@schemaloom/schema-model';
 import { randomUUID } from 'node:crypto';
 import {
   PermissionResolver,
   VisibilityFilter,
+  isCompleteView,
   type ProjectPermissionMap,
   type ProjectSkeleton,
 } from '../access';
 import type { Subject } from '../auth';
 import { ENGINE_REGISTRY, EngineGate } from '../engines';
 import { PrismaService } from '../prisma/prisma.service';
-import { SchemaWriter, type SchemaOperationBatch, type SchemaOperationResult } from '../schema';
+import {
+  SchemaOperationBatchSchema,
+  SchemaWriter,
+  type SchemaOperationBatch,
+  type SchemaOperationResult,
+  type WriteContext,
+} from '../schema';
+import { writeAutoSnapshot } from './auto-snapshot';
+import { renameOps, type ConfirmedRename } from './import-renames';
 import { blobToLive, loadLiveProject, snapshotBlob, type LiveIr, type LiveProject } from './live-ir';
 import { assertFullProjectView, assertSnapshotEngine } from './restore-guards';
 import { mergeImport } from './merge-import';
@@ -136,6 +148,53 @@ const refOf = (row: SnapshotRow): SnapshotRef => ({
 const restoredConflict = (projectId: string): ConflictException =>
   new ConflictException({ code: 'project_restored', projectId });
 
+/**
+ * Phase 4 §1.1 — the header counts, computed from the diff of two REDACTED models, so they
+ * count only what the caller can see (L8). `structural` counts entries that change DDL
+ * (every add/remove, and every change with a structural property); `governance` counts
+ * changes carrying a governance property (restricted, PII, area moves).
+ */
+export interface DiffHeaderCounts {
+  readonly added: number;
+  readonly removed: number;
+  readonly changed: number;
+  readonly structural: number;
+  readonly governance: number;
+}
+
+export type HistoryDiff = SchemaDiff & { readonly counts: DiffHeaderCounts };
+
+export type LiveHistoryDiff = HistoryDiff & {
+  /** R21′ — whether a restore would be allowed. Discloses only that the caller's view is
+   *  partial, which they already know (`assertFullProjectView`). */
+  readonly fullView: boolean;
+};
+
+export function withCounts(diff: SchemaDiff): HistoryDiff {
+  const has = (severity: string) => (e: SchemaDiff['entries'][number]) =>
+    e.change === 'changed' && e.properties.some((p) => p.severity === severity);
+  return {
+    ...diff,
+    counts: {
+      added: diff.summary.added,
+      removed: diff.summary.removed,
+      changed: diff.summary.changed,
+      structural: diff.entries.filter((e) => e.change !== 'changed' || has('structural')(e)).length,
+      governance: diff.entries.filter(has('governance')).length,
+    },
+  };
+}
+
+/** `POST .../import/preview` — what an import WOULD do. Nothing is written. */
+export interface ImportPreview {
+  /** Tables the import would create. */
+  readonly creates: readonly string[];
+  /** Tables the SQL names that the project already has. */
+  readonly existing: readonly string[];
+  /** Proposals only (§2.2); a human confirms each one. */
+  readonly renameCandidates: readonly RenameCandidate[];
+}
+
 /** Doc 00 Q22 — larger sources go through the BullMQ import job (`import.processor.ts`). */
 export const SYNC_IMPORT_MAX_BYTES = 5_000_000;
 
@@ -144,6 +203,18 @@ export interface ImportOutcome {
   readonly report: ImportReport;
   /** Imported tables that already existed and were left unchanged. */
   readonly existing: readonly string[];
+}
+
+type BeforeWrite = NonNullable<WriteContext['beforeWrite']>;
+
+/** The hook for the FIRST write only; later batches get none. */
+function once(hook: BeforeWrite): () => BeforeWrite | undefined {
+  let used = false;
+  return () => {
+    if (used) return undefined;
+    used = true;
+    return hook;
+  };
 }
 
 @Injectable()
@@ -203,16 +274,57 @@ export class SnapshotsService {
    * true and this diff can never be fed to `opsFromDiff`. That is not a limitation of the
    * viewer; it is what stops a diff being laundered into a restore.
    */
-  async diff(ctx: SnapshotContext, fromId: string, toId: string): Promise<SchemaDiff> {
+  async diff(ctx: SnapshotContext, fromId: string, toId: string): Promise<HistoryDiff> {
     const [from, to] = await Promise.all([
       this.require(ctx.projectId, fromId),
       this.require(ctx.projectId, toId),
     ]);
-    return diffModels(
-      this.redact(ctx, blobToLive(from.ir)),
-      this.redact(ctx, blobToLive(to.ir)),
-      { from: refOf(from), to: refOf(to) },
+    return withCounts(
+      diffModels(this.redact(ctx, blobToLive(from.ir)), this.redact(ctx, blobToLive(to.ir)), {
+        from: refOf(from),
+        to: refOf(to),
+      }),
     );
+  }
+
+  /**
+   * Phase 4 §1.1 — snapshot → NOW. Both sides redacted with the caller's CURRENT context
+   * (L18), exactly like a snapshot-to-snapshot diff. Refused across an engine major
+   * (§15.2, like restore): the blob's `engineProps` would diff as noise.
+   */
+  async liveDiff(ctx: SnapshotContext, snapshotId: string): Promise<LiveHistoryDiff> {
+    const [row, project] = await Promise.all([
+      this.require(ctx.projectId, snapshotId),
+      loadLiveProject(this.prisma, ctx.projectId),
+    ]);
+    assertSnapshotEngine(
+      this.gate,
+      { engineId: project.engineId, enginePluginVersion: project.enginePluginVersion },
+      row.enginePluginVersion,
+    );
+    const live = this.filter.redactWith(project.raw, ctx.subject, ctx.projectId, ctx.map, ctx.skel);
+    const diff = diffModels(this.redact(ctx, blobToLive(row.ir)), live, {
+      from: refOf(row),
+      to: { kind: 'live' },
+    });
+    const visibility = this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel);
+    return { ...withCounts(diff), fullView: isCompleteView(visibility) };
+  }
+
+  /** §7.8 — `schema:edit`, and `kind = manual` only: automatic ones age out (Q4). A
+   *  snapshot of another project reads as absent. */
+  async remove(ctx: SnapshotContext, snapshotId: string): Promise<void> {
+    const row = await this.prisma.snapshot.findFirst({
+      where: { id: snapshotId, projectId: ctx.projectId },
+      select: { kind: true },
+    });
+    if (row === null) {
+      throw new NotFoundException({ code: 'not_found', resourceType: 'snapshot', id: snapshotId });
+    }
+    if (row.kind !== 'manual') throw new ConflictException({ code: 'snapshot_not_manual' });
+    await this.prisma.snapshot.deleteMany({
+      where: { id: snapshotId, projectId: ctx.projectId, kind: 'manual' },
+    });
   }
 
   /**
@@ -241,7 +353,13 @@ export class SnapshotsService {
       batchId,
       `Restore "${row.name}"`,
     );
-    return this.applyPlanned(ctx, project, batchId, batch);
+    return this.applyPlanned(
+      ctx,
+      project,
+      batchId,
+      batch,
+      this.autoSnapshot(ctx, project, 'restore', `Before restore "${row.name}"`),
+    );
   }
 
   /**
@@ -250,13 +368,88 @@ export class SnapshotsService {
    * deleted), and the difference is applied as ordinary batches through `SchemaWriter`.
    * R21′ applies for the same reason it does to restore.
    *
+   * Phase 4 Q1 — the ONE exception to "existing objects win": `renames` a human confirmed
+   * from the preview are validated against the fresh merge and applied FIRST, as ordinary
+   * `update { name }` ops, so the renamed object keeps its id and then matches by key.
+   * Q4 — the first batch that writes also writes a `kind = import` snapshot of the model
+   * as it was, in that batch's transaction.
+   *
    * `maxBytes` is the caller's: 5 MB on the request path, larger from the import job.
    */
   async importSource(
     ctx: SnapshotContext,
     source: string,
     maxBytes: number = SYNC_IMPORT_MAX_BYTES,
+    renames: readonly ConfirmedRename[] = [],
   ): Promise<ImportOutcome> {
+    const { project, model, report } = await this.parseSource(ctx, source, maxBytes);
+
+    let merged = mergeImport(project.live, model);
+    const renaming = renames.length === 0 ? [] : renameOps(project.live, merged.imported, renames);
+    await this.assertUnchanged(ctx.projectId, project.schemaRevision);
+
+    const snapshotOnce = once(this.autoSnapshot(ctx, project, 'import', 'Before import'));
+    let result: SchemaOperationResult | null = null;
+    let current = project;
+    let batchCtx = ctx;
+    // Re-read between batches: the next batch's permission check has to see the entities
+    // the previous one created or renamed, in the model AND in the skeleton (a field on an
+    // entity the skeleton has never heard of is a 404).
+    const reload = async (): Promise<void> => {
+      const [live, map, skel] = await Promise.all([
+        loadLiveProject(this.prisma, ctx.projectId),
+        this.resolver.resolveProject(ctx.subject, ctx.projectId),
+        this.resolver.skeleton(ctx.projectId),
+      ]);
+      current = live;
+      batchCtx = { ...ctx, map, skel };
+    };
+
+    if (renaming.length > 0) {
+      const batch = SchemaOperationBatchSchema.parse({
+        batchId: randomUUID(),
+        projectId: ctx.projectId,
+        ops: renaming,
+        label: 'Import SQL: confirmed renames',
+      });
+      result = await this.write(ctx, project, batch, snapshotOnce());
+      await reload();
+      // The additive merge now runs against the RENAMED model.
+      merged = mergeImport(current.live, model);
+    }
+
+    const batches = planImport(current.live, merged.model, randomUUID, 'Import SQL');
+    for (const [i, batch] of batches.entries()) {
+      if (i > 0) await reload();
+      result = await this.write(batchCtx, current, batch, snapshotOnce());
+    }
+    return {
+      result: result ?? this.noop(ctx, randomUUID(), project),
+      report,
+      existing: merged.existing,
+    };
+  }
+
+  /** Phase 4 §2.1 — the same parse and merge as an import, and nothing written. */
+  async preview(ctx: SnapshotContext, source: string): Promise<ImportPreview> {
+    const { project, model } = await this.parseSource(ctx, source, SYNC_IMPORT_MAX_BYTES);
+    const merged = mergeImport(project.live, model);
+    return {
+      creates: Object.values(merged.imported.objects.entity)
+        .filter((e) => !(e.id in project.live.objects.entity))
+        .map((e) => e.name),
+      existing: merged.existing,
+      // Only visible objects enter the pools: R21′ in `parseSource` required the full view.
+      renameCandidates: renameCandidates(project.live, merged.imported),
+    };
+  }
+
+  /** R21′, the byte cap and the engine's importer — shared by import and preview. */
+  private async parseSource(
+    ctx: SnapshotContext,
+    source: string,
+    maxBytes: number,
+  ): Promise<{ project: LiveProject; model: SchemaModel; report: ImportReport }> {
     const visibility = this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel);
     assertFullProjectView(visibility);
 
@@ -284,34 +477,26 @@ export class SnapshotsService {
       },
       { projectId: ctx.projectId, serverVersion: project.live.engineVersion, newId: randomUUID },
     );
+    return { project, model, report };
+  }
 
-    const merged = mergeImport(project.live, model);
-    const batches = planImport(project.live, merged.model, randomUUID, 'Import SQL');
-    await this.assertUnchanged(ctx.projectId, project.schemaRevision);
-
-    let result: SchemaOperationResult | null = null;
-    let current = project;
-    let batchCtx = ctx;
-    for (const batch of batches) {
-      if (result !== null) {
-        // Re-read between batches: the next batch's permission check has to see the
-        // entities the previous one created, in the model AND in the skeleton (a field
-        // on an entity the skeleton has never heard of is a 404).
-        const [live, map, skel] = await Promise.all([
-          loadLiveProject(this.prisma, ctx.projectId),
-          this.resolver.resolveProject(ctx.subject, ctx.projectId),
-          this.resolver.skeleton(ctx.projectId),
-        ]);
-        current = live;
-        batchCtx = { ...ctx, map, skel };
-      }
-      result = await this.write(batchCtx, current, batch);
-    }
-    return {
-      result: result ?? this.noop(ctx, randomUUID(), project),
-      report,
-      existing: merged.existing,
-    };
+  /** Q4 — the snapshot written inside the batch it precedes (see `auto-snapshot.ts`). */
+  private autoSnapshot(
+    ctx: SnapshotContext,
+    project: LiveProject,
+    kind: 'import' | 'restore',
+    name: string,
+  ): BeforeWrite {
+    return (tx) =>
+      writeAutoSnapshot(tx, {
+        projectId: ctx.projectId,
+        kind,
+        name,
+        live: project.live,
+        enginePluginVersion: project.enginePluginVersion,
+        createdById: ctx.actorUserId,
+        now: new Date(),
+      });
   }
 
   /** The shared tail of restore and import: an empty plan is a no-op, anything else is
@@ -321,6 +506,7 @@ export class SnapshotsService {
     project: LiveProject,
     batchId: string,
     batch: SchemaOperationBatch | null,
+    beforeWrite?: BeforeWrite,
   ): Promise<SchemaOperationResult> {
     // The snapshot already matches live. Writing an empty batch would bump the
     // revision and broadcast a reload for nothing.
@@ -332,7 +518,7 @@ export class SnapshotsService {
     // see — a concurrently CREATED object, which no op of ours names — and the catch below
     // converts the version conflicts it does see into the same answer.
     await this.assertUnchanged(ctx.projectId, project.schemaRevision);
-    return this.write(ctx, project, batch);
+    return this.write(ctx, project, batch, beforeWrite);
   }
 
   private noop(ctx: SnapshotContext, batchId: string, project: LiveProject): SchemaOperationResult {
@@ -350,6 +536,7 @@ export class SnapshotsService {
     ctx: SnapshotContext,
     project: LiveProject,
     batch: SchemaOperationBatch,
+    beforeWrite?: BeforeWrite,
   ): Promise<SchemaOperationResult> {
     const redacted = this.filter.redactWith(
       project.raw,
@@ -365,6 +552,7 @@ export class SnapshotsService {
         map: ctx.map,
         skel: ctx.skel,
         redacted,
+        ...(beforeWrite === undefined ? {} : { beforeWrite }),
       });
     } catch (error) {
       if (error instanceof ConflictException) throw restoredConflict(ctx.projectId);

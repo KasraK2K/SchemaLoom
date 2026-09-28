@@ -11,6 +11,9 @@ export interface MergedImport {
   readonly model: LiveIr;
   /** Names of imported tables that already existed and were left exactly as they are. */
   readonly existing: readonly string[];
+  /** The imported model with every matched object carrying its LIVE id (keys too), for
+   *  the rename generator and for validating confirmed renames against. */
+  readonly imported: SchemaModel;
 }
 
 /**
@@ -19,7 +22,10 @@ export interface MergedImport {
  * 1. **Collision key** is `logicalKey` (§6.1): `ent:public.orders`, `fld:public.orders.id`…
  *    An imported object whose key live already has is the SAME object and is not written.
  * 2. **Docs** and 3. **positions** of existing objects are untouched, because nothing
- *    existing is updated.
+ *    existing is updated here. The ONE exception (Phase 4 Q1) is not in this function: a
+ *    rename a human CONFIRMED in the import dialog is applied as an ordinary
+ *    `update { name }` through `SchemaWriter` before this merge runs, so the renamed object
+ *    then matches by key. Nothing is inferred and nothing is deleted.
  * 4. **Grants and comments** stay attached to existing ids; new objects referencing an
  *    existing one are RETARGETED to its live id.
  *
@@ -105,5 +111,18 @@ export function mergeImport(live: LiveIr, imported: SchemaModel): MergedImport {
     }
   }
 
-  return { model: blobToLive({ ...live, objects }), existing };
+  const rekeyed = Object.fromEntries(
+    IR_OBJECT_TYPES.map((type) => [
+      type,
+      Object.fromEntries(
+        Object.values(retargeted.objects[type] as Record<string, { id: string }>).map((o) => [o.id, o]),
+      ),
+    ]),
+  ) as unknown as SchemaModel['objects'];
+
+  return {
+    model: blobToLive({ ...live, objects }),
+    existing,
+    imported: { ...retargeted, objects: rekeyed },
+  };
 }

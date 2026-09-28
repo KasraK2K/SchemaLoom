@@ -13,6 +13,7 @@ import { io } from 'socket.io-client';
 import { z } from 'zod';
 import { create } from 'zustand';
 import { clientEnv } from '@/env.client';
+import { commentsKey } from '@/features/comments/comments-api';
 import { accessQueryKey } from '@/features/sharing/sharing-api';
 import { irQueryKey } from './ir-query';
 import { useCanvasStore } from './store';
@@ -178,8 +179,13 @@ export function useRealtime(projectId: Id, { presence }: { readonly presence: bo
     socket.on('access-changed', () => {
       void queryClient.invalidateQueries({ queryKey: irQueryKey(projectId) });
       void queryClient.invalidateQueries({ queryKey: accessQueryKey(projectId) });
+      void queryClient.invalidateQueries({ queryKey: commentsKey(projectId) });
     });
     socket.on('project:closed', gone);
+    // Phase 4 §3.1 — only sent when this reader can see the target; refetch its thread.
+    socket.on('comments:changed', () => {
+      void queryClient.invalidateQueries({ queryKey: commentsKey(projectId) });
+    });
 
     let unsubscribe: (() => void) | null = null;
     if (presence) {

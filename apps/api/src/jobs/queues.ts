@@ -1,4 +1,5 @@
 import type { Subject } from '../access';
+import type { ConfirmedRename } from '../snapshots';
 
 /**
  * Doc 01 §4.4 — the three Phase 1 queues, in-process.
@@ -72,6 +73,8 @@ export interface ImportJobData {
   readonly projectId: string;
   readonly subject: Subject;
   readonly storageKey: string;
+  /** Phase 4 §2.1 — confirmed renames, validated again when the job runs. */
+  readonly renames?: readonly ConfirmedRename[];
 }
 
 /** What `GET .../import/jobs/:id` hands back once the job is done. */

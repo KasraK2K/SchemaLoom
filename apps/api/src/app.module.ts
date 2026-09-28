@@ -4,8 +4,10 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AccessModule } from './access/access.module';
 import { AuthModule, JwtAuthGuard } from './auth';
+import { CommentsModule } from './comments';
 import { EnginesModule } from './engines';
 import { JobsModule } from './jobs';
+import { NotificationsModule } from './notifications';
 import { OrganizationsModule } from './organizations';
 import { ProjectsModule } from './projects';
 import { RealtimeModule } from './realtime/realtime.module';
@@ -66,6 +68,8 @@ import { RedisModule } from './redis/redis.module';
     SnapshotsModule,
     SharingModule,
     SavedQueriesModule,
+    NotificationsModule,
+    CommentsModule,
     RealtimeModule,
     JobsModule,
     HealthModule,

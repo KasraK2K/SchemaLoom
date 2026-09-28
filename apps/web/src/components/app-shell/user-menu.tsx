@@ -21,7 +21,7 @@ export function UserMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem asChild>
-          <Link href="/settings/security">Security</Link>
+          <Link href="/settings/security">Account</Link>
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {

@@ -11,6 +11,7 @@ import {
 } from '../access';
 import { Prisma } from '../generated/prisma/client';
 import { AccessRequestStatus, PrincipalType } from '../generated/prisma/enums';
+import { NotificationsService, type CreatedNotification } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_RATELIMIT } from '../redis/redis.tokens';
 import { AccessWriter, assertNotGuestManager, assertVisible, grantableRole, type Tx } from './access-write';
@@ -47,6 +48,7 @@ export class AccessRequestsService {
     private readonly resolver: PermissionResolver,
     private readonly writer: AccessWriter,
     @Inject(REDIS_RATELIMIT) private readonly rateLimit: Redis,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Never throws for a bad target and never says which case it was. */
@@ -99,7 +101,8 @@ export class AccessRequestsService {
       throw error;
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    const url = await this.notifications.projectUrl(project.id);
+    const sent = await this.prisma.$transaction(async (tx) => {
       await this.writer.audit(tx, subject, project.id, project.organizationId, {
         action: 'access_request.created',
         resourceType: ref.type,
@@ -107,18 +110,21 @@ export class AccessRequestsService {
         metadata: { accessRequestId: requestId },
       });
       const recipients = await this.approvers(project.id, project.organizationId, ref, subject.userId);
-      await tx.notification.createMany({
-        data: recipients.map((userId) => ({
+      return this.notifications.create(
+        tx,
+        recipients.map((userId) => ({
           userId,
           actorUserId: subject.userId,
           organizationId: project.organizationId,
           projectId: project.id,
-          type: 'access.requested',
+          type: 'access.requested' as const,
           title: 'Access requested',
+          url,
           data: { accessRequestId: requestId, resourceType: ref.type, resourceId: ref.id },
         })),
-      });
+      );
     });
+    await this.notifications.deliver(sent);
   }
 
   /** Pending requests on resources the actor manages. */
@@ -160,7 +166,7 @@ export class AccessRequestsService {
     const role = await grantableRole(this.prisma, request.project.organizationId, roleKey);
     const ref = { type: request.resourceType, id: request.resourceId };
 
-    await this.writer.write(subject, request.projectId, async ({ tx, map, skel }) => {
+    const sent = await this.writer.write(subject, request.projectId, async ({ tx, map, skel }) => {
       assertVisible(map, skel, ref);
       const proposed = materialise({ atoms: role.atoms, canUseAi: false, canViewRestricted: false });
       this.resolver.assertMayGrant(map, skel, ref, proposed);
@@ -188,8 +194,9 @@ export class AccessRequestsService {
         where: { id: requestId },
         data: { status: AccessRequestStatus.approved, decidedById: subject.userId, decidedAt: new Date() },
       });
-      await this.decided(tx, subject, request, 'access_request.approved', { grantId: grant.id, roleKey });
+      return this.decided(tx, subject, request, 'access_request.approved', { grantId: grant.id, roleKey });
     });
+    await this.notifications.deliver(sent);
   }
 
   /** Denial writes no grant, so it takes the lock without bumping the generation. */
@@ -197,7 +204,7 @@ export class AccessRequestsService {
     const request = await this.pending(subject, requestId);
     const ref = { type: request.resourceType, id: request.resourceId };
 
-    await this.writer.write(
+    const sent = await this.writer.write(
       subject,
       request.projectId,
       async ({ tx, map, skel }) => {
@@ -213,10 +220,11 @@ export class AccessRequestsService {
             denyReason: decisionNote,
           },
         });
-        await this.decided(tx, subject, request, 'access_request.denied', { decisionNote });
+        return this.decided(tx, subject, request, 'access_request.denied', { decisionNote });
       },
       { bump: false },
     );
+    await this.notifications.deliver(sent);
   }
 
   // -------------------------------------------------------------------------------------
@@ -256,25 +264,28 @@ export class AccessRequestsService {
     request: { id: string; projectId: string; requesterId: string; resourceType: string; resourceId: string; project: { organizationId: string } },
     action: string,
     metadata: Record<string, string | null>,
-  ): Promise<void> {
+  ): Promise<CreatedNotification[]> {
     await this.writer.audit(tx, subject, request.projectId, request.project.organizationId, {
       action,
       resourceType: request.resourceType,
       resourceId: request.resourceId,
       metadata: { accessRequestId: request.id, ...metadata },
     });
-    await tx.notification.create({
-      data: {
+    const approved = action === 'access_request.approved';
+    return this.notifications.create(tx, [
+      {
         userId: request.requesterId,
         actorUserId: subject.userId,
         organizationId: request.project.organizationId,
         projectId: request.projectId,
         type: 'access.decided',
-        title: action === 'access_request.approved' ? 'Access granted' : 'Access request declined',
+        title: approved ? 'Access granted' : 'Access request declined',
         body: metadata.decisionNote ?? null,
+        // Only an approval makes the project openable; a denial links nowhere (L17).
+        url: approved ? await this.notifications.projectUrl(request.projectId) : null,
         data: { accessRequestId: request.id, resourceType: request.resourceType, resourceId: request.resourceId },
       },
-    });
+    ]);
   }
 
   /** "Not yours", "not there" and "already decided" share one 404. */

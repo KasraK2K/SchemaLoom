@@ -19,6 +19,7 @@ import {
   type Connection,
   type EdgeTypes,
   type FinalConnectionState,
+  type NodeChange,
   type NodeTypes,
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -47,6 +48,7 @@ import { GRID_SIZE, autoLayout, unstack } from './layout';
 import { irQueryKey } from './ir-query';
 import { LinkEdge } from './link-edge';
 import { deleteLinkOp, postOps } from './schema-ops';
+import { applySelectChanges } from './selection';
 import { useCanvasStore } from './store';
 import { useCanvasShortcuts } from './use-canvas-shortcuts';
 
@@ -117,14 +119,7 @@ export function CanvasSurface({
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
-    // Keep the selection across an IR refetch: rebuilt nodes carry no `selected`, and React
-    // Flow would report an empty selection, closing the inspector after every edit.
-    const { selection } = useCanvasStore.getState();
-    setNodes(
-      selection.size === 0
-        ? builtNodes
-        : builtNodes.map((node) => (selection.has(node.id) ? { ...node, selected: true } : node)),
-    );
+    setNodes(builtNodes);
   }, [builtNodes, setNodes]);
   useEffect(() => {
     setEdges(builtEdges);
@@ -328,12 +323,26 @@ export function CanvasSurface({
     [flow],
   );
 
-  // ── selection: React Flow owns it, the store mirrors it for the inspector ──────────
-  const onSelectionChange = useCallback(
-    ({ nodes: selected }: { nodes: EntityNodeType[] }) => {
-      select(selected.map((node) => node.id));
+  // ── selection: the STORE owns it, React Flow renders it ─────────────────────────────
+  // `selected` is derived from the store at render time, and only React Flow's `select`
+  // changes (click, shift-click, lasso, pane click) write back. Letting `onSelectionChange`
+  // write instead let its mount-time and re-init reports ("nothing selected") wipe any
+  // selection made outside the canvas: History's `?select=`, the Queries tab, a notification.
+  const selection = useCanvasStore((state) => state.selection);
+  const shownNodes = useMemo(
+    () =>
+      nodes.map((node) =>
+        Boolean(node.selected) === selection.has(node.id) ? node : { ...node, selected: selection.has(node.id) },
+      ),
+    [nodes, selection],
+  );
+  const handleNodesChange = useCallback(
+    (changes: NodeChange<EntityNodeType>[]) => {
+      const picks = changes.filter((change) => change.type === 'select');
+      if (picks.length > 0) select([...applySelectChanges(useCanvasStore.getState().selection, picks)]);
+      onNodesChange(picks.length === changes.length ? [] : changes.filter((change) => change.type !== 'select'));
     },
-    [select],
+    [onNodesChange, select],
   );
 
   // ── auto-layout ────────────────────────────────────────────────────────────────────
@@ -547,17 +556,16 @@ export function CanvasSurface({
     <div className="relative size-full">
       <CrowFootDefs />
       <ReactFlow<EntityNodeType, LinkEdgeType>
-        nodes={nodes}
+        nodes={shownNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         nodesDraggable={!readOnly}
         nodesConnectable={!readOnly}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
-        onSelectionChange={onSelectionChange}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
         isValidConnection={isValid}

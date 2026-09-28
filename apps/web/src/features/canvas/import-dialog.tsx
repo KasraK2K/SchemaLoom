@@ -7,15 +7,29 @@ import {
   DialogDescription,
   DialogFooter,
   DialogTitle,
+  cn,
 } from '@schemaloom/ui';
 import { useState } from 'react';
 import { useEngine } from '@/engines';
-import { importInto, type Imported } from '@/features/projects/create-project';
+import {
+  importInto,
+  previewImport,
+  type ConfirmedRename,
+  type Imported,
+  type RenameCandidate,
+} from '@/features/projects/create-project';
 import { ApiError } from '@/lib/api-client';
+
+type EntityCandidate = Extract<RenameCandidate, { type: 'entity' }>;
+type FieldCandidate = Extract<RenameCandidate, { type: 'field' }>;
 
 /**
  * SQL import into the open project. Same call as the project-list import (inline up to
  * 5 MB, queued above), and additive: existing objects win and nothing is deleted.
+ *
+ * Phase 4 §2.1: the source is previewed first, and when it looks like a table or column
+ * was renamed the dialog asks. Nothing is inferred — "Keep both" is the default, and only
+ * the pairs the user marks "Rename" are sent.
  */
 export function ImportDialog({
   open,
@@ -34,6 +48,11 @@ export function ImportDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Imported | null>(null);
+  /** Confirmed table renames, as `from → to`, for the result summary. */
+  const [renamed, setRenamed] = useState<readonly string[]>([]);
+  const [candidates, setCandidates] = useState<readonly RenameCandidate[] | null>(null);
+  /** Confirmed candidate keys (`type:fromId`). */
+  const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(new Set());
 
   const close = (next: boolean) => {
     if (busy) return;
@@ -42,17 +61,83 @@ export function ImportDialog({
       setSource('');
       setError(null);
       setResult(null);
+      setRenamed([]);
+      setCandidates(null);
+      setConfirmed(new Set());
     }
   };
 
+  const fail = (caught: unknown) => {
+    setError(caught instanceof ApiError ? caught.message : 'Something went wrong. Try again.');
+  };
+
+  const run = async (renames: readonly ConfirmedRename[]) => {
+    const imported = await importInto(projectId, source, renames);
+    await onImported();
+    setResult(imported);
+  };
+
+  const submitSource = () => {
+    setBusy(true);
+    setError(null);
+    void (async () => {
+      try {
+        const preview = await previewImport(projectId, source);
+        if (preview !== null && preview.renameCandidates.length > 0) {
+          setCandidates(preview.renameCandidates);
+          return;
+        }
+        await run([]);
+      } catch (caught) {
+        fail(caught);
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
+  const entities = (candidates ?? []).filter((c): c is EntityCandidate => c.type === 'entity');
+  const fields = (candidates ?? []).filter((c): c is FieldCandidate => c.type === 'field');
+  const renamedEntity = new Set(entities.filter((c) => confirmed.has(`entity:${c.fromId}`)).map((c) => c.fromId));
+  const proposedEntity = new Set(entities.map((c) => c.fromId));
+  /** A field pair inside a table rename only applies when that rename is confirmed. */
+  const fieldApplies = (c: FieldCandidate) => !proposedEntity.has(c.entityId) || renamedEntity.has(c.entityId);
+
+  const submitRenames = () => {
+    const tables = entities.filter((c) => confirmed.has(`entity:${c.fromId}`));
+    setRenamed(tables.map((c) => `${c.fromName} → ${c.toName}`));
+    const renames: ConfirmedRename[] = [
+      ...tables,
+      ...fields.filter((c) => fieldApplies(c) && confirmed.has(`field:${c.fromId}`)),
+    ].map((c) => ({ type: c.type, fromId: c.fromId, toName: c.toName }));
+    setBusy(true);
+    setError(null);
+    run(renames)
+      .catch(fail)
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
+  const toggle = (key: string, on: boolean) => {
+    const next = new Set(confirmed);
+    if (on) next.add(key);
+    else next.delete(key);
+    setConfirmed(next);
+  };
+
   const notApplied = result?.report.statements.filter((s) => s.status !== 'applied') ?? [];
+  const renamedTo = new Set(entities.filter((c) => confirmed.has(`entity:${c.fromId}`)).map((c) => c.toName));
+  const unchanged = (result?.existing ?? []).filter((name) => !renamedTo.has(name));
+  const matchedFields = fields.filter((c) => !proposedEntity.has(c.entityId));
 
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-w-2xl">
         <DialogTitle>Import SQL</DialogTitle>
         <DialogDescription>
-          Adds what the project does not have yet. Existing objects are left unchanged.
+          Adds what the project does not have yet. Existing objects are left unchanged, except
+          for renames you confirm.
         </DialogDescription>
         {result !== null ? (
           <div className="mt-4 flex flex-col gap-2 text-xs">
@@ -60,10 +145,9 @@ export function ImportDialog({
               {result.report.statementCount - notApplied.length} of{' '}
               {result.report.statementCount} statements applied.
             </p>
-            {result.existing.length > 0 && (
-              <p className="text-text-muted">
-                Already in the project, left unchanged: {result.existing.join(', ')}
-              </p>
+            {renamed.length > 0 && <p className="text-text-muted">Renamed: {renamed.join(', ')}</p>}
+            {unchanged.length > 0 && (
+              <p className="text-text-muted">Already in the project, left unchanged: {unchanged.join(', ')}</p>
             )}
             {notApplied.length > 0 && (
               <ul className="flex max-h-64 flex-col gap-2 overflow-auto">
@@ -89,26 +173,78 @@ export function ImportDialog({
               </Button>
             </DialogFooter>
           </div>
+        ) : candidates !== null ? (
+          <div className="mt-4 flex flex-col gap-3 text-xs">
+            <p className="text-sm text-text">Looks like a rename?</p>
+            <ul className="flex max-h-96 flex-col gap-2 overflow-auto">
+              {entities.map((c) => (
+                <li key={c.fromId} className="rounded border border-border p-2">
+                  <RenameCard
+                    label={`Table ${c.fromName} → ${c.toName}`}
+                    reason={c.reason}
+                    on={confirmed.has(`entity:${c.fromId}`)}
+                    onChange={(on) => {
+                      toggle(`entity:${c.fromId}`, on);
+                    }}
+                  />
+                  {renamedEntity.has(c.fromId) &&
+                    fields
+                      .filter((f) => f.entityId === c.fromId)
+                      .map((f) => (
+                        <div key={f.fromId} className="mt-2 border-t border-border pl-4 pt-2">
+                          <RenameCard
+                            label={`Column ${f.fromName} → ${f.toName}`}
+                            reason={f.reason}
+                            on={confirmed.has(`field:${f.fromId}`)}
+                            onChange={(on) => {
+                              toggle(`field:${f.fromId}`, on);
+                            }}
+                          />
+                        </div>
+                      ))}
+                </li>
+              ))}
+              {matchedFields.map((f) => (
+                <li key={f.fromId} className="rounded border border-border p-2">
+                  <RenameCard
+                    label={`Column ${f.entityName}.${f.fromName} → ${f.toName}`}
+                    reason={f.reason}
+                    on={confirmed.has(`field:${f.fromId}`)}
+                    onChange={(on) => {
+                      toggle(`field:${f.fromId}`, on);
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+            {error !== null && (
+              <p role="alert" className="text-xs text-danger-text">
+                {error}
+              </p>
+            )}
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setCandidates(null);
+                  setConfirmed(new Set());
+                }}
+              >
+                Back
+              </Button>
+              <Button variant="primary" size="sm" disabled={busy} onClick={submitRenames}>
+                {busy ? 'Importing…' : 'Import'}
+              </Button>
+            </DialogFooter>
+          </div>
         ) : (
           <form
             className="mt-4 flex flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              setBusy(true);
-              setError(null);
-              importInto(projectId, source)
-                .then(async (imported) => {
-                  await onImported();
-                  setResult(imported);
-                })
-                .catch((caught: unknown) => {
-                  setError(
-                    caught instanceof ApiError ? caught.message : 'Something went wrong. Try again.',
-                  );
-                })
-                .finally(() => {
-                  setBusy(false);
-                });
+              submitSource();
             }}
           >
             <textarea
@@ -146,5 +282,48 @@ export function ImportDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** One "Looks like a rename?" card: Rename / Keep both, Keep both by default. */
+function RenameCard({
+  label,
+  reason,
+  on,
+  onChange,
+}: {
+  readonly label: string;
+  readonly reason: string;
+  readonly on: boolean;
+  readonly onChange: (on: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-text">{label}</p>
+        <p className="text-text-muted">{reason}</p>
+      </div>
+      <div role="group" aria-label={label} className="flex gap-1">
+        {(
+          [
+            [true, 'Rename'],
+            [false, 'Keep both'],
+          ] as const
+        ).map(([value, text]) => (
+          <Button
+            key={text}
+            size="sm"
+            variant={on === value ? 'primary' : 'outline'}
+            aria-pressed={on === value}
+            className={cn(on === value && 'pointer-events-none')}
+            onClick={() => {
+              onChange(value);
+            }}
+          >
+            {text}
+          </Button>
+        ))}
+      </div>
+    </div>
   );
 }

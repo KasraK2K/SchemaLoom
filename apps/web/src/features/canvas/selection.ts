@@ -36,6 +36,23 @@ export function applySelect(current: Selection, ids: readonly Id[], mode: Select
   return ids.reduce<Selection>(toggleSelection, current);
 }
 
+/**
+ * React Flow's `select` node changes applied to the store's selection. React Flow emits them
+ * for real gestures only (click, multi-select key, lasso, pane click), so unlike its
+ * `onSelectionChange` reports they never wipe a selection made outside the canvas.
+ */
+export function applySelectChanges(
+  current: Selection,
+  changes: readonly { readonly id: Id; readonly selected: boolean }[],
+): Selection {
+  const next = new Set(current);
+  for (const change of changes) {
+    if (change.selected) next.add(change.id);
+    else next.delete(change.id);
+  }
+  return next;
+}
+
 /** Set equality, so the store can skip a notify that would re-render every node. */
 export function sameSelection(a: Selection, b: Selection): boolean {
   if (a === b) return true;

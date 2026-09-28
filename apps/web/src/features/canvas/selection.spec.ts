@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EMPTY_SELECTION,
   applySelect,
+  applySelectChanges,
   extendSelection,
   sameSelection,
   selectOnly,
@@ -9,6 +10,16 @@ import {
 } from './selection';
 
 describe('selection reducer', () => {
+  it('applies React Flow select changes: a click deselects the rest, a multi-select adds', () => {
+    const click = applySelectChanges(selectOnly(['a']), [
+      { id: 'a', selected: false },
+      { id: 'b', selected: true },
+    ]);
+    expect([...click]).toEqual(['b']);
+    expect([...applySelectChanges(click, [{ id: 'c', selected: true }])].sort()).toEqual(['b', 'c']);
+    expect(applySelectChanges(selectOnly(['a', 'b']), [{ id: 'a', selected: false }, { id: 'b', selected: false }]).size).toBe(0);
+  });
+
   it('replaces the whole selection', () => {
     expect([...applySelect(selectOnly(['a', 'b']), ['c'], 'replace')]).toEqual(['c']);
   });

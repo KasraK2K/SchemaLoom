@@ -24,7 +24,7 @@ export class ImportProcessor {
   ) {}
 
   async run(data: ImportJobData): Promise<ImportJobResult> {
-    const { projectId, subject, storageKey } = data;
+    const { projectId, subject, storageKey, renames = [] } = data;
     const [map, skel] = await Promise.all([
       this.resolver.resolveProject(subject, projectId),
       this.resolver.skeleton(projectId),
@@ -42,6 +42,7 @@ export class ImportProcessor {
       },
       source,
       QUEUED_IMPORT_MAX_BYTES,
+      renames,
     );
     // Only on success: a retry needs the source again.
     await this.storage.delete(storageKey);

@@ -35,8 +35,16 @@ export {
 } from './permissions.js';
 
 export {
+  COMMENT_TARGET_TYPES,
   NOTIFICATION_TYPES,
+  commentTargetTypeSchema,
+  notificationPrefsInputSchema,
+  notificationPrefsPatchSchema,
+  notificationPrefsStoredSchema,
   notificationTypeSchema,
+  type CommentTargetType,
+  type NotificationPrefs,
+  type NotificationPrefsPatch,
   type NotificationType,
 } from './notifications.js';
 

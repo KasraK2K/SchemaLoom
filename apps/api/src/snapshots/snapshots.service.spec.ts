@@ -15,7 +15,7 @@ import type {
 } from '../access';
 import { EngineGate } from '../engines';
 import type { PrismaService } from '../prisma/prisma.service';
-import type { SchemaOperationBatch, SchemaWriter } from '../schema';
+import type { SchemaOperationBatch, SchemaWriter, WriteContext } from '../schema';
 import { fakePrisma, type Row, type Store } from '../schema/fake-prisma';
 import { PROJECT, baseStore, entityRow, fieldRow, projectRow, storeContext } from '../schema/fixture';
 import { blobToLive } from './live-ir';
@@ -45,7 +45,7 @@ const storeOf = (over: Partial<Store> = {}, pluginVersion = '1.0.0'): Partial<St
 
 interface Harness {
   readonly service: SnapshotsService;
-  readonly apply: Mock<(batch: SchemaOperationBatch) => Promise<unknown>>;
+  readonly apply: Mock<(batch: SchemaOperationBatch, ctx?: WriteContext) => Promise<unknown>>;
   /** The `snapshots` table. */
   readonly rows: Row[];
   /** The live relational store, so a test can change the schema between snapshots. */
@@ -89,7 +89,30 @@ function harness(
         rows.push(row);
         return Promise.resolve(row);
       },
-      findMany: (): Promise<Row[]> => Promise.resolve([...rows].reverse()),
+      findMany: (args: Row = {}): Promise<Row[]> => {
+        const where = (args.where ?? {}) as Row;
+        const notKind = (where.kind as Row | undefined)?.not;
+        const hits = [...rows]
+          .reverse()
+          .filter((r) => notKind === undefined || r.kind !== notKind);
+        return Promise.resolve(hits.slice((args.skip as number | undefined) ?? 0));
+      },
+      deleteMany: (args: Row = {}): Promise<{ count: number }> => {
+        const where = args.where as Row;
+        const ids = (where.id as Row | undefined)?.in as string[] | undefined;
+        const before = rows.length;
+        for (let i = rows.length - 1; i >= 0; i -= 1) {
+          const r = rows[i]!;
+          const idOk = ids === undefined ? r.id === where.id : ids.includes(r.id as string);
+          const kind = where.kind as string | Row | undefined;
+          const kindOk =
+            kind === undefined || (typeof kind === 'string' ? r.kind === kind : r.kind !== kind.not);
+          if (idOk && r.projectId === where.projectId && kindOk) {
+            rows.splice(i, 1);
+          }
+        }
+        return Promise.resolve({ count: before - rows.length });
+      },
       findFirst: (args: Row = {}): Promise<Row | null> => {
         const where = args.where as Row;
         return Promise.resolve(
@@ -105,16 +128,24 @@ function harness(
     redactWith: (raw: RawSchemaModel) => redact(raw, visibility),
   } as unknown as VisibilityFilter;
 
-  const apply = vi.fn((batch: SchemaOperationBatch) =>
-    Promise.resolve({
+  // Stands in for `SchemaWriter.apply`: runs the in-transaction hook (the auto snapshot)
+  // and mirrors `update { name }` into the store, so a re-read after a rename sees it.
+  const apply = vi.fn(async (batch: SchemaOperationBatch, ctx?: WriteContext) => {
+    await ctx?.beforeWrite?.(client as never);
+    for (const op of batch.ops) {
+      if (op.op !== 'update' || !('name' in op.patch)) continue;
+      const row = (fake.store[op.type] ?? []).find((r) => r.id === op.id);
+      if (row !== undefined) row.name = op.patch.name;
+    }
+    return {
       batchId: batch.batchId,
       projectId: PROJECT,
       actorUserId: CTX.actorUserId,
       seq: 99,
       changed: {},
       removed: [],
-    }),
-  );
+    };
+  });
 
   const gate = new EngineGate({
     tryGet: () => ({ version: over.engine ?? '1.0.0' }) as unknown as EngineDefinition,
@@ -383,5 +414,212 @@ describe('SnapshotsService.importSource', () => {
 
     expect(h.apply.mock.calls.map(([batch]) => batch.ops.length)).toEqual([2000, 1000]);
     expect(skeleton).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SnapshotsService.liveDiff (Phase 4 §1.1)', () => {
+  it('diffs snapshot → live with both sides redacted; a hidden addition is not there (L18, L8)', async () => {
+    const seed = storeOf({ entity: [entityRow('ent_a')] });
+    const h = harness(seed, { context: { visibleEntityIds: new Set(['ent_a', 'ent_new']) } });
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    h.store.entity?.push(entityRow('ent_new'), entityRow('ent_hidden'));
+
+    const diff = await h.service.liveDiff(CTX, id);
+
+    expect(diff.to).toEqual({ kind: 'live' });
+    expect(diff.redacted).toBe(true);
+    const ids = diff.entries.map((e) => e.id);
+    expect(ids).toContain('ent_new');
+    expect(ids).not.toContain('ent_hidden');
+    expect(JSON.stringify(diff)).not.toContain('ent_hidden');
+    // Counts are post-redaction: one add, not two.
+    expect(diff.counts).toEqual({ added: 1, removed: 0, changed: 0, structural: 1, governance: 0 });
+    expect(diff.fullView).toBe(false);
+  });
+
+  it('counts a changed property by severity', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a')] }));
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    const row = h.store.entity?.[0];
+    if (row !== undefined) row.name = 'renamed';
+
+    const diff = await h.service.liveDiff(CTX, id);
+    expect(diff.counts.changed).toBe(1);
+    expect(diff.counts.structural).toBe(1);
+    expect(diff.fullView).toBe(true);
+  });
+
+  it('is 404 for a snapshot of another project', async () => {
+    const h = harness(storeOf());
+    await expect(h.service.liveDiff(CTX, 'snap_nope')).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('SnapshotsService.remove', () => {
+  it('deletes a manual snapshot', async () => {
+    const h = harness(storeOf());
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    await h.service.remove(CTX, id);
+    expect(h.rows).toEqual([]);
+  });
+
+  it('refuses an automatic snapshot with 409 and keeps it', async () => {
+    const h = harness(storeOf());
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    const row = h.rows[0];
+    if (row !== undefined) row.kind = 'import';
+    await expect(h.service.remove(CTX, id)).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'snapshot_not_manual' },
+    });
+    expect(h.rows).toHaveLength(1);
+  });
+
+  it('is 404 for an unknown id', async () => {
+    const h = harness(storeOf());
+    await expect(h.service.remove(CTX, 'snap_x')).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('automatic snapshots (Phase 4 Q4)', () => {
+  it('writes kind=restore inside the restore batch, holding the pre-restore model', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a'), entityRow('ent_b')] }));
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    h.store.entity = (h.store.entity ?? []).filter((e) => e.id !== 'ent_a');
+
+    await h.service.restore(CTX, id);
+
+    const auto = h.rows.find((r) => r.kind === 'restore');
+    expect(auto?.name).toBe('Before restore "v1"');
+    const blob = blobToLive(JSON.parse(JSON.stringify(auto?.ir)) as unknown);
+    expect(Object.keys(blob.objects.entity)).toEqual(['ent_b']);
+  });
+
+  it('writes nothing for a no-op restore', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a')] }));
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    await h.service.restore(CTX, id);
+    expect(h.rows.map((r) => r.kind)).toEqual(['manual']);
+  });
+});
+
+describe('SnapshotsService.importSource with confirmed renames (Phase 4 Q1)', () => {
+  /** The SQL renames `customer` → `customers`, columns unchanged. */
+  const renamedSql = async (): Promise<SchemaModel> => {
+    const imported = await liveFrom(
+      storeOf({
+        entity: [entityRow('ent_sql', { name: 'customers' })],
+        field: [
+          fieldRow('fs_id', 'ent_sql', { name: 'id', position: 0 }),
+          fieldRow('fs_mail', 'ent_sql', { name: 'email_address', position: 1 }),
+          fieldRow('fs_name', 'ent_sql', { name: 'name', position: 2 }),
+        ],
+      }),
+    );
+    return JSON.parse(JSON.stringify(imported).replaceAll('"ns_public"', '"ns_imported"')) as SchemaModel;
+  };
+  const project = () =>
+    storeOf({
+      entity: [entityRow('ent_customer', { name: 'customer', version: 3 })],
+      field: [
+        fieldRow('f_id', 'ent_customer', { name: 'id', position: 0 }),
+        fieldRow('f_mail', 'ent_customer', { name: 'email', position: 1, version: 2 }),
+        fieldRow('f_name', 'ent_customer', { name: 'name', position: 2 }),
+      ],
+    });
+
+  it('previews creates, existing and candidates without writing anything', async () => {
+    const h = harness(project(), { imported: await renamedSql() });
+
+    const preview = await h.service.preview(CTX, 'CREATE TABLE customers (...)');
+
+    expect(preview.creates).toEqual(['customers']);
+    expect(preview.existing).toEqual([]);
+    expect(preview.renameCandidates).toEqual([
+      expect.objectContaining({ type: 'entity', fromId: 'ent_customer', toName: 'customers' }),
+      expect.objectContaining({ type: 'field', entityId: 'ent_customer', fromId: 'f_mail', toName: 'email_address' }),
+    ]);
+    expect(h.apply).not.toHaveBeenCalled();
+    expect(h.rows).toEqual([]);
+    expect(h.writeCalls()).toEqual([]);
+  });
+
+  it('applies the renames FIRST as update ops, keeping ids, then merges additively', async () => {
+    const h = harness(project(), { imported: await renamedSql() });
+
+    const outcome = await h.service.importSource(CTX, 'CREATE TABLE customers (...)', undefined, [
+      { type: 'entity', fromId: 'ent_customer', toName: 'customers' },
+      { type: 'field', fromId: 'f_mail', toName: 'email_address' },
+    ]);
+
+    const first = h.apply.mock.calls[0]?.[0];
+    expect(first?.ops).toEqual(
+      expect.arrayContaining([
+        { op: 'update', type: 'entity', id: 'ent_customer', expectedVersion: 3, patch: { name: 'customers' } },
+        { op: 'update', type: 'field', id: 'f_mail', expectedVersion: 2, patch: { name: 'email_address' } },
+      ]),
+    );
+    // After the rename the SQL table matches by key: nothing is created, the id survives,
+    // so docs, comments, grants and saved-query links (all keyed by id) follow it.
+    expect(h.apply).toHaveBeenCalledTimes(1);
+    expect(outcome.existing).toEqual(['customers']);
+    expect(h.store.entity?.map((e) => e.id)).toEqual(['ent_customer']);
+    // Q4: exactly one import snapshot, of the model BEFORE the rename.
+    const autos = h.rows.filter((r) => r.kind === 'import');
+    expect(autos).toHaveLength(1);
+    const blob = blobToLive(JSON.parse(JSON.stringify(autos[0]?.ir)) as unknown);
+    expect(blob.objects.entity.ent_customer?.name).toBe('customer');
+  });
+
+  it('without renames keeps both tables (additive) and still snapshots first', async () => {
+    const h = harness(project(), { imported: await renamedSql() });
+    await h.service.importSource(CTX, 'CREATE TABLE customers (...)');
+    expect(h.apply.mock.calls[0]?.[0].ops.every((op) => op.op === 'create')).toBe(true);
+    expect(h.rows.filter((r) => r.kind === 'import')).toHaveLength(1);
+  });
+
+  it('writes no snapshot when the import changes nothing', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a')] }), {
+      imported: JSON.parse(
+        JSON.stringify(await liveFrom(storeOf({ entity: [entityRow('ent_a')] }))),
+      ) as SchemaModel,
+    });
+    await h.service.importSource(CTX, 'CREATE TABLE ent_a ();');
+    expect(h.rows).toEqual([]);
+  });
+
+  it.each([
+    [{ type: 'entity', fromId: 'ent_nope', toName: 'customers' }, 'unknown_id'],
+    [{ type: 'entity', fromId: 'ent_customer', toName: 'nothing_like_it' }, 'unknown_target'],
+    [{ type: 'field', fromId: 'f_mail', toName: 'email_address' }, 'entity_not_matched'],
+    [{ type: 'field', fromId: 'f_nope', toName: 'x' }, 'unknown_id'],
+  ] as const)('refuses %o (%s) before writing anything', async (rename, reason) => {
+    const h = harness(project(), { imported: await renamedSql() });
+    await expect(
+      h.service.importSource(CTX, 'CREATE TABLE customers (...)', undefined, [rename]),
+    ).rejects.toMatchObject({ status: 422, response: { code: 'invalid_rename', reason } });
+    expect(h.apply).not.toHaveBeenCalled();
+    expect(h.rows).toEqual([]);
+  });
+
+  it('refuses a duplicate rename', async () => {
+    const h = harness(project(), { imported: await renamedSql() });
+    const rename = { type: 'entity', fromId: 'ent_customer', toName: 'customers' } as const;
+    await expect(
+      h.service.importSource(CTX, 'x', undefined, [rename, rename]),
+    ).rejects.toMatchObject({ response: { reason: 'duplicate' } });
+  });
+
+  it('refuses a rename across namespaces', async () => {
+    const seed = project();
+    seed.namespace?.push({ ...(seed.namespace[0]!), id: 'ns_billing', name: 'billing', isDefault: false });
+    const entity = seed.entity?.[0];
+    if (entity !== undefined) entity.namespaceId = 'ns_billing';
+    const h = harness(seed, { imported: await renamedSql() });
+    await expect(
+      h.service.importSource(CTX, 'x', undefined, [
+        { type: 'entity', fromId: 'ent_customer', toName: 'customers' },
+      ]),
+    ).rejects.toMatchObject({ response: { reason: 'cross_namespace' } });
   });
 });

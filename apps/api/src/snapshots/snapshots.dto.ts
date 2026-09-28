@@ -1,3 +1,4 @@
+import { IdSchema } from '@schemaloom/schema-model';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -14,10 +15,29 @@ export const CreateSnapshotSchema = z.object({
 
 export class CreateSnapshotDto extends createZodDto(CreateSnapshotSchema) {}
 
+/** Phase 4 §2.1 — renames a human confirmed in the import dialog. Shape only here; the
+ *  service validates each one against the fresh merge (`import-renames.ts`). */
+export const ConfirmedRenamesSchema = z
+  .array(
+    z.object({
+      type: z.enum(['entity', 'field']),
+      fromId: IdSchema,
+      toName: z.string().min(1).max(255),
+    }),
+  )
+  .max(500);
+
+/** `POST /projects/:projectId/import/preview`. */
+export const ImportPreviewSchema = z.object({
+  source: z.string().min(1).max(5_000_000),
+});
+
+export class ImportPreviewDto extends createZodDto(ImportPreviewSchema) {}
+
 /** `POST /projects/:projectId/import`. The byte cap is the service's (it is UTF-8 bytes,
  *  not characters); this bound only stops an absurd body before it reaches the importer. */
-export const ImportSourceSchema = z.object({
-  source: z.string().min(1).max(5_000_000),
+export const ImportSourceSchema = ImportPreviewSchema.extend({
+  renames: ConfirmedRenamesSchema.default([]),
 });
 
 export class ImportSourceDto extends createZodDto(ImportSourceSchema) {}
