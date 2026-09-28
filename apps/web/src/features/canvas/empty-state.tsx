@@ -2,18 +2,21 @@ import { Button, FilePlus2, Sparkles, Upload } from '@schemaloom/ui';
 
 const STARTING_POINTS = [
   {
+    id: 'blank',
     icon: FilePlus2,
     title: 'Start blank',
     body: 'Drop a first table on the canvas and grow the schema by hand.',
     action: 'New table',
   },
   {
+    id: 'import',
     icon: Upload,
     title: 'Import SQL',
     body: 'Paste a dump or a migration file. Every object keeps its engine properties.',
     action: 'Import',
   },
   {
+    id: 'describe',
     icon: Sparkles,
     title: 'Describe your app',
     body: 'Say what you are building and let AI draft a first schema for you to edit.',
@@ -26,11 +29,22 @@ const STARTING_POINTS = [
  * empty state, not a placeholder: a blank canvas tells a new user nothing about which
  * of the three ways in exists.
  *
- * The buttons are inert here because nothing behind them is built yet. They are
- * `disabled` rather than absent so the shape of the screen does not change when they
- * start working.
+ * A card whose handler is absent stays `disabled` rather than disappearing, so the shape
+ * of the screen does not change when it starts working ("Describe" waits for the AI).
  */
-export function CanvasEmptyState({ projectId }: { projectId: string }) {
+export function CanvasEmptyState({
+  projectId,
+  onNewEntity,
+  onImport,
+}: {
+  projectId: string;
+  onNewEntity?: () => void;
+  onImport?: () => void;
+}) {
+  const handlers: Record<string, (() => void) | undefined> = {
+    blank: onNewEntity,
+    import: onImport,
+  };
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 p-8">
       <div className="text-center">
@@ -50,7 +64,13 @@ export function CanvasEmptyState({ projectId }: { projectId: string }) {
             <point.icon className="size-5 text-accent-text" aria-hidden="true" />
             <h2 className="text-sm font-medium text-text">{point.title}</h2>
             <p className="text-sm text-text-muted">{point.body}</p>
-            <Button variant="outline" size="sm" className="mt-auto self-start" disabled>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-auto self-start"
+              disabled={handlers[point.id] === undefined}
+              onClick={handlers[point.id]}
+            >
               {point.action}
             </Button>
           </li>

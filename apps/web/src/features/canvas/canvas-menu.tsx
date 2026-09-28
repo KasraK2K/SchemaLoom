@@ -21,6 +21,8 @@ export interface CanvasMenuTarget {
   readonly y: number;
   /** null when the pointer was on empty canvas rather than on a card. */
   readonly entityId: Id | null;
+  /** Set when the pointer was on a link. */
+  readonly linkId?: Id | null;
 }
 
 export interface CanvasMenuItem {

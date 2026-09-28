@@ -1,5 +1,6 @@
 import type { Cardinality, Id, LinkEndpoint } from '@schemaloom/schema-model';
-import { apiFetch } from '@/lib/api-client';
+import type { QueryClient } from '@tanstack/react-query';
+import { postOps } from './schema-ops';
 
 /**
  * The write behind an accepted drag: one op, one batch, one transaction (§8.2).
@@ -20,29 +21,26 @@ export interface NewLink {
   readonly cardinality: Cardinality;
 }
 
-export async function createLink(projectId: Id, link: NewLink): Promise<void> {
-  await apiFetch<unknown>(`/projects/${projectId}/schema/ops`, {
-    method: 'POST',
-    body: {
-      batchId: crypto.randomUUID(),
-      projectId,
-      ops: [
-        {
-          op: 'create',
-          type: 'link',
-          object: {
-            id: crypto.randomUUID(),
-            // Legal and deliberate: the engine names a foreign key on export, and a name
-            // invented here would be a PostgreSQL identifier core has no business coining.
-            name: '',
-            engineProps: {},
-            kind: link.kind,
-            from: link.from,
-            to: link.to,
-            cardinality: link.cardinality,
-          },
-        },
-      ],
+export async function createLink(
+  queryClient: QueryClient,
+  projectId: Id,
+  link: NewLink,
+): Promise<void> {
+  await postOps(queryClient, projectId, [
+    {
+      op: 'create',
+      type: 'link',
+      object: {
+        id: crypto.randomUUID(),
+        // Legal and deliberate: the engine names a foreign key on export, and a name
+        // invented here would be a PostgreSQL identifier core has no business coining.
+        name: '',
+        engineProps: {},
+        kind: link.kind,
+        from: link.from,
+        to: link.to,
+        cardinality: link.cardinality,
+      },
     },
-  });
+  ]);
 }

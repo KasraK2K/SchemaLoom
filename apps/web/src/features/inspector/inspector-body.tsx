@@ -1,10 +1,12 @@
 'use client';
 
 import type { Entity, Field, Id, Link } from '@schemaloom/schema-model';
-import { TabsContent } from '@schemaloom/ui';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { TabsContent, X } from '@schemaloom/ui';
+import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useEngine, useEngineUi, useTerminology } from '@/engines';
 import { irQueryOptions } from '@/features/canvas/ir-query';
+import { deleteLinkOp, postOps } from '@/features/canvas/schema-ops';
 import { useCanvasStore } from '@/features/canvas/store';
 
 /**
@@ -70,7 +72,12 @@ export function InspectorBody({ projectId }: { readonly projectId: Id }) {
         ) : (
           <ul className="space-y-1">
             {links.map((link) => (
-              <LinkRow key={link.id} link={link} entities={model.objects.entity} />
+              <LinkRow
+                key={link.id}
+                projectId={projectId}
+                link={link}
+                entities={model.objects.entity}
+              />
             ))}
           </ul>
         )}
@@ -125,22 +132,51 @@ function FieldDetails({ field }: { readonly field: Field }) {
 }
 
 function LinkRow({
+  projectId,
   link,
   entities,
 }: {
+  readonly projectId: Id;
   readonly link: Link;
   readonly entities: Readonly<Record<Id, Entity>>;
 }) {
+  const t = useTerminology();
+  const queryClient = useQueryClient();
+  const [failed, setFailed] = useState(false);
+  // R19: no destructive affordance on a link touching a stub (the API 403s it).
+  const touchesStub =
+    link.restricted === true ||
+    entities[link.from.entityId]?.restricted === true ||
+    entities[link.to.entityId]?.restricted === true;
   const name = (id: Id): string => {
     const entity = entities[id];
     if (entity === undefined) return '?';
     return entity.restricted === true ? 'restricted' : entity.name;
   };
   return (
-    <li className="rounded border border-border px-2 py-1 text-xs text-text-muted">
-      <span className="font-mono">{name(link.from.entityId)}</span>
-      <span className="px-1 text-text-subtle">{link.cardinality}</span>
-      <span className="font-mono">{name(link.to.entityId)}</span>
+    <li className="flex items-center rounded border border-border px-2 py-1 text-xs text-text-muted">
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-mono">{name(link.from.entityId)}</span>
+        <span className="px-1 text-text-subtle">{link.cardinality}</span>
+        <span className="font-mono">{name(link.to.entityId)}</span>
+        {failed ? <span className="pl-1 text-danger-text">not deleted</span> : null}
+      </span>
+      {touchesStub ? null : (
+        <button
+          type="button"
+          aria-label={t.msg('action.delete', 'link')}
+          title={t.msg('action.delete', 'link')}
+          className="rounded p-0.5 text-text-subtle hover:bg-surface-hover hover:text-danger-text"
+          onClick={() => {
+            setFailed(false);
+            postOps(queryClient, projectId, [deleteLinkOp(link)]).catch(() => {
+              setFailed(true);
+            });
+          }}
+        >
+          <X className="size-3.5" aria-hidden="true" />
+        </button>
+      )}
     </li>
   );
 }

@@ -3,7 +3,8 @@
 import '@xyflow/react/dist/style.css';
 
 import { createIndex, type Id, type Point, type SchemaModel } from '@schemaloom/schema-model';
-import { Button, LayoutGrid } from '@schemaloom/ui';
+import { Button, FilePlus2, LayoutGrid, Upload } from '@schemaloom/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Background,
   BackgroundVariant,
@@ -21,7 +22,9 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useEngine, useEngineUi } from '@/engines';
+import { NameDialog } from '@/components/name-dialog';
+import { useEngine, useEngineUi, useTerminology } from '@/engines';
+import { ApiError } from '@/lib/api-client';
 import { areaColors } from './area-color';
 import { CanvasMenu, type CanvasMenuItem, type CanvasMenuTarget } from './canvas-menu';
 import { cardinalityFor, checkConnection, explainCheck } from './connect';
@@ -30,6 +33,7 @@ import { CrowFootDefs } from './crow-foot';
 import { CanvasEmptyState } from './empty-state';
 import { EntityNode } from './entity-node';
 import { createGeometryAutosave, postGeometry } from './geometry';
+import { ImportDialog } from './import-dialog';
 import {
   ENTITY_NODE_TYPE,
   LINK_EDGE_TYPE,
@@ -40,7 +44,9 @@ import {
 } from './graph';
 import { parseHandleId } from './handles';
 import { GRID_SIZE, autoLayout, unstack } from './layout';
+import { irQueryKey } from './ir-query';
 import { LinkEdge } from './link-edge';
+import { deleteLinkOp, postOps } from './schema-ops';
 import { useCanvasStore } from './store';
 import { useCanvasShortcuts } from './use-canvas-shortcuts';
 
@@ -87,6 +93,8 @@ export function CanvasSurface({
   const facet = useEngine();
   const ui = useEngineUi();
   const flow = useReactFlow<EntityNodeType, LinkEdgeType>();
+  const queryClient = useQueryClient();
+  const t = useTerminology();
 
   const select = useCanvasStore((state) => state.select);
   const clearSelection = useCanvasStore((state) => state.clearSelection);
@@ -104,6 +112,9 @@ export function CanvasSurface({
   const [edges, setEdges, onEdgesChange] = useEdgesState<LinkEdgeType>(builtEdges);
   const [message, setMessage] = useState<string | null>(null);
   const [menu, setMenu] = useState<CanvasMenuTarget | null>(null);
+  /** Where a new entity lands: the pointer for "add here", the viewport centre otherwise. */
+  const [newEntityAt, setNewEntityAt] = useState<Point | null>(null);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     setNodes(builtNodes);
@@ -236,7 +247,7 @@ export function CanvasSurface({
       if (!check.ok || check.linkKindId === null) return;
       const sourceField = parseHandleId(connection.sourceHandle)?.fieldId ?? null;
       const targetField = parseHandleId(connection.targetHandle)?.fieldId ?? null;
-      void createLink(projectId, {
+      void createLink(queryClient, projectId, {
         kind: check.linkKindId,
         from: { entityId: connection.source, fieldIds: sourceField === null ? [] : [sourceField] },
         to: { entityId: connection.target, fieldIds: targetField === null ? [] : [targetField] },
@@ -249,7 +260,65 @@ export function CanvasSurface({
           setMessage('The link could not be saved.');
         });
     },
-    [connectionContext, projectId],
+    [connectionContext, projectId, queryClient],
+  );
+
+  // ── entity create / link delete: ops through `/schema/ops`, then an IR refetch ───────
+  const createEntity = useCallback(
+    async (name: string, position: Point) => {
+      const namespace = Object.values(model.objects.namespace).find((ns) => ns.isDefault);
+      const kind = facet.capabilities.entityKinds[0];
+      if (namespace === undefined || kind === undefined) {
+        throw new ApiError(422, 'no_default_namespace', 'This project has no default namespace.');
+      }
+      await postOps(
+        queryClient,
+        projectId,
+        [
+          {
+            op: 'create',
+            type: 'entity',
+            object: {
+              id: crypto.randomUUID(),
+              name,
+              engineProps: {},
+              namespaceId: namespace.id,
+              kind: kind.id,
+              areaId: null,
+              position,
+              color: null,
+            },
+          },
+        ],
+        t.msg('action.add', 'entity'),
+      );
+    },
+    [model, facet, queryClient, projectId, t],
+  );
+
+  const deleteLink = useCallback(
+    (linkId: Id) => {
+      const link = model.objects.link[linkId];
+      if (link === undefined) return;
+      void postOps(queryClient, projectId, [deleteLinkOp(link)], t.msg('action.delete', 'link'))
+        .then(() => {
+          setMessage(null);
+        })
+        .catch((caught: unknown) => {
+          setMessage(
+            caught instanceof ApiError && caught.status === 409
+              ? 'This link was changed by someone else. The diagram has been refreshed; try again.'
+              : 'The link could not be deleted.',
+          );
+          void queryClient.invalidateQueries({ queryKey: irQueryKey(projectId) });
+        });
+    },
+    [model, queryClient, projectId, t],
+  );
+
+  const viewportCentre = useCallback(
+    (): Point => flow.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }),
+    [flow],
   );
 
   // ── selection: React Flow owns it, the store mirrors it for the inspector ──────────
@@ -335,9 +404,55 @@ export function CanvasSurface({
 
   const menuItems = useMemo<readonly CanvasMenuItem[]>(() => {
     const entityId = menu?.entityId ?? null;
+    const linkId = menu?.linkId ?? null;
+    if (linkId !== null) {
+      const link = model.objects.link[linkId];
+      // R19: no destructive affordance on a link that touches a stub. The API would 403
+      // it, and the user cannot see what they would be disconnecting.
+      const touchesStub =
+        link === undefined ||
+        link.restricted === true ||
+        model.objects.entity[link.from.entityId]?.restricted === true ||
+        model.objects.entity[link.to.entityId]?.restricted === true;
+      return readOnly
+        ? []
+        : [
+            {
+              id: 'delete-link',
+              label: t.msg('action.delete', 'link'),
+              disabled: touchesStub,
+              onSelect: () => {
+                deleteLink(linkId);
+              },
+            },
+          ];
+    }
     if (entityId === null) {
+      const at = menu === null ? null : flow.screenToFlowPosition({ x: menu.x, y: menu.y });
       return [
-        ...(readOnly ? [] : [{ id: 'layout', label: 'Auto-layout', onSelect: runLayout }]),
+        ...(readOnly
+          ? []
+          : [
+              {
+                id: 'add-entity',
+                label: t.msg('action.add', 'entity'),
+                onSelect: () => {
+                  setNewEntityAt(at ?? viewportCentre());
+                },
+              },
+              ...(facet.capabilities.importFormats.length === 0
+                ? []
+                : [
+                    {
+                      id: 'import',
+                      label: 'Import SQL',
+                      onSelect: () => {
+                        setImporting(true);
+                      },
+                    },
+                  ]),
+              { id: 'layout', label: 'Auto-layout', onSelect: runLayout },
+            ]),
         { id: 'fit', label: 'Fit to view', onSelect: fitView },
       ];
     }
@@ -357,7 +472,44 @@ export function CanvasSurface({
         },
       },
     ];
-  }, [menu, runLayout, fitView, toggleCollapse, flow, readOnly]);
+  }, [
+    menu,
+    runLayout,
+    fitView,
+    toggleCollapse,
+    flow,
+    readOnly,
+    model,
+    t,
+    facet,
+    deleteLink,
+    viewportCentre,
+  ]);
+
+  const canImport = facet.capabilities.importFormats.length > 0;
+  const dialogs = readOnly ? null : (
+    <>
+      <NameDialog
+        open={newEntityAt !== null}
+        onOpenChange={(open) => {
+          if (!open) setNewEntityAt(null);
+        }}
+        title={t.msg('action.add', 'entity')}
+        submitLabel="Create"
+        onSubmit={(name) => createEntity(name, newEntityAt ?? { x: 0, y: 0 })}
+      />
+      <ImportDialog
+        open={importing}
+        onOpenChange={setImporting}
+        projectId={projectId}
+        onImported={async () => {
+          // Imported entities arrive at the origin; let the placement effect unpile them.
+          laidOut.current = false;
+          await queryClient.invalidateQueries({ queryKey: irQueryKey(projectId) });
+        }}
+      />
+    </>
+  );
 
   if (nodes.length === 0) {
     return readOnly ? (
@@ -365,7 +517,22 @@ export function CanvasSurface({
         Nothing is shared here yet.
       </div>
     ) : (
-      <CanvasEmptyState projectId={projectId} />
+      <>
+        <CanvasEmptyState
+          projectId={projectId}
+          onNewEntity={() => {
+            setNewEntityAt({ x: 0, y: 0 });
+          }}
+          onImport={
+            canImport
+              ? () => {
+                  setImporting(true);
+                }
+              : undefined
+          }
+        />
+        {dialogs}
+      </>
     );
   }
 
@@ -395,6 +562,10 @@ export function CanvasSurface({
           event.preventDefault();
           setMenu({ x: event.clientX, y: event.clientY, entityId: null });
         }}
+        onEdgeContextMenu={(event, edge) => {
+          event.preventDefault();
+          setMenu({ x: event.clientX, y: event.clientY, entityId: null, linkId: edge.id });
+        }}
         multiSelectionKeyCode={MULTI_SELECT_KEYS}
         snapToGrid
         snapGrid={SNAP}
@@ -416,7 +587,29 @@ export function CanvasSurface({
         />
         <Controls showInteractive={false} />
         {readOnly ? null : (
-          <Panel position="top-right">
+          <Panel position="top-right" className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setNewEntityAt(viewportCentre());
+              }}
+            >
+              <FilePlus2 className="size-3.5" aria-hidden="true" />
+              {t.msg('action.add', 'entity')}
+            </Button>
+            {canImport ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setImporting(true);
+                }}
+              >
+                <Upload className="size-3.5" aria-hidden="true" />
+                Import SQL
+              </Button>
+            ) : null}
             <Button variant="outline" size="sm" onClick={runLayout}>
               <LayoutGrid className="size-3.5" aria-hidden="true" />
               Auto-layout
@@ -444,6 +637,7 @@ export function CanvasSurface({
           setMenu(null);
         }}
       />
+      {dialogs}
     </div>
   );
 }
