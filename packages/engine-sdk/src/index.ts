@@ -166,6 +166,17 @@ export {
   type RenderStatementsOptions,
 } from './exporter.js';
 
+// --- query validator (§12) ---
+export type {
+  IdentifierResolution,
+  IdentifierRole,
+  QueryParseError,
+  QueryValidationInput,
+  QueryValidationResult,
+  QueryValidator,
+  ResolutionStatus,
+} from './query.js';
+
 // --- the engine itself (§3) ---
 export type { EngineDefinition, EngineParadigm, EngineStaticFacet } from './definition.js';
 

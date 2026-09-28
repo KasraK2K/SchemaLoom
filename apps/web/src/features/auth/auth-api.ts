@@ -53,8 +53,8 @@ export async function signIn(email: string, password: string): Promise<LoginResu
 }
 
 /** Always 202 from the API, known address or not. */
-export async function requestMagicLink(email: string): Promise<void> {
-  await apiFetch<unknown>('/auth/magic-link', { method: 'POST', body: { email } });
+export async function requestMagicLink(email: string, next?: string): Promise<void> {
+  await apiFetch<unknown>('/auth/magic-link', { method: 'POST', body: { email, next } });
 }
 
 export async function consumeMagicLink(token: string): Promise<LoginResult> {

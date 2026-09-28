@@ -74,8 +74,8 @@ export class MailService {
   }
 
   /** No name: the address may not belong to an account yet. */
-  async sendMagicLinkEmail(to: string, token: string): Promise<void> {
-    const url = this.link('/magic-link', token);
+  async sendMagicLinkEmail(to: string, token: string, next?: string): Promise<void> {
+    const url = this.link('/magic-link', token) + (next === undefined ? '' : `&next=${encodeURIComponent(next)}`);
     await this.send({
       to,
       subject: 'Your SchemaLoom sign-in link',

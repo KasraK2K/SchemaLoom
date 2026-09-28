@@ -38,6 +38,7 @@ import {
   DisableTwoFactorDto,
   EmailOnlyDto,
   LoginDto,
+  MagicLinkDto,
   RegisterDto,
   ResetPasswordDto,
   SwitchOrgDto,
@@ -253,8 +254,8 @@ export class AuthController {
   @Public()
   @Post('magic-link')
   @HttpCode(202)
-  async requestMagicLink(@Body() dto: EmailOnlyDto): Promise<void> {
-    await this.auth.requestMagicLink(dto.email);
+  async requestMagicLink(@Body() dto: MagicLinkDto): Promise<void> {
+    await this.auth.requestMagicLink(dto.email, dto.next);
   }
 
   /** A POST from the SPA page, never a GET from the email — see `MailService`. */

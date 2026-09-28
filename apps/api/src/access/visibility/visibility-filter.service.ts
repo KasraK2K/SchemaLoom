@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   RawSchemaModel,
   redact,
+  type FieldVisibilityIndex,
   type RedactedModel,
   type VisibilityContext,
 } from '@schemaloom/schema-model';
@@ -26,6 +27,24 @@ import type { ProjectPermissionMap, ProjectSkeleton, Subject } from '../types';
  * even by destructuring it out of a loader result — which was the realistic mistake an
  * earlier draft's `readonly ir: SchemaModel` field failed to prevent.
  */
+/**
+ * Doc 05 R21' — the subject's view of the project is unredacted: every entity visible, and
+ * every entity holding a restricted field also `field:viewRestricted`.
+ */
+export function isCompleteView(ctx: VisibilityContext): boolean {
+  return (
+    ctx.visibleEntityIds.size === ctx.totalEntityCount &&
+    [...ctx.entitiesWithRestrictedFields].every((id) => ctx.restrictedOkEntityIds.has(id))
+  );
+}
+
+/** The columns `filterQueryRows` reads. A `SavedQuery` row satisfies it structurally. */
+export interface QueryRow {
+  readonly identifiersResolved: boolean;
+  readonly touchedEntityIds: readonly string[];
+  readonly touchedFieldIds: readonly string[];
+}
+
 @Injectable()
 export class VisibilityFilter {
   constructor(private readonly resolver: PermissionResolver) {}
@@ -108,5 +127,32 @@ export class VisibilityFilter {
     skel: ProjectSkeleton,
   ): RedactedModel {
     return redact(raw, this.contextFrom(subject, projectId, map, skel));
+  }
+
+  /**
+   * Doc 05 L25 — saved queries (and later AI messages), whose BODY is raw schema text and
+   * cannot be partially redacted. A failing row is OMITTED, never stubbed.
+   *
+   * - `identifiersResolved = true`: kept iff every touched entity is visible and every
+   *   touched field is `full` in `fieldVis`. A field missing from the index (hidden, or
+   *   deleted since) fails closed.
+   * - `identifiersResolved = false`: the arrays mean nothing (an empty array would pass the
+   *   test above trivially), so kept only for a subject with a complete view (R21').
+   *
+   * `fieldVis` is `fieldVisibilityIndex(redactedModel, ctx)`: a masked field survives
+   * redaction as a restricted stub and resolves `masked` again; a hidden one is absent.
+   */
+  filterQueryRows<T extends QueryRow>(
+    rows: readonly T[],
+    ctx: VisibilityContext,
+    fieldVis: FieldVisibilityIndex,
+  ): T[] {
+    const complete = isCompleteView(ctx);
+    return rows.filter((row) =>
+      row.identifiersResolved
+        ? row.touchedEntityIds.every((id) => ctx.visibleEntityIds.has(id)) &&
+          row.touchedFieldIds.every((id) => fieldVis.get(id) === 'full')
+        : complete,
+    );
   }
 }

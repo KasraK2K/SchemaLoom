@@ -17,6 +17,13 @@ import { TokensService, type SessionContext } from './tokens.service';
 import { PER_CHALLENGE, TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
 
+/**
+ * Per address, per purpose, for the three unauthenticated routes that send email. Keyed
+ * on the address alone and checked BEFORE the account lookup, so a 429 says nothing about
+ * whether the account exists. Stops one address being flooded, not one IP mailing many.
+ */
+const EMAILS_PER_ADDRESS = { limit: 5, windowSec: 60 * 60 };
+
 /** Uniqueness is `users_email_uq ON users (lower(email))`; normalise-on-write is the convenience. */
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -255,6 +262,10 @@ export class AuthService implements OnModuleInit {
 
   // ------------------------------------------------------- email verification
 
+  private throttleEmail(purpose: 'verify' | 'reset' | 'magic', email: string): Promise<void> {
+    return this.twoFactor.throttle(`email:${purpose}:${email}`, EMAILS_PER_ADDRESS);
+  }
+
   private async sendVerification(userId: string, email: string, name: string): Promise<void> {
     const token = await this.verification.issue(
       VerificationPurpose.email_verification,
@@ -267,6 +278,7 @@ export class AuthService implements OnModuleInit {
   /** Always 204 at the controller: whether the address exists is not this route's to tell. */
   async resendVerification(rawEmail: string): Promise<void> {
     const email = normalizeEmail(rawEmail);
+    await this.throttleEmail('verify', email);
     const user = await this.prisma.user.findFirst({
       where: { email, emailVerifiedAt: null },
       select: { id: true, name: true },
@@ -290,6 +302,7 @@ export class AuthService implements OnModuleInit {
 
   async requestPasswordReset(rawEmail: string): Promise<void> {
     const email = normalizeEmail(rawEmail);
+    await this.throttleEmail('reset', email);
     const user = await this.prisma.user.findFirst({
       where: { email },
       select: { id: true, name: true },
@@ -326,15 +339,16 @@ export class AuthService implements OnModuleInit {
    * proves the mailbox, which is all a magic-link account is. Whether mail was sent to
    * an existing account or a new one is not this route's to tell.
    */
-  async requestMagicLink(rawEmail: string): Promise<void> {
+  async requestMagicLink(rawEmail: string, next?: string): Promise<void> {
     const email = normalizeEmail(rawEmail);
+    await this.throttleEmail('magic', email);
     const user = await this.prisma.user.findFirst({ where: { email }, select: { id: true } });
     const token = await this.verification.issue(
       VerificationPurpose.magic_link,
       email,
       user?.id ?? null,
     );
-    await this.mail.sendMagicLinkEmail(email, token);
+    await this.mail.sendMagicLinkEmail(email, token, next);
   }
 
   /** Returns the user to open a session for. The link proves the address, so it verifies it. */

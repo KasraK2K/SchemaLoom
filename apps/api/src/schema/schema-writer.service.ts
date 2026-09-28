@@ -180,6 +180,13 @@ export class SchemaWriter {
       }
     }
 
+    // Doc 02 SavedQuery: a rename or delete of an entity or field (or its namespace) can break any saved
+    // query's resolution, so every one in the project falls back to the fail-closed branch
+    // (R21') until it is re-validated. Raw SQL so `updated_at` keeps meaning "edited".
+    if (renamesOrDeletesNames(ops, removed)) {
+      await tx.$executeRaw`UPDATE saved_queries SET identifiers_resolved = false WHERE project_id = ${projectId} AND identifiers_resolved`;
+    }
+
     // Per-project monotonic, assigned INSIDE this transaction so a client can detect a
     // gap and refetch (§8.7). It cannot be `max(version)`: a maximum does not move when
     // a non-maximal object is edited and falls when its holder is deleted.
@@ -405,6 +412,22 @@ export function changesSkeleton(
     const patch = op.patch as Record<string, unknown>;
     return (op.type === 'entity' && 'areaId' in patch) || (op.type === 'field' && 'isRestricted' in patch);
   });
+}
+
+/** An entity or field (or the namespace qualifying it) was renamed or removed, directly
+ *  or by cascade. */
+export function renamesOrDeletesNames(
+  ops: readonly SchemaOperation[],
+  removed: readonly { type: IrObjectType }[],
+): boolean {
+  const named = (type: IrObjectType): boolean =>
+    type === 'entity' || type === 'field' || type === 'namespace';
+  if (removed.some((r) => named(r.type))) return true;
+  return ops.some(
+    (op) =>
+      named(op.type) &&
+      (op.op === 'delete' || (op.op === 'update' && 'name' in (op.patch as Record<string, unknown>))),
+  );
 }
 
 /**

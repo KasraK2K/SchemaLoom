@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RawSchemaModel } from '@schemaloom/schema-model';
+import {
+  RawSchemaModel,
+  type FieldVisibilityIndex,
+  type VisibilityContext,
+} from '@schemaloom/schema-model';
 import type { PermissionResolver } from '../permission-resolver.service';
 import type { ProjectPermissionMap, ProjectSkeleton, Subject } from '../types';
-import { VisibilityFilter } from './visibility-filter.service';
+import { VisibilityFilter, type QueryRow } from './visibility-filter.service';
 
 const USER: Subject = { kind: 'user', userId: 'us_1', orgId: 'or_1' };
 
@@ -154,5 +158,58 @@ describe('the single-path rule (doc 05 §8.6)', () => {
     // The redacted model serialises; the raw one refuses to.
     expect(() => JSON.stringify(out)).not.toThrow();
     expect(() => JSON.stringify(raw)).toThrow('raw_ir_escaped');
+  });
+});
+
+describe('VisibilityFilter.filterQueryRows (doc 05 L25)', () => {
+  const filter = new VisibilityFilter(asResolver(resolverStub()));
+  const ctx = (over: Partial<VisibilityContext> = {}): VisibilityContext => ({
+    projectId: 'pr_1',
+    subjectKind: 'user',
+    subjectKey: 'user:us_1',
+    canOpenProject: true,
+    visibleEntityIds: new Set(['en_1', 'en_2']),
+    restrictedOkEntityIds: new Set(['en_1', 'en_2']),
+    areasWithAtoms: new Set(),
+    restrictedFieldMode: 'mask',
+    totalEntityCount: 2,
+    entitiesWithRestrictedFields: new Set(['en_2']),
+    ...over,
+  });
+  const fieldVis: FieldVisibilityIndex = new Map([
+    ['fd_open', 'full'],
+    ['fd_salary', 'masked'],
+  ]);
+  const row = (over: Partial<QueryRow> = {}): QueryRow => ({
+    identifiersResolved: true,
+    touchedEntityIds: ['en_1'],
+    touchedFieldIds: ['fd_open'],
+    ...over,
+  });
+
+  it('keeps a resolved row whose every touched id is fully visible', () => {
+    expect(filter.filterQueryRows([row()], ctx(), fieldVis)).toHaveLength(1);
+  });
+
+  it('omits a resolved row touching a hidden entity', () => {
+    const narrowed = ctx({ visibleEntityIds: new Set(['en_2']) });
+    expect(filter.filterQueryRows([row()], narrowed, fieldVis)).toEqual([]);
+  });
+
+  it('omits a resolved row touching a masked field, and one touching a field absent from the index', () => {
+    expect(filter.filterQueryRows([row({ touchedFieldIds: ['fd_salary'] })], ctx(), fieldVis)).toEqual([]);
+    expect(filter.filterQueryRows([row({ touchedFieldIds: ['fd_gone'] })], ctx(), fieldVis)).toEqual([]);
+  });
+
+  it('keeps an unresolved row only for a complete view (R21′)', () => {
+    const unresolved = row({ identifiersResolved: false, touchedEntityIds: [], touchedFieldIds: [] });
+    expect(filter.filterQueryRows([unresolved], ctx(), fieldVis)).toHaveLength(1);
+    expect(
+      filter.filterQueryRows([unresolved], ctx({ visibleEntityIds: new Set(['en_1']) }), fieldVis),
+    ).toEqual([]);
+    expect(
+      filter.filterQueryRows([unresolved], ctx({ restrictedOkEntityIds: new Set(['en_1']) }), fieldVis),
+      'every entity visible but a restricted field still masked is not complete',
+    ).toEqual([]);
   });
 });

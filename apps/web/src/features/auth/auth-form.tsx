@@ -169,7 +169,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
     if (!(await form.trigger('email'))) return;
     const email = form.getValues('email');
     try {
-      await requestMagicLink(email);
+      await requestMagicLink(email, safeNextPath(params.get('next')));
       setLinkSentTo(email);
     } catch (error) {
       setFormError(messageFor(error));

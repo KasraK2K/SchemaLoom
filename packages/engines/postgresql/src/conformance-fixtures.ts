@@ -324,7 +324,31 @@ export const CONFORMANCE_FIXTURES: ConformanceFixtures = {
       ],
     },
   ],
-  queries: [],
+  // Run against `redactedModel`: `customers` is a stub and `orders.total` is masked, so both
+  // must read exactly like the typo beside them (doc 05 P8).
+  queries: [
+    {
+      name: 'aliases and a schema-qualified view',
+      query:
+        'SELECT o.id, o.status FROM orders o JOIN billing.order_summary AS s ON s.id = o.id',
+      expect: { touchedEntityNames: ['orders', 'order_summary'], unknownIdentifiers: [], parsed: true },
+    },
+    {
+      name: 'a stub does not resolve by its real name',
+      query: 'SELECT * FROM customers',
+      expect: { touchedEntityNames: [], unknownIdentifiers: ['customers'], parsed: true },
+    },
+    {
+      name: 'a masked field reads like a typo',
+      query: 'SELECT total, statuss FROM orders',
+      expect: { touchedEntityNames: ['orders'], unknownIdentifiers: ['total', 'statuss'], parsed: true },
+    },
+    {
+      name: 'unparseable',
+      query: 'SELECT FROM WHERE (',
+      expect: { touchedEntityNames: [], unknownIdentifiers: [], parsed: false },
+    },
+  ],
   migrations: [],
 
   invalidProps: [

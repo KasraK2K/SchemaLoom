@@ -23,6 +23,16 @@ export class LoginDto extends createZodDto(loginSchema) {}
 export const emailOnlySchema = z.object({ email });
 export class EmailOnlyDto extends createZodDto(emailOnlySchema) {}
 
+/**
+ * `next` rides along in the emailed link so an invitee lands back on `/invite/…`. Same
+ * rule as the web's `safeNextPath`: a same-origin path, never `//host` or `/\host`.
+ */
+export const magicLinkSchema = z.object({
+  email,
+  next: z.string().max(512).regex(/^\/(?![/\\])/).optional(),
+});
+export class MagicLinkDto extends createZodDto(magicLinkSchema) {}
+
 export const tokenSchema = z.object({ token: z.string().min(1).max(512) });
 export class TokenDto extends createZodDto(tokenSchema) {}
 

@@ -2,6 +2,7 @@ import type { EngineCapabilities } from './capabilities.js';
 import type { DiagnosticMessages, EngineId } from './diagnostics.js';
 import type { Exporter } from './exporter.js';
 import type { Importer } from './importer.js';
+import type { QueryValidator } from './query.js';
 import type { IrObject, IrObjectRef, SchemaModel } from './ir.js';
 import type { EnginePropsSchemas } from './props.js';
 import type { TerminologyBundle } from './terminology.js';
@@ -70,8 +71,8 @@ export interface EngineDefinition extends EngineStaticFacet {
   readonly annotateDiff?: unknown;
   /** phase-gated; presence must equal `features.migrations` */
   readonly migrationGenerator?: unknown;
-  /** phase-gated; presence must equal `features.queryValidation` */
-  readonly queryValidator?: unknown;
+  /** Phase 2 — `QueryValidator` (§12). Presence must equal `features.queryValidation`. */
+  readonly queryValidator?: QueryValidator;
   /** No feature atom: `aiProfile === undefined` simply hides the AI panel and makes the AI
    *  routes 400 `engine.feature-unsupported`. */
   readonly aiProfile?: unknown;

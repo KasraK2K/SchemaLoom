@@ -35,6 +35,13 @@ export const CODE = {
   /** §9 — a statement the importer could not apply, targeted at the PROJECT with a `range`,
    *  because there is no IR object to point at. */
   importStatementFailed: 'postgresql.import-statement-failed',
+  /** §12 — the query validator's `unknown` / `ambiguous` identifiers. Worded so a hidden
+   *  object and a typo read the same (doc 05 P8): nothing here ever says "you cannot see". */
+  queryUnknownRelation: 'postgresql.query-unknown-relation',
+  queryUnknownQualifier: 'postgresql.query-unknown-qualifier',
+  queryUnknownColumn: 'postgresql.query-unknown-column',
+  queryUnknownColumnOn: 'postgresql.query-unknown-column-on',
+  queryAmbiguousColumn: 'postgresql.query-ambiguous-column',
 } as const;
 
 export const DIAGNOSTIC_MESSAGES: DiagnosticMessages = {
@@ -65,4 +72,10 @@ export const DIAGNOSTIC_MESSAGES: DiagnosticMessages = {
     'An expression here names {count} object(s) that no longer exist',
   [CODE.exportOmitted]: 'This is not in the exported script — {reason}',
   [CODE.importStatementFailed]: 'This statement could not be applied — {reason}',
+  [CODE.queryUnknownRelation]: 'There is no table or view named “{name}”',
+  [CODE.queryUnknownQualifier]: '“{name}” is not a table or alias in this query’s FROM clause',
+  [CODE.queryUnknownColumn]: 'No table in this query has a column named “{name}”',
+  [CODE.queryUnknownColumnOn]: '“{table}” has no column named “{name}”',
+  [CODE.queryAmbiguousColumn]:
+    '“{name}” is ambiguous — {count} tables in this query have it ({tables}); qualify it',
 };

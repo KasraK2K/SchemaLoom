@@ -1,5 +1,6 @@
 import { ForbiddenException, HttpException, HttpStatus } from '@nestjs/common';
 import type { VisibilityContext } from '@schemaloom/schema-model';
+import { isCompleteView } from '../access';
 import { assertWritable, type EngineGate, type ProjectEngineRef } from '../engines';
 
 /**
@@ -17,11 +18,7 @@ import { assertWritable, type EngineGate, type ProjectEngineRef } from '../engin
  * be explicit: it discloses only that your view is partial, which you already know.
  */
 export function assertFullProjectView(ctx: VisibilityContext): void {
-  const everyEntity = ctx.visibleEntityIds.size === ctx.totalEntityCount;
-  const everyRestrictedField = [...ctx.entitiesWithRestrictedFields].every((id) =>
-    ctx.restrictedOkEntityIds.has(id),
-  );
-  if (!everyEntity || !everyRestrictedField) {
+  if (!isCompleteView(ctx)) {
     throw new ForbiddenException({ code: 'requires_full_project_access' });
   }
 }

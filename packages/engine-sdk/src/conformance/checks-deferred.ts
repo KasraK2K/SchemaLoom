@@ -31,11 +31,6 @@ export const DEFERRED_CHECKS: readonly ConformanceCheck[] = [
   { id: 'diff/annotate-is-pure', requires: 'annotateDiff' },
   { id: 'diff/annotate-never-raises-severity', requires: 'annotateDiff' },
 
-  // §12 QueryValidator — Phase 2.
-  { id: 'query/fixtures-resolve', requires: 'queryValidator' },
-  { id: 'query/unknown-has-range', requires: 'queryValidator' },
-  { id: 'query/never-throws', requires: 'queryValidator' },
-
   // §13 AiProfile — Phase 2. No feature atom: absence just hides the AI panel.
   { id: 'ai/serialize-deterministic', requires: 'aiProfile' },
   { id: 'ai/serialize-respects-budget', requires: 'aiProfile' },

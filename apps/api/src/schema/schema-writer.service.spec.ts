@@ -412,3 +412,33 @@ describe('SchemaWriter — batch mechanics', () => {
     await expect(writer.apply(ops, await context())).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe('SchemaWriter — saved-query invalidation (doc 02 SavedQuery)', () => {
+  const resets = (prisma: FakePrisma) => prisma.callsTo('$raw', 'executeRaw');
+
+  it('resets identifiersResolved for the whole project on a rename, in the same transaction', async () => {
+    const { prisma, writer, context } = harness();
+    await writer.apply(
+      batch([{ op: 'update', type: 'field', id: 'fld_total', expectedVersion: 3, patch: { name: 'sum' } }]),
+      await context(),
+    );
+    expect(resets(prisma)).toHaveLength(1);
+    expect(resets(prisma)[0]?.args).toMatchObject({ values: [PROJECT] });
+    expect(String(resets(prisma)[0]?.args.sql)).toMatch(/UPDATE saved_queries SET identifiers_resolved = false WHERE project_id = \?/);
+  });
+
+  it('resets on a delete, and not on an edit that keeps every name', async () => {
+    const { prisma, writer, context } = harness();
+    await writer.apply(
+      batch([{ op: 'update', type: 'field', id: 'fld_total', expectedVersion: 3, patch: { isNullable: false } }]),
+      await context(),
+    );
+    expect(resets(prisma)).toHaveLength(0);
+
+    await writer.apply(
+      batch([{ op: 'delete', type: 'entity', id: 'ent_orders', expectedVersion: 2 }]),
+      await context(),
+    );
+    expect(resets(prisma)).toHaveLength(1);
+  });
+});

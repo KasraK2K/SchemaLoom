@@ -6,6 +6,7 @@ import { EXPORT_CHECKS } from './checks-export.js';
 import { IMPORT_CHECKS } from './checks-import.js';
 import { LINK_CHECKS } from './checks-links.js';
 import { PROPS_CHECKS } from './checks-props.js';
+import { QUERY_CHECKS } from './checks-query.js';
 import { REFERENCE_CHECKS } from './checks-references.js';
 import { TYPE_CHECKS } from './checks-types.js';
 import { emitsQuickFixes, staleReferenceCandidate, VALIDATOR_CHECKS } from './checks-validator.js';
@@ -21,6 +22,7 @@ const REGISTERED: readonly ConformanceCheck[] = [
   ...VALIDATOR_CHECKS,
   ...EXPORT_CHECKS,
   ...IMPORT_CHECKS,
+  ...QUERY_CHECKS,
   ...DEFERRED_CHECKS,
 ];
 

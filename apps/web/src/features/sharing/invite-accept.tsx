@@ -4,7 +4,7 @@ import { Button } from '@schemaloom/ui';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
-import { ApiError, apiFetch, apiUrl, readCookie } from '@/lib/api-client';
+import { ApiError, apiFetch, apiUrl } from '@/lib/api-client';
 
 /**
  * `/invite/[token]` — doc 05 §6.4 (R11), §12.2(b).
@@ -14,8 +14,7 @@ import { ApiError, apiFetch, apiUrl, readCookie } from '@/lib/api-client';
  * `apiFetch` — it needs the CSRF echo, and a dead session there SHOULD go to /login with
  * `next` pointing back at this page.
  *
- * `sl_presence` is only a hint for which buttons to show (see `middleware.ts`); the API
- * decides whether the accept is allowed.
+ * `signedIn` comes from the page, which reads the httpOnly `sl_presence` cookie server-side.
  */
 const InviteSchema = z.object({
   organizationName: z.string(),
@@ -46,14 +45,12 @@ function acceptError(error: unknown, email: string): string {
   return 'Something went wrong. Try again.';
 }
 
-export function InviteAccept({ token }: { readonly token: string }) {
+export function InviteAccept({ token, signedIn }: { readonly token: string; readonly signedIn: boolean }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
-  const [signedIn, setSignedIn] = useState(false);
   const path = `/invitations/${encodeURIComponent(token)}`;
   const next = encodeURIComponent(`/invite/${encodeURIComponent(token)}`);
 
   useEffect(() => {
-    setSignedIn(readCookie('sl_presence') !== undefined);
     const controller = new AbortController();
     void (async () => {
       const response = await fetch(apiUrl(path), {

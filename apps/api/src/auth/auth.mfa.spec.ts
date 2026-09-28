@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppEnv } from '../config/env';
 import type { MailService } from '../mail/mail.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import { magicLinkSchema } from './auth.dto';
 import { AuthService, isMfaChallenge } from './auth.service';
 import type { TokensService } from './tokens.service';
 import type { TwoFactorService } from './two-factor.service';
@@ -126,5 +127,33 @@ describe('magic link consume', () => {
     const { auth } = setup([{ ...guarded }], { userId: 'u2', email: guarded.email });
     const userId = await auth.consumeMagicLink('t');
     expect(isMfaChallenge(await auth.issueSession(userId, {}))).toBe(true);
+  });
+});
+
+describe('emailing an address is capped before the account lookup', () => {
+  it.each([
+    ['requestMagicLink', 'email:magic:a@example.com'],
+    ['requestPasswordReset', 'email:reset:a@example.com'],
+    ['resendVerification', 'email:verify:a@example.com'],
+  ] as const)('%s throttles on the normalised address, and a refusal sends nothing', async (method, key) => {
+    const { auth, twoFactor } = setup([{ ...plain, emailVerifiedAt: null }]);
+    const refused = new Error('rate_limited');
+    twoFactor.throttle.mockImplementationOnce(() => Promise.reject(refused));
+    // Mail and VerificationService.issue are absent from the fixture: reaching either
+    // would throw a TypeError instead of the throttle's own error.
+    await expect(auth[method](' A@Example.com ')).rejects.toBe(refused);
+    expect(twoFactor.throttle).toHaveBeenCalledWith(key, { limit: 5, windowSec: 3600 });
+  });
+});
+
+describe('the magic link `next`', () => {
+  const accepts = (next: string) => magicLinkSchema.safeParse({ email: 'a@example.com', next }).success;
+
+  it('carries a same-origin path, such as an invitation', () => {
+    expect(accepts('/invite/abc')).toBe(true);
+  });
+
+  it.each(['https://evil.test', '//evil.test', '/\\evil.test', 'invite/abc'])('refuses %s', (next) => {
+    expect(accepts(next)).toBe(false);
   });
 });

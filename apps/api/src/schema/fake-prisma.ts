@@ -9,7 +9,7 @@ import type { PrismaService } from '../prisma/prisma.service';
  * them to arrays tests exactly that. The queries themselves are ordinary indexed lookups
  * that Postgres, not this code, is responsible for.
  *
- * Deliberately small: equality, `{ in }`, `OR`, `orderBy`, and `{ increment }` in `data`.
+ * Deliberately small: equality, `{ in }`, `{ has }`, `OR`, `orderBy`, and `{ increment }` in `data`.
  * The moment a test needs more than that, it wants an integration test instead.
  */
 
@@ -37,6 +37,8 @@ const MODELS = [
   'link',
   'linkEndpoint',
   'doc',
+  'savedQuery',
+  'savedQueryEntity',
 ] as const;
 
 /** `parent.create({ data: { columns: { create: [...] } } })` → which table the children
@@ -52,6 +54,10 @@ function matches(row: Row, where: Row | undefined): boolean {
   return Object.entries(where).every(([key, expected]) => {
     if (key === 'OR') {
       return Array.isArray(expected) && expected.some((w) => matches(row, w as Row));
+    }
+    if (expected !== null && typeof expected === 'object' && 'has' in expected) {
+      const cell = row[key];
+      return Array.isArray(cell) && cell.includes(expected.has);
     }
     if (expected !== null && typeof expected === 'object' && 'in' in expected) {
       const list = (expected as { in: unknown[] }).in;
@@ -171,6 +177,8 @@ export function fakePrisma(seed: Partial<Store> = {}, options: FakeOptions = {})
             rowsOf(nested.table).push({ ...child, [nested.fk]: raw.id });
           }
         }
+        // Prisma's `@default(cuid())`, for the models whose id the caller never sends.
+        if (!('id' in data) && model === 'savedQuery') data.id = `${model}_${String(rowsOf(model).length + 1)}`;
         rowsOf(model).push(data);
         return Promise.resolve(data);
       },
@@ -205,6 +213,11 @@ export function fakePrisma(seed: Partial<Store> = {}, options: FakeOptions = {})
 
   const client: Record<string, unknown> = {
     $transaction: (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => fn(client),
+    // Recorded, not executed: a test asserts the statement and its bound values.
+    $executeRaw: (strings: TemplateStringsArray, ...values: unknown[]): Promise<number> => {
+      calls.push({ model: '$raw', method: 'executeRaw', args: { sql: strings.join('?'), values } });
+      return Promise.resolve(0);
+    },
   };
   for (const model of MODELS) client[model] = delegate(model);
 
