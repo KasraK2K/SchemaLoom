@@ -13,3 +13,4 @@ export {
   type VisibilityContext,
 } from './context.js';
 export { redact } from './redact.js';
+export { redactPatch, type ModelPatch } from './patch.js';

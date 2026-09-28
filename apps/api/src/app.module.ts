@@ -8,6 +8,7 @@ import { EnginesModule } from './engines';
 import { JobsModule } from './jobs';
 import { OrganizationsModule } from './organizations';
 import { ProjectsModule } from './projects';
+import { RealtimeModule } from './realtime/realtime.module';
 import { SavedQueriesModule } from './saved-queries/saved-queries.module';
 import { SchemaModule } from './schema';
 import { SharingModule } from './sharing';
@@ -65,6 +66,7 @@ import { RedisModule } from './redis/redis.module';
     SnapshotsModule,
     SharingModule,
     SavedQueriesModule,
+    RealtimeModule,
     JobsModule,
     HealthModule,
   ],

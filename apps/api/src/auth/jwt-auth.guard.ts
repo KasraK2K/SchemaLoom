@@ -41,7 +41,7 @@ export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (context.getType() !== 'http') return true;
     const request = context.switchToHttp().getRequest<Request>();
-    request.auth = await this.resolve(request);
+    request.auth = await this.principalFromCookies(request.headers.cookie);
 
     const isPublic = this.reflector.getAllAndOverride<boolean | undefined>(IS_PUBLIC_KEY, [
       context.getHandler(),
@@ -52,8 +52,12 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 
-  private async resolve(request: Request): Promise<AuthPrincipal | undefined> {
-    const cookies = parseCookieHeader(request.headers.cookie);
+  /**
+   * Public so the realtime handshake (doc 01 §4.5: the upgrade authenticates with the
+   * same cookies) resolves subjects exactly as HTTP does, with no second copy.
+   */
+  async principalFromCookies(header: string | undefined): Promise<AuthPrincipal | undefined> {
+    const cookies = parseCookieHeader(header);
 
     const access = cookies[COOKIE_NAMES.access];
     if (access) {

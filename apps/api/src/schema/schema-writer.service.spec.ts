@@ -22,7 +22,7 @@ import {
 } from './fixture';
 import { SchemaOperationBatchSchema, type SchemaOperationBatch } from './ops';
 import { SchemaLoader } from './schema-loader.service';
-import { SchemaWriter, type WriteContext } from './schema-writer.service';
+import { SchemaCommits, SchemaWriter, type WriteContext } from './schema-writer.service';
 
 /**
  * Doc 04 §8.6 — one test per safety rule, because each of them is a rule somebody will
@@ -61,7 +61,7 @@ function harness(store: Partial<Store> = world()): {
 } {
   const prisma = fakePrisma(store);
   const { spy, service } = resolver();
-  const writer = new SchemaWriter(prisma.client, service);
+  const writer = new SchemaWriter(prisma.client, service, new SchemaCommits());
   const loader = new SchemaLoader(prisma.client);
   return {
     prisma,
@@ -147,7 +147,7 @@ describe('SchemaWriter — visibility before version (§8.6 rule 1)', () => {
     const store = world();
     const prisma = fakePrisma(store);
     const { service } = resolver();
-    const writer = new SchemaWriter(prisma.client, service);
+    const writer = new SchemaWriter(prisma.client, service, new SchemaCommits());
     const raw = await new SchemaLoader(prisma.client).load(PROJECT);
     // `ent_users` is invisible and the surviving link makes it a stub, so `fld_id` — a
     // field on a stub entity — is dropped entirely by redaction.

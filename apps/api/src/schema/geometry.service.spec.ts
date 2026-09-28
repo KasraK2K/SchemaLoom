@@ -7,6 +7,7 @@ import type {
 import { fakePrisma } from './fake-prisma';
 import { PROJECT, baseStore, entityRow } from './fixture';
 import { GeometryWriter } from './geometry.service';
+import { SchemaCommits } from './schema-writer.service';
 import { GeometryBatchSchema } from './ops';
 
 /**
@@ -40,9 +41,11 @@ describe('GeometryWriter', () => {
   const build = () => {
     const prisma = fakePrisma(store);
     const assertAll = vi.fn();
-    const writer = new GeometryWriter(prisma.client, {
-      assertAll,
-    } as unknown as PermissionResolver);
+    const writer = new GeometryWriter(
+      prisma.client,
+      { assertAll } as unknown as PermissionResolver,
+      new SchemaCommits(),
+    );
     return { prisma, writer, assertAll };
   };
 

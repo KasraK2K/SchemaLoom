@@ -64,6 +64,8 @@ export class ProjectsService {
       where: { id: projectId },
       data: { deletedAt: new Date(), permGeneration: { increment: 1 } },
     });
+    // After the commit: drops the cached maps and tells open sockets (they get 4403).
+    await this.resolver.invalidate({ project: projectId });
   }
 
   /**

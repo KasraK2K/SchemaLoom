@@ -9,7 +9,7 @@
 export { SchemaModule } from './schema.module';
 export { SchemaController } from './schema.controller';
 export { SchemaLoader } from './schema-loader.service';
-export { SchemaWriter, type WriteContext } from './schema-writer.service';
+export { SchemaCommits, SchemaWriter, type WriteContext } from './schema-writer.service';
 export { GeometryWriter } from './geometry.service';
 export { toCanvas, type CanvasArea, type CanvasEntity, type CanvasLink, type CanvasView } from './canvas';
 export { requirementsOf, type LiveModel, type OpRequirement } from './requirements';

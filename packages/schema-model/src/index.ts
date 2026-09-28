@@ -157,6 +157,8 @@ export {
   fieldVisibility,
   fieldVisibilityIndex,
   redact,
+  redactPatch,
+  type ModelPatch,
   type FieldVisibility,
   type FieldVisibilityIndex,
   type RedactedModel,

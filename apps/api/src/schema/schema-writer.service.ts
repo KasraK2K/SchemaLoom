@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { PermissionAtom } from '@schemaloom/contracts';
+import { Subject } from 'rxjs';
 import type { Id, IrObject, IrObjectType, RedactedModel } from '@schemaloom/schema-model';
 import {
   PermissionResolver,
@@ -66,11 +67,23 @@ export interface WriteContext {
   readonly redacted: RedactedModel;
 }
 
+/**
+ * Doc 04 §8.7 — every COMMITTED write result, for the realtime gateway. Both writers
+ * (`SchemaWriter`, `GeometryWriter`) publish here after their transaction commits, and
+ * nothing else writes schema rows, so this is the single place a frame originates. SQL
+ * import and snapshot restore route through `SchemaWriter.apply` and publish for free.
+ */
+@Injectable()
+export class SchemaCommits {
+  readonly results = new Subject<SchemaOperationResult>();
+}
+
 @Injectable()
 export class SchemaWriter {
   constructor(
     private readonly prisma: PrismaService,
     private readonly resolver: PermissionResolver,
+    private readonly commits: SchemaCommits,
   ) {}
 
   async apply(batch: SchemaOperationBatch, ctx: WriteContext): Promise<SchemaOperationResult> {
@@ -101,7 +114,11 @@ export class SchemaWriter {
       });
     // Doc 05 §9.3: commit, THEN drop the keys. Correctness rides on the bumped `pg` in the
     // cache key; the DEL only stops dead entries lingering until their TTL.
-    if (changesSkeleton(ops, result.removed)) await this.resolver.invalidate({ project: ctx.projectId });
+    // `notify: false`: this commit's own frame carries the visibility transition.
+    if (changesSkeleton(ops, result.removed)) {
+      await this.resolver.invalidate({ project: ctx.projectId }, { notify: false });
+    }
+    this.commits.results.next(result);
     return result;
   }
 

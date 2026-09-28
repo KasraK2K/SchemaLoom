@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AtomSet, OrgRole, PermissionAtom, RestrictedFieldMode } from '@schemaloom/contracts';
 import type { Redis } from 'ioredis';
+import { Subject as Channel } from 'rxjs';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_CACHE } from '../redis/redis.tokens';
@@ -70,6 +71,13 @@ import {
  * - the grant write path (§7.14) calls `resolveProjectUncached` inside its advisory lock,
  *   then `invalidate({ project })` after the commit.
  */
+/** What a permission bump retired: a project, an org, or one user's reach. */
+export interface AccessScope {
+  readonly project?: string;
+  readonly org?: string;
+  readonly user?: string;
+}
+
 @Injectable()
 export class PermissionResolver {
   private readonly logger = new Logger(PermissionResolver.name);
@@ -269,8 +277,16 @@ export class PermissionResolver {
    * ponytail: a bounded best-effort SCAN. Permission maps for OTHER projects in a bumped
    * org are left to their <=300 s TTL rather than scanned for — they are already
    * unreachable. Upgrade path if Redis memory ever shows up: a per-org key tag.
+   *
+   * Every committed permission bump ends here, which makes it the one hook for doc 05
+   * §9.3's `permissions:changed` signal: `accessChanged` feeds the realtime gateway.
+   * `notify: false` is for the schema writer, whose commit frame already carries the
+   * visibility transition (doc 04 §8.7) — without it every table create would make every
+   * open canvas drop and refetch its model.
    */
-  async invalidate(scope: { project?: string; org?: string; user?: string }): Promise<void> {
+  readonly accessChanged = new Channel<AccessScope>();
+
+  async invalidate(scope: AccessScope, opts: { notify?: boolean } = {}): Promise<void> {
     this.inFlight.clear();
     const patterns: string[] = [];
     if (scope.project !== undefined) {
@@ -279,6 +295,7 @@ export class PermissionResolver {
     if (scope.org !== undefined) patterns.push(`orgmem:3:${scope.org}:*`);
     if (scope.user !== undefined) patterns.push(`orgmem:3:*:${scope.user}:*`);
     for (const pattern of patterns) await this.scanDelete(pattern);
+    if (opts.notify !== false) this.accessChanged.next(scope);
   }
 
   // =====================================================================================

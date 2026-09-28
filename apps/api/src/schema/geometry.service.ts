@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { GeometryBatch, SchemaOperationResult } from './ops';
 import { postImages } from './post-images';
 import type { SchemaDb } from './row-read';
-import type { WriteContext } from './schema-writer.service';
+import { SchemaCommits, type WriteContext } from './schema-writer.service';
 
 /**
  * Doc 04 §8.11 — canvas geometry, THE ONE WRITE THAT IS NOT AN OP.
@@ -32,6 +32,7 @@ export class GeometryWriter {
   constructor(
     private readonly prisma: PrismaService,
     private readonly resolver: PermissionResolver,
+    private readonly commits: SchemaCommits,
   ) {}
 
   async apply(
@@ -42,7 +43,9 @@ export class GeometryWriter {
     const refs: ResourceRef[] = ids.map((id) => ({ type: 'entity', id }));
     this.resolver.assertAll(ctx.map, ctx.skel, refs, 'schema:edit');
 
-    return this.prisma.$transaction(async (tx) => this.run(tx, batch, ctx, ids));
+    const result = await this.prisma.$transaction(async (tx) => this.run(tx, batch, ctx, ids));
+    this.commits.results.next(result);
+    return result;
   }
 
   private async run(

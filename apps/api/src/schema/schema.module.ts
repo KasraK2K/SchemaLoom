@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { GeometryWriter } from './geometry.service';
 import { SchemaController } from './schema.controller';
 import { SchemaLoader } from './schema-loader.service';
-import { SchemaWriter } from './schema-writer.service';
+import { SchemaCommits, SchemaWriter } from './schema-writer.service';
 
 /**
  * Build-order steps 13-14. `PrismaModule` and `AccessModule` are both `@Global()`
@@ -17,7 +17,7 @@ import { SchemaWriter } from './schema-writer.service';
  */
 @Module({
   controllers: [SchemaController],
-  providers: [SchemaLoader, SchemaWriter, GeometryWriter],
-  exports: [SchemaLoader, SchemaWriter],
+  providers: [SchemaLoader, SchemaWriter, GeometryWriter, SchemaCommits],
+  exports: [SchemaLoader, SchemaWriter, SchemaCommits],
 })
 export class SchemaModule {}
