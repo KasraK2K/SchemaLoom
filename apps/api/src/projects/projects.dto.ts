@@ -31,3 +31,8 @@ export const CreateProjectSchema = z.object({
 });
 
 export class CreateProjectDto extends createZodDto(CreateProjectSchema) {}
+
+/** `PATCH /projects/:id` — the name only. The slug stays: URLs carry the id, not the slug. */
+export const UpdateProjectSchema = z.object({ name: z.string().trim().min(1).max(200) });
+
+export class UpdateProjectDto extends createZodDto(UpdateProjectSchema) {}

@@ -51,6 +51,21 @@ export class ProjectsService {
     return toDetail(row, map);
   }
 
+  async rename(projectId: string, name: string): Promise<void> {
+    await this.prisma.project.update({ where: { id: projectId }, data: { name } });
+  }
+
+  /**
+   * Doc 05 §9's row "project soft-deleted → `Project.permGeneration`": the bump is what
+   * retires every cached permission map for it in the same commit.
+   */
+  async softDelete(projectId: string): Promise<void> {
+    await this.prisma.project.update({
+      where: { id: projectId },
+      data: { deletedAt: new Date(), permGeneration: { increment: 1 } },
+    });
+  }
+
   /**
    * Doc 05 §3.2 — `member` and above may create a project and become `manager` on it "via
    * an auto-written grant". The grant is not an afterthought: an org `member` holds NO

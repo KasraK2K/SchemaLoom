@@ -1,11 +1,22 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { OrgRole } from '@schemaloom/contracts';
 import type { Request } from 'express';
-import { RequireOrgRole, RequireProjectAccess, getAccessContext } from '../access';
+import { RequireOrgRole, RequirePermission, RequireProjectAccess, getAccessContext } from '../access';
 import { getSubject } from '../auth';
 import type { ProjectDetail } from './project-views';
-import { CreateProjectDto } from './projects.dto';
+import { CreateProjectDto, UpdateProjectDto } from './projects.dto';
 import { ProjectsService } from './projects.service';
 
 /**
@@ -71,5 +82,37 @@ export class ProjectsController {
       throw new ForbiddenException({ code: 'route_not_classified' });
     }
     return this.projects.create(body, subject.userId);
+  }
+
+  /**
+   * MARKER: `@RequirePermission('sharing:manage')` at the project. Doc 05 names no atom
+   * for project administration; `sharing:manage` is the one only a project's manager (and
+   * org owner/admin, R13) holds, which is who may already decide who sees the project at
+   * all. Not share-link reachable: neither route is in `SHARE_LINK_ROUTES`.
+   */
+  @ApiOperation({ summary: 'Rename a project' })
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @Patch(':projectId')
+  async update(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: UpdateProjectDto,
+  ): Promise<ProjectDetail> {
+    const context = getAccessContext(req);
+    if (context?.projectId !== projectId) {
+      throw new ForbiddenException({ code: 'route_not_classified' });
+    }
+    await this.projects.rename(projectId, body.name);
+    return this.projects.detail(projectId, context.map);
+  }
+
+  /** Soft delete (C8 tombstone). The resolver skips tombstoned projects, so every route
+   *  answers 404 for it from the next request on, share links included. */
+  @ApiOperation({ summary: 'Delete a project' })
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @HttpCode(204)
+  @Delete(':projectId')
+  async remove(@Param('projectId') projectId: string): Promise<void> {
+    await this.projects.softDelete(projectId);
   }
 }

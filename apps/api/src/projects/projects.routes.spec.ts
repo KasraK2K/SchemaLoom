@@ -4,6 +4,7 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { describe, expect, it } from 'vitest';
 import {
   ORG_ROLE_META,
+  PERM_META,
   PROJECT_ACCESS_META,
   assertRouteTable,
   isShareLinkRoute,
@@ -57,11 +58,21 @@ describe('ProjectsController route markers', () => {
   const routes = sweep();
   const route = (handler: string): Swept | undefined => routes.find((r) => r.handler === handler);
 
-  it('registers the project shell and the create route', () => {
+  it('registers the project shell, create, rename and delete routes', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
+      'DELETE /api/projects/:projectId',
       'GET /api/projects/:projectId',
+      'PATCH /api/projects/:projectId',
       'POST /api/projects',
     ]);
+  });
+
+  it('gates rename and delete on sharing:manage at the project, not share-link reachable', () => {
+    for (const handler of ['update', 'remove']) {
+      const r = route(handler);
+      expect(r?.markers).toEqual([PERM_META]);
+      expect(r && isShareLinkRoute(r.method, r.path)).toBe(false);
+    }
   });
 
   it('passes the boot sweep: exactly one marker each', () => {
