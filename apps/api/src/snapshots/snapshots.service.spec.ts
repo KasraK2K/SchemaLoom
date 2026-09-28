@@ -3,6 +3,7 @@ import type { EngineDefinition, EngineRegistry } from '@schemaloom/engine-sdk';
 import {
   redact,
   type RawSchemaModel,
+  type SchemaModel,
   type VisibilityContext,
 } from '@schemaloom/schema-model';
 import { describe, expect, it, vi, type Mock } from 'vitest';
@@ -13,6 +14,7 @@ import type { SchemaOperationBatch, SchemaWriter } from '../schema';
 import { fakePrisma, type Row, type Store } from '../schema/fake-prisma';
 import { PROJECT, baseStore, entityRow, fieldRow, projectRow, storeContext } from '../schema/fixture';
 import { blobToLive } from './live-ir';
+import { liveFrom } from './test-fixture';
 import { SnapshotEngineMismatchException } from './restore-guards';
 import { SnapshotsService, type SnapshotContext } from './snapshots.service';
 
@@ -50,7 +52,7 @@ interface Harness {
 
 function harness(
   seed: Partial<Store>,
-  over: { context?: Partial<VisibilityContext>; engine?: string } = {},
+  over: { context?: Partial<VisibilityContext>; engine?: string; imported?: SchemaModel } = {},
 ): Harness {
   const fake = fakePrisma(seed);
   const base = fake.client as unknown as Record<string, unknown>;
@@ -119,6 +121,19 @@ function harness(
       { apply } as unknown as SchemaWriter,
       filter,
       gate,
+      {
+        tryGet: () =>
+          ({
+            capabilities: {
+              importFormats: [{ id: 'ddl' }],
+              defaultNamespaceName: 'public',
+              identifiers: { foldsTo: 'lower' },
+            },
+            importer: {
+              import: () => Promise.resolve({ model: over.imported, report: { statementCount: 1 } }),
+            },
+          }) as unknown as EngineDefinition,
+      } as unknown as EngineRegistry,
     ),
     apply,
     rows,
@@ -310,5 +325,37 @@ describe('SnapshotsService.restore', () => {
 
     await h.service.restore(CTX, id);
     expect(h.apply).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SnapshotsService.importSource', () => {
+  /** What the importer hands back: its OWN default namespace id, as a real one does. */
+  const importedModel = async (): Promise<SchemaModel> => {
+    const live = await liveFrom(storeOf({ entity: [entityRow('ent_a')] }));
+    return JSON.parse(JSON.stringify(live).replaceAll('"ns_public"', '"ns_imported"')) as SchemaModel;
+  };
+
+  it('creates the imported objects inside the project’s own default namespace', async () => {
+    const h = harness(storeOf(), { imported: await importedModel() });
+
+    await h.service.importSource(CTX, 'CREATE TABLE a ();');
+
+    const ops = h.apply.mock.calls[0]?.[0].ops;
+    expect(ops).toEqual([
+      {
+        op: 'create',
+        type: 'entity',
+        object: expect.objectContaining({ id: 'ent_a', namespaceId: 'ns_public' }) as unknown,
+      },
+    ]);
+  });
+
+  it('refuses a project that already has tables (no merge rules yet)', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_b')] }), { imported: await importedModel() });
+
+    await expect(h.service.importSource(CTX, 'CREATE TABLE a ();')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(h.apply).not.toHaveBeenCalled();
   });
 });

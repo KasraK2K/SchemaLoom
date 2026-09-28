@@ -1,18 +1,27 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  PayloadTooLargeException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import type { EngineRegistry, ImportReport } from '@schemaloom/engine-sdk';
 import {
   RawSchemaModel,
   diffModels,
   type RedactedModel,
   type SchemaDiff,
+  type SchemaModel,
   type SnapshotRef,
 } from '@schemaloom/schema-model';
 import { randomUUID } from 'node:crypto';
 import { VisibilityFilter, type ProjectPermissionMap, type ProjectSkeleton } from '../access';
 import type { Subject } from '../auth';
-import { EngineGate } from '../engines';
+import { ENGINE_REGISTRY, EngineGate } from '../engines';
 import { PrismaService } from '../prisma/prisma.service';
-import { SchemaWriter, type SchemaOperationResult } from '../schema';
-import { blobToLive, loadLiveProject, snapshotBlob, type LiveIr } from './live-ir';
+import { SchemaWriter, type SchemaOperationBatch, type SchemaOperationResult } from '../schema';
+import { blobToLive, loadLiveProject, snapshotBlob, type LiveIr, type LiveProject } from './live-ir';
 import { assertFullProjectView, assertSnapshotEngine } from './restore-guards';
 import { planRestore } from './restore-plan';
 
@@ -122,6 +131,26 @@ const refOf = (row: SnapshotRow): SnapshotRef => ({
 const restoredConflict = (projectId: string): ConflictException =>
   new ConflictException({ code: 'project_restored', projectId });
 
+/** Doc 00 Q22 — larger sources belong to the BullMQ import job, which does not exist yet. */
+const SYNC_IMPORT_MAX_BYTES = 5_000_000;
+
+/**
+ * The importer mints its own default namespace; the project already has one, and a plan
+ * that deleted it would orphan every entity. Ids are opaque unique strings, so rewriting
+ * the imported id wherever it appears — then re-parsing through `blobToLive` — retargets
+ * every reference to it without knowing which fields hold namespace ids.
+ */
+function adoptDefaultNamespace(imported: SchemaModel, live: LiveIr): LiveIr {
+  const find = (m: SchemaModel) =>
+    Object.values(m.objects.namespace).find((namespace) => namespace.isDefault)?.id;
+  const from = find(imported);
+  const to = find(live);
+  const json = JSON.stringify(imported);
+  return blobToLive(
+    JSON.parse(from === undefined || to === undefined ? json : json.replaceAll(`"${from}"`, `"${to}"`)),
+  );
+}
+
 @Injectable()
 export class SnapshotsService {
   constructor(
@@ -129,6 +158,7 @@ export class SnapshotsService {
     private readonly writer: SchemaWriter,
     private readonly filter: VisibilityFilter,
     private readonly gate: EngineGate,
+    @Inject(ENGINE_REGISTRY) private readonly registry: EngineRegistry,
   ) {}
 
   /**
@@ -215,6 +245,75 @@ export class SnapshotsService {
       batchId,
       `Restore "${row.name}"`,
     );
+    return this.applyPlanned(ctx, project, batchId, batch);
+  }
+
+  /**
+   * Doc 00 Q22 — SQL import, synchronous up to 5 MB. The engine's importer builds a
+   * standalone IR (doc 03 §9) and it is applied exactly like a restore: diff against live,
+   * one batch through `SchemaWriter`. R21′ applies for the same reason it does to restore.
+   *
+   * ponytail: EMPTY projects only. Merging into an existing schema needs the four merge
+   * rules doc 03 §9.2 leaves to the import/export document (collision key, doc/position
+   * retention, retargeting); without them a diff against live would delete every table the
+   * source does not mention. Lift the 409 when those rules exist.
+   */
+  async importSource(
+    ctx: SnapshotContext,
+    source: string,
+  ): Promise<{ result: SchemaOperationResult; report: ImportReport }> {
+    const visibility = this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel);
+    assertFullProjectView(visibility);
+
+    if (Buffer.byteLength(source, 'utf8') > SYNC_IMPORT_MAX_BYTES) {
+      throw new PayloadTooLargeException({ code: 'import_too_large', max: SYNC_IMPORT_MAX_BYTES });
+    }
+
+    const project = await loadLiveProject(this.prisma, ctx.projectId);
+    if (Object.keys(project.live.objects.entity).length > 0) {
+      throw new ConflictException({ code: 'import_requires_empty_project' });
+    }
+
+    const engine = this.registry.tryGet(project.engineId);
+    const format = engine?.capabilities.importFormats[0];
+    if (engine?.importer === undefined || format === undefined) {
+      throw new UnprocessableEntityException({ code: 'engine.import_unavailable' });
+    }
+
+    const { model, report } = await engine.importer.import(
+      source,
+      {
+        format: format.id,
+        defaultNamespace: engine.capabilities.defaultNamespaceName,
+        caseFolding:
+          engine.capabilities.identifiers.foldsTo === 'none'
+            ? 'preserve'
+            : engine.capabilities.identifiers.foldsTo,
+        engineOptions: {},
+      },
+      { projectId: ctx.projectId, serverVersion: project.live.engineVersion, newId: randomUUID },
+    );
+
+    const batchId = randomUUID();
+    const batch = planRestore(
+      project.live,
+      adoptDefaultNamespace(model, project.live),
+      { kind: 'import', label: 'SQL import' },
+      batchId,
+      'Import SQL',
+      {},
+    );
+    return { result: await this.applyPlanned(ctx, project, batchId, batch), report };
+  }
+
+  /** The shared tail of restore and import: an empty plan is a no-op, anything else is
+   *  ONE batch through the ordinary write path. */
+  private async applyPlanned(
+    ctx: SnapshotContext,
+    project: LiveProject,
+    batchId: string,
+    batch: SchemaOperationBatch | null,
+  ): Promise<SchemaOperationResult> {
     if (batch === null) {
       // The snapshot already matches live. Writing an empty batch would bump the
       // revision and broadcast a reload for nothing.

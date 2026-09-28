@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -23,7 +24,10 @@ import type { AppEnv } from './config/env';
 async function bootstrap(): Promise<void> {
   // `bufferLogs` holds start-up lines until pino is wired, so a boot failure is
   // logged in the same format as everything else.
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  // Doc 00 Q22: SQL import is synchronous up to 5 MB of source, which arrives JSON-encoded.
+  // Express's 100 KB default also rejected large `schema/ops` batches (MAX_OPS_PER_BATCH).
+  app.useBodyParser('json', { limit: '6mb' });
   app.useLogger(app.get(Logger));
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
 

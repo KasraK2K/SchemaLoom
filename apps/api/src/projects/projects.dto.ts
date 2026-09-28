@@ -19,7 +19,9 @@ import { z } from 'zod';
  */
 export const CreateProjectSchema = z.object({
   organizationId: z.string().min(1).max(64),
-  workspaceId: z.string().min(1).max(64),
+  /** Omitted → the org's first workspace, created on demand. No route lists workspaces
+   *  yet, so the web client has nothing to put here. */
+  workspaceId: z.string().min(1).max(64).optional(),
   name: z.string().trim().min(1).max(200),
   description: z.string().max(2000).optional(),
   /** An `EngineRegistry` key. Validated against the registry, not against a list here. */

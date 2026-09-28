@@ -5,7 +5,8 @@ import type { Request } from 'express';
 import { RequirePermission, getAccessContext } from '../access';
 import { getSubject } from '../auth';
 import type { SchemaOperationResult } from '../schema';
-import { CreateSnapshotDto } from './snapshots.dto';
+import type { ImportReport } from '@schemaloom/engine-sdk';
+import { CreateSnapshotDto, ImportSourceDto } from './snapshots.dto';
 import {
   SnapshotsService,
   type SnapshotContext,
@@ -46,7 +47,7 @@ export class SnapshotsController {
     @Param('projectId') projectId: string,
     @Body() body: CreateSnapshotDto,
   ): Promise<SnapshotSummary> {
-    return this.snapshots.create(this.context(req, projectId), body);
+    return this.snapshots.create(snapshotContext(req, projectId), body);
   }
 
   @ApiOperation({ summary: 'List the project snapshots, newest first' })
@@ -64,7 +65,7 @@ export class SnapshotsController {
     @Param('projectId') projectId: string,
     @Param('snapshotId') snapshotId: string,
   ): Promise<SnapshotView> {
-    return this.snapshots.read(this.context(req, projectId), snapshotId);
+    return this.snapshots.read(snapshotContext(req, projectId), snapshotId);
   }
 
   /** Two snapshots, both redacted first (L18), diffed by step 18's `diffModels`. */
@@ -77,7 +78,7 @@ export class SnapshotsController {
     @Param('fromId') fromId: string,
     @Param('toId') toId: string,
   ): Promise<SchemaDiff> {
-    return this.snapshots.diff(this.context(req, projectId), fromId, toId);
+    return this.snapshots.diff(snapshotContext(req, projectId), fromId, toId);
   }
 
   /** §8.8 — planned from unredacted models, applied through the step-14 write path. */
@@ -89,33 +90,55 @@ export class SnapshotsController {
     @Param('projectId') projectId: string,
     @Param('snapshotId') snapshotId: string,
   ): Promise<SchemaOperationResult> {
-    return this.snapshots.restore(this.context(req, projectId), snapshotId);
+    return this.snapshots.restore(snapshotContext(req, projectId), snapshotId);
   }
+}
 
-  /**
-   * `PermissionGuard` resolved the map AND the skeleton for a `@RequirePermission` route
-   * (§10.4: N locators cost one `resolveProject` and one `skeleton`), so this is a read of
-   * work already done, never a second resolve.
-   */
-  private context(req: Request, projectId: string): SnapshotContext {
-    const access = getAccessContext(req);
-    const subject = getSubject(req);
-    if (
-      access === null ||
-      subject === null ||
-      access.projectId !== projectId ||
-      access.skel === null
-    ) {
-      // Unreachable behind the guard; kept because a handler that trusts a guard is a
-      // handler that opens a route the day that guard moves.
-      throw new ForbiddenException({ code: 'route_not_classified' });
-    }
-    return {
-      projectId,
-      subject,
-      actorUserId: subject.kind === 'user' ? subject.userId : null,
-      map: access.map,
-      skel: access.skel,
-    };
+/**
+ * `PermissionGuard` resolved the map AND the skeleton for a `@RequirePermission` route
+ * (§10.4: N locators cost one `resolveProject` and one `skeleton`), so this is a read of
+ * work already done, never a second resolve.
+ */
+function snapshotContext(req: Request, projectId: string): SnapshotContext {
+  const access = getAccessContext(req);
+  const subject = getSubject(req);
+  if (
+    access === null ||
+    subject === null ||
+    access.projectId !== projectId ||
+    access.skel === null
+  ) {
+    // Unreachable behind the guard; kept because a handler that trusts a guard is a
+    // handler that opens a route the day that guard moves.
+    throw new ForbiddenException({ code: 'route_not_classified' });
+  }
+  return {
+    projectId,
+    subject,
+    actorUserId: subject.kind === 'user' ? subject.userId : null,
+    map: access.map,
+    skel: access.skel,
+  };
+}
+
+/**
+ * Doc 05 §3.1 names `POST /projects/:id/import` as a sibling of restore: same atom, same
+ * R21′ check (in the service), same single write path. Its own class only because the
+ * snapshot controller's path prefix is `/snapshots`.
+ */
+@ApiTags('snapshots')
+@Controller('projects/:projectId/import')
+export class ImportController {
+  constructor(private readonly snapshots: SnapshotsService) {}
+
+  @ApiOperation({ summary: 'Import SQL DDL into an empty project' })
+  @RequirePermission('schema:edit', { project: 'projectId' })
+  @Post()
+  importSource(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: ImportSourceDto,
+  ): Promise<{ result: SchemaOperationResult; report: ImportReport }> {
+    return this.snapshots.importSource(snapshotContext(req, projectId), body.source);
   }
 }

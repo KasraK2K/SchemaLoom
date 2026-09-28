@@ -13,3 +13,11 @@ export const CreateSnapshotSchema = z.object({
 });
 
 export class CreateSnapshotDto extends createZodDto(CreateSnapshotSchema) {}
+
+/** `POST /projects/:projectId/import`. The byte cap is the service's (it is UTF-8 bytes,
+ *  not characters); this bound only stops an absurd body before it reaches the importer. */
+export const ImportSourceSchema = z.object({
+  source: z.string().min(1).max(5_000_000),
+});
+
+export class ImportSourceDto extends createZodDto(ImportSourceSchema) {}

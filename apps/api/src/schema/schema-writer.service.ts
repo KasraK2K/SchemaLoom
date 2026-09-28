@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import type { PermissionAtom } from '@schemaloom/contracts';
 import type { Id, IrObject, IrObjectType, RedactedModel } from '@schemaloom/schema-model';
 import {
@@ -78,7 +84,21 @@ export class SchemaWriter {
     this.assertPermissions(batch.ops, ctx);
 
     const ops = sortOps(batch.ops);
-    const result = await this.prisma.$transaction(async (tx) => this.run(tx, ops, batch, ctx));
+    const result = await this.prisma
+      .$transaction(async (tx) => this.run(tx, ops, batch, ctx))
+      .catch((error: unknown) => {
+        // A partial `lower(name)` unique index (migration 0002) is the arbiter of name
+        // collisions; surfacing its P2002 as a 500 told the user nothing. 422, not 409, so
+        // restore's "409 means the project moved" conversion does not swallow it.
+        if ((error as { code?: unknown }).code === 'P2002') {
+          const meta = (error as { meta?: { modelName?: unknown } }).meta;
+          throw new UnprocessableEntityException({
+            code: 'duplicate_name',
+            resourceType: meta?.modelName ?? null,
+          });
+        }
+        throw error;
+      });
     // Doc 05 §9.3: commit, THEN drop the keys. Correctness rides on the bumped `pg` in the
     // cache key; the DEL only stops dead entries lingering until their TTL.
     if (changesSkeleton(ops, result.removed)) await this.resolver.invalidate({ project: ctx.projectId });
@@ -91,11 +111,13 @@ export class SchemaWriter {
    * checks invisibility across every ref before permission on any of them.
    */
   private assertPermissions(ops: readonly SchemaOperation[], ctx: WriteContext): void {
+    const scopeOfNew = scopeOfCreated(ops, ctx.projectId);
     const byAtom = new Map<PermissionAtom, Map<string, ResourceRef>>();
     for (const op of ops) {
       for (const requirement of requirementsOf(op, { model: ctx.redacted })) {
+        const ref = scopeOfNew(requirement.ref);
         const refs = byAtom.get(requirement.atom) ?? new Map<string, ResourceRef>();
-        refs.set(`${requirement.ref.type}:${requirement.ref.id}`, requirement.ref);
+        refs.set(`${ref.type}:${ref.id}`, ref);
         byAtom.set(requirement.atom, refs);
       }
     }
@@ -338,6 +360,34 @@ export class SchemaWriter {
     }
     return object;
   }
+}
+
+/**
+ * An entity or area CREATED in this batch is not in the skeleton yet, so `assertAll`
+ * would 404 a field, index or link that names it — which made "a table and its columns in
+ * one batch" (SQL import, a pasted table) impossible. No grant can name an id that does
+ * not exist, so the new object's effective scope is exactly the one it is being created
+ * in: its area if it has one, else the project. Chains through a new area to the project.
+ */
+function scopeOfCreated(
+  ops: readonly SchemaOperation[],
+  projectId: Id,
+): (ref: ResourceRef) => ResourceRef {
+  const project: ResourceRef = { type: 'project', id: projectId };
+  const newAreas = new Set<Id>();
+  const newEntities = new Map<Id, Id | null>();
+  for (const op of ops) {
+    if (op.op !== 'create') continue;
+    if (op.type === 'area') newAreas.add(op.object.id);
+    if (op.type === 'entity') newEntities.set(op.object.id, op.object.areaId);
+  }
+  const ofArea = (id: Id): ResourceRef => (newAreas.has(id) ? project : { type: 'area', id });
+  return (ref) => {
+    if (ref.type === 'area') return ofArea(ref.id);
+    if (ref.type !== 'entity' || !newEntities.has(ref.id)) return ref;
+    const areaId = newEntities.get(ref.id) ?? null;
+    return areaId === null ? project : ofArea(areaId);
+  };
 }
 
 /**

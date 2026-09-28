@@ -331,6 +331,43 @@ describe('SchemaWriter — batch mechanics', () => {
     expect(refs).toEqual([{ type: 'entity', id: 'ent_orders' }]);
   });
 
+  it('checks a field on an entity created in the SAME batch against the entity’s scope', async () => {
+    const { writer, context, assertAll } = harness();
+    await writer.apply(
+      batch([
+        {
+          op: 'create',
+          type: 'entity',
+          object: { id: 'ent_new', name: 'new', engineProps: {}, namespaceId: 'ns_public', kind: 'table', areaId: null, position: { x: 0, y: 0 }, color: null },
+        },
+        {
+          op: 'create',
+          type: 'field',
+          object: { id: 'fld_new', name: 'id', engineProps: {}, entityId: 'ent_new', parentFieldId: null, type: { name: 'text' }, isNullable: true, isRestricted: false, isPii: false, isDeprecated: false },
+        },
+      ]),
+      await context(),
+    );
+    // Not `entity:ent_new`: the skeleton has never heard of it, and assertAll would 404.
+    const refs = assertAll.mock.calls[0]?.[2] as { type: string; id: string }[];
+    expect(refs).toEqual([{ type: 'project', id: PROJECT }]);
+  });
+
+  it('stores an unnamed constraint as NULL, so two of them do not collide', async () => {
+    const { prisma, writer, context } = harness();
+    await writer.apply(
+      batch([
+        {
+          op: 'create',
+          type: 'constraint',
+          object: { id: 'con_u', name: '', engineProps: {}, entityId: 'ent_users', kind: 'unique', fieldIds: ['fld_id'] },
+        },
+      ]),
+      await context(),
+    );
+    expect(prisma.callsTo('constraint', 'create')[0]?.args.data).toMatchObject({ name: null });
+  });
+
   it('assigns a monotonic seq from the project row, inside the transaction', async () => {
     const { prisma, writer, context } = harness();
     const result = await writer.apply(

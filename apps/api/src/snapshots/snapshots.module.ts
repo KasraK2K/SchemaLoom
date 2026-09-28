@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SchemaModule } from '../schema';
-import { SnapshotsController } from './snapshots.controller';
+import { ImportController, SnapshotsController } from './snapshots.controller';
 import { SnapshotsService } from './snapshots.service';
 
 /**
@@ -14,7 +14,7 @@ import { SnapshotsService } from './snapshots.service';
  */
 @Module({
   imports: [SchemaModule],
-  controllers: [SnapshotsController],
+  controllers: [SnapshotsController, ImportController],
   providers: [SnapshotsService],
   exports: [SnapshotsService],
 })

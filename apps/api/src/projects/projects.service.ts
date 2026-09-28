@@ -121,10 +121,13 @@ export class ProjectsService {
     // client chose and the row is written into whatever workspace it named — someone
     // else's. `404`, not `403`: a workspace in an org the caller cannot see must not be
     // distinguishable from one that does not exist.
-    const workspace = await tx.workspace.findFirst({
-      where: { id: input.workspaceId, organizationId: input.organizationId },
-      select: { id: true },
-    });
+    const workspace =
+      input.workspaceId === undefined
+        ? await this.defaultWorkspace(tx, input.organizationId)
+        : await tx.workspace.findFirst({
+            where: { id: input.workspaceId, organizationId: input.organizationId },
+            select: { id: true },
+          });
     if (!workspace) throw new NotFoundException({ code: 'not_found' });
 
     const project = await tx.project.create({
@@ -179,5 +182,31 @@ export class ProjectsService {
     });
 
     return project;
+  }
+
+  /**
+   * The org's first workspace by sidebar order, or a new "General" one. Creating an org
+   * does not create a workspace, so a brand-new org has none until its first project.
+   *
+   * ponytail: two concurrent first creates can both miss and race on
+   * `(organizationId, slug)`; the loser gets `project_slug_taken`'s 409 and a retry
+   * succeeds. Create the workspace with the org if that ever matters.
+   */
+  private async defaultWorkspace(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+  ): Promise<{ id: string }> {
+    const existing = await tx.workspace.findFirst({
+      where: { organizationId },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    });
+    return (
+      existing ??
+      tx.workspace.create({
+        data: { organizationId, name: 'General', slug: 'general' },
+        select: { id: true },
+      })
+    );
   }
 }

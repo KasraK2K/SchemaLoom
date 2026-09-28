@@ -50,13 +50,13 @@ const CREATE_DEFAULTS: Partial<Record<IrObjectType, Readonly<Record<string, unkn
  * through the SAME zod boundary a hand edit goes through is what keeps restore from being
  * a privileged bulk overwrite with its own rules.
  */
-function toOperation(op: RestoreOp): unknown {
+function toOperation(op: RestoreOp, createDefaults = CREATE_DEFAULTS): unknown {
   switch (op.op) {
     case 'create':
       return {
         op: 'create',
         type: op.type,
-        object: { ...op.object, ...(CREATE_DEFAULTS[op.type] ?? {}) },
+        object: { ...op.object, ...(createDefaults[op.type] ?? {}) },
       };
     case 'update': {
       const frozen = new Set(FROZEN[op.type] ?? []);
@@ -76,6 +76,8 @@ export const restoreDiff = (live: LiveIr, snapshot: LiveIr, to: SnapshotRef): Sc
   diffModels(live, snapshot, { from: { kind: 'live' }, to });
 
 /**
+ * @param createDefaults R28's fail-closed defaults. SQL import passes `{}`: a column read
+ *   from DDL has never been marked Restricted, so there is no earlier decision to preserve.
  * @returns `null` when the snapshot already matches live — there is nothing to write, and
  *   an empty batch fails `ops.min(1)` at the boundary.
  */
@@ -85,8 +87,11 @@ export function planRestore(
   to: SnapshotRef,
   batchId: string,
   label: string,
+  createDefaults = CREATE_DEFAULTS,
 ): SchemaOperationBatch | null {
-  const ops = opsFromDiff(restoreDiff(live, snapshot, to), live).map(toOperation);
+  const ops = opsFromDiff(restoreDiff(live, snapshot, to), live).map((op) =>
+    toOperation(op, createDefaults),
+  );
   if (ops.length === 0) return null;
   if (ops.length > MAX_OPS_PER_BATCH) {
     // §8.2's bound is a DoS guard on the request body, and a restore that exceeds it needs

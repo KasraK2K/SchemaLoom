@@ -59,6 +59,13 @@ const typeColumns = (type: Field['type']) => ({
   typeDimensions: type.dimensions ?? 0,
 });
 
+/**
+ * Constraint and link names are nullable in the store and `''` in the IR (assembly maps
+ * null → ''). Writing `''` back would put every unnamed constraint on the partial
+ * `lower(name)` unique index — which skips only NULL — so a second unnamed PK collides.
+ */
+const storedName = (name: string): string | null => (name === '' ? null : name);
+
 /** All four undefined when the patch does not name `type` — Prisma's "leave it alone". */
 const typeColumnsPatch = (type: Field['type'] | undefined) =>
   type === undefined
@@ -204,7 +211,7 @@ export async function createRow(
           id: op.object.id,
           projectId,
           entityId: op.object.entityId,
-          name: op.object.name,
+          name: storedName(op.object.name),
           kind: op.object.kind,
           expression: expressionOf(op.object.engineProps) ?? null,
           engineProps: json(op.object.engineProps),
@@ -231,7 +238,7 @@ export async function createRow(
         data: {
           id: op.object.id,
           projectId,
-          name: op.object.name,
+          name: storedName(op.object.name),
           kind: op.object.kind,
           cardinality: CARDINALITY[op.object.cardinality],
           sourceEntityId: op.object.from.entityId,
@@ -354,7 +361,7 @@ async function scalarUpdate(
         where,
         data: {
           ...bump,
-          name: p.name,
+          name: p.name === undefined ? undefined : storedName(p.name),
           kind: p.kind,
           entityId: p.entityId,
           expression: expressionOf(p.engineProps),
@@ -384,7 +391,7 @@ async function scalarUpdate(
         where,
         data: {
           ...bump,
-          name: p.name,
+          name: p.name === undefined ? undefined : storedName(p.name),
           kind: p.kind,
           cardinality: p.cardinality === undefined ? undefined : CARDINALITY[p.cardinality],
           sourceEntityId: p.from?.entityId,
