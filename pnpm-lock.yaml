@@ -391,6 +391,9 @@ importers:
       '@schemaloom/schema-model':
         specifier: workspace:*
         version: link:../../schema-model
+      libpg-query:
+        specifier: 'catalog:'
+        version: 17.7.4
       zod:
         specifier: 'catalog:'
         version: 4.6.5
@@ -401,9 +404,6 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 9.39.5(jiti@2.7.0)
-      libpg-query:
-        specifier: 'catalog:'
-        version: 17.7.4
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.28)(tsx@4.23.15)(typescript@5.9.3)

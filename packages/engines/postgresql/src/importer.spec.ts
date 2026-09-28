@@ -328,3 +328,15 @@ function exportInput(result: ImportResult): Parameters<typeof EXPORTER.export>[0
     context: { projectId: 'p1', serverVersion: '16' },
   };
 }
+
+describe('a relation declared twice', () => {
+  it('fails the second CREATE the way PostgreSQL would, and keeps only the first', async () => {
+    const { model, report } = await importDdl(
+      'CREATE TABLE a (id int PRIMARY KEY);\nCREATE TABLE a (id int PRIMARY KEY);',
+    );
+    expect(Object.values(model.objects.entity)).toHaveLength(1);
+    expect(Object.values(model.objects.constraint)).toHaveLength(1);
+    expect(report.statements.map((s) => s.status)).toEqual(['applied', 'failed']);
+    expect(report.statements[1]?.reason).toBe('relation "a" already exists');
+  });
+});

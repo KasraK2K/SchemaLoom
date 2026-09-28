@@ -132,6 +132,11 @@ export class ImportModel {
     return created;
   }
 
+  /** Exact (namespace, folded name) match — unlike `findEntity`, no cross-namespace guess. */
+  hasEntity(schema: string | undefined, name: string): boolean {
+    return this.entityByKey.has(this.entityKey(schema ?? this.defaultNamespaceName, name));
+  }
+
   findEntity(schema: string | undefined, name: string): Entity | undefined {
     const direct = this.entityByKey.get(
       this.entityKey(schema ?? this.defaultNamespaceName, name),

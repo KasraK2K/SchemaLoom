@@ -62,6 +62,7 @@ interface StatementState {
   readonly parsed: ParsedStatement;
   readonly produced: IrObjectRef[];
   readonly losses: string[];
+  failure: string | null;
 }
 
 function parseErrorMessage(error: unknown): string {
@@ -83,6 +84,7 @@ function emptyCounts(): Record<ImportStatementStatus, number> {
 function statusOf(state: StatementState): { status: ImportStatementStatus; reason: string | null } {
   const { classification, parseError } = state.parsed;
   if (parseError !== null) return { status: 'failed', reason: parseError };
+  if (state.failure !== null) return { status: 'failed', reason: state.failure };
   if (classification.phase === 'ignored') {
     return { status: 'ignored', reason: classification.reason ?? 'not part of the schema model' };
   }
@@ -158,12 +160,16 @@ async function importDdl(
     parsed: entry,
     produced: [],
     losses: [],
+    failure: null,
   }));
 
   const contextFor = (state: StatementState): StatementContext => ({
     model,
     text: state.parsed.chunk.text,
     loss: (message) => state.losses.push(message),
+    fail: (message) => {
+      state.failure = message;
+    },
     produced: (ref) => state.produced.push(ref),
   });
 
@@ -179,7 +185,8 @@ async function importDdl(
   // --- pass 2: constraints, indexes, foreign keys ----------------------------------------
   for (const state of states) {
     const { phase } = state.parsed.classification;
-    if (state.parsed.parseError !== null) continue;
+    // A statement pass 1 refused must not attach its constraints to the FIRST definition.
+    if (state.parsed.parseError !== null || state.failure !== null) continue;
     if (phase === 'dependent' || phase === 'both') {
       dependentStatement(state.parsed.statement, contextFor(state));
     }

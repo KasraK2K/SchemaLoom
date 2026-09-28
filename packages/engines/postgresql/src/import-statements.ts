@@ -36,7 +36,17 @@ export interface StatementContext {
   /** the statement's own text; every `location` in its parse tree is an offset into this */
   readonly text: string;
   loss(message: string): void;
+  /** The statement is refused outright — what PostgreSQL itself would reject. */
+  fail(message: string): void;
   produced(ref: IrObjectRef): void;
+}
+
+/** PostgreSQL's own answer to a second CREATE of the same relation. Checked BEFORE
+ *  `addEntity`, so the duplicate never reaches the model (or the store's unique index). */
+function alreadyExists(target: { schema?: string; name: string }, ctx: StatementContext): boolean {
+  if (!ctx.model.hasEntity(target.schema, target.name)) return false;
+  ctx.fail(`relation "${target.name}" already exists`);
+  return true;
 }
 
 export type StatementPhase = 'declare' | 'dependent' | 'both' | 'ignored' | 'unsupported';
@@ -253,6 +263,7 @@ function declareView(node: AstNode, ctx: StatementContext): void {
   if (checkOption === 'LOCAL_CHECK_OPTION') props.checkOption = 'local';
   else if (checkOption === 'CASCADED_CHECK_OPTION') props.checkOption = 'cascaded';
 
+  if (alreadyExists(target, ctx)) return;
   const created = ctx.model.addEntity(target.schema, target.name, 'view', props);
   ctx.produced({ type: 'entity', id: created.id });
   declareViewColumns(node.query, created, ctx);
@@ -277,6 +288,7 @@ function declareMaterializedView(node: AstNode, ctx: StatementContext): void {
   const tablespace = into === undefined ? undefined : str(into, 'tableSpaceName');
   if (tablespace !== undefined) props.tablespace = tablespace;
 
+  if (alreadyExists(target, ctx)) return;
   const created = ctx.model.addEntity(target.schema, target.name, 'materializedView', props);
   ctx.produced({ type: 'entity', id: created.id });
   declareViewColumns(node.query, created, ctx);
@@ -338,6 +350,7 @@ function declareTable(node: AstNode, ctx: StatementContext): void {
     ctx.loss('table inheritance is not part of the schema model');
   }
 
+  if (alreadyExists(target, ctx)) return;
   const entity = ctx.model.addEntity(target.schema, target.name, 'table', props);
   ctx.produced({ type: 'entity', id: entity.id });
 

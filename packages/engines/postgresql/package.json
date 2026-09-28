@@ -27,12 +27,12 @@
   "dependencies": {
     "@schemaloom/engine-sdk": "workspace:*",
     "@schemaloom/schema-model": "workspace:*",
+    "libpg-query": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@schemaloom/config": "workspace:*",
     "eslint": "catalog:",
-    "libpg-query": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
