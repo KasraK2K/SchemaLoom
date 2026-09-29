@@ -205,3 +205,15 @@ Phase 1 was designed before any code was written. The documents are in `docs/pha
 | `05-permission-resolution.md` | Atoms, the resolver, VisibilityFilter, the leak audit                 |
 
 `RECONCILIATION.md` takes precedence where a design document disagrees with it.
+
+---
+
+## License
+
+SchemaLoom is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE)
+with additional terms. You may use, study, modify, and share it for personal and other
+noncommercial purposes. You may not sell it, offer it as a paid service, or redistribute it
+under another name; modified versions must credit SchemaLoom by Kasra Karami. For
+commercial licensing, contact Kasra_K2K@yahoo.com.
+
+Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
