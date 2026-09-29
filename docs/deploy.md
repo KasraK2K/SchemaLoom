@@ -1,22 +1,26 @@
 # Deploying SchemaLoom
 
-This follows the Q14 default in `docs/phase1/00-OVERVIEW.md`: **the web app on Vercel and the
-api in a container**, with both under one registrable domain (Q13), for example
-`app.example.com` and `api.example.com`.
+**The web app and the api must share one hostname**, for example `app.example.com`, with a
+reverse proxy sending `/api/*` and `/socket.io/*` to the api and everything else to the web
+app. The api refuses to boot when `API_PUBLIC_URL` and `WEB_PUBLIC_URL` name different hosts.
 
-| Piece                                                          | Runs on                                | Built from                              |
-| -------------------------------------------------------------- | -------------------------------------- | --------------------------------------- |
-| `apps/web`                                                     | Vercel                                 | `apps/web/vercel.json`                  |
-| `apps/api` (HTTP, WebSocket and the in-process BullMQ workers) | any container host                     | `apps/api/Dockerfile`, target `runtime` |
-| Migrations                                                     | a one-shot job before each api rollout | `apps/api/Dockerfile`, target `migrate` |
-| PostgreSQL 16, Redis 7, S3-compatible storage, SMTP or Resend  | managed services                       | —                                       |
+The reason: the session cookies (`sl_access`, `sl_refresh`) are host-only on the api's host,
+and the web app's server-rendered pages forward the browser's cookies to the api. On two
+hostnames (`app.` and `api.`) the web server never receives `sl_access`, so every signed-in
+page redirects to `/login` and back, forever. That was reproduced on 2026-09-29. Sharing the
+cookie across subdomains would fix it, but it hands a live session token to every subdomain,
+which doc 01 §5.4 rules out. Vercel is off the table for the same reason: it can proxy
+`/api` but not the Socket.IO WebSocket.
 
-> **Unverified: the login cookie with two subdomains.** The api's `sl_access` cookie is
-> host-only on `api.example.com`, but the web app's server-rendered pages forward the
-> _browser's_ cookies for `app.example.com` to the api. That cookie is never among them, so
-> signed-in pages may keep redirecting to `/login`. Test sign-in on a staging deploy before
-> relying on this layout. `docs/self-host-ubuntu.md` avoids the problem by serving both apps
-> from one hostname.
+`docs/self-host-ubuntu.md` is a complete single-server setup with Caddy. The pieces:
+
+| Piece                                                          | Runs on                                | Built from                                  |
+| -------------------------------------------------------------- | -------------------------------------- | ------------------------------------------- |
+| Reverse proxy (TLS, path routing, WebSocket upgrades)          | Caddy, nginx or a load balancer        | —                                           |
+| `apps/web`                                                     | Node 22, `next start`                  | `pnpm turbo build --filter=@schemaloom/web` |
+| `apps/api` (HTTP, WebSocket and the in-process BullMQ workers) | any container host                     | `apps/api/Dockerfile`, target `runtime`     |
+| Migrations                                                     | a one-shot job before each api rollout | `apps/api/Dockerfile`, target `migrate`     |
+| PostgreSQL 16, Redis 7, S3-compatible storage, SMTP or Resend  | managed services or containers         | —                                           |
 
 ## 1. Create the database with a pinned collation (once, before anything else)
 
@@ -59,8 +63,8 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
 - **Port:** `PORT` (default 3001).
 - **Probes:** liveness `GET /healthz` (process only), readiness `GET /readyz` (Postgres and
   Redis). The image also declares a Docker `HEALTHCHECK` on `/healthz`.
-- **WebSockets:** realtime uses Socket.IO on the api origin, so the host and its load
-  balancer must allow WebSocket upgrades.
+- **WebSockets:** realtime uses Socket.IO at `/socket.io/`, so the proxy must pass
+  WebSocket upgrades through to the api.
 - **Compression:** the api gzips its own responses (the IR for a 300-table project is about
   2.1 MB of JSON and 380 KB gzipped). The AI assistant's event stream is sent uncompressed
   so it isn't buffered. Turn off compression at the proxy for `text/event-stream` too.
@@ -77,8 +81,8 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
 | Variable                                                                           | Value                                                                                                                                                                                                                                           |
 | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_ENV`                                                                         | `production` (set by the image). Forces `COOKIE_SECURE`.                                                                                                                                                                                        |
-| `API_PUBLIC_URL` / `WEB_PUBLIC_URL`                                                | `https://api.example.com` / `https://app.example.com`                                                                                                                                                                                           |
-| `COOKIE_DOMAIN`                                                                    | `.example.com`. The web middleware reads `sl_presence` on the app host, so this is required when the two are on different subdomains.                                                                                                           |
+| `API_PUBLIC_URL` / `WEB_PUBLIC_URL`                                                | both `https://app.example.com` (one hostname; see the top of this page)                                                                                                                                                                         |
+| `COOKIE_DOMAIN`                                                                    | leave unset: on one hostname every cookie is host-only                                                                                                                                                                                          |
 | `TRUST_PROXY`                                                                      | How many proxies sit in front of the api, usually `1` for a load balancer. With `0` every visitor shares the balancer's IP and the per-IP rate limits apply to all of them together. Setting it too high lets a client spoof `X-Forwarded-For`. |
 | `DATABASE_URL`                                                                     | the managed database's URL (it overrides the `POSTGRES_*` parts)                                                                                                                                                                                |
 | `REDIS_URL`                                                                        | the managed Redis                                                                                                                                                                                                                               |
@@ -87,16 +91,20 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `SECRETS_ENCRYPTION_KEY` | fresh values, generated as `.env.example` shows. Don't copy them from dev.                                                                                                                                                                      |
 | `ANTHROPIC_API_KEY`                                                                | optional. Without it, the AI routes answer 503.                                                                                                                                                                                                 |
 
-## 3. The web app on Vercel
+## 3. The web app
 
-Create a Vercel project from this repository with **Root Directory `apps/web`**. Vercel picks
-up `apps/web/vercel.json`, installs with pnpm from the workspace root, and builds through
-turbo so the workspace packages are built first.
+`NEXT_PUBLIC_*` values are inlined into the browser bundle at build time, so set them for the
+build and rebuild after changing them:
 
-| Variable              | Value                                                                                    |
-| --------------------- | ---------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_API_URL` | `https://api.example.com`. This is inlined at build time, so redeploy after changing it. |
-| `NEXT_PUBLIC_APP_URL` | `https://app.example.com`                                                                |
-| `API_INTERNAL_URL`    | optional: a private address server components can use to reach the api                   |
+```bash
+NEXT_PUBLIC_API_URL=https://app.example.com NEXT_PUBLIC_APP_URL=https://app.example.com   pnpm turbo build --filter=@schemaloom/web
+cd apps/web && NODE_ENV=production API_INTERNAL_URL=http://127.0.0.1:3001   node node_modules/next/dist/bin/next start -p 3000 -H 127.0.0.1
+```
+
+| Variable              | Value                                                                       |
+| --------------------- | --------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL` | `https://app.example.com`, the shared hostname                              |
+| `NEXT_PUBLIC_APP_URL` | `https://app.example.com`                                                   |
+| `API_INTERNAL_URL`    | optional: a private address server components use to reach the api directly |
 
 Nothing else needs to be set: the api's `CORS_ORIGINS` defaults to `WEB_PUBLIC_URL`.

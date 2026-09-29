@@ -109,6 +109,25 @@ describe('envSchema — §11.4 cross-field rules', () => {
     ).toBe(true);
   });
 
+  it('requires the api and web app on one hostname, ports aside', () => {
+    expect(() =>
+      envSchema.parse(
+        env({
+          API_PUBLIC_URL: 'https://api.example.com',
+          WEB_PUBLIC_URL: 'https://app.example.com',
+        }),
+      ),
+    ).toThrow(/same hostname/);
+    expect(() =>
+      envSchema.parse(
+        env({
+          API_PUBLIC_URL: 'https://app.example.com',
+          WEB_PUBLIC_URL: 'https://app.example.com',
+        }),
+      ),
+    ).not.toThrow();
+  });
+
   it('rejects a refresh secret equal to the access secret', () => {
     const same = 'z'.repeat(48);
     const result = envSchema.safeParse(env({ JWT_ACCESS_SECRET: same, JWT_REFRESH_SECRET: same }));

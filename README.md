@@ -147,9 +147,9 @@ Dependency edges only ever point downward; `schema-model` depends on nothing but
 `test` excludes `*.int.spec.ts` on purpose: integration tests need Docker and a live
 database, which would make `pnpm test` uncacheable and unrunnable on a clean machine.
 
-**Deploying:** the web app goes on Vercel and the api runs as a container. See
-[`docs/deploy.md`](docs/deploy.md). To run everything on one Ubuntu server instead, see
-[`docs/self-host-ubuntu.md`](docs/self-host-ubuntu.md).
+**Deploying:** the web app and the api must share one hostname behind a reverse proxy. See
+[`docs/deploy.md`](docs/deploy.md), and [`docs/self-host-ubuntu.md`](docs/self-host-ubuntu.md)
+for a complete single-server setup.
 
 ---
 

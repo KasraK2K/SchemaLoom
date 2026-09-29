@@ -18,17 +18,17 @@ behind a pluggable engine boundary.
 
 pnpm + turbo monorepo. **Use pnpm, never npm** (`catalog:` and `node-linker=isolated`).
 
-| Path                                 | What                                                                                                                                           |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/api`                           | NestJS 11 + Prisma 6 + BullMQ (in-process workers) + S3/MinIO                                                                                  |
-| `apps/web`                           | Next.js 15 App Router, React Flow canvas, Tailwind                                                                                             |
-| `packages/schema-model`              | The IR (`SchemaModel`), diff, `logicalKey`, redaction                                                                                          |
-| `packages/engine-sdk`                | `EngineDefinition`, importer/exporter contracts, registry                                                                                      |
-| `packages/engines/postgresql`        | The only engine; importer uses `libpg-query` (keep it in `dependencies`, or tsup drops the `.wasm`)                                            |
-| `packages/contracts`, `ui`, `config` | Shared types/atoms, UI kit, tsup/eslint presets                                                                                                |
-| `e2e`                                | Playwright workflows 1–6                                                                                                                       |
-| `docs/deploy.md`                     | Production: web on Vercel (`apps/web/vercel.json`), api container (`apps/api/Dockerfile`, `--target migrate` for migrations), pinned collation |
-| `docs/phase1`                        | The approved design (00-OVERVIEW, 01–05, REVIEW). Read the relevant doc before changing its area                                               |
+| Path                                         | What                                                                                                                                                             |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`                                   | NestJS 11 + Prisma 6 + BullMQ (in-process workers) + S3/MinIO                                                                                                    |
+| `apps/web`                                   | Next.js 15 App Router, React Flow canvas, Tailwind                                                                                                               |
+| `packages/schema-model`                      | The IR (`SchemaModel`), diff, `logicalKey`, redaction                                                                                                            |
+| `packages/engine-sdk`                        | `EngineDefinition`, importer/exporter contracts, registry                                                                                                        |
+| `packages/engines/postgresql`                | The only engine; importer uses `libpg-query` (keep it in `dependencies`, or tsup drops the `.wasm`)                                                              |
+| `packages/contracts`, `ui`, `config`         | Shared types/atoms, UI kit, tsup/eslint presets                                                                                                                  |
+| `e2e`                                        | Playwright workflows 1–6                                                                                                                                         |
+| `docs/deploy.md`, `docs/self-host-ubuntu.md` | Production: web and api on ONE hostname behind a proxy (`/api`, `/socket.io` → api), api container (`apps/api/Dockerfile`, `--target migrate`), pinned collation |
+| `docs/phase1`                                | The approved design (00-OVERVIEW, 01–05, REVIEW). Read the relevant doc before changing its area                                                                 |
 
 ## Commands
 
@@ -48,6 +48,9 @@ DEV database.
 - **Every route carries exactly one marker** (`@RequirePermission`, `@RequireProjectAccess`,
   `@RequireOrgRole`, `@Authenticated`, `@Public`). The boot sweep refuses to start
   otherwise, and each controller has a `*.routes.spec.ts` listing its routes.
+- **Web and api share one hostname** in every deploy (the api refuses to boot otherwise).
+  Session cookies are host-only and RSC pages forward the browser's cookies; two hostnames
+  loop on /login. Don't "fix" that by putting `sl_access` on `COOKIE_DOMAIN`.
 - **Invisible is 404, not 403.** Don't make a route an existence oracle.
 - **Only org owners see every project (R13, amended 2026-09-29).** Org admins manage the org
   but see only projects they are granted, like members. Don't reintroduce `'admin'` into a

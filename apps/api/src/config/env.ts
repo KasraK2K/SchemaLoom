@@ -116,6 +116,19 @@ export const envSchema = z
       });
     }
 
+    // The session cookies are host-only on the API's host, and the web server forwards the
+    // browser's cookies when it renders a page. On two hostnames the web server never gets
+    // `sl_access` and every signed-in page loops back to /login, so both must share one
+    // (ports may differ: cookies ignore them). Proxy /api and /socket.io to the api.
+    if (new URL(env.API_PUBLIC_URL).hostname !== new URL(env.WEB_PUBLIC_URL).hostname) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['API_PUBLIC_URL'],
+        message:
+          'must have the same hostname as WEB_PUBLIC_URL (serve /api and /socket.io from the web host)',
+      });
+    }
+
     // §11.1: the refresh secret is distinct "so a leak of one does not mint the other".
     if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
       ctx.addIssue({
