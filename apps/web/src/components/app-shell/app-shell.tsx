@@ -37,7 +37,8 @@ export function AppShell({
         {rightPanel !== undefined && (
           <aside
             aria-label="Inspector"
-            className="hidden w-80 shrink-0 overflow-auto border-l border-border bg-surface lg:block"
+            // Width, collapse and the tab rail belong to the panel itself (InspectorPanel).
+            className="hidden shrink-0 border-l border-border bg-surface lg:flex"
           >
             {rightPanel}
           </aside>

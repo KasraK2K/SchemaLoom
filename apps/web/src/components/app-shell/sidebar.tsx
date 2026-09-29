@@ -1,5 +1,6 @@
 import { Database, ScrollArea, type LucideIcon } from '@schemaloom/ui';
 import Link from 'next/link';
+import { SidebarFrame } from './sidebar-frame';
 
 interface NavItem {
   href: string;
@@ -17,13 +18,10 @@ interface NavItem {
  */
 export function Sidebar({ items, orgLabel }: { items: readonly NavItem[]; orgLabel?: string }) {
   return (
-    <nav
-      aria-label="Primary"
-      className="hidden w-60 shrink-0 border-r border-border bg-surface md:block"
-    >
+    <SidebarFrame>
       <ScrollArea className="h-full">
         {orgLabel !== undefined && (
-          <p className="truncate border-b border-border px-3 py-2 text-xs font-medium tracking-wide text-text-subtle uppercase">
+          <p className="truncate border-b border-border px-3 py-2 text-xs group-data-[collapsed=true]/sidebar:hidden font-medium tracking-wide text-text-subtle uppercase">
             {orgLabel}
           </p>
         )}
@@ -32,16 +30,17 @@ export function Sidebar({ items, orgLabel }: { items: readonly NavItem[]; orgLab
             <li key={item.href}>
               <Link
                 href={item.href}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+                title={item.label}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm group-data-[collapsed=true]/sidebar:justify-center text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
               >
                 <item.icon className="size-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{item.label}</span>
+                <span className="truncate group-data-[collapsed=true]/sidebar:sr-only">{item.label}</span>
               </Link>
             </li>
           ))}
         </ul>
       </ScrollArea>
-    </nav>
+    </SidebarFrame>
   );
 }
 

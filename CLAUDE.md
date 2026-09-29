@@ -60,6 +60,8 @@ DEV database.
   paths (magic link, 2nd OAuth, TOTP, recovery codes). See `docs/phase1/00-OVERVIEW.md`,
   "Deferred to Phases 2–5".
 - Write in English. Git commits go on `main` only when the user asks.
+- Every commit message ends with `Co-Authored-By: Kasra Karami <kasra_k2k@yahoo.com>`, and no
+  other co-author line.
 
 ## Windows gotchas
 
