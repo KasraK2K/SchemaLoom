@@ -7,6 +7,40 @@ you selected and what you are allowed to see.
 PostgreSQL in v1, behind a pluggable engine architecture so other engines arrive later as
 packages rather than as changes to core code.
 
+![Schema canvas with ten tables and their foreign keys](docs/screenshots/canvas.png)
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/ai-query.png" alt="AI assistant writing a query from the selected tables" />
+      <p><b>Ask in plain English.</b> Select tables and get SQL back, with the assumptions
+      it made spelled out. The AI sees only what you selected and are allowed to see.</p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/inspector.png" alt="Inspector editing the columns of the orders table" />
+      <p><b>Edit tables in place.</b> Click a table to change its columns, types, keys and
+      nullability. Changes show up live for everyone on the project.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/history.png" alt="History view diffing a snapshot against the current schema" />
+      <p><b>Snapshots and diffs.</b> Compare any snapshot with the current schema, get the
+      migration SQL, or restore it.</p>
+    </td>
+    <td width="50%" valign="top">
+      <p><b>Start from what you already run.</b> Paste a <code>pg_dump</code> or a migration
+      file and SchemaLoom lays it out on the canvas for you. Importing again merges
+      additively.</p>
+      <p><b>Share at any level.</b> Grant access to a project, an area or a single table, or
+      send a view-only link with an expiry and an optional password.</p>
+    </td>
+  </tr>
+</table>
+
+To refresh these screenshots, run `pnpm dev` against a seeded database, then
+`pnpm --filter @schemaloom/e2e screenshots`.
+
 ---
 
 ## Use pnpm, not npm

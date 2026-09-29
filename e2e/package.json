@@ -6,7 +6,8 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "screenshots": "node --experimental-strip-types scripts/screenshots.ts"
   },
   "dependencies": {
     "@schemaloom/contracts": "workspace:*"
