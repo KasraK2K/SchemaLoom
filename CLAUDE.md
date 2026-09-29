@@ -27,6 +27,7 @@ pnpm + turbo monorepo. **Use pnpm, never npm** (`catalog:` and `node-linker=isol
 | `packages/engines/postgresql` | The only engine; importer uses `libpg-query` (keep it in `dependencies`, or tsup drops the `.wasm`) |
 | `packages/contracts`, `ui`, `config` | Shared types/atoms, UI kit, tsup/eslint presets |
 | `e2e` | Playwright workflows 1–6 |
+| `docs/deploy.md` | Production: web on Vercel (`apps/web/vercel.json`), api container (`apps/api/Dockerfile`, `--target migrate` for migrations), pinned collation |
 | `docs/phase1` | The approved design (00-OVERVIEW, 01–05, REVIEW). Read the relevant doc before changing its area |
 
 ## Commands

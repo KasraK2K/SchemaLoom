@@ -35,6 +35,10 @@ async function bootstrap(): Promise<void> {
 
   const config = app.get<ConfigService<AppEnv, true>>(ConfigService);
 
+  // Behind a load balancer every request's socket peer is the balancer, so without this
+  // the per-IP rate limits (share-link unlock) would throttle all visitors as one.
+  app.set('trust proxy', config.get('TRUST_PROXY', { infer: true }));
+
   app.use(helmet());
   // Before anything that reads a cookie: the auth guard and the CSRF middleware.
   app.use(cookieMiddleware);

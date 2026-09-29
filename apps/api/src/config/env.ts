@@ -27,6 +27,9 @@ export const envSchema = z
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
+    // Proxy hops in front of the api (load balancer = 1). 0 trusts none: `req.ip` is the
+    // socket peer. Too high lets a client spoof X-Forwarded-For past the per-IP limits.
+    TRUST_PROXY: z.coerce.number().int().min(0).default(0),
 
     // public URLs
     API_PUBLIC_URL: z.url(),

@@ -34,6 +34,7 @@ describe('envSchema — a valid environment', () => {
     expect(parsed.REFRESH_TOKEN_TTL).toBe('30d');
     expect(parsed.COOKIE_SECURE).toBe(false);
     expect(parsed.COOKIE_DOMAIN).toBeUndefined();
+    expect(parsed.TRUST_PROXY).toBe(0);
   });
 
   it('defaults CORS_ORIGINS to WEB_PUBLIC_URL and splits an explicit list', () => {

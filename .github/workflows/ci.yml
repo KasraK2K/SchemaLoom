@@ -73,3 +73,10 @@ jobs:
       # shadow database.
       - run: pnpm --filter @schemaloom/api run db:deploy
       - run: pnpm turbo test:int
+
+  # Builds the api image so a change that breaks the Dockerfile fails here, not at deploy.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f apps/api/Dockerfile -t schemaloom-api .
