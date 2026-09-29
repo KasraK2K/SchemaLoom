@@ -28,6 +28,7 @@ pnpm + turbo monorepo. **Use pnpm, never npm** (`catalog:` and `node-linker=isol
 | `packages/contracts`, `ui`, `config`         | Shared types/atoms, UI kit, tsup/eslint presets                                                                                                                  |
 | `e2e`                                        | Playwright workflows 1–6                                                                                                                                         |
 | `docs/deploy.md`, `docs/self-host-ubuntu.md` | Production: web and api on ONE hostname behind a proxy (`/api`, `/socket.io` → api), api container (`apps/api/Dockerfile`, `--target migrate`), pinned collation |
+| `docs/ROADMAP.md`                            | What's built, what's next and in what order. Check it before starting a feature; update a row's status in the same commit                                        |
 | `docs/phase1`                                | The approved design (00-OVERVIEW, 01–05, REVIEW). Read the relevant doc before changing its area                                                                 |
 
 ## Commands

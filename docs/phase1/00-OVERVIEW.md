@@ -717,7 +717,8 @@ become expensive to reverse. Everything here is **additive later** unless marked
 **Cut from the engine SDK `[D03]`**
 - 23 of 33 feature atoms — every atom a descriptor already answered (`enforcedLinks`, `compositeLinkEndpoints`, `linkFields`, `uniqueIndexes`, `arrayTypes`, `namespaces`, `views`, `materializedViews`, `schemalessEntities`, all four constraint atoms, all three customType atoms, `import`, `export`, `introspection`) plus the consumerless ones (`fieldOrderMatters`, `defaults`, `collations`, `identityFields`, `generatedFields`, `partialIndexes`). Replaced by 12 derived helpers.
 - The entire upgrade-on-open subsystem: `propsMigrations`, `EnginePropsMigration`, the transaction, `engineUpgradePending`. Four race conditions deleted rather than fixed.
-- `Introspector` and `features.introspection`.
+- `Introspector` and `features.introspection`. (Brought back as a smaller contract in Phase 6,
+  approved 2026-09-29: `docs/phase6/DESIGN.md`.)
 - Server-version-targeting knobs: `TypeDescriptor.since`, `ExportFormatDescriptor.targetVersions`, both `targetVersion` options.
 - `term` on all four kind descriptors (Terminology is the single home for nouns).
 - `AiOutputFormat` and `AiOutputFormat.kind`, `'generic-brackets'`, `AiPromptContext.capabilities`.
