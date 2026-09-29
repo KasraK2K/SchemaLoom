@@ -58,7 +58,7 @@ docs mode.
 
 The Anthropic SDK (`@anthropic-ai/sdk`) behind one `AiProvider` service in `apps/api/src/ai`.
 `ANTHROPIC_API_KEY` enables it; without a key every AI route answers `503 ai_not_configured` and
-the panel says so. Model is `AI_MODEL`, default `claude-opus-5`, with adaptive thinking and
+the panel says so. Model is `AI_MODEL`, default `claude-sonnet-5-5` (was `claude-opus-5`; changed 2026-09-29 for cost), with adaptive thinking and
 server-side `fallbacks: "default"`. The system prompt and the SCS context are the cached prefix
 (`cache_control`), because SCS is deterministic (doc 03 §13.1).
 
@@ -116,13 +116,13 @@ screen (dropped in phase4 §0), area-scoped export (Q29, still deferred).
 
 ## 6. Questions (defaults taken)
 
-| #   | Question                      | Default                                                                                                  |
-| --- | ----------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Q1  | Who may generate a migration? | `history:view` + the full view. A migration from a partial view is a script that silently omits objects. |
-| Q2  | AI model                      | `claude-opus-5` via `AI_MODEL`; adaptive thinking; `fallbacks: "default"`.                               |
-| Q3  | AI rate limits                | 30/user/h, 300/org/h, fail closed.                                                                       |
-| Q4  | New dependencies              | `@anthropic-ai/sdk` and `pdfkit` in the api. TipTap is already in the web.                               |
-| Q5  | Doc drafting                  | a BullMQ job (doc 02 `doc_drafts.jobId`), one draft per target, a re-run replaces the pending one.       |
+| #   | Question                      | Default                                                                                                                        |
+| --- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Q1  | Who may generate a migration? | `history:view` + the full view. A migration from a partial view is a script that silently omits objects.                       |
+| Q2  | AI model                      | `claude-sonnet-5-5` via `AI_MODEL` (user decision 2026-09-29; was `claude-opus-5`); adaptive thinking; `fallbacks: "default"`. |
+| Q3  | AI rate limits                | 30/user/h, 300/org/h, fail closed.                                                                                             |
+| Q4  | New dependencies              | `@anthropic-ai/sdk` and `pdfkit` in the api. TipTap is already in the web.                                                     |
+| Q5  | Doc drafting                  | a BullMQ job (doc 02 `doc_drafts.jobId`), one draft per target, a re-run replaces the pending one.                             |
 
 ## 7. Later decisions (made by the user)
 

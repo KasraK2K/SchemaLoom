@@ -27,7 +27,8 @@ export interface AiResult {
  * DESIGN §4.1 — the one place `@anthropic-ai/sdk` is named. A Nest provider so specs override
  * it (`{ provide: AiProvider, useValue: stub }`) and nothing reaches the network in a test.
  *
- * Opus with adaptive thinking and server-side `fallbacks: "default"`: a policy decline is
+ * Sonnet 5.5 by default (`AI_MODEL`), with adaptive thinking and server-side
+ * `fallbacks: "default"` (Claude API only for Sonnet 5.5): a policy decline is
  * retried on a fallback model inside the same call, and only a refusal of the whole chain
  * comes back as `stop_reason: "refusal"`, which callers must check.
  */

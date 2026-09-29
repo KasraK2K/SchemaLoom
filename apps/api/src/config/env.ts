@@ -89,7 +89,10 @@ export const envSchema = z
 
     // Phase 5: without a key every AI route answers 503 ai_not_configured
     ANTHROPIC_API_KEY: optionalStr,
-    AI_MODEL: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('claude-opus-5')),
+    AI_MODEL: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().default('claude-sonnet-5-5'),
+    ),
   })
   .superRefine((env, ctx) => {
     // §11.4: a mail provider is required. Boot fails if neither Mailgun nor SMTP is set.
