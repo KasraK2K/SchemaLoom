@@ -21,6 +21,7 @@ export interface JobQueues {
   readonly email: Queue<EmailJobData, void>;
   readonly validate: Queue<ValidateJobData>;
   readonly import: Queue<ImportJobData, ImportJobResult>;
+  readonly maintenance: Queue;
 }
 
 export interface ImportJobStatus {

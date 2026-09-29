@@ -1,5 +1,13 @@
-import { Inject, Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
-import { JOB_QUEUES, type JobQueues } from './jobs.service';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+  type OnModuleDestroy,
+} from '@nestjs/common';
+import { AUDIT_RETENTION_CRON } from './audit-retention.processor';
+import { DEFAULT_JOB_OPTIONS, JOB_QUEUES, type JobQueues } from './jobs.service';
+import { JOB_AUDIT_RETENTION } from './queues';
 
 /** The token for the workers this process runs. */
 export const JOB_WORKERS = Symbol('JOB_WORKERS');
@@ -28,7 +36,7 @@ export interface Closable {
  * while a job was still running.
  */
 @Injectable()
-export class JobsRuntime implements OnModuleDestroy {
+export class JobsRuntime implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(JobsRuntime.name);
 
   constructor(
@@ -36,18 +44,31 @@ export class JobsRuntime implements OnModuleDestroy {
     @Inject(JOB_QUEUES) private readonly queues: JobQueues,
   ) {}
 
+  /**
+   * Registers the nightly audit-retention sweep (doc 00 Q10). `upsertJobScheduler` is keyed by
+   * id, so every boot and every replica converges on the one schedule instead of adding one.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    await this.queues.maintenance.upsertJobScheduler(
+      JOB_AUDIT_RETENTION,
+      { pattern: AUDIT_RETENTION_CRON, tz: 'UTC' },
+      { name: JOB_AUDIT_RETENTION, opts: DEFAULT_JOB_OPTIONS },
+    );
+  }
+
   async onModuleDestroy(): Promise<void> {
     this.logger.log(`closing ${String(this.workers.length)} worker(s)`);
     // allSettled: one worker refusing to close must not leave the other two running.
     await Promise.allSettled(this.workers.map((worker) => worker.close()));
 
-    // Named rather than `Object.values`, which widens three differently-parameterised
+    // Named rather than `Object.values`, which widens the differently-parameterised
     // `Queue`s to `any` and takes the type-safety of this line with it.
     const queues: readonly Closable[] = [
       this.queues.export,
       this.queues.email,
       this.queues.validate,
       this.queues.import,
+      this.queues.maintenance,
     ];
     await Promise.allSettled(queues.map((queue) => queue.close()));
   }

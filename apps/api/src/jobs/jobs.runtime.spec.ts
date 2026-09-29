@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { JobQueues } from './jobs.service';
 import { JobsRuntime, type Closable } from './jobs.runtime';
-import { QUEUE_EMAIL, QUEUE_EXPORT, QUEUE_VALIDATE } from './queues';
+import { AUDIT_RETENTION_CRON } from './audit-retention.processor';
+import { JOB_AUDIT_RETENTION, QUEUE_EMAIL, QUEUE_EXPORT, QUEUE_VALIDATE } from './queues';
 
 type CloseSpy = ReturnType<typeof vi.fn<() => Promise<void>>>;
 
@@ -19,12 +20,13 @@ function fakeQueues(close: () => Promise<void> = () => Promise.resolve()): {
   queues: JobQueues;
   closes: CloseSpy[];
 } {
-  const closes = [vi.fn(close), vi.fn(close), vi.fn(close), vi.fn(close)];
+  const closes = [vi.fn(close), vi.fn(close), vi.fn(close), vi.fn(close), vi.fn(close)];
   const queues = {
     export: { close: closes[0] },
     email: { close: closes[1] },
     validate: { close: closes[2] },
     import: { close: closes[3] },
+    maintenance: { close: closes[4] },
   } as unknown as JobQueues;
   return { queues, closes };
 }
@@ -70,6 +72,24 @@ describe('graceful shutdown', () => {
 
     await new JobsRuntime([w.closable], q.queues).onModuleDestroy();
 
-    expect(order).toEqual(['worker', 'queue', 'queue', 'queue', 'queue']);
+    expect(order).toEqual(['worker', 'queue', 'queue', 'queue', 'queue', 'queue']);
+  });
+});
+
+describe('the audit-retention schedule (doc 00 Q10)', () => {
+  it('upserts ONE nightly scheduler by id, so a reboot does not add a second', async () => {
+    const upsertJobScheduler = vi.fn().mockResolvedValue(undefined);
+    const queues = { maintenance: { upsertJobScheduler } } as unknown as JobQueues;
+
+    const runtime = new JobsRuntime([], queues);
+    await runtime.onApplicationBootstrap();
+    await runtime.onApplicationBootstrap();
+
+    expect(upsertJobScheduler).toHaveBeenCalledTimes(2);
+    for (const [id, repeat, template] of upsertJobScheduler.mock.calls) {
+      expect(id).toBe(JOB_AUDIT_RETENTION);
+      expect(repeat).toEqual({ pattern: AUDIT_RETENTION_CRON, tz: 'UTC' });
+      expect(template).toMatchObject({ name: JOB_AUDIT_RETENTION });
+    }
   });
 });

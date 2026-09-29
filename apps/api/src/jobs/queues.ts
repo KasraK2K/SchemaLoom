@@ -13,8 +13,16 @@ export const QUEUE_EXPORT = 'export';
 export const QUEUE_EMAIL = 'email';
 export const QUEUE_VALIDATE = 'validate';
 export const QUEUE_IMPORT = 'import';
+/** Scheduled housekeeping (doc 00 Q10's audit retention). Nothing enqueues onto it by hand. */
+export const QUEUE_MAINTENANCE = 'maintenance';
 
-export const QUEUE_NAMES = [QUEUE_EXPORT, QUEUE_EMAIL, QUEUE_VALIDATE, QUEUE_IMPORT] as const;
+export const QUEUE_NAMES = [
+  QUEUE_EXPORT,
+  QUEUE_EMAIL,
+  QUEUE_VALIDATE,
+  QUEUE_IMPORT,
+  QUEUE_MAINTENANCE,
+] as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[number];
 
@@ -27,6 +35,7 @@ export const JOB_EXPORT_RENDER = 'export.render';
 export const JOB_EMAIL_SEND = 'email.send';
 export const JOB_VALIDATE_MODEL = 'validate.model';
 export const JOB_IMPORT_SQL = 'import.sql';
+export const JOB_AUDIT_RETENTION = 'audit.retention';
 
 /**
  * The export job carries a `(projectId, subject)` pair, never a model.

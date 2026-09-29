@@ -14,12 +14,14 @@ import { ExportsController } from './exports.controller';
 import { ExportsService } from './exports.service';
 import { ImportJobsController } from './import-jobs.controller';
 import { ImportProcessor } from './import.processor';
+import { AuditRetentionProcessor } from './audit-retention.processor';
 import { JOB_QUEUES, JobsService, type JobQueues } from './jobs.service';
 import { JOB_WORKERS, JobsRuntime, type Closable } from './jobs.runtime';
 import {
   QUEUE_EMAIL,
   QUEUE_EXPORT,
   QUEUE_IMPORT,
+  QUEUE_MAINTENANCE,
   QUEUE_VALIDATE,
   type EmailJobData,
   type ExportJobData,
@@ -49,6 +51,7 @@ const queuesProvider: Provider = {
     email: new Queue<EmailJobData, void>(QUEUE_EMAIL, bull),
     validate: new Queue<ValidateJobData>(QUEUE_VALIDATE, bull),
     import: new Queue<ImportJobData, ImportJobResult>(QUEUE_IMPORT, bull),
+    maintenance: new Queue(QUEUE_MAINTENANCE, bull),
   }),
 };
 
@@ -59,13 +62,21 @@ const queuesProvider: Provider = {
  */
 const workersProvider: Provider = {
   provide: JOB_WORKERS,
-  inject: [BULL_CONNECTION, ExportProcessor, EmailProcessor, ValidateProcessor, ImportProcessor],
+  inject: [
+    BULL_CONNECTION,
+    ExportProcessor,
+    EmailProcessor,
+    ValidateProcessor,
+    ImportProcessor,
+    AuditRetentionProcessor,
+  ],
   useFactory: (
     bull: BullConnection,
     exporter: ExportProcessor,
     mailer: EmailProcessor,
     validator: ValidateProcessor,
     importer: ImportProcessor,
+    retention: AuditRetentionProcessor,
   ): Closable[] => [
     new Worker<ExportJobData, ExportJobResult>(
       QUEUE_EXPORT,
@@ -89,6 +100,7 @@ const workersProvider: Provider = {
       (job: Job<ImportJobData>) => importer.run(job.data),
       bull,
     ),
+    new Worker(QUEUE_MAINTENANCE, () => retention.run(), bull),
   ],
 };
 
@@ -111,6 +123,7 @@ const workersProvider: Provider = {
     EmailProcessor,
     ValidateProcessor,
     ImportProcessor,
+    AuditRetentionProcessor,
     workersProvider,
     JobsService,
     JobsRuntime,

@@ -57,6 +57,9 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
 - **Compression:** the api gzips its own responses (the IR for a 300-table project is about
   2.1 MB of JSON and 380 KB gzipped). The AI assistant's event stream is sent uncompressed
   so it isn't buffered. Turn off compression at the proxy for `text/event-stream` too.
+- **Audit-log retention:** a nightly job (03:15 UTC) deletes `audit_log` rows older than
+  24 months (doc 00 Q10). Nothing else is deleted. To hand a customer their trail, export
+  it before it ages out: `SELECT * FROM audit_log WHERE organization_id = '<org id>'`.
 - **Replicas:** run **one**. Realtime is single-node (phase4 DESIGN) and the BullMQ
   workers are in-process (Q30).
 

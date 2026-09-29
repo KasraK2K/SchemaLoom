@@ -14,7 +14,9 @@ import {
 
 type AddCall = [name: string, data: unknown, options?: unknown];
 
-function harness(): { service: JobsService; add: (queue: keyof JobQueues) => AddCall[] } {
+type EnqueueQueue = Exclude<keyof JobQueues, 'maintenance'>;
+
+function harness(): { service: JobsService; add: (queue: EnqueueQueue) => AddCall[] } {
   const spies = {
     export: vi.fn((..._args: AddCall) => Promise.resolve({ id: 'bull_1' })),
     email: vi.fn((..._args: AddCall) => Promise.resolve({ id: 'bull_2' })),
