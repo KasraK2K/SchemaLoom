@@ -14,7 +14,7 @@ import { deriveDatabaseUrl } from './database-url';
  */
 
 /** An unset optional variable and one present-but-empty (`FOO=` in `.env`) are the
- *  same thing. Without this, `RESEND_API_KEY=` would count as "Resend configured". */
+ *  same thing. Without this, `MAILGUN_API_KEY=` would count as "Mailgun configured". */
 const optionalStr = z.preprocess((v) => (v === '' ? undefined : v), z.string().optional());
 
 const secret32 = z.string().min(32, 'must be at least 32 characters');
@@ -70,7 +70,14 @@ export const envSchema = z
 
     // mail
     MAIL_FROM: z.string().min(1),
-    RESEND_API_KEY: optionalStr,
+    // Mailgun's HTTP API; both-or-neither. MAILGUN_API_URL is https://api.eu.mailgun.net
+    // for a domain in the EU region.
+    MAILGUN_API_KEY: optionalStr,
+    MAILGUN_DOMAIN: optionalStr,
+    MAILGUN_API_URL: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.url().default('https://api.mailgun.net'),
+    ),
     SMTP_URL: optionalStr,
 
     // object storage
@@ -85,12 +92,19 @@ export const envSchema = z
     AI_MODEL: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('claude-opus-5')),
   })
   .superRefine((env, ctx) => {
-    // §11.4: "RESEND_API_KEY or SMTP_URL". Boot fails if both are missing.
-    if (!env.RESEND_API_KEY && !env.SMTP_URL) {
+    // §11.4: a mail provider is required. Boot fails if neither Mailgun nor SMTP is set.
+    if (Boolean(env.MAILGUN_API_KEY) !== Boolean(env.MAILGUN_DOMAIN)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAILGUN_DOMAIN'],
+        message: 'MAILGUN_API_KEY and MAILGUN_DOMAIN are both-or-neither',
+      });
+    }
+    if (!env.MAILGUN_API_KEY && !env.SMTP_URL) {
       ctx.addIssue({
         code: 'custom',
         path: ['SMTP_URL'],
-        message: 'one of RESEND_API_KEY or SMTP_URL is required (MailModule has no provider)',
+        message: 'set MAILGUN_API_KEY + MAILGUN_DOMAIN or SMTP_URL (MailModule has no provider)',
       });
     }
 

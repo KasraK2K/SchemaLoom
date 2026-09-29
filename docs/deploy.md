@@ -20,7 +20,7 @@ which doc 01 §5.4 rules out. Vercel is off the table for the same reason: it ca
 | `apps/web`                                                     | Node 22, `next start`                  | `pnpm turbo build --filter=@schemaloom/web` |
 | `apps/api` (HTTP, WebSocket and the in-process BullMQ workers) | any container host                     | `apps/api/Dockerfile`, target `runtime`     |
 | Migrations                                                     | a one-shot job before each api rollout | `apps/api/Dockerfile`, target `migrate`     |
-| PostgreSQL 16, Redis 7, S3-compatible storage, SMTP or Resend  | managed services or containers         | —                                           |
+| PostgreSQL 16, Redis 7, S3-compatible storage, Mailgun or SMTP | managed services or containers         | —                                           |
 
 ## 1. Create the database with a pinned collation (once, before anything else)
 
@@ -89,7 +89,7 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
 | `DATABASE_URL`                                                                     | the managed database's URL (it overrides the `POSTGRES_*` parts)                                                                                                                                                                                |
 | `REDIS_URL`                                                                        | the managed Redis                                                                                                                                                                                                                               |
 | `S3_*`                                                                             | the bucket. `S3_PUBLIC_URL` is the address browsers use for presigned URLs. The api creates the bucket on boot if it doesn't exist.                                                                                                             |
-| `RESEND_API_KEY` or `SMTP_URL`                                                     | mail                                                                                                                                                                                                                                            |
+| `MAILGUN_API_KEY` + `MAILGUN_DOMAIN`, or `SMTP_URL`                                | mail. Mailgun wins when both are set; `MAILGUN_API_URL=https://api.eu.mailgun.net` for an EU-region domain                                                                                                                                      |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `SECRETS_ENCRYPTION_KEY` | fresh values, generated as `.env.example` shows. Don't copy them from dev.                                                                                                                                                                      |
 | `ANTHROPIC_API_KEY`                                                                | optional. Without it, the AI routes answer 503.                                                                                                                                                                                                 |
 

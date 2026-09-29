@@ -85,8 +85,9 @@ JWT_REFRESH_SECRET=$(secret)
 CSRF_SECRET=$(secret)
 SECRETS_ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
 
-MAIL_FROM=SchemaLoom <no-reply@example.com>
-SMTP_URL=smtps://USER:PASSWORD@smtp.your-provider.com:465
+MAIL_FROM=SchemaLoom <no-reply@mg.example.com>
+MAILGUN_API_KEY=your-mailgun-api-key
+MAILGUN_DOMAIN=mg.example.com
 
 S3_ENDPOINT=http://minio:9000
 S3_PUBLIC_URL=https://files.example.com
@@ -99,7 +100,10 @@ chmod 600 .env
 
 Then edit it:
 
-- **`SMTP_URL`:** set your mail provider's details, or replace it with `RESEND_API_KEY=...`.
+- **Mail:** set `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` (your sending domain, for example
+  `mg.example.com`), and make `MAIL_FROM` an address on that domain. For a domain in Mailgun's EU
+  region, also set `MAILGUN_API_URL=https://api.eu.mailgun.net`. To use another provider, delete
+  the two Mailgun lines and set `SMTP_URL` instead.
   Sign-up, invitations and password resets all send email, so set this up first.
 - **Optional:** add `ANTHROPIC_API_KEY=...` for the AI assistant, and
   `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` for Google sign-in (callback

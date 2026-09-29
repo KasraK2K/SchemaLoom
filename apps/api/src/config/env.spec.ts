@@ -49,9 +49,9 @@ describe('envSchema — a valid environment', () => {
   });
 
   it('treats a present-but-empty optional variable as unset', () => {
-    // `RESEND_API_KEY=` in .env must not count as "Resend configured".
-    const parsed = envSchema.parse(env({ RESEND_API_KEY: '', COOKIE_DOMAIN: '' }));
-    expect(parsed.RESEND_API_KEY).toBeUndefined();
+    // `MAILGUN_API_KEY=` in .env must not count as "Mailgun configured".
+    const parsed = envSchema.parse(env({ MAILGUN_API_KEY: '', COOKIE_DOMAIN: '' }));
+    expect(parsed.MAILGUN_API_KEY).toBeUndefined();
     expect(parsed.COOKIE_DOMAIN).toBeUndefined();
   });
 
@@ -73,16 +73,24 @@ describe('envSchema — each missing required variable', () => {
 });
 
 describe('envSchema — §11.4 cross-field rules', () => {
-  it('requires RESEND_API_KEY or SMTP_URL', () => {
+  it('requires Mailgun or SMTP_URL', () => {
     const result = envSchema.safeParse(env({ SMTP_URL: undefined }));
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toContain('RESEND_API_KEY or SMTP_URL');
+    expect(result.error?.issues[0]?.message).toContain(
+      'MAILGUN_API_KEY + MAILGUN_DOMAIN or SMTP_URL',
+    );
   });
 
-  it('accepts RESEND_API_KEY alone', () => {
-    expect(envSchema.safeParse(env({ SMTP_URL: undefined, RESEND_API_KEY: 're_x' })).success).toBe(
-      true,
-    );
+  it('accepts Mailgun alone, and needs its key and domain together', () => {
+    const mailgun = {
+      SMTP_URL: undefined,
+      MAILGUN_API_KEY: 'key-x',
+      MAILGUN_DOMAIN: 'mg.example.com',
+    };
+    const parsed = envSchema.parse(env(mailgun));
+    expect(parsed.MAILGUN_API_URL).toBe('https://api.mailgun.net');
+    expect(envSchema.safeParse(env({ ...mailgun, MAILGUN_DOMAIN: undefined })).success).toBe(false);
+    expect(envSchema.safeParse(env({ MAILGUN_DOMAIN: 'mg.example.com' })).success).toBe(false);
   });
 
   for (const provider of ['GOOGLE', 'GITHUB'] as const) {

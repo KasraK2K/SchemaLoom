@@ -1801,7 +1801,7 @@ volumes:
 | `postgres` 16 | 5432 | The application database: users, orgs, projects, entities/fields/links, docs, grants, snapshots. Not the database being *modelled* — SchemaLoom never connects to a user's database in Phase 1. |
 | `redis` 7 | 6379 | `PermissionResolver` effective-permission cache + invalidation, rate limiting, BullMQ queues (export render, email, DDL import apply), and the Socket.IO adapter from Phase 4. `noeviction` because losing a queue job silently is worse than an OOM error — **safe only because §4.4 requires an explicit TTL on every cache and rate-limit key**, so nothing on this instance grows without bound. One instance, three clients, three key prefixes (§4.4); not three containers. |
 | `minio` | 9000 (S3 API), 9001 (console) | S3-compatible object storage for avatars and generated export files. `StorageModule.ensureBucket()` creates the bucket at boot, so there is no bucket-provisioning sidecar container. |
-| `mailpit` | 1025 (SMTP), 8025 (web UI) | Catches every outgoing email in dev — verification, magic link, password reset, invites. The `MailModule` SMTP provider points here when `RESEND_API_KEY` is unset. |
+| `mailpit` | 1025 (SMTP), 8025 (web UI) | Catches every outgoing email in dev — verification, magic link, password reset, invites. The `MailModule` SMTP provider points here when Mailgun is not configured. |
 
 **Credentials and ports both come from `.env`, never from literals.** An earlier draft
 hardcoded `POSTGRES_USER/PASSWORD/DB` and the MinIO root pair while the api read a
@@ -1889,8 +1889,9 @@ through `dotenv-cli` (a devDependency, ~40 kB):
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | — | Both-or-neither; the Google strategy registers only when both are present, and `GET /engines`-style capability reporting tells the UI which buttons to show. |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | — | Same pattern. |
 | `MAIL_FROM` | **yes** | — | e.g. `SchemaLoom <no-reply@schemaloom.dev>`. |
-| `RESEND_API_KEY` | no | — | When present, `MailModule` binds `EmailProvider` to Resend. |
-| `SMTP_URL` | no | — | When `RESEND_API_KEY` is absent, must be set; locally `smtp://localhost:1025` (mailpit). Boot fails if both are missing. |
+| `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` | no | — | Both-or-neither. When present, `MailModule` binds `EmailProvider` to Mailgun's HTTP API. (Replaced Resend, 2026-09-29.) |
+| `MAILGUN_API_URL` | no | `https://api.mailgun.net` | `https://api.eu.mailgun.net` for an EU-region domain. |
+| `SMTP_URL` | no | — | When Mailgun is not configured, must be set; locally `smtp://localhost:1025` (mailpit). Boot fails if neither is set. |
 | `S3_ENDPOINT` | **yes** | — | `http://localhost:9000` locally. |
 | `S3_BUCKET` | **yes** | — | `schemaloom` locally. |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | **yes** | — | Also read by **compose** as MinIO's root credentials (§10), so they cannot drift. |
@@ -1944,7 +1945,7 @@ Two small zod schemas, no library:
   `validate` hook runs `envSchema.parse(raw)`; a failure throws before the Nest
   container is built, so the process exits with the list of offending variables
   instead of a `undefined is not a function` twenty seconds later. Cross-field rules
-  live in the same schema as `.superRefine` (e.g. "`RESEND_API_KEY` or `SMTP_URL`",
+  live in the same schema as `.superRefine` (e.g. "Mailgun or `SMTP_URL`",
   "Google id and secret are both-or-neither", "`COOKIE_SECURE` must be true when
   `NODE_ENV==='production'`"), as does the `DATABASE_URL` derivation from §10.
 - **web** — **two modules, not one**, because they are needed at different times:

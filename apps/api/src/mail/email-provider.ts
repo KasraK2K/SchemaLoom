@@ -1,10 +1,10 @@
 /**
- * Doc 01 §11.1: `RESEND_API_KEY` present -> Resend; otherwise `SMTP_URL` (mailpit
+ * `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` present -> Mailgun; otherwise `SMTP_URL` (mailpit
  * locally). `env.ts` already refuses to boot when both are missing, so this interface
  * always has exactly one implementation bound behind it.
  *
  * Two implementations is why this is an interface rather than a concrete class — the
- * local loop must not need a Resend account and production must not need an SMTP relay.
+ * local loop must not need a Mailgun account and production must not need an SMTP relay.
  */
 export interface EmailMessage {
   readonly to: string;
