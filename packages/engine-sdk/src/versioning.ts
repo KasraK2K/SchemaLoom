@@ -1,4 +1,6 @@
-import type { EngineStaticFacet } from './definition.js';
+import type { EngineDefinition, EngineStaticFacet } from './definition.js';
+import type { EnginePropsKind } from './diagnostics.js';
+import type { EngineProps } from './ir.js';
 
 /**
  * TWO DIFFERENT VERSIONS, and they must not be confused.
@@ -45,8 +47,8 @@ function compare(
  * reason, which is recoverable by redeploying. Stripping unknown keys instead would silently
  * destroy the data on the way back up, so `.strict()` stays and this comparison does the work.
  *
- * There is no `propsMigrations` and no upgrade-on-open transaction: a major bump opens the
- * project read-only until someone migrates it, deliberately, as an operator action.
+ * There is no upgrade-on-open transaction: a major bump opens the project read-only until an
+ * operator migrates it (`PropsUpgrade`, below; the api's `engines:upgrade` command).
  */
 export function compareEngineVersion(
   storedPluginVersion: string,
@@ -64,4 +66,43 @@ export function compareEngineVersion(
     return { action: 'read-only', reason: 'project-older-major' };
   }
   return { action: 'ok' };
+}
+
+/**
+ * Doc 00 Q19 / doc 03 §15.1 — rewrites one object's stored `engineProps` from major `fromMajor`
+ * to `fromMajor + 1`. Pure, total and deterministic. It runs once per object, inside the
+ * operator's upgrade transaction, and every result must pass the NEW `propsSchemas`: one
+ * rejection rolls the whole project back and leaves it read-only.
+ */
+export interface PropsUpgrade {
+  readonly fromMajor: number;
+  readonly upgrade: (
+    kind: EnginePropsKind,
+    subKind: string | null,
+    props: EngineProps,
+  ) => EngineProps;
+}
+
+export function majorOf(version: string): number {
+  return parseSemver(version)[0];
+}
+
+/**
+ * The upgrades that take props written under `storedVersion` up to `engine.version`, in order.
+ * Throws when a step is missing, so an engine that forgot one fails the upgrade loudly instead
+ * of stamping the project with a version its props were never converted to.
+ */
+export function propsUpgradePath(
+  storedVersion: string,
+  engine: Pick<EngineDefinition, 'id' | 'version' | 'propsUpgrades'>,
+): readonly PropsUpgrade[] {
+  const path: PropsUpgrade[] = [];
+  for (let major = majorOf(storedVersion); major < majorOf(engine.version); major++) {
+    const step = engine.propsUpgrades?.find((u) => u.fromMajor === major);
+    if (step === undefined) {
+      throw new Error(`engine ${engine.id} has no propsUpgrade from major ${String(major)}`);
+    }
+    path.push(step);
+  }
+  return path;
 }

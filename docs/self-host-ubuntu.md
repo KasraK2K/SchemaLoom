@@ -298,6 +298,14 @@ sudo systemctl restart schemaloom-web
 
 Always run `migrate` before starting the new api.
 
+If the release bumps an engine's **major** version, projects on the old major open read-only
+until their stored props are converted. Run this once after the new api is up; it prints one
+line per project it changes and exits non-zero if any project failed:
+
+```bash
+docker compose run --rm api node dist/engine-upgrade.cli.js --all
+```
+
 ## 10. Backups
 
 The data lives in three Docker volumes. Postgres is the one that matters most. A nightly dump

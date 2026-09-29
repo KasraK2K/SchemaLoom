@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareEngineVersion } from './versioning.js';
+import { compareEngineVersion, propsUpgradePath, type PropsUpgrade } from './versioning.js';
 import { fixtureFacet } from './fixture-engine.js';
 import type { EngineStaticFacet } from './definition.js';
 
@@ -50,5 +50,28 @@ describe('compareEngineVersion', () => {
 
   it('ignores a prerelease suffix rather than mis-parsing it', () => {
     expect(compareEngineVersion('1.4.2-rc.1', engineAt('1.4.2'))).toEqual({ action: 'ok' });
+  });
+});
+
+describe('propsUpgradePath (doc 00 Q19)', () => {
+  const step = (fromMajor: number): PropsUpgrade => ({
+    fromMajor,
+    upgrade: (_kind, _subKind, props) => ({ ...props, [`m${String(fromMajor)}`]: true }),
+  });
+  const engine = { id: 'fixture', version: '3.1.0', propsUpgrades: [step(2), step(1)] };
+
+  it('returns the steps from the stored major up to the engine major, in order', () => {
+    expect(propsUpgradePath('1.4.2', engine).map((s) => s.fromMajor)).toEqual([1, 2]);
+    expect(propsUpgradePath('2.0.0', engine).map((s) => s.fromMajor)).toEqual([2]);
+  });
+
+  it('is empty on the same major', () => {
+    expect(propsUpgradePath('3.0.0', engine)).toEqual([]);
+  });
+
+  it('throws when a step is missing', () => {
+    expect(() => propsUpgradePath('1.0.0', { ...engine, propsUpgrades: [step(2)] })).toThrow(
+      /no propsUpgrade from major 1/,
+    );
   });
 });

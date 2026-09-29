@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
 import { parseEngineProps } from '../props.js';
-import { compareEngineVersion } from '../versioning.js';
+import { compareEngineVersion, majorOf, propsUpgradePath } from '../versioning.js';
 import type { ConformanceCheck } from './check.js';
 import { NO_SUCH_PROP, PROPS_KINDS, subKindsOf } from './context.js';
 
@@ -67,6 +67,31 @@ export const PROPS_CHECKS: readonly ConformanceCheck[] = [
         action: 'read-only',
         reason: 'engine-missing',
       });
+    },
+  },
+  {
+    id: 'props/previous-major-migrates',
+    run: ({ engine }) => {
+      // Doc 00 Q19: every past major has exactly one upgrade, and the chain from 1.0.0 turns
+      // a fresh bag into props the CURRENT schemas accept. A gap would leave projects on that
+      // major read-only with no way forward.
+      const froms = (engine.propsUpgrades ?? []).map((u) => u.fromMajor);
+      expect(new Set(froms).size).toBe(froms.length);
+      expect([...froms].sort((a, b) => a - b)).toEqual(
+        Array.from({ length: majorOf(engine.version) - 1 }, (_, i) => i + 1),
+      );
+
+      const path = propsUpgradePath('1.0.0', engine);
+      const problems: string[] = [];
+      for (const kind of PROPS_KINDS) {
+        for (const subKind of subKindsOf(engine, kind)) {
+          const props = path.reduce((p, step) => step.upgrade(kind, subKind, p), {});
+          if (!parseEngineProps(engine, kind, subKind, props).ok) {
+            problems.push(`${kind}/${subKind ?? '(none)'}`);
+          }
+        }
+      }
+      expect(problems).toEqual([]);
     },
   },
 ];

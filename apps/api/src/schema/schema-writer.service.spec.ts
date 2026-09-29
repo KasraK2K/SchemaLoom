@@ -19,6 +19,10 @@ import {
 import { SchemaOperationBatchSchema, type SchemaOperationBatch } from './ops';
 import { SchemaLoader } from './schema-loader.service';
 import { SchemaCommits, SchemaWriter, type WriteContext } from './schema-writer.service';
+import type { EngineGate } from '../engines/engine-gate.service';
+
+/** The engine gate has its own spec; here every project is writable. */
+const OPEN_GATE = { checkWrite: () => Promise.resolve() } as unknown as EngineGate;
 
 /**
  * Doc 04 §8.6 — one test per safety rule, because each of them is a rule somebody will
@@ -57,7 +61,7 @@ function harness(store: Partial<Store> = world()): {
 } {
   const prisma = fakePrisma(store);
   const { spy, service } = resolver();
-  const writer = new SchemaWriter(prisma.client, service, new SchemaCommits());
+  const writer = new SchemaWriter(prisma.client, service, new SchemaCommits(), OPEN_GATE);
   const loader = new SchemaLoader(prisma.client);
   return {
     prisma,
@@ -144,7 +148,7 @@ describe('SchemaWriter — visibility before version (§8.6 rule 1)', () => {
     const store = world();
     const prisma = fakePrisma(store);
     const { service } = resolver();
-    const writer = new SchemaWriter(prisma.client, service, new SchemaCommits());
+    const writer = new SchemaWriter(prisma.client, service, new SchemaCommits(), OPEN_GATE);
     const raw = await new SchemaLoader(prisma.client).load(PROJECT);
     // `ent_users` is invisible and the surviving link makes it a stub, so `fld_id` — a
     // field on a stub entity — is dropped entirely by redaction.

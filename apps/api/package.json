@@ -15,7 +15,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:validate": "prisma validate"
+    "db:validate": "prisma validate",
+    "engines:upgrade": "node dist/engine-upgrade.cli.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

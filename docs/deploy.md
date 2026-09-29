@@ -71,6 +71,8 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
 - **Audit-log retention:** a nightly job (03:15 UTC) deletes `audit_log` rows older than
   24 months (doc 00 Q10). Nothing else is deleted. To hand a customer their trail, export
   it before it ages out: `SELECT * FROM audit_log WHERE organization_id = '<org id>'`.
+- **Engine major bumps:** projects on an older engine major are read-only (writes answer 423) until an operator runs `node dist/engine-upgrade.cli.js --all` in the api image. Each
+  project converts in one transaction or not at all.
 - **Replicas:** run **one**. Realtime is single-node (phase4 DESIGN) and the BullMQ
   workers are in-process (Q30).
 

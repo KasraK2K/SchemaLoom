@@ -121,6 +121,7 @@ export type ConformanceCheckId =
   | 'props/accept-exporter-roundtrip'
   | 'props/reject-invalid'
   | 'props/rollback-is-read-only'
+  | 'props/previous-major-migrates'
   | 'links/descriptors-consistent'
   | 'links/tolerates-redacted'
   | 'references/superset'
@@ -174,6 +175,7 @@ export const CONFORMANCE_CHECKS: readonly ConformanceCheckId[] = [
   'props/accept-exporter-roundtrip',
   'props/reject-invalid',
   'props/rollback-is-read-only',
+  'props/previous-major-migrates',
   'links/descriptors-consistent',
   'links/tolerates-redacted',
   'references/superset',

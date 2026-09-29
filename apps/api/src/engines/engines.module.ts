@@ -27,21 +27,25 @@ import { ENGINE_REGISTRY } from './engines.tokens';
  * property that mattered — one manifest file names the engines, this file names none — holds
  * unchanged, and a token nothing can inject is not worth declaring.
  */
+/**
+ * Doc 03 §14: constructed from the ANNOUNCED list; "coming soon" is derived by set difference,
+ * so a registration always wins and shipping an engine needs no edit to the announcement.
+ * `register` throws `DuplicateEngineError` on a repeated id, at boot — a wiring bug fails the
+ * deploy rather than a request. Exported for `engine-upgrade.cli.ts`, which runs without Nest.
+ */
+export function buildEngineRegistry(): EngineRegistry {
+  const registry = createEngineRegistry(COMING_SOON);
+  for (const engine of ENGINE_MANIFEST) registry.register(engine);
+  return registry;
+}
+
 @Global()
 @Module({
   controllers: [EnginesController],
   providers: [
     {
       provide: ENGINE_REGISTRY,
-      useFactory: (): EngineRegistry => {
-        // doc 03 §14: constructed from the ANNOUNCED list; "coming soon" is derived by set
-        // difference, so a registration always wins and shipping an engine needs no edit to
-        // the announcement. `register` throws `DuplicateEngineError` on a repeated id, at
-        // boot — a wiring bug fails the deploy rather than a request.
-        const registry = createEngineRegistry(COMING_SOON);
-        for (const engine of ENGINE_MANIFEST) registry.register(engine);
-        return registry;
-      },
+      useFactory: buildEngineRegistry,
     },
     EngineGate,
   ],

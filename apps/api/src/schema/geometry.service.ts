@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Id } from '@schemaloom/schema-model';
 import { PermissionResolver, type ResourceRef } from '../access';
+import { EngineGate } from '../engines/engine-gate.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { GeometryBatch, SchemaOperationResult } from './ops';
 import { postImages } from './post-images';
@@ -33,6 +34,7 @@ export class GeometryWriter {
     private readonly prisma: PrismaService,
     private readonly resolver: PermissionResolver,
     private readonly commits: SchemaCommits,
+    private readonly gate: EngineGate,
   ) {}
 
   async apply(
@@ -55,6 +57,7 @@ export class GeometryWriter {
     ids: readonly Id[],
   ): Promise<SchemaOperationResult> {
     const { projectId } = ctx;
+    await this.gate.checkWrite(tx, projectId);
 
     await Promise.all(
       batch.entities.map((e) =>

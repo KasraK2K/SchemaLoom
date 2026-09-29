@@ -238,7 +238,13 @@ export {
 } from './registry.js';
 
 // --- versioning (§15) ---
-export { compareEngineVersion, type EngineVersionVerdict } from './versioning.js';
+export {
+  compareEngineVersion,
+  majorOf,
+  propsUpgradePath,
+  type EngineVersionVerdict,
+  type PropsUpgrade,
+} from './versioning.js';
 
 // --- conformance suite (§17) ---
 // NOT re-exported here, and the reason is load-bearing rather than tidiness: the suite calls

@@ -15,7 +15,7 @@ import {
   type TypeDescriptor,
 } from '@schemaloom/engine-sdk';
 import { z } from 'zod';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RouteSweep } from '../access/route-sweep';
 import { COMING_SOON } from './coming-soon.const';
 import {
@@ -257,6 +257,41 @@ describe('engine plugin version drift (doc 03 §15)', () => {
     if (engine !== null) registry.register(engine);
     return new EngineGate(registry);
   };
+
+  /** The two `project` calls `checkWrite` makes, over one stored version. */
+  const txWith = (enginePluginVersion: string) => {
+    const update = vi.fn().mockResolvedValue({});
+    const tx = {
+      project: {
+        findFirst: vi.fn().mockResolvedValue({ engineId: 'fakesql', enginePluginVersion }),
+        update,
+      },
+    };
+    return { tx: tx as never, update };
+  };
+
+  it('checkWrite refuses a write on an older major with 423 and writes nothing', async () => {
+    const { tx, update } = txWith('1.4.2');
+    await expect(
+      gateFor(fakeEngine({ version: '2.0.0' })).checkWrite(tx, 'prj_1'),
+    ).rejects.toBeInstanceOf(ProjectReadOnlyException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('checkWrite stamps an older same-major version with the running engine version', async () => {
+    const { tx, update } = txWith('1.3.9');
+    await gateFor(fakeEngine()).checkWrite(tx, 'prj_1');
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'prj_1' },
+      data: { enginePluginVersion: '1.4.2' },
+    });
+  });
+
+  it('checkWrite writes nothing when the version is current', async () => {
+    const { tx, update } = txWith('1.4.2');
+    await gateFor(fakeEngine()).checkWrite(tx, 'prj_1');
+    expect(update).not.toHaveBeenCalled();
+  });
 
   it('opens read-write when the stored version matches', () => {
     const state = gateFor(fakeEngine()).resolve({

@@ -6,6 +6,7 @@ import {
   type EngineRegistry,
   type EngineVersionVerdict,
 } from '@schemaloom/engine-sdk';
+import type { Prisma } from '../generated/prisma/client';
 import { ENGINE_REGISTRY } from './engines.tokens';
 
 /**
@@ -18,9 +19,8 @@ import { ENGINE_REGISTRY } from './engines.tokens';
  *
  * Per RECONCILIATION and §15.1 there is **no `propsMigrations`, no `EnginePropsMigration` and
  * no upgrade-on-open transaction**. A major bump opens the project READ-ONLY until an operator
- * migrates it — a deliberate job with an advisory lock, run as a system actor, designed in the
- * release that first needs it. That job does not exist. This file makes the waiting state
- * explicit and typed; it does not invent the job.
+ * migrates it: `EngineUpgrader` (doc 00 Q19), run by an operator with `engines:upgrade`.
+ * `checkWrite` is what makes the read-only state real on the write path.
  */
 
 /** Exactly the fields this check reads. A `Project` row satisfies it structurally. */
@@ -139,5 +139,30 @@ export class EngineGate {
       storedPluginVersion: stored,
       enginePluginVersion: engine.version,
     };
+  }
+
+  /**
+   * §15 "re-checked on every write". Both schema writers call this first, inside their
+   * transaction: a read-only project refuses with 423, and a writable one whose stored version
+   * is older within the same major is stamped with the running engine's version, because the
+   * props this write stores are validated against that engine.
+   */
+  async checkWrite(
+    tx: Pick<Prisma.TransactionClient, 'project'>,
+    projectId: string,
+  ): Promise<void> {
+    const project = await tx.project.findFirst({
+      where: { id: projectId },
+      select: { engineId: true, enginePluginVersion: true },
+    });
+    if (project === null) return; // the guard already 404'd a missing project
+    const state = this.resolve(project);
+    assertWritable(state);
+    if (state.storedPluginVersion !== state.enginePluginVersion) {
+      await tx.project.update({
+        where: { id: projectId },
+        data: { enginePluginVersion: state.enginePluginVersion },
+      });
+    }
   }
 }

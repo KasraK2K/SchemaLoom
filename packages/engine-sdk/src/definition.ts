@@ -7,6 +7,7 @@ import type { AnnotatedDiff, MigrationGenerator } from './migration.js';
 import type { QueryValidator } from './query.js';
 import type { IrObject, IrObjectRef, SchemaDiff, SchemaModel } from './ir.js';
 import type { EnginePropsSchemas } from './props.js';
+import type { PropsUpgrade } from './versioning.js';
 import type { TerminologyBundle } from './terminology.js';
 import type { TypeCatalog } from './type-catalog.js';
 
@@ -84,6 +85,12 @@ export interface EngineDefinition extends EngineStaticFacet {
   /** No feature atom: `aiProfile === undefined` simply hides the AI panel and makes the AI
    *  routes 400 `engine.feature-unsupported`. Narrowed from `unknown` with §13 (Phase 5). */
   readonly aiProfile?: AiProfile;
+  /**
+   * §15.1 / doc 00 Q19 — one entry per past major (`fromMajor` 1 … current − 1), so the api's
+   * `engines:upgrade` command can move a project's stored props to this major. Absent at
+   * major 1. `props/previous-major-migrates` checks the chain is complete.
+   */
+  readonly propsUpgrades?: readonly PropsUpgrade[];
 
   /**
    * The engine's only obligation to the permission system (§3.1). REQUIRED, pure, synchronous,

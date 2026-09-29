@@ -14,6 +14,7 @@ import {
   type ProjectSkeleton,
   type ResourceRef,
 } from '../access';
+import { EngineGate } from '../engines/engine-gate.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { cascadeDelete } from './cascade';
 import { sortOps } from './op-order';
@@ -90,6 +91,7 @@ export class SchemaWriter {
     private readonly prisma: PrismaService,
     private readonly resolver: PermissionResolver,
     private readonly commits: SchemaCommits,
+    private readonly gate: EngineGate,
   ) {}
 
   async apply(batch: SchemaOperationBatch, ctx: WriteContext): Promise<SchemaOperationResult> {
@@ -156,6 +158,7 @@ export class SchemaWriter {
     ctx: WriteContext,
   ): Promise<SchemaOperationResult> {
     const { projectId } = ctx;
+    await this.gate.checkWrite(tx, projectId);
     await this.assertVersions(tx, ops, ctx);
     await ctx.beforeWrite?.(tx);
 

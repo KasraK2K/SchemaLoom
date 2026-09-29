@@ -51,6 +51,9 @@ DEV database.
 - **Web and api share one hostname** in every deploy (the api refuses to boot otherwise).
   Session cookies are host-only and RSC pages forward the browser's cookies; two hostnames
   loop on /login. Don't "fix" that by putting `sl_access` on `COOKIE_DOMAIN`.
+- **An engine major bump ships `propsUpgrades`** (one step per past major; conformance checks
+  it). Projects on the old major stay read-only (`EngineGate.checkWrite`, 423) until an operator
+  runs `engine-upgrade.cli.js`. Never convert props on open.
 - **Invisible is 404, not 403.** Don't make a route an existence oracle.
 - **Only org owners see every project (R13, amended 2026-09-29).** Org admins manage the org
   but see only projects they are granted, like members. Don't reintroduce `'admin'` into a
