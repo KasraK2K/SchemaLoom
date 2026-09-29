@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/brand/schemaloom-logo.svg" alt="SchemaLoom" width="320" /></p>
+
 # SchemaLoom
 
 Visual database design workspace: design schemas on a canvas, document every table and

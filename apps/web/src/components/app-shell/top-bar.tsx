@@ -1,6 +1,7 @@
 import { Button, Search } from '@schemaloom/ui';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { LogoMark } from '@/components/logo-mark';
 import { UserMenu } from '@/components/app-shell/user-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationsBell } from '@/features/notifications/notifications-bell';
@@ -20,7 +21,11 @@ export function TopBar({
 }) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-3">
-      <Link href="/" className="rounded-sm text-sm font-semibold tracking-tight text-text">
+      <Link
+        href="/"
+        className="flex items-center gap-2 rounded-sm text-sm font-semibold tracking-tight text-text"
+      >
+        <LogoMark className="size-6" />
         SchemaLoom
       </Link>
       {breadcrumb !== undefined && (
