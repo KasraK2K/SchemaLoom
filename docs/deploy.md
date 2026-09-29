@@ -11,6 +11,13 @@ api in a container**, with both under one registrable domain (Q13), for example
 | Migrations                                                     | a one-shot job before each api rollout | `apps/api/Dockerfile`, target `migrate` |
 | PostgreSQL 16, Redis 7, S3-compatible storage, SMTP or Resend  | managed services                       | —                                       |
 
+> **Unverified: the login cookie with two subdomains.** The api's `sl_access` cookie is
+> host-only on `api.example.com`, but the web app's server-rendered pages forward the
+> _browser's_ cookies for `app.example.com` to the api. That cookie is never among them, so
+> signed-in pages may keep redirecting to `/login`. Test sign-in on a staging deploy before
+> relying on this layout. `docs/self-host-ubuntu.md` avoids the problem by serving both apps
+> from one hostname.
+
 ## 1. Create the database with a pinned collation (once, before anything else)
 
 A database's collation **cannot be changed in place**. Text indexes are ordered by it, so
