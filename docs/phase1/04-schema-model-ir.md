@@ -2444,6 +2444,7 @@ fields, ~400 links, ~600 indexes and constraints.
 | Structure (objects, no docs) | ~1.5 MB JSON |
 | Doc excerpts at 100% coverage: ~3,300 documented objects × ≤200 chars plus the `DocRef` wrapper | ~0.8 MB |
 | **Total worst case** | **~2.3 MB JSON, ~250 KB gzipped** |
+| *Measured 2026-09-29* (`apps/api/src/schema/ir-size.spec.ts`, random cuid ids, which gzip worse than the estimate assumed) | *2.1 MB JSON, ~380 KB gzipped* |
 
 The excerpt cap is what keeps that second row bounded, and revision 1 had no cap: it shipped
 the full flattened `plainText` plus `FieldDocFacts` (`allowedValues` and `examples` arrays)

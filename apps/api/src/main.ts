@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import compression from 'compression';
 import helmet from 'helmet';
 import { Logger, LoggerErrorInterceptor } from 'nestjs-pino';
 import { ZodValidationPipe, cleanupOpenApiDoc } from 'nestjs-zod';
@@ -40,6 +41,15 @@ async function bootstrap(): Promise<void> {
   app.set('trust proxy', config.get('TRUST_PROXY', { infer: true }));
 
   app.use(helmet());
+  // Q23: a worst-case 300-table IR is ~2.1 MB of JSON and ~380 KB gzipped (ir-size.spec).
+  // The AI stream is skipped: gzip buffers it, so tokens would stop arriving one by one.
+  app.use(
+    compression({
+      filter: (req, res) =>
+        !String(res.getHeader('Content-Type') ?? '').startsWith('text/event-stream') &&
+        compression.filter(req, res),
+    }),
+  );
   // Before anything that reads a cookie: the auth guard and the CSRF middleware.
   app.use(cookieMiddleware);
 

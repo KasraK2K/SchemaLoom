@@ -54,6 +54,9 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
   Redis). The image also declares a Docker `HEALTHCHECK` on `/healthz`.
 - **WebSockets:** realtime uses Socket.IO on the api origin, so the host and its load
   balancer must allow WebSocket upgrades.
+- **Compression:** the api gzips its own responses (the IR for a 300-table project is about
+  2.1 MB of JSON and 380 KB gzipped). The AI assistant's event stream is sent uncompressed
+  so it isn't buffered. Turn off compression at the proxy for `text/event-stream` too.
 - **Replicas:** run **one**. Realtime is single-node (phase4 DESIGN) and the BullMQ
   workers are in-process (Q30).
 
