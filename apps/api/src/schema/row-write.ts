@@ -27,7 +27,7 @@ import type { SchemaDb } from './row-read';
 
 /** The one JSON cast. `engineProps` is `Record<string, unknown>` by design (C4) and
  *  Prisma's input type is a closed JSON union; nothing checks the bag here because the
- *  engine's `propsSchemas` validate it one stage earlier (§8.6 rule 9). */
+ *  engine's `propsSchemas` validate it one stage earlier (§8.6 rule 9, `props-validation.ts`). */
 const json = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
 
 const optionalJson = (value: unknown): Prisma.InputJsonValue | undefined =>

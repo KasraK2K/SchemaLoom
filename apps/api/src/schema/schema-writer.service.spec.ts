@@ -21,8 +21,8 @@ import { SchemaLoader } from './schema-loader.service';
 import { SchemaCommits, SchemaWriter, type WriteContext } from './schema-writer.service';
 import type { EngineGate } from '../engines/engine-gate.service';
 
-/** The engine gate has its own spec; here every project is writable. */
-const OPEN_GATE = { checkWrite: () => Promise.resolve() } as unknown as EngineGate;
+/** The engine gate has its own spec; here every project is writable, with no engine props check. */
+const OPEN_GATE = { checkWrite: () => Promise.resolve(null) } as unknown as EngineGate;
 
 /**
  * Doc 04 §8.6 — one test per safety rule, because each of them is a rule somebody will

@@ -145,17 +145,18 @@ export class EngineGate {
    * §15 "re-checked on every write". Both schema writers call this first, inside their
    * transaction: a read-only project refuses with 423, and a writable one whose stored version
    * is older within the same major is stamped with the running engine's version, because the
-   * props this write stores are validated against that engine.
+   * props this write stores are validated against that engine. Returns that engine, for
+   * the `propsSchemas` stage (doc 04 §8.6 rule 9).
    */
   async checkWrite(
     tx: Pick<Prisma.TransactionClient, 'project'>,
     projectId: string,
-  ): Promise<void> {
+  ): Promise<EngineDefinition | null> {
     const project = await tx.project.findFirst({
       where: { id: projectId },
       select: { engineId: true, enginePluginVersion: true },
     });
-    if (project === null) return; // the guard already 404'd a missing project
+    if (project === null) return null; // the guard already 404'd a missing project
     const state = this.resolve(project);
     assertWritable(state);
     if (state.storedPluginVersion !== state.enginePluginVersion) {
@@ -164,5 +165,6 @@ export class EngineGate {
         data: { enginePluginVersion: state.enginePluginVersion },
       });
     }
+    return state.engine;
   }
 }

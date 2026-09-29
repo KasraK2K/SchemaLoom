@@ -7,8 +7,8 @@ import { SchemaCommits } from './schema-writer.service';
 import { GeometryBatchSchema } from './ops';
 import type { EngineGate } from '../engines/engine-gate.service';
 
-/** The engine gate has its own spec; here every project is writable. */
-const OPEN_GATE = { checkWrite: () => Promise.resolve() } as unknown as EngineGate;
+/** The engine gate has its own spec; here every project is writable, with no engine props check. */
+const OPEN_GATE = { checkWrite: () => Promise.resolve(null) } as unknown as EngineGate;
 
 /**
  * Doc 04 §8.11 — the C7 carve-out. The two assertions that matter are ABSENCES, which is

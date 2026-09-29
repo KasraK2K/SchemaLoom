@@ -26,6 +26,7 @@ import {
   type VersionConflict,
 } from './ops';
 import { postImages } from './post-images';
+import { assertEngineProps } from './props-validation';
 import type { SchemaDb } from './row-read';
 import { createRow, replaceChildren, updateRow } from './row-write';
 import { requirementsOf } from './requirements';
@@ -158,7 +159,8 @@ export class SchemaWriter {
     ctx: WriteContext,
   ): Promise<SchemaOperationResult> {
     const { projectId } = ctx;
-    await this.gate.checkWrite(tx, projectId);
+    const engine = await this.gate.checkWrite(tx, projectId);
+    if (engine !== null) assertEngineProps(engine, ops, ctx.redacted);
     await this.assertVersions(tx, ops, ctx);
     await ctx.beforeWrite?.(tx);
 
