@@ -9,7 +9,9 @@
  *  1. it did not work — an entity's maximum reachable score was 0.50 against a 0.60
  *     threshold, so a plain table rename could never even be SUGGESTED, while a field
  *     could score 1.20 on a `confidence` documented as 0..1;
- *  2. the confirm-rename screen it feeds does not exist; it belongs to Phase 4;
+ *  2. the confirm-rename screen now exists (Phase 4's import preview), and it is fed by
+ *     `renameCandidates`, which only PROPOSES; a human confirms, and nothing unconfirmed
+ *     ever reaches this matcher;
  *  3. the safe default is the no-op. A false rename emits `RENAME COLUMN` and silently
  *     lands production data in a column that means something else. Drop+add is correct,
  *     just noisier.

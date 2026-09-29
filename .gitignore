@@ -32,3 +32,6 @@ npm-debug.log*
 
 # graphify knowledge graph: rebuilt locally by the post-commit/post-checkout hooks
 graphify-out/
+
+# Claude Code agent worktrees
+.claude/worktrees/

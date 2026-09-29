@@ -11,6 +11,7 @@ import {
 } from '@schemaloom/ui';
 import { useState } from 'react';
 import { useEngine } from '@/engines';
+import { DescribeSchema } from '@/features/ai/describe-schema';
 import {
   importInto,
   previewImport,
@@ -247,6 +248,7 @@ export function ImportDialog({
               submitSource();
             }}
           >
+            <DescribeSchema projectId={projectId} onDraft={setSource} />
             <textarea
               required
               autoFocus

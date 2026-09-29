@@ -282,7 +282,7 @@ export function ValidationNotes({ validation }: { readonly validation: QueryVali
   );
 }
 
-function marksOf(validation: QueryValidation | null): EditorMark[] {
+export function marksOf(validation: QueryValidation | null): EditorMark[] {
   if (validation === null) return [];
   const flagged = validation.identifiers
     .filter((i) => FLAGGED_STATUSES.has(i.status))

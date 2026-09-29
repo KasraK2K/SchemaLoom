@@ -79,7 +79,7 @@ interface Pending {
 }
 
 /** Byte comparison, NOT `localeCompare`: the result must not depend on the server's locale. */
-function compare(a: string, b: string): number {
+export function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
@@ -95,7 +95,7 @@ function byPhaseThenKey(a: Pending, b: Pending): number {
 
 const REDACTION_NOTICE = '-- Some objects are not included because of your access level.';
 
-const ENTITY_SUBJECT: Readonly<Record<string, CommentSubject>> = {
+export const ENTITY_SUBJECT: Readonly<Record<string, CommentSubject>> = {
   table: 'TABLE',
   view: 'VIEW',
   materializedView: 'MATERIALIZED VIEW',
@@ -147,7 +147,7 @@ function sortedValues<T extends { readonly id: Id }>(bag: Record<Id, T>): readon
 /** Dependency depth over `refs.entityIds` — §10.1 rule 2, "a table before a view that selects
  *  from it, and a view before a view that selects from *it*". A cycle resolves to depth 0 for
  *  every member, so the tie-break key orders it deterministically rather than hanging. */
-function entityDepths(entities: readonly Entity[]): ReadonlyMap<Id, number> {
+export function entityDepths(entities: readonly Entity[]): ReadonlyMap<Id, number> {
   const present = new Set(entities.map((e) => e.id));
   const byId = new Map(entities.map((e) => [e.id, e]));
   const depths = new Map<Id, number>();
@@ -518,7 +518,7 @@ function buildExport(input: ExportInput): ExportResult {
  * qualified here — in the exporter, where the DDL is, rather than in the catalog, where the
  * label is.
  */
-function renderType(
+export function renderType(
   field: Field,
   typeContext: TypeResolutionContext,
   entityNamespaceId: Id,
@@ -552,7 +552,7 @@ function linkSkipReason(
   return null;
 }
 
-function indexColumns(
+export function indexColumns(
   index: Index,
   emittedFields: ReadonlyMap<Id, Field>,
 ): { keys: readonly IndexColumnInput[]; included: readonly string[] } | null {
@@ -583,7 +583,7 @@ function indexColumns(
   return keys.length === 0 ? null : { keys, included };
 }
 
-function customTypeStatement(
+export function customTypeStatement(
   customType: CustomType,
   nsName: string,
 ): { kind: string; text: string } | null {

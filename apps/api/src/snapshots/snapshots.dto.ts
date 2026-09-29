@@ -41,3 +41,18 @@ export const ImportSourceSchema = ImportPreviewSchema.extend({
 });
 
 export class ImportSourceDto extends createZodDto(ImportSourceSchema) {}
+
+/** Doc 03 §11.2 `MigrationOptions`, from a query string: only the literal `true` / `false`. */
+const flag = (fallback: 'true' | 'false') =>
+  z
+    .enum(['true', 'false'])
+    .default(fallback)
+    .transform((v) => v === 'true');
+
+/** `GET …/migration/…`. Destructive steps are commented out unless asked for (§11.2). */
+export const MigrationQuerySchema = z.object({
+  allowDestructive: flag('false'),
+  transactional: flag('true'),
+});
+
+export class MigrationQueryDto extends createZodDto(MigrationQuerySchema) {}

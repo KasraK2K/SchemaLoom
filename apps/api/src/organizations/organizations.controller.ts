@@ -15,10 +15,16 @@ import type { Request } from 'express';
 import { Authenticated } from '../access';
 import { getPrincipal } from '../auth';
 import type { ProjectSummary } from '../projects';
+import { GroupsService, type GroupView } from './groups.service';
+import { MembersService, type MemberView } from './members.service';
 import {
+  AddGroupMemberDto,
+  CreateGroupDto,
   CreateOrganizationDto,
   CreateRoleDto,
   CreateWorkspaceDto,
+  UpdateGroupDto,
+  UpdateMemberDto,
   UpdateRoleDto,
 } from './organizations.dto';
 import { OrganizationsService } from './organizations.service';
@@ -31,6 +37,8 @@ export class OrganizationsController {
   constructor(
     private readonly organizations: OrganizationsService,
     private readonly roles: RolesService,
+    private readonly members: MembersService,
+    private readonly groups: GroupsService,
   ) {}
 
   /**
@@ -158,6 +166,110 @@ export class OrganizationsController {
     @Param('roleId') roleId: string,
   ): Promise<void> {
     await this.roles.remove(this.userId(req), orgSlug, roleId);
+  }
+
+  /**
+   * Doc 05 §3.2 members and groups. Same marker and membership-first rule as the role
+   * routes. Listing answers owner/admin/member (the §3.2 table; the §12.1 example's
+   * `['owner','admin']` decorator predates it and agrees on the guest's 403); every write
+   * is owner/admin, applied by the services.
+   */
+  @ApiOperation({ summary: 'Members of the organisation with their org role' })
+  @Authenticated()
+  @Get(':orgSlug/members')
+  async listMembers(@Req() req: Request, @Param('orgSlug') orgSlug: string): Promise<MemberView[]> {
+    return this.members.list(this.userId(req), orgSlug);
+  }
+
+  @ApiOperation({ summary: 'Change a member’s org role (owner or admin; owners only for owners)' })
+  @Authenticated()
+  @Patch(':orgSlug/members/:userId')
+  async updateMember(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('userId') userId: string,
+    @Body() dto: UpdateMemberDto,
+  ): Promise<MemberView> {
+    return this.members.setRole(this.userId(req), orgSlug, userId, dto.role);
+  }
+
+  @ApiOperation({ summary: 'Remove a member from the organisation (owner or admin)' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete(':orgSlug/members/:userId')
+  async removeMember(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('userId') userId: string,
+  ): Promise<void> {
+    await this.members.remove(this.userId(req), orgSlug, userId);
+  }
+
+  @ApiOperation({ summary: 'Groups of the organisation with their members' })
+  @Authenticated()
+  @Get(':orgSlug/groups')
+  async listGroups(@Req() req: Request, @Param('orgSlug') orgSlug: string): Promise<GroupView[]> {
+    return this.groups.list(this.userId(req), orgSlug);
+  }
+
+  @ApiOperation({ summary: 'Create a group (owner or admin)' })
+  @Authenticated()
+  @Post(':orgSlug/groups')
+  async createGroup(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Body() dto: CreateGroupDto,
+  ): Promise<GroupView> {
+    return this.groups.create(this.userId(req), orgSlug, dto);
+  }
+
+  @ApiOperation({ summary: 'Rename or describe a group (owner or admin)' })
+  @Authenticated()
+  @Patch(':orgSlug/groups/:groupId')
+  async updateGroup(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('groupId') groupId: string,
+    @Body() dto: UpdateGroupDto,
+  ): Promise<GroupView> {
+    return this.groups.update(this.userId(req), orgSlug, groupId, dto);
+  }
+
+  @ApiOperation({ summary: 'Delete a group and its grants (owner or admin)' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete(':orgSlug/groups/:groupId')
+  async deleteGroup(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('groupId') groupId: string,
+  ): Promise<void> {
+    await this.groups.remove(this.userId(req), orgSlug, groupId);
+  }
+
+  @ApiOperation({ summary: 'Add an org member to a group (owner or admin)' })
+  @Authenticated()
+  @Post(':orgSlug/groups/:groupId/members')
+  async addGroupMember(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('groupId') groupId: string,
+    @Body() dto: AddGroupMemberDto,
+  ): Promise<GroupView> {
+    return this.groups.addMember(this.userId(req), orgSlug, groupId, dto.userId);
+  }
+
+  @ApiOperation({ summary: 'Remove a user from a group (owner or admin)' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete(':orgSlug/groups/:groupId/members/:userId')
+  async removeGroupMember(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('groupId') groupId: string,
+    @Param('userId') userId: string,
+  ): Promise<void> {
+    await this.groups.removeMember(this.userId(req), orgSlug, groupId, userId);
   }
 
   /**

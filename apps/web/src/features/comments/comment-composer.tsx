@@ -165,12 +165,12 @@ interface Node {
   type?: string;
   text?: string;
   attrs?: Record<string, unknown>;
-  marks?: { type: string }[];
+  marks?: { type: string; attrs?: Record<string, unknown> }[];
   content?: Node[];
 }
 
 /**
- * Read-only render of a (server-redacted) comment body. A handful of node types, not a
+ * Read-only render of a (server-redacted) comment body or doc. A handful of node types, not a
  * second editor per comment; anything unknown renders its children.
  */
 export function RichText({ doc }: { readonly doc: unknown }) {
@@ -190,6 +190,12 @@ function render(node: Node, key: string): ReactNode {
       return <ol key={key} className="list-decimal pl-5">{kids}</ol>;
     case 'listItem':
       return <li key={key}>{kids}</li>;
+    case 'heading':
+      return <p key={key} className="font-semibold">{kids}</p>;
+    case 'codeBlock':
+      return <pre key={key} className="overflow-auto rounded bg-surface-sunken p-2 font-mono text-xs">{kids}</pre>;
+    case 'horizontalRule':
+      return <hr key={key} className="border-border" />;
     case 'blockquote':
       return <blockquote key={key} className="border-l-2 border-border pl-2 text-text-muted">{kids}</blockquote>;
     case 'mention':
@@ -207,6 +213,15 @@ function render(node: Node, key: string): ReactNode {
         else if (mark.type === 'italic') out = <em>{out}</em>;
         else if (mark.type === 'code') out = <code className="font-mono text-xs">{out}</code>;
         else if (mark.type === 'strike') out = <s>{out}</s>;
+        else if (mark.type === 'underline') out = <u>{out}</u>;
+        // The API keeps only http(s)/mailto hrefs (docs-rules.ts).
+        else if (mark.type === 'link' && typeof mark.attrs?.href === 'string') {
+          out = (
+            <a href={mark.attrs.href} target="_blank" rel="noopener noreferrer nofollow" className="text-accent-text underline">
+              {out}
+            </a>
+          );
+        }
       }
       return <span key={key}>{out}</span>;
     }

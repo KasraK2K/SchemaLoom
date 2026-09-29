@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
+import { OrgSettingsNav } from '@/features/org-settings/org-settings-nav';
 import { listOrganizations } from '@/features/projects';
 import { listRoles } from '@/features/roles/roles-api';
 import { RolesManager } from '@/features/roles/roles-manager';
@@ -31,6 +32,7 @@ export default async function OrgRolesPage({ params }: { params: Promise<{ orgSl
       }
     >
       <div className="mx-auto max-w-3xl p-8">
+        <OrgSettingsNav orgSlug={orgSlug} orgRole={org.orgRole} current="roles" />
         <h1 className="text-lg font-semibold text-text">Roles</h1>
         <p className="mt-1 mb-6 text-sm text-text-muted">
           Custom roles can be used in any grant in {org.name}. Archiving a role hides it from

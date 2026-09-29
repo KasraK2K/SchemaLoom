@@ -4,8 +4,10 @@ import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
 import { CanvasClient } from '@/features/canvas/canvas-client';
 import { dehydrateIr } from '@/features/canvas/ir-prefetch';
+import { ExportMenu } from '@/features/exports/export-menu';
 import { ProjectTabs } from '@/features/history/project-tabs';
 import { InspectorPanel } from '@/features/inspector/inspector-panel';
+import { ProjectSettingsDialog } from '@/features/project/project-settings-dialog';
 import { ProjectShareButton } from '@/features/sharing';
 
 /**
@@ -43,7 +45,13 @@ export default async function ProjectCanvasPage({
             <ProjectTabs orgSlug={orgSlug} projectId={projectId} />
           </span>
         }
-        actions={<ProjectShareButton projectId={projectId} />}
+        actions={
+          <>
+            <ExportMenu projectId={projectId} />
+            <ProjectSettingsDialog projectId={projectId} />
+            <ProjectShareButton projectId={projectId} />
+          </>
+        }
         rightPanel={<InspectorPanel projectId={projectId} />}
       >
         <CanvasClient projectId={projectId} />

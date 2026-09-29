@@ -77,8 +77,9 @@ export const envSchema = z
     S3_SECRET_ACCESS_KEY: z.string().min(1),
     S3_PUBLIC_URL: optionalStr,
 
-    // Phase 2; the AI module is not registered without it
+    // Phase 5: without a key every AI route answers 503 ai_not_configured
     ANTHROPIC_API_KEY: optionalStr,
+    AI_MODEL: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('claude-opus-5')),
   })
   .superRefine((env, ctx) => {
     // §11.4: "RESEND_API_KEY or SMTP_URL". Boot fails if both are missing.

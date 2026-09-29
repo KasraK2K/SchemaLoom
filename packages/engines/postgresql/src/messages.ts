@@ -42,6 +42,13 @@ export const CODE = {
   queryUnknownColumn: 'postgresql.query-unknown-column',
   queryUnknownColumnOn: 'postgresql.query-unknown-column-on',
   queryAmbiguousColumn: 'postgresql.query-ambiguous-column',
+  /** §11.2 — a migration step's `reasonCode`, and an `unsupported` entry's two codes. */
+  migrationDropsData: 'postgresql.migration-drops-data',
+  migrationTypeNarrowed: 'postgresql.migration-type-narrowed',
+  migrationTypeRewrite: 'postgresql.migration-type-rewrite',
+  migrationNotNull: 'postgresql.migration-not-null',
+  migrationChange: 'postgresql.migration-change',
+  migrationUnsupported: 'postgresql.migration-unsupported',
 } as const;
 
 export const DIAGNOSTIC_MESSAGES: DiagnosticMessages = {
@@ -78,4 +85,12 @@ export const DIAGNOSTIC_MESSAGES: DiagnosticMessages = {
   [CODE.queryUnknownColumnOn]: '“{table}” has no column named “{name}”',
   [CODE.queryAmbiguousColumn]:
     '“{name}” is ambiguous — {count} tables in this query have it ({tables}); qualify it',
+  [CODE.migrationDropsData]: 'Permanently deletes {object} and every value stored in it',
+  [CODE.migrationTypeNarrowed]:
+    'Changing {from} to {to} may truncate, round or reject existing values, and rewrites the table',
+  [CODE.migrationTypeRewrite]: 'Changing {from} to {to} rewrites the whole table under a lock',
+  [CODE.migrationNotNull]:
+    'Adding NOT NULL to {object} scans the whole table under a lock, and fails if any row holds NULL',
+  [CODE.migrationChange]: '{object}: {property} ({change})',
+  [CODE.migrationUnsupported]: 'Needs a manual step — {reason}',
 };

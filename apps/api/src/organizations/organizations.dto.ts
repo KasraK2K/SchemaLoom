@@ -1,3 +1,4 @@
+import { orgRoleSchema } from '@schemaloom/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -26,3 +27,21 @@ export const updateRoleSchema = z.object({
   archived: z.boolean().optional(),
 });
 export class UpdateRoleDto extends createZodDto(updateRoleSchema) {}
+
+export const updateMemberSchema = z.object({ role: orgRoleSchema });
+export class UpdateMemberDto extends createZodDto(updateMemberSchema) {}
+
+const groupName = z.string().trim().min(1).max(120);
+const groupDescription = z.string().trim().max(500).nullable();
+
+export const createGroupSchema = z.object({ name: groupName, description: groupDescription.optional() });
+export class CreateGroupDto extends createZodDto(createGroupSchema) {}
+
+export const updateGroupSchema = z.object({
+  name: groupName.optional(),
+  description: groupDescription.optional(),
+});
+export class UpdateGroupDto extends createZodDto(updateGroupSchema) {}
+
+export const addGroupMemberSchema = z.object({ userId: z.string().min(1).max(64) });
+export class AddGroupMemberDto extends createZodDto(addGroupMemberSchema) {}

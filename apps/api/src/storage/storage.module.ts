@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { S3Client } from '@aws-sdk/client-s3';
 import type { AppEnv } from '../config/env';
 import { StorageService, createS3Client } from './storage.service';
-import { S3_BUCKET, S3_CLIENT } from './storage.tokens';
+import { S3_BUCKET, S3_CLIENT, S3_PRESIGN_CLIENT } from './storage.tokens';
 
 const clientProvider: Provider = {
   provide: S3_CLIENT,
@@ -16,6 +16,21 @@ const clientProvider: Provider = {
       accessKeyId: config.get('S3_ACCESS_KEY_ID', { infer: true }),
       secretAccessKey: config.get('S3_SECRET_ACCESS_KEY', { infer: true }),
     }),
+};
+
+const presignClientProvider: Provider = {
+  provide: S3_PRESIGN_CLIENT,
+  inject: [ConfigService, S3_CLIENT],
+  useFactory: (config: ConfigService<AppEnv, true>, internal: S3Client): S3Client => {
+    const publicUrl = config.get('S3_PUBLIC_URL', { infer: true });
+    return publicUrl === config.get('S3_ENDPOINT', { infer: true })
+      ? internal
+      : createS3Client({
+          endpoint: publicUrl,
+          accessKeyId: config.get('S3_ACCESS_KEY_ID', { infer: true }),
+          secretAccessKey: config.get('S3_SECRET_ACCESS_KEY', { infer: true }),
+        });
+  },
 };
 
 const bucketProvider: Provider = {
@@ -31,7 +46,7 @@ const bucketProvider: Provider = {
  * is how a bucket write ends up on a request path.
  */
 @Module({
-  providers: [clientProvider, bucketProvider, StorageService],
+  providers: [clientProvider, presignClientProvider, bucketProvider, StorageService],
   exports: [StorageService],
 })
 export class StorageModule {}

@@ -48,6 +48,25 @@ export {
   type NotificationType,
 } from './notifications.js';
 
+export {
+  applyProjectSettingsPatch,
+  projectSettingsInputSchema,
+  projectSettingsPatchSchema,
+  projectSettingsStoredSchema,
+  type ProjectSettings,
+  type ProjectSettingsPatch,
+} from './project-settings.js';
+
+export {
+  DOC_TARGET_TYPES,
+  docTargetTypeSchema,
+  richTextSchema,
+  structuredDocSchema,
+  type DocTargetType,
+  type FieldDocFacts,
+  type StructuredDoc,
+} from './docs.js';
+
 /**
  * Re-exported from `schema-model`, which owns it (C10 forbids the reverse
  * dependency). The API layer imports it from here so there is one import site
@@ -60,3 +79,5 @@ export { MAX_FIELD_DEPTH } from '@schemaloom/schema-model';
  * and the e2e suite cannot drift — see the file header for why every id is opaque.
  */
 export { DEMO_PASSWORD, HIDDEN_FROM_FREELANCER, SEED, SEED_EMAILS } from './fixtures.js';
+
+export { aiMessageMetaSchema, selectionSchema, type AiMessageMeta, type Selection } from './ai.js';

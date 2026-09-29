@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccessWriter } from '../sharing/access-write';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 
@@ -10,7 +11,8 @@ import { ProjectsService } from './projects.service';
  */
 @Module({
   controllers: [ProjectsController],
-  providers: [ProjectsService],
+  // `AccessWriter` needs only the global Prisma and resolver; settings writes reuse it.
+  providers: [ProjectsService, AccessWriter],
   exports: [ProjectsService],
 })
 export class ProjectsModule {}

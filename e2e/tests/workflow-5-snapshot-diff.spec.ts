@@ -7,9 +7,8 @@ import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
  * SPEC §8 workflow #5 — an editor changes the schema, saves a snapshot, views the diff,
  * exports a migration script.
  *
- * The first three are live routes. Export needs `POST /api/projects/:id/export`, which
- * Phase 1 does not ship (the exporter itself is finished and unit tested in
- * `packages/engines/postgresql`), so it is `test.fixme`.
+ * All four are live routes: the migration script comes from the Phase 5 generator
+ * (`…/snapshots/:id/migration/live`) and the export from `POST /api/projects/:id/exports`.
  */
 
 interface SnapshotSummary {
@@ -94,10 +93,79 @@ test.describe('workflow 5 — change, snapshot, diff, export', () => {
     expect(listed.status()).toBe(403);
   });
 
-  test.fixme('exports a migration script from the diff', () => {
-    // Needs POST /api/projects/:id/export. When it lands it must be asserted through a
-    // REDACTED model (L18): the analyst's export of `employees` must not contain
-    // `salary`, and an entity whose index was blanked must not silently emit DDL for a
-    // table with no primary key (doc 04 §10.2's closing rule, `propsRedacted`).
+  test('generates a migration script from a snapshot to the live schema', async () => {
+    const owner = await signIn(SEED_EMAILS.owner);
+    const base = await snapshot(owner, uniq('migration_base'));
+    const column = uniq('shipped_at').toLowerCase();
+
+    const changed = await owner.api.post(`/api/projects/${SEED.projectId}/schema/ops`, {
+      headers: write(owner),
+      data: {
+        batchId: uniq('bat_e2e_w5m'),
+        projectId: SEED.projectId,
+        ops: [
+          {
+            op: 'create',
+            type: 'field',
+            object: {
+              id: uniq('fld_e2e_w5m').slice(0, 40),
+              name: column,
+              engineProps: {},
+              entityId: SEED.entities.orders,
+              parentFieldId: null,
+              type: { name: 'timestamptz' },
+              isNullable: true,
+              isRestricted: false,
+              isPii: false,
+              isDeprecated: false,
+            },
+          },
+        ],
+        label: 'Add a column for the migration test',
+      },
+    });
+    expect(changed.status(), await changed.text()).toBe(201);
+
+    const plan = await owner.api.get(
+      `/api/projects/${SEED.projectId}/snapshots/${base.id}/migration/live`,
+    );
+    expect(plan.status(), await plan.text()).toBe(200);
+    const { script } = (await plan.json()) as { script: string };
+    expect(script).toMatch(/ALTER TABLE .*orders.* ADD COLUMN .*shipped_at/i);
+
+    // A partial view would produce a script that silently omits objects: refused (R21′).
+    const dana = await signIn(SEED_EMAILS.freelancer);
+    const refused = await dana.api.get(
+      `/api/projects/${SEED.projectId}/snapshots/${base.id}/migration/live`,
+    );
+    expect([403, 404]).toContain(refused.status());
+  });
+
+  test('a DDL export is rendered from the redacted model (L11)', async () => {
+    // The analyst sees `employees` with `salary` masked; the export must not name it.
+    const alex = await signIn(SEED_EMAILS.analyst);
+    const created = await alex.api.post(`/api/projects/${SEED.projectId}/exports`, {
+      headers: write(alex),
+      data: { format: 'ddl' },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const { id } = (await created.json()) as { id: string };
+
+    let downloadUrl: string | undefined;
+    await expect(async () => {
+      const job = (await (await alex.api.get(`/api/exports/${id}`)).json()) as {
+        status: string;
+        downloadUrl?: string;
+      };
+      expect(job.status).toBe('done');
+      downloadUrl = job.downloadUrl;
+    }).toPass({ timeout: 30_000 });
+
+    const file = await alex.api.get(downloadUrl ?? '');
+    expect(file.status()).toBe(200);
+    const ddl = await file.text();
+    expect(ddl).toContain('employees');
+    expect(ddl).not.toContain('salary');
+    expect(ddl).toContain('Some objects are not included because of your access level.');
   });
 });

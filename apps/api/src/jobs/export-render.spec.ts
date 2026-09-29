@@ -136,7 +136,7 @@ describe('ir-json', () => {
     expect(rendered.contentType).toBe('application/json; charset=utf-8');
     expect(rendered.fileExtension).toBe('json');
 
-    const parsed = JSON.parse(rendered.body) as SchemaModel;
+    const parsed = JSON.parse(rendered.body as string) as SchemaModel;
     expect(parsed.projectId).toBe(PROJECT);
     expect(parsed.redacted).toBe(true);
     expect(Object.keys(parsed.objects.entity)).toEqual(['ent_orders', 'ent_secret']);

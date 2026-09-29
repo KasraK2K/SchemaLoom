@@ -14,6 +14,7 @@ import {
   entryName,
   groupByEntity,
   isCosmeticOnly,
+  migrationQueryOptions,
   restoreSnapshot,
   snapshotsKey,
   snapshotsQueryOptions,
@@ -21,6 +22,7 @@ import {
   type DiffEntry,
   type DiffProperty,
   type HistoryDiff,
+  type MigrationStep,
   type Snapshot,
 } from './history-api';
 
@@ -190,6 +192,9 @@ function DiffPane({
   const ir = useQuery(irQueryOptions(projectId));
   const [hideCosmetic, setHideCosmetic] = useState(true);
   const [restoring, setRestoring] = useState(false);
+  const [showSql, setShowSql] = useState(false);
+  // R21′: the API refuses a migration from a partial view; say why before the click.
+  const sqlBlocked = live.data?.fullView === false;
 
   const entityName = (id: string): string | null => ir.data?.objects.entity[id]?.name ?? null;
 
@@ -215,6 +220,18 @@ function DiffPane({
               </option>
             ))}
         </select>
+        <Button
+          size="sm"
+          variant={showSql && !sqlBlocked ? 'outline' : 'ghost'}
+          aria-pressed={showSql && !sqlBlocked}
+          disabled={sqlBlocked}
+          title={sqlBlocked ? 'Migration SQL needs access to every table in the project.' : undefined}
+          onClick={() => {
+            setShowSql((on) => !on);
+          }}
+        >
+          Migration SQL
+        </Button>
         <label className="ml-auto flex items-center gap-1 text-xs text-text-muted">
           <input
             type="checkbox"
@@ -244,7 +261,9 @@ function DiffPane({
       {live.data?.fullView === false && (
         <p className="text-xs text-text-muted">Restore is unavailable: it needs access to every table in the project.</p>
       )}
-      {diff.error !== null ? (
+      {showSql && !sqlBlocked ? (
+        <MigrationPane projectId={projectId} from={snapshot} to={compareTo} />
+      ) : diff.error !== null ? (
         <p role="alert" className="text-xs text-danger-text">
           {errorText(diff.error)}
         </p>
@@ -272,6 +291,136 @@ function DiffPane({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Doc 03 §11.2 — the engine's migration plan. Red and amber come straight off each step's
+ * `destructive` / `lossy`, never from parsing the SQL, so this and the diff cannot disagree.
+ */
+function MigrationPane({
+  projectId,
+  from,
+  to,
+}: {
+  readonly projectId: string;
+  readonly from: Snapshot;
+  readonly to: string | null;
+}) {
+  const [allowDestructive, setAllowDestructive] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const plan = useQuery(migrationQueryOptions(projectId, from.id, to, allowDestructive));
+
+  if (plan.error !== null) {
+    const status = plan.error instanceof ApiError ? plan.error.status : 0;
+    return (
+      <p role="alert" className="text-xs text-danger-text">
+        {status === 403 ? 'Migration SQL needs access to every table in the project.' : errorText(plan.error)}
+      </p>
+    );
+  }
+  if (plan.data === undefined) return <p className="text-xs text-text-subtle">Generating the migration…</p>;
+
+  const { steps, summary, unsupported, script, fileExtension } = plan.data;
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([script], { type: 'text/plain' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `migration-${from.name.replace(/[^\w.-]+/g, '_')}.${fileExtension}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Chip>{summary.total} steps</Chip>
+        <Chip warn={summary.destructive > 0}>{summary.destructive} destructive</Chip>
+        <Chip warn={summary.lossy > 0}>{summary.lossy} lossy</Chip>
+        <Chip>{summary.rewrites} locking</Chip>
+        <label className="ml-auto flex items-center gap-1 text-text-muted">
+          <input
+            type="checkbox"
+            checked={allowDestructive}
+            onChange={(e) => {
+              setAllowDestructive(e.target.checked);
+            }}
+          />
+          Include destructive steps
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={steps.length === 0}
+          onClick={() => {
+            void navigator.clipboard.writeText(script).then(() => {
+              setCopied(true);
+            });
+          }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+        <Button size="sm" variant="outline" disabled={steps.length === 0} onClick={download}>
+          Download .{fileExtension}
+        </Button>
+      </div>
+      {!allowDestructive && summary.destructive > 0 && (
+        <p className="text-xs text-text-muted">
+          Destructive steps are commented out in the script. Tick “Include destructive steps” to run them.
+        </p>
+      )}
+      {unsupported.length > 0 && (
+        <details open className="rounded border border-warning bg-warning-subtle">
+          <summary className="cursor-pointer px-2 py-1.5 text-xs font-medium text-warning-text">
+            {unsupported.length} change{unsupported.length === 1 ? ' needs' : 's need'} a manual step
+          </summary>
+          <ul className="flex flex-col gap-0.5 border-t border-warning px-2 py-1.5 text-xs text-text">
+            {unsupported.map((u, i) => (
+              <li key={i}>
+                {u.change} — <span className="text-text-muted">{u.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {steps.length === 0 && unsupported.length === 0 && (
+        <p className="text-sm text-text-muted">No schema changes to migrate.</p>
+      )}
+      <ol className="flex flex-col gap-1.5">
+        {steps.map((step) => (
+          <StepRow key={step.ordinal} step={step} />
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function StepRow({ step }: { readonly step: MigrationStep }) {
+  return (
+    <li
+      className={cn(
+        'flex flex-col gap-1 rounded border px-2 py-1.5',
+        step.destructive
+          ? 'border-danger bg-danger-subtle'
+          : step.lossy
+            ? 'border-warning bg-warning-subtle'
+            : 'border-border',
+      )}
+    >
+      <span className="flex flex-wrap items-center gap-2 text-[10px] uppercase text-text-subtle">
+        <span>{step.kind}</span>
+        {step.destructive && <span className="text-danger-text">destructive</span>}
+        {step.lossy && <span className="text-warning-text">lossy</span>}
+        {step.requiresTableRewrite && <span>locks the table</span>}
+        {step.commentedOut && <span>commented out</span>}
+      </span>
+      <pre className={cn('whitespace-pre-wrap font-mono text-xs text-text', step.commentedOut && 'opacity-60 line-through')}>
+        {step.text}
+      </pre>
+      {step.reason !== null && (
+        <span className={cn('text-xs', step.destructive ? 'text-danger-text' : 'text-text-muted')}>{step.reason}</span>
+      )}
+    </li>
   );
 }
 

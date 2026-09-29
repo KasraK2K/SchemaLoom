@@ -6,7 +6,18 @@ import {
   PayloadTooLargeException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import type { EngineRegistry, ImportReport } from '@schemaloom/engine-sdk';
+import {
+  renderDiagnostic,
+  renderMigrationScript,
+  type DiagnosticParam,
+  type EngineDefinition,
+  type EngineRegistry,
+  type ImportReport,
+  type IrObjectRef,
+  type MigrationPlan,
+  type MigrationStep,
+  type UnsupportedChange,
+} from '@schemaloom/engine-sdk';
 import {
   RawSchemaModel,
   diffModels,
@@ -185,6 +196,52 @@ export function withCounts(diff: SchemaDiff): HistoryDiff {
   };
 }
 
+/**
+ * Phase 5 §3 — `GET …/migration/…`. The engine's plan with each reason rendered for the
+ * caller, plus the whole script. Rendering server-side is safe only because the route
+ * requires the full view (R21′): every object a reason names is one the caller can see.
+ */
+export interface MigrationView {
+  readonly steps: readonly (MigrationStep & { readonly reason: string | null })[];
+  readonly summary: MigrationPlan['summary'];
+  readonly unsupported: readonly (UnsupportedChange & {
+    readonly change: string;
+    readonly reason: string;
+  })[];
+  readonly script: string;
+  /** the engine's `queryLanguage.fileExtension`, for the download */
+  readonly fileExtension: string;
+}
+
+export interface MigrationRequest {
+  readonly allowDestructive: boolean;
+  readonly transactional: boolean;
+}
+
+/** Diagnostic-style rendering (doc 03 §2.4) of a migration code, naming objects from the
+ *  newer model first, so a renamed table reads by its new name and a dropped one still has
+ *  its old name. */
+function reasonRenderer(
+  engine: EngineDefinition,
+  projectId: string,
+  models: readonly SchemaModel[],
+): (code: string, params: Readonly<Record<string, DiagnosticParam>>) => string {
+  const nameOf = (ref: IrObjectRef): string | null => {
+    for (const model of models) {
+      const object: { name?: string } | undefined = model.objects[ref.type][ref.id];
+      if (object?.name !== undefined && object.name !== '') return object.name;
+    }
+    return null;
+  };
+  return (code, params) =>
+    renderDiagnostic(
+      engine.diagnosticMessages,
+      engine.terminology,
+      { code, severity: 'info', params, target: { type: 'project', id: projectId } },
+      nameOf,
+    );
+}
+
 /** `POST .../import/preview` — what an import WOULD do. Nothing is written. */
 export interface ImportPreview {
   /** Tables the import would create. */
@@ -309,6 +366,86 @@ export class SnapshotsService {
     });
     const visibility = this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel);
     return { ...withCounts(diff), fullView: isCompleteView(visibility) };
+  }
+
+  /**
+   * Phase 5 §3 — the migration script from one snapshot to another, or (`toId === null`) to
+   * the current schema. `history:view` at the project (the guard) AND the full view (R21′,
+   * Q1): a script generated from a partial view silently omits every object the caller
+   * cannot see, and running it would read as "the database now matches the design".
+   *
+   * Built from the same redacted models the diff routes use — with the full view required
+   * they hold everything — so no unredacted model reaches the engine's output.
+   */
+  async migration(
+    ctx: SnapshotContext,
+    fromId: string,
+    toId: string | null,
+    request: MigrationRequest,
+  ): Promise<MigrationView> {
+    // R21′ first: an authorization answer, no I/O.
+    const visibility = this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel);
+    assertFullProjectView(visibility);
+
+    const [from, to, project] = await Promise.all([
+      this.require(ctx.projectId, fromId),
+      toId === null ? Promise.resolve(null) : this.require(ctx.projectId, toId),
+      loadLiveProject(this.prisma, ctx.projectId),
+    ]);
+    const stamp = { engineId: project.engineId, enginePluginVersion: project.enginePluginVersion };
+    assertSnapshotEngine(this.gate, stamp, from.enginePluginVersion);
+    if (to !== null) assertSnapshotEngine(this.gate, stamp, to.enginePluginVersion);
+
+    const engine = this.registry.tryGet(project.engineId);
+    const annotate = engine?.annotateDiff;
+    const generator = engine?.migrationGenerator;
+    if (engine === undefined || annotate === undefined || generator === undefined) {
+      throw new UnprocessableEntityException({ code: 'engine.migrations_unavailable' });
+    }
+
+    const before = this.redact(ctx, blobToLive(from.ir));
+    const after =
+      to === null
+        ? this.filter.redactWith(project.raw, ctx.subject, ctx.projectId, ctx.map, ctx.skel)
+        : this.redact(ctx, blobToLive(to.ir));
+    // The same diff the history screen shows, minus canvas noise (doc 04 §7.1), so the red in
+    // the script and the red in the diff come from one `annotateDiff` pass.
+    const diff = annotate(
+      diffModels(before, after, {
+        ignoreCosmetic: true,
+        from: refOf(from),
+        to: to === null ? { kind: 'live' } : refOf(to),
+      }),
+      before,
+      after,
+    );
+    const plan = await generator.generate({
+      diff,
+      before,
+      after,
+      options: { ...request, engineOptions: {} },
+      context: { projectId: ctx.projectId, serverVersion: project.live.engineVersion },
+    });
+
+    const render = reasonRenderer(engine, ctx.projectId, [after, before]);
+    const language = engine.capabilities.queryLanguage;
+    return {
+      steps: plan.steps.map((step) => ({
+        ...step,
+        reason: step.reasonCode === null ? null : render(step.reasonCode, step.reasonParams),
+      })),
+      summary: plan.summary,
+      unsupported: plan.unsupported.map((u) => ({
+        ...u,
+        change: render(u.changeCode, u.changeParams),
+        reason: render(u.reasonCode, u.reasonParams),
+      })),
+      script: renderMigrationScript(plan, {
+        separator: language.statementSeparator,
+        lineComment: language.lineComment,
+      }),
+      fileExtension: language.fileExtension,
+    };
   }
 
   /** §7.8 — `schema:edit`, and `kind = manual` only: automatic ones age out (Q4). A

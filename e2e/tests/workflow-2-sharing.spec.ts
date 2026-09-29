@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn, write } from '../fixtures/api';
+import { signedInPage, signIn, write } from '../fixtures/api';
 import { entityNames, fetchIr, fieldsOf } from '../fixtures/ir';
 import { HIDDEN_FROM_FREELANCER, SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
@@ -8,10 +8,9 @@ import { HIDDEN_FROM_FREELANCER, SEED, SEED_EMAILS } from '../fixtures/seed-ids'
  * Editor, and the whole project with an analyst as Viewer + AI, with salary columns
  * Restricted.
  *
- * The two grants are what the seed writes, so this file asserts the OUTCOME rather than
- * the sharing dialog: doc 05 §11.4's freelancer spec, near enough verbatim. Performing
- * the share through the UI waits on the sharing routes and
- * `apps/web/src/features/sharing`.
+ * The two grants are what the seed writes. The first test performs them again through the
+ * access dialog (`apps/web/src/features/sharing`); the rest assert the OUTCOME: doc 05
+ * §11.4's freelancer spec, near enough verbatim.
  *
  * The assertion that matters most is the last one, and it is deliberately made on BYTES
  * rather than on rendered text: a name the freelancer may not see must not be in the
@@ -19,9 +18,59 @@ import { HIDDEN_FROM_FREELANCER, SEED, SEED_EMAILS } from '../fixtures/seed-ids'
  * a server that ships it and hides it in CSS.
  */
 test.describe('workflow 2 — an area grant and a project grant, from the receiving end', () => {
-  test.fixme('the owner performs both shares in the access dialog', () => {
-    // Needs the sharing routes (POST /api/projects/:id/grants) and the web dialog.
-    // Until then the seed writes exactly the two grants this workflow describes.
+  // The seed already holds both grants; `POST /projects/:id/grants` creates OR REPLACES the
+  // grant for one (resource, principal), so re-sharing the same values through the dialog
+  // leaves the state every other test here reads exactly as it was.
+  test('the owner performs both shares in the access dialog', async ({ browser }) => {
+    const page = await signedInPage(browser, SEED_EMAILS.owner);
+    await page.goto(`/${SEED.orgSlug}/p/${SEED.projectId}`);
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    const who = dialog.getByLabel('Add people, groups, or an email address');
+    // `has` is matched INSIDE each form, so it must not start from `dialog` again.
+    const form = dialog
+      .locator('form')
+      .filter({ has: page.getByLabel('Add people, groups, or an email address') });
+    const saved = () =>
+      page.waitForResponse((r) => r.url().endsWith(`/api/projects/${SEED.projectId}/grants`) && r.request().method() === 'POST');
+
+    // Billing only, as Editor, for the freelancer.
+    await dialog.getByLabel('Resource to share').selectOption(SEED.areas.billing);
+    await who.fill('Dana');
+    await dialog.getByRole('button', { name: SEED.users.guest.name, exact: true }).click();
+    await form.getByLabel('Role for the new grant').selectOption({ label: 'Editor' });
+    let response = saved();
+    await form.getByRole('button', { name: /^Save/ }).click();
+    expect((await response).status()).toBe(201);
+
+    // The whole project, as Viewer + AI, for the analyst.
+    await dialog.getByLabel('Resource to share').selectOption(SEED.projectId);
+    await who.fill('Alex');
+    await dialog.getByRole('button', { name: SEED.users.member.name, exact: true }).click();
+    await form.getByLabel('Role for the new grant').selectOption({ label: 'Viewer' });
+    await form.getByLabel('Use AI').check();
+    response = saved();
+    await form.getByRole('button', { name: /^Save/ }).click();
+    expect((await response).status()).toBe(201);
+
+    // The outcome, read back from the API rather than from the dialog's own rendering.
+    const olivia = await signIn(SEED_EMAILS.owner);
+    const access = (await (await olivia.api.get(`/api/projects/${SEED.projectId}/access`)).json()) as {
+      entries: {
+        principal: { kind: string; id: string };
+        grants: { principal: { id: string }; resourceId: string; roleKey: string; canUseAi: boolean }[];
+      }[];
+    };
+    const own = (userId: string) =>
+      access.entries
+        .find((e) => e.principal.kind === 'user' && e.principal.id === userId)
+        ?.grants.filter((g) => g.principal.id === userId) ?? [];
+    expect(own(SEED.users.guest.id)).toEqual([
+      expect.objectContaining({ resourceId: SEED.areas.billing, roleKey: 'editor' }),
+    ]);
+    expect(own(SEED.users.member.id)).toEqual([
+      expect.objectContaining({ resourceId: SEED.projectId, roleKey: 'viewer', canUseAi: true }),
+    ]);
   });
 
   test('the freelancer sees Billing and nothing from Catalog', async () => {

@@ -14,6 +14,7 @@ import type {
   VisibilityFilter,
 } from '../access';
 import { EngineGate } from '../engines';
+import { ENGINE_MANIFEST } from '../engines/engines.manifest';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SchemaOperationBatch, SchemaWriter, WriteContext } from '../schema';
 import { fakePrisma, type Row, type Store } from '../schema/fake-prisma';
@@ -57,7 +58,13 @@ interface Harness {
 
 function harness(
   seed: Partial<Store>,
-  over: { context?: Partial<VisibilityContext>; engine?: string; imported?: SchemaModel } = {},
+  over: {
+    context?: Partial<VisibilityContext>;
+    engine?: string;
+    imported?: SchemaModel;
+    /** the real registered engine, for the migration routes */
+    realEngine?: boolean;
+  } = {},
 ): Harness {
   const fake = fakePrisma(seed);
   const base = fake.client as unknown as Record<string, unknown>;
@@ -159,7 +166,9 @@ function harness(
       gate,
       {
         tryGet: () =>
-          ({
+          over.realEngine === true
+            ? ENGINE_MANIFEST[0]
+            : ({
             capabilities: {
               importFormats: [{ id: 'ddl' }],
               defaultNamespaceName: 'public',
@@ -452,6 +461,81 @@ describe('SnapshotsService.liveDiff (Phase 4 §1.1)', () => {
   it('is 404 for a snapshot of another project', async () => {
     const h = harness(storeOf());
     await expect(h.service.liveDiff(CTX, 'snap_nope')).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('SnapshotsService.migration (Phase 5 §3)', () => {
+  const OPTIONS = { allowDestructive: false, transactional: true };
+
+  it('plans snapshot → live with the engine and renders the whole script', async () => {
+    const seed = storeOf({ entity: [entityRow('ent_a')] });
+    const all = new Set(['ent_a', 'ent_new']);
+    const h = harness(seed, {
+      realEngine: true,
+      context: { visibleEntityIds: all, restrictedOkEntityIds: all, totalEntityCount: 2 },
+    });
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    h.store.entity?.push(entityRow('ent_new', { name: 'invoices' }));
+    h.store.field?.push(fieldRow('fld_n', 'ent_new', { name: 'total' }));
+
+    const view = await h.service.migration(CTX, id, null, OPTIONS);
+
+    expect(view.steps.map((s) => s.kind)).toEqual(['CREATE TABLE']);
+    expect(view.steps[0]?.covers).toContainEqual({ type: 'field', id: 'fld_n' });
+    expect(view.script).toBe(
+      ['BEGIN;', '', 'CREATE TABLE public.invoices (', '  total text', ');', '', 'COMMIT;'].join('\n'),
+    );
+    expect(view.fileExtension).toBe('sql');
+    expect(h.writeCalls()).toEqual([]); // generating writes nothing
+  });
+
+  it('comments a DROP TABLE out, names it in the reason, and runs it only when allowed', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a'), entityRow('ent_b', { name: 'legacy' })] }), {
+      realEngine: true,
+    });
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    h.store.entity = (h.store.entity ?? []).filter((e) => e.id !== 'ent_b');
+
+    const guarded = await h.service.migration(CTX, id, null, OPTIONS);
+    expect(guarded.steps).toMatchObject([
+      { text: 'DROP TABLE public.legacy', destructive: true, commentedOut: true },
+    ]);
+    expect(guarded.steps[0]?.reason).toContain('legacy');
+    expect(guarded.script).toContain('-- DROP TABLE public.legacy;');
+
+    const allowed = await h.service.migration(CTX, id, null, { ...OPTIONS, allowDestructive: true });
+    expect(allowed.steps[0]?.commentedOut).toBe(false);
+  });
+
+  it('diffs two snapshots in the direction asked', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a')] }), { realEngine: true });
+    const v1 = await h.service.create(CTX, { name: 'v1' });
+    const row = h.store.entity?.[0];
+    if (row !== undefined) row.name = 'accounts';
+    const v2 = await h.service.create(CTX, { name: 'v2' });
+
+    const view = await h.service.migration(CTX, v1.id, v2.id, { ...OPTIONS, transactional: false });
+    expect(view.script).toBe('ALTER TABLE public.ent_a RENAME TO accounts;');
+  });
+
+  it('refuses a partial view before reading anything (R21′, Q1)', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a'), entityRow('ent_b')] }), {
+      realEngine: true,
+      context: { visibleEntityIds: new Set(['ent_a']) },
+    });
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    await expect(h.service.migration(CTX, id, null, OPTIONS)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('is 404 for a snapshot of another project', async () => {
+    const h = harness(storeOf(), { realEngine: true });
+    await expect(h.service.migration(CTX, 'snap_nope', null, OPTIONS)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('is 422 when the engine ships no migration generator', async () => {
+    const h = harness(storeOf());
+    const { id } = await h.service.create(CTX, { name: 'v1' });
+    await expect(h.service.migration(CTX, id, null, OPTIONS)).rejects.toMatchObject({ status: 422 });
   });
 });
 

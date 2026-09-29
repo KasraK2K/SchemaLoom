@@ -4,7 +4,8 @@ import {
   type ExportOptions,
 } from '@schemaloom/engine-sdk';
 import type { IrObject, RedactedModel } from '@schemaloom/schema-model';
-import { renderMarkdown } from './export-markdown';
+import { renderMarkdown, type ExportDoc } from './export-markdown';
+import { renderPdf } from './export-pdf';
 
 /**
  * Doc 01 §4.3 — what is rendered where.
@@ -13,11 +14,17 @@ import { renderMarkdown } from './export-markdown';
  * |---|---|
  * | engine DDL | here, through the engine's `exporter` |
  * | `ir-json` | here, `VisibilityFilter` -> IR serialise |
- * | `markdown` | here |
+ * | `markdown` | here, with the full doc text |
+ * | `pdf` | here, `pdfkit` (Phase 5 §2) |
  * | SVG / PNG | the CLIENT, uploaded with a presigned PUT — `apps/api` has no headless browser |
- * | PDF | Phase 5 |
  */
-export const CORE_EXPORT_FORMATS = ['ir-json', 'markdown'] as const;
+export const CORE_EXPORT_FORMATS = ['ir-json', 'markdown', 'pdf'] as const;
+
+/** The two formats the browser renders from the canvas and uploads (`ExportsService`). */
+export const IMAGE_EXPORT_FORMATS = {
+  png: { contentType: 'image/png', fileExtension: 'png' },
+  svg: { contentType: 'image/svg+xml', fileExtension: 'svg' },
+} as const;
 
 export type CoreExportFormat = (typeof CORE_EXPORT_FORMATS)[number];
 
@@ -34,10 +41,16 @@ export interface RenderExportInput {
   readonly format: string;
   readonly engine: EngineDefinition;
   readonly options?: Partial<ExportOptions>;
+  /** The requester's view is partial (`!isCompleteView`). A wholly hidden table leaves no
+   *  stub behind, so the model alone cannot tell; the processor passes this. */
+  readonly partialView?: boolean;
+  /** This project's `docs` rows, for `markdown` and `pdf`. Filtered against `model` there. */
+  readonly docs?: readonly ExportDoc[];
 }
 
 export interface RenderedExport {
-  readonly body: string;
+  /** Text formats are a string; `pdf` is binary. */
+  readonly body: string | Buffer;
   readonly contentType: string;
   readonly fileExtension: string;
   /** doc 03 §10.3 — a boolean, never a count (doc 05 §8.4 L8). */
@@ -85,21 +98,33 @@ export async function renderExport(input: RenderExportInput): Promise<RenderedEx
   assertRedacted(model);
 
   if (isCoreFormat(format)) {
-    return format === 'ir-json'
-      ? {
+    const incomplete = input.partialView === true || isIncomplete(model);
+    const docOptions = { docs: input.docs ?? [], incomplete };
+    switch (format) {
+      case 'ir-json':
+        return {
           // `null, 2` and not a compact blob: an IR export is read by a human or diffed
           // by a tool, and both want one key per line.
           body: JSON.stringify(model, null, 2),
           contentType: 'application/json; charset=utf-8',
           fileExtension: 'json',
-          incomplete: isIncomplete(model),
-        }
-      : {
-          body: renderMarkdown(model),
+          incomplete,
+        };
+      case 'markdown':
+        return {
+          body: renderMarkdown(model, docOptions),
           contentType: 'text/markdown; charset=utf-8',
           fileExtension: 'md',
-          incomplete: isIncomplete(model),
+          incomplete,
         };
+      case 'pdf':
+        return {
+          body: await renderPdf(model, docOptions),
+          contentType: 'application/pdf',
+          fileExtension: 'pdf',
+          incomplete,
+        };
+    }
   }
 
   const descriptor = engine.capabilities.exportFormats.find((f) => f.id === format);
@@ -130,7 +155,7 @@ export async function renderExport(input: RenderExportInput): Promise<RenderedEx
     fileExtension: descriptor.fileExtension,
     // The engine already accounts for what it could not emit; redaction marks the model
     // itself. Either one makes the download dialog say "this export is incomplete".
-    incomplete: result.incomplete || isIncomplete(model),
+    incomplete: result.incomplete || input.partialView === true || isIncomplete(model),
   };
 }
 

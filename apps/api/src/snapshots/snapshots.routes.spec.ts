@@ -59,13 +59,15 @@ describe('SnapshotsController route markers', () => {
   const atomOf = (handler: string): string | undefined =>
     routes.find((r) => r.handler === handler)?.requirement?.atom;
 
-  it('registers step 19’s five routes plus Phase 4’s live diff and delete', () => {
+  it('registers step 19’s five routes, Phase 4’s live diff and delete, Phase 5’s migrations', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       'DELETE /api/projects/:projectId/snapshots/:snapshotId',
       'GET /api/projects/:projectId/snapshots',
       'GET /api/projects/:projectId/snapshots/:fromId/diff/:toId',
+      'GET /api/projects/:projectId/snapshots/:fromId/migration/:toId',
       'GET /api/projects/:projectId/snapshots/:snapshotId',
       'GET /api/projects/:projectId/snapshots/:snapshotId/diff/live',
+      'GET /api/projects/:projectId/snapshots/:snapshotId/migration/live',
       'POST /api/projects/:projectId/snapshots',
       'POST /api/projects/:projectId/snapshots/:snapshotId/restore',
     ]);
@@ -74,6 +76,12 @@ describe('SnapshotsController route markers', () => {
   it('declares diff/live BEFORE :fromId/diff/:toId, or `live` would be read as an id', () => {
     const order = routes.map((r) => r.handler);
     expect(order.indexOf('liveDiff')).toBeLessThan(order.indexOf('diff'));
+    expect(order.indexOf('liveMigration')).toBeLessThan(order.indexOf('migration'));
+  });
+
+  it('generating a migration reads with history:view (the full view is the service’s R21′)', () => {
+    expect(atomOf('liveMigration')).toBe('history:view');
+    expect(atomOf('migration')).toBe('history:view');
   });
 
   it('live diff reads with history:view; delete needs schema:edit', () => {

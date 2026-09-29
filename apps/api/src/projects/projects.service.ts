@@ -1,13 +1,22 @@
 import {
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { BUILTIN_ROLE_IDS } from '@schemaloom/contracts';
+import {
+  BUILTIN_ROLE_IDS,
+  applyProjectSettingsPatch,
+  projectSettingsStoredSchema,
+  type ProjectSettings,
+  type ProjectSettingsPatch,
+  type RestrictedFieldMode,
+} from '@schemaloom/contracts';
 import type { EngineDefinition, EngineRegistry } from '@schemaloom/engine-sdk';
-import { PermissionResolver, type ProjectPermissionMap } from '../access';
+import { PermissionResolver, type ProjectPermissionMap, type Subject } from '../access';
+import { AccessWriter } from '../sharing/access-write';
 import { ENGINE_REGISTRY } from '../engines';
 import { Prisma } from '../generated/prisma/client';
 import { PrincipalType, ResourceType } from '../generated/prisma/enums';
@@ -25,6 +34,7 @@ export class ProjectsService {
     private readonly prisma: PrismaService,
     private readonly resolver: PermissionResolver,
     @Inject(ENGINE_REGISTRY) private readonly registry: EngineRegistry,
+    private readonly writer: AccessWriter,
   ) {}
 
   /**
@@ -53,6 +63,83 @@ export class ProjectsService {
 
   async rename(projectId: string, name: string): Promise<void> {
     await this.prisma.project.update({ where: { id: projectId }, data: { name } });
+  }
+
+  async settings(projectId: string): Promise<ProjectSettingsView> {
+    const row = await this.prisma.project.findFirstOrThrow({
+      where: { id: projectId, deletedAt: null },
+      select: { restrictedFieldMode: true, settings: true },
+    });
+    return toSettingsView(row);
+  }
+
+  /**
+   * Doc 05 §9.3: a `restrictedFieldMode` change is an access write — it changes what
+   * `VisibilityFilter` shows every restricted-less viewer — so it takes the sharing lock,
+   * re-checks `sharing:manage` against a fresh map (R26), audits and bumps
+   * `Project.permGeneration` through `AccessWriter`.
+   */
+  async setRestrictedFieldMode(
+    subject: Subject & { kind: 'user' },
+    projectId: string,
+    mode: RestrictedFieldMode,
+  ): Promise<ProjectSettingsView> {
+    return this.writer.write(subject, projectId, async ({ tx, map }) => {
+      assertManages(map);
+      const before = await tx.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { organizationId: true, restrictedFieldMode: true },
+      });
+      const row = await tx.project.update({
+        where: { id: projectId },
+        data: { restrictedFieldMode: mode },
+        select: { restrictedFieldMode: true, settings: true },
+      });
+      await this.writer.audit(tx, subject, projectId, before.organizationId, {
+        action: 'project.restricted_field_mode_changed',
+        resourceType: 'project',
+        resourceId: projectId,
+        metadata: { before: before.restrictedFieldMode, after: mode },
+      });
+      return toSettingsView(row);
+    });
+  }
+
+  /**
+   * `projects.settings.ai` — the AI kill switch. Not an access write in §9.3's sense (it
+   * gates a feature, the `ai:use` check reads it live), so no bump; still locked,
+   * re-checked and audited like one.
+   */
+  async updateSettings(
+    subject: Subject & { kind: 'user' },
+    projectId: string,
+    patch: ProjectSettingsPatch,
+  ): Promise<ProjectSettingsView> {
+    return this.writer.write(
+      subject,
+      projectId,
+      async ({ tx, map }) => {
+        assertManages(map);
+        const before = await tx.project.findUniqueOrThrow({
+          where: { id: projectId },
+          select: { organizationId: true, settings: true },
+        });
+        const settings = applyProjectSettingsPatch(before.settings, patch);
+        const row = await tx.project.update({
+          where: { id: projectId },
+          data: { settings },
+          select: { restrictedFieldMode: true, settings: true },
+        });
+        await this.writer.audit(tx, subject, projectId, before.organizationId, {
+          action: 'project.settings_changed',
+          resourceType: 'project',
+          resourceId: projectId,
+          metadata: { before: readSettings(before.settings).ai, after: settings.ai },
+        });
+        return toSettingsView(row);
+      },
+      { bump: false },
+    );
   }
 
   /**
@@ -225,5 +312,28 @@ export class ProjectsService {
         select: { id: true },
       })
     );
+  }
+}
+
+/** `GET /projects/:id/settings`: the two knobs a manager sets on project settings. */
+export interface ProjectSettingsView {
+  readonly restrictedFieldMode: RestrictedFieldMode;
+  readonly ai: ProjectSettings['ai'];
+}
+
+function readSettings(raw: unknown): ProjectSettings {
+  const parsed = projectSettingsStoredSchema.safeParse(raw ?? {});
+  return parsed.success ? parsed.data : projectSettingsStoredSchema.parse({});
+}
+
+function toSettingsView(row: { restrictedFieldMode: RestrictedFieldMode; settings: unknown }): ProjectSettingsView {
+  return { restrictedFieldMode: row.restrictedFieldMode, ai: readSettings(row.settings).ai };
+}
+
+/** The guard checked `sharing:manage` on a possibly cached map; this is the R26 re-check
+ *  against the map `AccessWriter` resolved inside the lock. */
+function assertManages(map: ProjectPermissionMap): void {
+  if (!map.projectAtoms.has('sharing:manage')) {
+    throw new ForbiddenException({ code: 'forbidden', required: 'sharing:manage' });
   }
 }

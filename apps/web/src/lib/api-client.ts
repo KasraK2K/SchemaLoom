@@ -178,6 +178,16 @@ async function send(path: string, init: ApiRequestInit): Promise<Response> {
 }
 
 export async function apiFetch<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  const response = await apiResponse(path, init);
+  if (response.status === 204) return undefined as T;
+  return (await response.json().catch(() => null)) as T;
+}
+
+/**
+ * `apiFetch` without the JSON parse, for a caller that reads the body itself — the AI
+ * assistant's server-sent events. Same cookies, CSRF echo, refresh and error envelope.
+ */
+export async function apiResponse(path: string, init: ApiRequestInit = {}): Promise<Response> {
   let response = await send(path, init);
 
   // A short-lived access token expiring mid-session is the NORMAL case, not an error:
@@ -191,11 +201,8 @@ export async function apiFetch<T>(path: string, init: ApiRequestInit = {}): Prom
     }
   }
 
-  if (response.status === 204) return undefined as T;
-
-  const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw toApiError(response.status, payload);
-  return payload as T;
+  if (!response.ok) throw toApiError(response.status, await response.json().catch(() => null));
+  return response;
 }
 
 export function toApiError(status: number, payload: unknown): ApiError {

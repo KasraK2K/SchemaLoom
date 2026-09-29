@@ -143,10 +143,9 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
     expressionIndexes: true,
     includeColumns: true,
     comments: true,
-    // The atoms must equal the presence of `migrationGenerator` (Phase 4, not shipped) and
-    // `queryValidator` (Phase 2, shipped) on the definition
-    // (`capabilities/services-match-features`).
-    migrations: false,
+    // The atoms must equal the presence of `migrationGenerator` (Phase 5) and
+    // `queryValidator` (Phase 2) on the definition (`capabilities/services-match-features`).
+    migrations: true,
     queryValidation: true,
   },
   typeDescriptors: TYPE_DESCRIPTORS,

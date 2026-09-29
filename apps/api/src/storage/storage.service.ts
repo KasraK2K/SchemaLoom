@@ -1,14 +1,15 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { S3_BUCKET, S3_CLIENT } from './storage.tokens';
+import { S3_BUCKET, S3_CLIENT, S3_PRESIGN_CLIENT } from './storage.tokens';
 
 /**
  * Doc 01 §11.1 deleted `S3_REGION` and `S3_FORCE_PATH_STYLE` from the environment table:
@@ -79,7 +80,12 @@ export class StorageService implements OnModuleInit {
   constructor(
     @Inject(S3_CLIENT) private readonly s3: S3Client,
     @Inject(S3_BUCKET) private readonly bucket: string,
-  ) {}
+    @Optional() @Inject(S3_PRESIGN_CLIENT) presigner?: S3Client,
+  ) {
+    this.presigner = presigner ?? s3;
+  }
+
+  private readonly presigner: S3Client;
 
   async onModuleInit(): Promise<void> {
     await this.ensureBucket();
@@ -124,21 +130,45 @@ export class StorageService implements OnModuleInit {
 
   /**
    * The client-render upload (§4.3). The signature covers the bucket, the key, the method
-   * and the deadline — so the URL writes ONE object and expires. `contentType` is the
-   * value the uploader is expected to send; SigV4 query presigning signs only `host`, so
-   * it is not a constraint the URL can enforce, and the object's type is checked where it
-   * is consumed rather than assumed from the upload.
+   * and the deadline — so the URL writes ONE object and expires. Without `contentLength`,
+   * SigV4 query presigning signs only `host`, so `contentType` is a hint the URL cannot
+   * enforce; with it, both headers are signed. Either way the object's type and size are
+   * checked where it is consumed rather than assumed from the upload.
    */
   presignPut(
     key: string,
     contentType: string,
     expiresIn: number = PRESIGN_PUT_TTL_SEC,
+    contentLength?: number,
   ): Promise<string> {
     return getSignedUrl(
-      this.s3,
-      new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }),
-      { expiresIn },
+      this.presigner,
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: contentType,
+        ContentLength: contentLength,
+      }),
+      // With a declared length, `content-type` and `content-length` become SIGNED headers,
+      // so the store itself refuses an upload of another type or size. `head` still
+      // checks the object afterwards (`ExportsService.complete`).
+      contentLength === undefined
+        ? { expiresIn }
+        : { expiresIn, signableHeaders: new Set(['content-type', 'content-length']) },
     );
+  }
+
+  /** Size and type of an uploaded object, or null when there is none. */
+  async head(key: string): Promise<{ size: number; contentType: string | null } | null> {
+    try {
+      const out = await this.s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return { size: out.ContentLength ?? 0, contentType: out.ContentType ?? null };
+    } catch (error) {
+      if (error instanceof Error && (error.name === 'NotFound' || error.name === 'NoSuchKey')) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /** A queued SQL import's source (doc 00 Q22), read back by the import job. */
@@ -152,10 +182,23 @@ export class StorageService implements OnModuleInit {
   }
 
   /** The download link for a finished `export_jobs` row. */
-  presignGet(key: string, expiresIn: number = PRESIGN_GET_TTL_SEC): Promise<string> {
-    return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
-      expiresIn,
-    });
+  presignGet(
+    key: string,
+    expiresIn: number = PRESIGN_GET_TTL_SEC,
+    downloadName?: string,
+  ): Promise<string> {
+    return getSignedUrl(
+      this.presigner,
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        // `attachment`: the browser saves the file (a cross-origin `<a download>` is ignored)
+        // and never renders an uploaded SVG in the bucket's origin.
+        ResponseContentDisposition:
+          downloadName === undefined ? undefined : `attachment; filename="${downloadName}"`,
+      }),
+      { expiresIn },
+    );
   }
 }
 

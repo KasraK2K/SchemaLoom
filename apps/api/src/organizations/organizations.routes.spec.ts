@@ -51,13 +51,22 @@ describe('OrganizationsController route markers', () => {
 
   it('registers the org list, org creation, and the per-org project, workspace and role routes', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
+      'DELETE /api/organizations/:orgSlug/groups/:groupId',
+      'DELETE /api/organizations/:orgSlug/groups/:groupId/members/:userId',
+      'DELETE /api/organizations/:orgSlug/members/:userId',
       'DELETE /api/organizations/:orgSlug/roles/:roleId',
       'GET /api/organizations',
+      'GET /api/organizations/:orgSlug/groups',
+      'GET /api/organizations/:orgSlug/members',
       'GET /api/organizations/:orgSlug/projects',
       'GET /api/organizations/:orgSlug/roles',
       'GET /api/organizations/:orgSlug/workspaces',
+      'PATCH /api/organizations/:orgSlug/groups/:groupId',
+      'PATCH /api/organizations/:orgSlug/members/:userId',
       'PATCH /api/organizations/:orgSlug/roles/:roleId',
       'POST /api/organizations',
+      'POST /api/organizations/:orgSlug/groups',
+      'POST /api/organizations/:orgSlug/groups/:groupId/members',
       'POST /api/organizations/:orgSlug/roles',
       'POST /api/organizations/:orgSlug/workspaces',
     ]);

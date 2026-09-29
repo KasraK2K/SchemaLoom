@@ -148,6 +148,18 @@ describe('presigned URLs', () => {
     }
   });
 
+  it('signs content-type and content-length when a length is declared', async () => {
+    const url = new URL(await service.presignPut(key, 'image/png', 60, 1234));
+    expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;content-type;host');
+  });
+
+  it('names the download when asked, so the browser saves it', async () => {
+    const url = new URL(await service.presignGet(key, 30, 'schema.png'));
+    expect(url.searchParams.get('response-content-disposition')).toBe(
+      'attachment; filename="schema.png"',
+    );
+  });
+
   it('honours an explicit expiry', async () => {
     const url = new URL(await service.presignPut(key, 'image/svg+xml', 60));
     expect(url.searchParams.get('X-Amz-Expires')).toBe('60');

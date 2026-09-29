@@ -6,12 +6,13 @@ import {
   type SchemaModel,
 } from '@schemaloom/schema-model';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import type { VisibilityFilter } from '../access';
+import type { PermissionResolver, VisibilityFilter } from '../access';
 import type { PrismaService } from '../prisma/prisma.service';
 import { fakePrisma, type Store } from '../schema/fake-prisma';
 import { PROJECT, baseStore, entityRow, fieldRow, redactFully } from '../schema/fixture';
 import type { SchemaLoader } from '../schema';
 import { readProjectRows } from '../schema/row-read';
+import type { NotificationsService } from '../notifications';
 import type { StorageService } from '../storage';
 import { EXPORT_ARTIFACT_TTL_MS, ExportProcessor } from './export.processor';
 import type { ExportJobData } from './queues';
@@ -47,9 +48,10 @@ interface Harness {
   readonly updates: { where: { id: string }; data: Record<string, unknown> }[];
   readonly put: ReturnType<typeof vi.fn<(key: string, body: Buffer, type: string) => Promise<void>>>;
   readonly redactModel: ReturnType<typeof vi.fn>;
+  readonly send: ReturnType<typeof vi.fn>;
 }
 
-function harness(over: { put?: () => Promise<void> } = {}): Harness {
+function harness(over: { put?: () => Promise<void>; atoms?: string[] } = {}): Harness {
   const updates: Harness['updates'] = [];
   const prisma = {
     exportJob: {
@@ -58,10 +60,31 @@ function harness(over: { put?: () => Promise<void> } = {}): Harness {
         return Promise.resolve(args.data);
       },
     },
+    doc: { findMany: () => Promise.resolve([]) },
+    project: { findFirst: () => Promise.resolve({ organizationId: 'org_acme' }) },
   } as unknown as PrismaService;
 
-  const redactModel = vi.fn((): Promise<RedactedModel> => Promise.resolve(redactFully(model)));
-  const visibility = { redactModel } as unknown as VisibilityFilter;
+  // Named after the old one-call API; the processor now resolves the map itself and calls
+  // `redactWith`, so the export:run re-check and the redaction share one resolution.
+  const redactModel = vi.fn((): RedactedModel => redactFully(model));
+  const visibility = {
+    redactWith: redactModel,
+    contextFrom: () => ({
+      visibleEntityIds: new Set(['ent_orders']),
+      totalEntityCount: 1,
+      entitiesWithRestrictedFields: new Set(),
+      restrictedOkEntityIds: new Set(),
+    }),
+  } as unknown as VisibilityFilter;
+  const resolver = {
+    resolveProject: () =>
+      Promise.resolve({
+        projectAtoms: new Set(over.atoms ?? ['schema:view', 'export:run']),
+        areaAtoms: new Map(),
+        entityOverrides: new Map(),
+      }),
+    skeleton: () => Promise.resolve({}),
+  } as unknown as PermissionResolver;
   const loader = { load: () => Promise.resolve(new RawSchemaModel(model)) } as unknown as SchemaLoader;
 
   const engine = {
@@ -73,11 +96,18 @@ function harness(over: { put?: () => Promise<void> } = {}): Harness {
   const put = vi.fn(over.put ?? (() => Promise.resolve()));
   const storage = { put } as unknown as StorageService;
 
+  const send = vi.fn(() => Promise.resolve());
+  const notifications = {
+    send,
+    projectUrl: () => Promise.resolve('/acme/p/prj'),
+  } as unknown as NotificationsService;
+
   return {
-    processor: new ExportProcessor(prisma, loader, visibility, registry, storage),
+    processor: new ExportProcessor(prisma, loader, visibility, resolver, registry, storage, notifications),
     updates,
     put,
     redactModel,
+    send,
   };
 }
 
@@ -91,6 +121,13 @@ describe('ExportProcessor', () => {
     // Resolved from the payload AT RUN TIME, so a revoked grant is honoured.
     expect(subject).toEqual(DATA.subject);
     expect(projectId).toBe(PROJECT);
+  });
+
+  it('re-checks export:run when the job runs, so a grant revoked in the queue stops it', async () => {
+    const h = harness({ atoms: ['schema:view'] });
+    await expect(h.processor.run(DATA)).rejects.toThrow('export_access_revoked');
+    expect(h.put).not.toHaveBeenCalled();
+    expect(h.updates.at(-1)?.data).toMatchObject({ status: 'failed' });
   });
 
   it('writes the artifact to S3 under the job key and records the row', async () => {
@@ -129,5 +166,21 @@ describe('ExportProcessor', () => {
   it('rethrows so BullMQ applies the retry policy', async () => {
     const h = harness({ put: () => Promise.reject(new Error('transient')) });
     await expect(h.processor.run(DATA)).rejects.toThrow('transient');
+    expect(h.send).not.toHaveBeenCalled();
+  });
+
+  it('tells the requester once the artifact is done — by format, never by schema name', async () => {
+    const h = harness();
+    await h.processor.run(DATA);
+
+    expect(h.send).toHaveBeenCalledWith([
+      expect.objectContaining({
+        userId: 'usr_ana',
+        organizationId: 'org_acme',
+        type: 'export.ready',
+        title: 'Your ir-json export is ready',
+        data: { exportJobId: 'exj_1', format: 'ir-json' },
+      }),
+    ]);
   });
 });

@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { EngineRegistry } from '@schemaloom/engine-sdk';
-import { VisibilityFilter } from '../access';
+import { PermissionResolver, VisibilityFilter, canOpenProject, isCompleteView } from '../access';
 import { ENGINE_REGISTRY } from '../engines';
+import { NotificationsService } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { SchemaLoader } from '../schema';
 import { StorageService } from '../storage';
@@ -36,8 +37,10 @@ export class ExportProcessor {
     private readonly prisma: PrismaService,
     private readonly loader: SchemaLoader,
     private readonly visibility: VisibilityFilter,
+    private readonly resolver: PermissionResolver,
     @Inject(ENGINE_REGISTRY) private readonly registry: EngineRegistry,
     private readonly storage: StorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async run(data: ExportJobData): Promise<ExportJobResult> {
@@ -48,19 +51,39 @@ export class ExportProcessor {
     });
 
     try {
-      const model = await this.visibility.redactModel(
+      // doc 05 L11: `export:run` is re-checked HERE, not only at enqueue, so a grant revoked
+      // while the job sat in the queue stops the render.
+      const map = await this.resolver.resolveProject(subject, projectId);
+      if (!canOpenProject(map) || !map.projectAtoms.has('export:run')) {
+        throw new Error('export_access_revoked');
+      }
+      const skel = await this.resolver.skeleton(projectId);
+      const model = this.visibility.redactWith(
         await this.loader.load(projectId),
         subject,
         projectId,
+        map,
+        skel,
       );
+      // A hidden table leaves no stub behind, so the model alone cannot say it is partial.
+      const partialView = !isCompleteView(this.visibility.contextFrom(subject, projectId, map, skel));
       // The engine id travels ON the model, so there is no second project read and no way
       // for the two to disagree. `get` throws `UnknownEngineError` for an engine this
       // deployment does not carry, which fails the job rather than emitting wrong DDL.
       const engine = this.registry.get(model.engineId);
-      const rendered = await renderExport({ model, format, engine });
+      // Every doc row of the project: `renderExport` keeps only those the REDACTED model
+      // still points at, so no visibility rule is repeated here.
+      const docs = DOC_FORMATS.has(format)
+        ? await this.prisma.doc.findMany({
+            where: { projectId },
+            select: { id: true, targetType: true, targetId: true, plainText: true, structured: true },
+          })
+        : [];
+      const rendered = await renderExport({ model, format, engine, docs, options: data.options, partialView });
 
       const storageKey = exportObjectKey(projectId, exportJobId, rendered.fileExtension);
-      const body = Buffer.from(rendered.body, 'utf8');
+      const body =
+        typeof rendered.body === 'string' ? Buffer.from(rendered.body, 'utf8') : rendered.body;
       await this.storage.put(storageKey, body, rendered.contentType);
 
       await this.prisma.exportJob.update({
@@ -74,6 +97,7 @@ export class ExportProcessor {
         },
       });
 
+      await this.notifyReady(data);
       return { storageKey, sizeBytes: body.byteLength, incomplete: rendered.incomplete };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -87,4 +111,36 @@ export class ExportProcessor {
       throw error;
     }
   }
+
+  /**
+   * `export.ready` to the requester. The title names the format only (L7: no schema
+   * names in a stored title). Best effort: the artifact is already written and `done`.
+   */
+  private async notifyReady({ exportJobId, projectId, subject, format }: ExportJobData): Promise<void> {
+    if (subject.kind !== 'user') return;
+    try {
+      const project = await this.prisma.project.findFirst({
+        where: { id: projectId },
+        select: { organizationId: true },
+      });
+      if (project === null) return;
+      await this.notifications.send([
+        {
+          userId: subject.userId,
+          actorUserId: null,
+          organizationId: project.organizationId,
+          projectId,
+          type: 'export.ready',
+          title: `Your ${format} export is ready`,
+          url: await this.notifications.projectUrl(projectId),
+          data: { exportJobId, format },
+        },
+      ]);
+    } catch (error) {
+      this.logger.warn({ err: error, exportJobId }, 'export.ready notification failed');
+    }
+  }
 }
+
+/** The formats that print documentation, and so need the `docs` rows. */
+const DOC_FORMATS: ReadonlySet<string> = new Set(['markdown', 'pdf']);

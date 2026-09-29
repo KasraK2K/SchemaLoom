@@ -7,6 +7,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -14,13 +15,19 @@ import type { Request } from 'express';
 import { RequirePermission, getAccessContext } from '../access';
 import { getSubject } from '../auth';
 import type { SchemaOperationResult } from '../schema';
-import { CreateSnapshotDto, ImportPreviewDto, ImportSourceDto } from './snapshots.dto';
+import {
+  CreateSnapshotDto,
+  ImportPreviewDto,
+  ImportSourceDto,
+  MigrationQueryDto,
+} from './snapshots.dto';
 import {
   SnapshotsService,
   type HistoryDiff,
   type ImportOutcome,
   type ImportPreview,
   type LiveHistoryDiff,
+  type MigrationView,
   type SnapshotContext,
   type SnapshotSummary,
   type SnapshotView,
@@ -107,6 +114,37 @@ export class SnapshotsController {
     @Param('toId') toId: string,
   ): Promise<HistoryDiff> {
     return this.snapshots.diff(snapshotContext(req, projectId), fromId, toId);
+  }
+
+  /**
+   * Phase 5 §3 — the migration script, snapshot → current schema. `history:view` here; the
+   * service adds R21′ (the full view), because a script from a partial view silently omits
+   * what the caller cannot see. Declared before `:fromId/migration/:toId` for the same
+   * reason `diff/live` is.
+   */
+  @ApiOperation({ summary: 'Migration SQL from a snapshot to the current schema' })
+  @RequirePermission('history:view', { project: 'projectId' })
+  @Get(':snapshotId/migration/live')
+  liveMigration(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Param('snapshotId') snapshotId: string,
+    @Query() query: MigrationQueryDto,
+  ): Promise<MigrationView> {
+    return this.snapshots.migration(snapshotContext(req, projectId), snapshotId, null, query);
+  }
+
+  @ApiOperation({ summary: 'Migration SQL between two snapshots of this project' })
+  @RequirePermission('history:view', { project: 'projectId' })
+  @Get(':fromId/migration/:toId')
+  migration(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Param('fromId') fromId: string,
+    @Param('toId') toId: string,
+    @Query() query: MigrationQueryDto,
+  ): Promise<MigrationView> {
+    return this.snapshots.migration(snapshotContext(req, projectId), fromId, toId, query);
   }
 
   /** §8.8 — planned from unredacted models, applied through the step-14 write path. */

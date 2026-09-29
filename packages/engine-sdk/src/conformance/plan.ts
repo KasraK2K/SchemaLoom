@@ -1,10 +1,12 @@
 import type { EngineDefinition } from '../definition.js';
 import type { CheckRequirement, ConformanceCheck } from './check.js';
+import { AI_CHECKS } from './checks-ai.js';
 import { DECLARATION_CHECKS } from './checks-declaration.js';
 import { DEFERRED_CHECKS } from './checks-deferred.js';
 import { EXPORT_CHECKS } from './checks-export.js';
 import { IMPORT_CHECKS } from './checks-import.js';
 import { LINK_CHECKS } from './checks-links.js';
+import { MIGRATION_CHECKS } from './checks-migration.js';
 import { PROPS_CHECKS } from './checks-props.js';
 import { QUERY_CHECKS } from './checks-query.js';
 import { REFERENCE_CHECKS } from './checks-references.js';
@@ -23,6 +25,8 @@ const REGISTERED: readonly ConformanceCheck[] = [
   ...EXPORT_CHECKS,
   ...IMPORT_CHECKS,
   ...QUERY_CHECKS,
+  ...MIGRATION_CHECKS,
+  ...AI_CHECKS,
   ...DEFERRED_CHECKS,
 ];
 
@@ -45,7 +49,7 @@ function unmetReason(requires: CheckRequirement, ctx: CheckContext): string | nu
       return engine.annotateDiff === undefined ? 'the engine ships no `annotateDiff` (§11)' : null;
     case 'migrationGenerator':
       return engine.migrationGenerator === undefined
-        ? 'the engine ships no `migrationGenerator` (§12); `features.migrations` is false'
+        ? 'the engine ships no `migrationGenerator` (§11); `features.migrations` is false'
         : null;
     case 'queryValidator':
       return engine.queryValidator === undefined

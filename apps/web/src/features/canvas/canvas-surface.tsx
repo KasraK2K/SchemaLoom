@@ -28,6 +28,7 @@ import { useEngine, useEngineUi, useTerminology } from '@/engines';
 import { ApiError } from '@/lib/api-client';
 import { areaColors } from './area-color';
 import { CanvasMenu, type CanvasMenuItem, type CanvasMenuTarget } from './canvas-menu';
+import { CanvasSearch } from './canvas-search';
 import { cardinalityFor, checkConnection, explainCheck } from './connect';
 import { createLink } from './create-link';
 import { CrowFootDefs } from './crow-foot';
@@ -601,6 +602,9 @@ export function CanvasSurface({
           style={{ backgroundColor: 'var(--color-surface-sunken)' }}
         />
         <Controls showInteractive={false} />
+        <Panel position="top-left">
+          <CanvasSearch model={model} />
+        </Panel>
         {readOnly ? null : (
           <Panel position="top-right" className="flex gap-2">
             <Button

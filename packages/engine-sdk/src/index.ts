@@ -41,6 +41,10 @@ export type {
   RedactedModel,
   SchemaModel,
   TypeRef,
+  DiffEntry,
+  PropertyChange,
+  PropertySeverity,
+  SchemaDiff,
 } from './ir.js';
 export { IR_OBJECT_TYPES, MAX_FIELD_DEPTH } from './ir.js';
 
@@ -166,6 +170,30 @@ export {
   type RenderStatementsOptions,
 } from './exporter.js';
 
+// --- migrations (§11) ---
+export {
+  DESTRUCTIVE_REMOVALS,
+  MIGRATION_OPERATION_ORDER,
+  MIGRATION_PHASE_ORDER,
+  PROPERTY_SEVERITY_RANK,
+  compareMigrationSteps,
+  entryIsDestructive,
+  entryRiskKey,
+  needsMigrationStep,
+  renderMigrationScript,
+  type AnnotatedDiff,
+  type EntryRisk,
+  type MigrationGenerator,
+  type MigrationInput,
+  type MigrationOperation,
+  type MigrationOptions,
+  type MigrationPhase,
+  type MigrationPlan,
+  type MigrationStep,
+  type RenderMigrationOptions,
+  type UnsupportedChange,
+} from './migration.js';
+
 // --- query validator (§12) ---
 export type {
   IdentifierResolution,
@@ -176,6 +204,31 @@ export type {
   QueryValidator,
   ResolutionStatus,
 } from './query.js';
+
+// --- AI profile (§13) ---
+export {
+  AI_MODES,
+  DEFAULT_AI_CONTEXT_OPTIONS,
+  approxTokens,
+  createTaggedBlockStream,
+  defaultJoinPaths,
+  firstFencedBlock,
+  parseAiOutput,
+  parseTaggedOutput,
+  type AiContextOptions,
+  type AiDocSuggestion,
+  type AiMode,
+  type AiOutputEvent,
+  type AiParsedOutput,
+  type AiProfile,
+  type AiPromptContext,
+  type AiSerializedContext,
+  type JoinPathInput,
+  type JoinPathStep,
+  type JoinPathSuggestion,
+  type ParseAiOutputOptions,
+  type TaggedBlock,
+} from './ai.js';
 
 // --- the engine itself (§3) ---
 export type { EngineDefinition, EngineParadigm, EngineStaticFacet } from './definition.js';

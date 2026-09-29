@@ -1,3 +1,4 @@
+import { projectSettingsPatchSchema, restrictedFieldModeSchema } from '@schemaloom/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -36,3 +37,8 @@ export class CreateProjectDto extends createZodDto(CreateProjectSchema) {}
 export const UpdateProjectSchema = z.object({ name: z.string().trim().min(1).max(200) });
 
 export class UpdateProjectDto extends createZodDto(UpdateProjectSchema) {}
+
+export const RestrictedFieldModeBodySchema = z.object({ mode: restrictedFieldModeSchema }).strict();
+export class RestrictedFieldModeDto extends createZodDto(RestrictedFieldModeBodySchema) {}
+
+export class ProjectSettingsPatchDto extends createZodDto(projectSettingsPatchSchema) {}

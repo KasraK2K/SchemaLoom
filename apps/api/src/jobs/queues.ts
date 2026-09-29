@@ -42,8 +42,16 @@ export interface ExportJobData {
   readonly exportJobId: string;
   readonly projectId: string;
   readonly subject: Subject;
-  /** `ir-json`, `markdown`, or an `ExportFormatDescriptor.id` the engine declares. */
+  /** `ir-json`, `markdown`, `pdf`, or an `ExportFormatDescriptor.id` the engine declares. */
   readonly format: string;
+  /** DDL switches from `POST /projects/:id/exports`; the engine's defaults otherwise. */
+  readonly options?: ExportDdlOptions;
+}
+
+export interface ExportDdlOptions {
+  readonly includeComments?: boolean;
+  readonly includeDrops?: boolean;
+  readonly includeIfNotExists?: boolean;
 }
 
 export interface ExportJobResult {

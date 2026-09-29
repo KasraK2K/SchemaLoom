@@ -21,22 +21,9 @@ export const DEFERRED_CHECKS: readonly ConformanceCheck[] = [
   // narrower requirement would have skipped them on an export-only engine while claiming to
   // cover them.
 
-  // §12 MigrationGenerator — Phase 4.
-  { id: 'migration/empty-diff-no-steps', requires: 'migrationGenerator' },
-  { id: 'migration/drops-are-destructive', requires: 'migrationGenerator' },
-  { id: 'migration/accounts-for-every-change', requires: 'migrationGenerator' },
-  { id: 'migration/steps-ordered', requires: 'migrationGenerator' },
+  // §11 MigrationGenerator and annotateDiff now have bodies: `checks-migration.ts`.
 
-  // §11 annotateDiff — build-order step 11, which also needs schema-model's `SchemaDiff`.
-  { id: 'diff/annotate-is-pure', requires: 'annotateDiff' },
-  { id: 'diff/annotate-never-raises-severity', requires: 'annotateDiff' },
-
-  // §13 AiProfile — Phase 2. No feature atom: absence just hides the AI panel.
-  { id: 'ai/serialize-deterministic', requires: 'aiProfile' },
-  { id: 'ai/serialize-respects-budget', requires: 'aiProfile' },
-  { id: 'ai/serialize-omits-restricted', requires: 'aiProfile' },
-  { id: 'ai/serialize-escapes-docs', requires: 'aiProfile' },
-  { id: 'ai/parse-output-tolerant', requires: 'aiProfile' },
+  // §13 AiProfile — the five `ai/*` checks have bodies in `checks-ai.ts` (Phase 5).
 
   // §17's own optional check: bundling `staticEntry` with esbuild and asserting min+gzip is
   // under budget. `esbuild` is an optional peer dependency (§1) that this workspace does not

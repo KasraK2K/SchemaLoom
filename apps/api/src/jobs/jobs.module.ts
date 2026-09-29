@@ -8,7 +8,10 @@ import { SnapshotsModule } from '../snapshots';
 import { StorageModule } from '../storage';
 import { adoptQueueClient, type BullConnection } from './bull-connection';
 import { EmailProcessor } from './email.processor';
+import { NotificationsModule } from '../notifications';
 import { ExportProcessor } from './export.processor';
+import { ExportsController } from './exports.controller';
+import { ExportsService } from './exports.service';
 import { ImportJobsController } from './import-jobs.controller';
 import { ImportProcessor } from './import.processor';
 import { JOB_QUEUES, JobsService, type JobQueues } from './jobs.service';
@@ -28,8 +31,9 @@ import {
 import { ValidateProcessor } from './validate.processor';
 
 /** One provider, so `adoptQueueClient` — which moves the prefix and is therefore not
- *  idempotent — runs exactly once for both the queues and the workers. */
-const BULL_CONNECTION = Symbol('BULL_CONNECTION');
+ *  idempotent — runs exactly once for both the queues and the workers. Exported so the AI
+ *  module's `ai-doc-drafts` queue and worker share it rather than adopting the client twice. */
+export const BULL_CONNECTION = Symbol('BULL_CONNECTION');
 
 const connectionProvider: Provider = {
   provide: BULL_CONNECTION,
@@ -97,9 +101,10 @@ const workersProvider: Provider = {
  * providers and a second permission cache.
  */
 @Module({
-  imports: [SchemaModule, SnapshotsModule, StorageModule, MailModule],
-  controllers: [ImportJobsController],
+  imports: [SchemaModule, SnapshotsModule, StorageModule, MailModule, NotificationsModule],
+  controllers: [ImportJobsController, ExportsController],
   providers: [
+    ExportsService,
     connectionProvider,
     queuesProvider,
     ExportProcessor,
@@ -110,6 +115,6 @@ const workersProvider: Provider = {
     JobsService,
     JobsRuntime,
   ],
-  exports: [JobsService],
+  exports: [JobsService, BULL_CONNECTION],
 })
 export class JobsModule {}

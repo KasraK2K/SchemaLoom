@@ -141,8 +141,8 @@ describe('the server definition', () => {
   });
 
   it('declares the later-phase services absent, and says so in the atoms', () => {
-    expect(postgresEngine.annotateDiff).toBeUndefined();
-    expect(postgresEngine.aiProfile).toBeUndefined();
+    expect(typeof postgresEngine.annotateDiff).toBe('function');
+    expect(typeof postgresEngine.aiProfile?.serializeContext).toBe('function');
     // capabilities/services-match-features
     expect(caps.features.migrations).toBe(postgresEngine.migrationGenerator !== undefined);
     expect(caps.features.queryValidation).toBe(postgresEngine.queryValidator !== undefined);

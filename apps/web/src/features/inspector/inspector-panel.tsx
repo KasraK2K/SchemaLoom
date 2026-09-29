@@ -1,6 +1,8 @@
 import type { Id } from '@schemaloom/schema-model';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@schemaloom/ui';
+import { AiPanel } from '@/features/ai/ai-panel';
 import { CommentsPanel, CommentsTabCount } from '@/features/comments/comments-panel';
+import { DocsPanel } from '@/features/docs/docs-panel';
 import { EngineGate } from '@/features/project/engine-gate';
 import { QueriesPanel } from '@/features/queries/queries-panel';
 import { InspectorBody } from './inspector-body';
@@ -26,6 +28,7 @@ export function InspectorPanel({ projectId }: { readonly projectId: Id }) {
           <CommentsTabCount projectId={projectId} />
         </TabsTrigger>
         <TabsTrigger value="queries">Queries</TabsTrigger>
+        <TabsTrigger value="ai">AI</TabsTrigger>
       </TabsList>
       <EngineGate
         projectId={projectId}
@@ -38,10 +41,13 @@ export function InspectorPanel({ projectId }: { readonly projectId: Id }) {
         <TabsContent value="queries" className="overflow-auto">
           <QueriesPanel projectId={projectId} />
         </TabsContent>
+        <TabsContent value="docs" className="overflow-auto">
+          <DocsPanel projectId={projectId} />
+        </TabsContent>
+        <TabsContent value="ai" className="overflow-auto">
+          <AiPanel projectId={projectId} />
+        </TabsContent>
       </EngineGate>
-      <TabsContent value="docs" className="text-sm text-text-muted">
-        Documentation arrives with the docs editor.
-      </TabsContent>
     </Tabs>
   );
 }

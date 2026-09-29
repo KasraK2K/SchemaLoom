@@ -8,8 +8,9 @@
  * (`RedactedModel`, `RawSchemaModel`, `VisibilityContext`). They are NOT re-exported here:
  *   - `RestrictionMark` was deleted by RECONCILIATION R-1 — `IrBase` carries `restricted?: true`
  *     and `propsRedacted?: true` as two independent flags and there is no `level`.
- *   - the diff types land in schema-model at build-order step 18. This file grows one line
- *     then; nothing here depends on them.
+ *   - the diff types (`SchemaDiff`, `DiffEntry`, `PropertyChange`, `PropertySeverity`) ARE
+ *     re-exported now: §11's `AnnotatedDiff` is built on them. `diffModels` and `isEmptyDiff`
+ *     come with them for the migration conformance checks.
  *
  * `RedactedModel` IS re-exported (step 12 landed it): §17's `ConformanceFixtures.redactedModel`
  * is typed with it, and the phantom brand is the point — a fixture typed `RedactedModel` cannot
@@ -38,9 +39,13 @@ export type {
   RedactedModel,
   SchemaModel,
   TypeRef,
+  DiffEntry,
+  PropertyChange,
+  PropertySeverity,
+  SchemaDiff,
 } from '@schemaloom/schema-model';
 
-export { IR_OBJECT_TYPES, MAX_FIELD_DEPTH } from '@schemaloom/schema-model';
+export { IR_OBJECT_TYPES, MAX_FIELD_DEPTH, diffModels, isEmptyDiff } from '@schemaloom/schema-model';
 
 import type { Id, IrObjectType } from '@schemaloom/schema-model';
 

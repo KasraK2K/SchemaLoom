@@ -15,9 +15,15 @@ import type { OrgRole } from '@schemaloom/contracts';
 import type { Request } from 'express';
 import { RequireOrgRole, RequirePermission, RequireProjectAccess, getAccessContext } from '../access';
 import { getSubject } from '../auth';
+import { userSubject } from '../sharing/access-write';
 import type { ProjectDetail } from './project-views';
-import { CreateProjectDto, UpdateProjectDto } from './projects.dto';
-import { ProjectsService } from './projects.service';
+import {
+  CreateProjectDto,
+  ProjectSettingsPatchDto,
+  RestrictedFieldModeDto,
+  UpdateProjectDto,
+} from './projects.dto';
+import { ProjectsService, type ProjectSettingsView } from './projects.service';
 
 /**
  * Doc 05 §3.2's project-creation row: owner, admin and member — **not guest**. A guest is
@@ -104,6 +110,40 @@ export class ProjectsController {
     }
     await this.projects.rename(projectId, body.name);
     return this.projects.detail(projectId, context.map);
+  }
+
+  /**
+   * Project settings: restricted-field mode and the AI toggles. `sharing:manage` at the
+   * project (doc 05 §2.2 names it for `restrictedFieldMode`; the AI kill switch sits with
+   * it, Phase 5 DESIGN §4.2). Kept off `GET /projects/:id`, which a share link can read.
+   */
+  @ApiOperation({ summary: 'Project settings (restricted-field mode, AI toggles)' })
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @Get(':projectId/settings')
+  settings(@Param('projectId') projectId: string): Promise<ProjectSettingsView> {
+    return this.projects.settings(projectId);
+  }
+
+  @ApiOperation({ summary: 'Change the AI toggles' })
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @Patch(':projectId/settings')
+  updateSettings(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: ProjectSettingsPatchDto,
+  ): Promise<ProjectSettingsView> {
+    return this.projects.updateSettings(userSubject(getSubject(req)), projectId, body);
+  }
+
+  @ApiOperation({ summary: 'Mask or hide restricted fields for viewers without the toggle' })
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @Patch(':projectId/restricted-field-mode')
+  setRestrictedFieldMode(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: RestrictedFieldModeDto,
+  ): Promise<ProjectSettingsView> {
+    return this.projects.setRestrictedFieldMode(userSubject(getSubject(req)), projectId, body.mode);
   }
 
   /** Soft delete (C8 tombstone). The resolver skips tombstoned projects, so every route

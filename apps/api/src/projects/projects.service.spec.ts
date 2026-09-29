@@ -1,10 +1,11 @@
-import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { BUILTIN_ROLE_IDS, PERMISSION_ATOMS, type PermissionAtom } from '@schemaloom/contracts';
 import type { EngineDefinition, EngineRegistry } from '@schemaloom/engine-sdk';
 import { describe, expect, it, vi } from 'vitest';
 import type { PermissionResolver, ProjectPermissionMap } from '../access';
 import { Prisma } from '../generated/prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { AccessWriter } from '../sharing/access-write';
 import { ProjectsService } from './projects.service';
 
 const ORG = 'org_acme';
@@ -99,7 +100,7 @@ function harness(
   } as unknown as PermissionResolver;
 
   return {
-    service: new ProjectsService(prisma, resolver, registry),
+    service: new ProjectsService(prisma, resolver, registry, {} as AccessWriter),
     tx,
     transaction,
     projectFindFirst,
@@ -212,5 +213,58 @@ describe('ProjectsService.detail', () => {
     const h = harness();
     h.projectFindFirst.mockResolvedValue(null);
     await expect(h.service.detail(PROJECT, managerMap())).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('ProjectsService settings writes', () => {
+  function settingsHarness(atoms: readonly PermissionAtom[] = PERMISSION_ATOMS) {
+    const tx = {
+      project: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          organizationId: ORG,
+          restrictedFieldMode: 'mask',
+          settings: { ai: { enabled: true, includeDocsInContext: false } },
+        }),
+        update: vi.fn(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({ restrictedFieldMode: 'mask', settings: {}, ...data }),
+        ),
+      },
+    };
+    const map = { ...managerMap(), projectAtoms: new Set<PermissionAtom>(atoms) };
+    const audit = vi.fn().mockResolvedValue({});
+    const write = vi.fn(
+      (_s: unknown, _p: string, fn: (scope: unknown) => Promise<unknown>, _o?: { bump: boolean }) =>
+        fn({ tx, map, skel: {} }),
+    );
+    const writer = { write, audit } as unknown as AccessWriter;
+    const service = new ProjectsService({} as PrismaService, {} as PermissionResolver, {} as EngineRegistry, writer);
+    return { service, tx, write, audit };
+  }
+  const subject = { kind: 'user' as const, userId: ACTOR, orgId: ORG };
+
+  it('restricted-field mode goes through AccessWriter with the bump, and is audited', async () => {
+    const h = settingsHarness();
+    const view = await h.service.setRestrictedFieldMode(subject, PROJECT, 'hide');
+    expect(view.restrictedFieldMode).toBe('hide');
+    expect(h.write.mock.calls[0]?.[3]).toBeUndefined(); // default { bump: true }
+    expect(h.audit.mock.calls[0]?.[4]).toMatchObject({
+      action: 'project.restricted_field_mode_changed',
+      metadata: { before: 'mask', after: 'hide' },
+    });
+  });
+
+  it('the AI patch merges into the stored settings and does not bump', async () => {
+    const h = settingsHarness();
+    const view = await h.service.updateSettings(subject, PROJECT, { ai: { enabled: false } });
+    expect(view.ai).toEqual({ enabled: false, includeDocsInContext: false });
+    expect(h.write.mock.calls[0]?.[3]).toEqual({ bump: false });
+  });
+
+  it('re-checks sharing:manage on the map resolved inside the lock (R26)', async () => {
+    const h = settingsHarness(['schema:view', 'schema:edit']);
+    await expect(h.service.setRestrictedFieldMode(subject, PROJECT, 'hide')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(h.tx.project.update).not.toHaveBeenCalled();
   });
 });

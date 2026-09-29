@@ -1,6 +1,9 @@
 import type { EngineDefinition } from '@schemaloom/engine-sdk';
+import { annotateDiff } from './annotate.js';
+import { AI_PROFILE } from './ai-profile.js';
 import { EXPORTER } from './exporter.js';
 import { IMPORTER } from './importer.js';
+import { MIGRATION_GENERATOR } from './migration.js';
 import { QUERY_VALIDATOR } from './query-validator.js';
 import { extractReferences } from './references.js';
 import { postgresFacet } from './static.js';
@@ -14,12 +17,11 @@ import { VALIDATOR } from './validator.js';
  * The facet is SPREAD, not rebuilt: there is one capabilities object, one type catalog
  * and one terminology bundle at runtime, shared with `./static`.
  *
+ * `migrationGenerator` and `aiProfile` (Phase 5) and `queryValidator` (Phase 2) are present, and
+ * `capabilities/services-match-features` holds them to `features.migrations` and
+ * `features.queryValidation` both being true.
+ *
  * ABSENT ON PURPOSE, and each absence is a declaration rather than a gap:
- *  - `annotateDiff` — step 11, which needs schema-model's `SchemaDiff` (step 18).
- *  - `migrationGenerator` — Phase 4. Its absence must equal `features.migrations === false`,
- *    which `capabilities/services-match-features` checks. The same check holds the Phase-2
- *    `queryValidator` (present) to `features.queryValidation === true`.
- *  - `aiProfile` — Phase 2. No feature atom: its absence simply hides the AI panel.
  *  - `introspector` — cut entirely (doc 03 §3).
  */
 export const postgresEngine: EngineDefinition = {
@@ -29,6 +31,9 @@ export const postgresEngine: EngineDefinition = {
   exporter: EXPORTER,
   extractReferences,
   queryValidator: QUERY_VALIDATOR,
+  annotateDiff,
+  migrationGenerator: MIGRATION_GENERATOR,
+  aiProfile: AI_PROFILE,
 };
 
 export { postgresFacet } from './static.js';
@@ -47,6 +52,9 @@ export { extractReferences, expressionsOf } from './references.js';
 export { VALIDATOR, type PostgresValidator, type ValidationInput } from './validator.js';
 export { EXPORTER } from './exporter.js';
 export { QUERY_VALIDATOR } from './query-validator.js';
+export { annotateDiff, typeChangeRisk } from './annotate.js';
+export { MIGRATION_GENERATOR } from './migration.js';
+export { AI_PROFILE } from './ai-profile.js';
 export { IMPORTER, defaultImportOptions } from './importer.js';
 /** The dynamic boundary, part of the package's public shape. `IMPORTER` and `QUERY_VALIDATOR` are its callers;
  *  a STATIC import of `libpg-query` anywhere in this graph would land a multi-megabyte WASM

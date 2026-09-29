@@ -58,17 +58,20 @@ describe('ProjectsController route markers', () => {
   const routes = sweep();
   const route = (handler: string): Swept | undefined => routes.find((r) => r.handler === handler);
 
-  it('registers the project shell, create, rename and delete routes', () => {
+  it('registers the project shell, create, rename, delete and settings routes', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       'DELETE /api/projects/:projectId',
       'GET /api/projects/:projectId',
+      'GET /api/projects/:projectId/settings',
       'PATCH /api/projects/:projectId',
+      'PATCH /api/projects/:projectId/restricted-field-mode',
+      'PATCH /api/projects/:projectId/settings',
       'POST /api/projects',
     ]);
   });
 
-  it('gates rename and delete on sharing:manage at the project, not share-link reachable', () => {
-    for (const handler of ['update', 'remove']) {
+  it('gates rename, delete and settings on sharing:manage at the project, not share-link reachable', () => {
+    for (const handler of ['update', 'remove', 'settings', 'updateSettings', 'setRestrictedFieldMode']) {
       const r = route(handler);
       expect(r?.markers).toEqual([PERM_META]);
       expect(r && isShareLinkRoute(r.method, r.path)).toBe(false);

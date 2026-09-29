@@ -1,0 +1,353 @@
+import { HttpException, NotFoundException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+import type { EngineRegistry, QueryValidator } from '@schemaloom/engine-sdk';
+import type { Redis } from 'ioredis';
+import type { Request, Response } from 'express';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  VisibilityFilter,
+  type PermissionResolver,
+  type ProjectPermissionMap,
+  type ProjectSkeleton,
+  type Subject,
+} from '../access';
+import type { AppEnv } from '../config/env';
+import { ENGINE_MANIFEST } from '../engines/engines.manifest';
+import { fakePrisma, type FakePrisma, type Row } from '../schema/fake-prisma';
+import type { DocsService } from '../docs';
+import { PROJECT, baseStore, entityRow, fieldRow, projectRow } from '../schema/fixture';
+import { SchemaLoader } from '../schema/schema-loader.service';
+import { AiController } from './ai.controller';
+import { AiProvider, type AiRequest } from './ai.provider';
+import { AiService, type DocDraftQueue } from './ai.service';
+
+/**
+ * Doc 05 §12.1's analyst again. `ent_emp.fld_sal` is Restricted and she lacks
+ * `field:viewRestricted`, so it is a mask stub in every view. In April she is narrowed to
+ * `ent_emp`, so `ent_prod` is hidden.
+ */
+
+const ANA: Subject = { kind: 'user', userId: 'usr_ana', orgId: 'org_1' };
+const mapOf = (s: Subject) => ({ subjectKey: s.kind === 'user' ? s.userId : 'link' }) as ProjectPermissionMap;
+
+interface View {
+  visible: string[];
+  /** entities holding `ai:use`; `'project'` for the project scope */
+  ai: string[];
+  docsEdit?: boolean;
+}
+const MARCH: View = { visible: ['ent_prod', 'ent_emp'], ai: ['project', 'ent_prod', 'ent_emp'] };
+const APRIL: View = { visible: ['ent_emp'], ai: ['project', 'ent_emp'] };
+
+const skel: ProjectSkeleton = {
+  generation: 1,
+  areaIds: [],
+  entities: [
+    { id: 'ent_prod', areaId: null },
+    { id: 'ent_emp', areaId: null },
+  ],
+  entityById: new Map([
+    ['ent_prod', { id: 'ent_prod', areaId: null }],
+    ['ent_emp', { id: 'ent_emp', areaId: null }],
+  ]),
+  entitiesWithRestrictedFields: new Set(['ent_emp']),
+};
+
+function resolverFor(view: View): PermissionResolver {
+  return {
+    resolveProject: vi.fn(() => Promise.resolve(mapOf(ANA))),
+    skeleton: vi.fn().mockResolvedValue(skel),
+    canOpenProject: () => true,
+    visibleEntityIds: () => new Set(view.visible),
+    restrictedOkEntityIds: () => new Set<string>(),
+    atomsAt: (_m: ProjectPermissionMap, _s: ProjectSkeleton, ref: { type: string; id: string }) => {
+      const atoms = new Set(['schema:view']);
+      if (view.ai.includes(ref.type === 'project' ? 'project' : ref.id)) atoms.add('ai:use');
+      if (view.docsEdit === true) atoms.add('docs:edit');
+      return atoms;
+    },
+  } as unknown as PermissionResolver;
+}
+
+const ANSWER =
+  '<query>\nSELECT fld_emp_name FROM ent_emp\n</query>\n<explanation>\nNames.\n</explanation>\n<assumptions>\n- none\n</assumptions>';
+
+function providerStub(answer = ANSWER): { provider: AiProvider; requests: AiRequest[] } {
+  const requests: AiRequest[] = [];
+  const provider = {
+    configured: true,
+    model: 'test-model',
+    assertConfigured: () => undefined,
+    stream: vi.fn((request: AiRequest, onText: (t: string) => void) => {
+      requests.push(request);
+      // Three-character chunks, so tags straddle chunk boundaries.
+      for (let i = 0; i < answer.length; i += 3) onText(answer.slice(i, i + 3));
+      return Promise.resolve({ text: answer, stopReason: 'end_turn', model: 'test-model', tokensIn: 10, tokensOut: 20 });
+    }),
+  } as unknown as AiProvider;
+  return { provider, requests };
+}
+
+const validator: QueryValidator = {
+  validate: vi.fn().mockResolvedValue({
+    parsed: true,
+    parseErrors: [],
+    identifiers: [],
+    touchedEntityIds: ['ent_emp'],
+    touchedFieldIds: ['fld_emp_name'],
+    hiddenReferences: [],
+    statementKinds: ['SELECT'],
+  }),
+};
+
+function harness(opts: {
+  view?: View;
+  provider?: AiProvider;
+  seed?: Partial<Record<string, Row[]>>;
+  counter?: number;
+  settings?: unknown;
+} = {}): { prisma: FakePrisma; service: AiService; add: ReturnType<typeof vi.fn>; write: ReturnType<typeof vi.fn> } {
+  const prisma = fakePrisma({
+    ...baseStore({
+      project: [projectRow({ name: 'Shop', organizationId: 'org_1', settings: opts.settings ?? {} })],
+      entity: [entityRow('ent_prod'), entityRow('ent_emp')],
+      field: [
+        fieldRow('fld_prod_id', 'ent_prod'),
+        fieldRow('fld_emp_name', 'ent_emp'),
+        fieldRow('fld_sal', 'ent_emp', { position: 1, isRestricted: true }),
+      ],
+    }),
+    ...opts.seed,
+  });
+  const resolver = resolverFor(opts.view ?? MARCH);
+  const engine = ENGINE_MANIFEST[0];
+  const registry = {
+    tryGet: () => ({ aiProfile: engine?.aiProfile, queryValidator: validator }),
+  } as unknown as EngineRegistry;
+  let count = opts.counter ?? 0;
+  const redis = {
+    incr: vi.fn(() => Promise.resolve(++count)),
+    expire: vi.fn(() => Promise.resolve(1)),
+    ttl: vi.fn(() => Promise.resolve(1200)),
+  } as unknown as Redis;
+  const add = vi.fn(() => Promise.resolve({ id: 'job_1' }));
+  const queue: DocDraftQueue = { add };
+  const write = vi.fn(() => Promise.resolve({}));
+  const service = new AiService(
+    prisma.client,
+    new SchemaLoader(prisma.client),
+    new VisibilityFilter(resolver),
+    resolver,
+    opts.provider ?? providerStub().provider,
+    registry,
+    redis,
+    queue,
+    { write } as unknown as DocsService,
+  );
+  return { prisma, service, add, write };
+}
+
+const selection = (entityIds: string[]) => ({ entityIds, fieldIds: [], linkIds: [], areaIds: [] });
+
+const threadRow = (over: Row = {}): Row => ({
+  id: 'thr_1',
+  projectId: PROJECT,
+  userId: 'usr_ana',
+  title: 'Untitled',
+  selection: selection([]),
+  lastMessageAt: null,
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  ...over,
+});
+
+describe('AiService — 503 without a key', () => {
+  it('every route answers 503 once the caller is authorised, and writes nothing', async () => {
+    const config = { get: () => undefined } as unknown as ConfigService<AppEnv, true>;
+    const { service, prisma } = harness({
+      provider: new AiProvider(config),
+      view: { ...MARCH, docsEdit: true },
+      seed: {
+        aiThread: [threadRow()],
+        docDraft: [{ id: 'd1', projectId: PROJECT, targetType: 'entity', targetId: 'ent_emp', status: 'pending', content: {}, createdAt: new Date(0) }],
+      },
+    });
+    const calls = [
+      service.listThreads(ANA, PROJECT, mapOf(ANA)),
+      service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection([]) }),
+      service.getThread(ANA, 'thr_1'),
+      service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'query' }),
+      service.draftSchema(ANA, PROJECT, mapOf(ANA), 'a shop'),
+      service.enqueueDocDrafts(ANA, PROJECT, mapOf(ANA), ['ent_emp']),
+      service.listDocDrafts(ANA, PROJECT, mapOf(ANA)),
+      service.rejectDocDraft(ANA, 'd1'),
+      service.acceptDocDraft(ANA, 'd1'),
+    ];
+    for (const call of calls) {
+      await expect(call).rejects.toMatchObject({ status: 503, response: { code: 'ai_not_configured' } });
+    }
+    expect(prisma.names().filter((n) => !n.endsWith('.findMany') && !n.endsWith('.findFirst'))).toEqual([]);
+  });
+
+  it('a permission refusal is the same with or without a key', async () => {
+    const config = { get: () => undefined } as unknown as ConfigService<AppEnv, true>;
+    const { service } = harness({ provider: new AiProvider(config), view: { ...MARCH, ai: [] } });
+    await expect(
+      service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection(['ent_emp']) }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('AiService.createThread — ai:use at every selected entity', () => {
+  it('403 when one selected entity lacks ai:use', async () => {
+    const { service } = harness({ view: { ...MARCH, ai: ['project', 'ent_emp'] } });
+    await expect(
+      service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection(['ent_emp', 'ent_prod']) }),
+    ).rejects.toMatchObject({ status: 403, response: { atom: 'ai:use', entityId: 'ent_prod' } });
+    // An empty selection means every visible entity, so it is refused too.
+    await expect(service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection([]) })).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it('404, not 403, for a selected entity the caller cannot see', async () => {
+    const { service } = harness({ view: APRIL });
+    await expect(
+      service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection(['ent_prod']) }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('403 ai_disabled when the project kill switch is off', async () => {
+    const { service } = harness({ settings: { ai: { enabled: false } } });
+    await expect(
+      service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection(['ent_emp']) }),
+    ).rejects.toMatchObject({ status: 403, response: { code: 'ai_disabled' } });
+  });
+});
+
+describe('AiService turns', () => {
+  it('sends a context with no hidden or restricted name, and stores both rows with touched ids', async () => {
+    const { provider, requests } = providerStub();
+    const { service, prisma } = harness({ view: APRIL, provider, seed: { aiThread: [threadRow()] } });
+    const turn = await service.prepareTurn(ANA, 'thr_1', { content: 'employee names', mode: 'query' });
+    const events: string[] = [];
+    const stored = await service.runTurn(turn, (event) => events.push(event));
+
+    const context = `${requests[0]?.prefix ?? ''}\n${requests[0]?.instructions ?? ''}`;
+    expect(context).toContain('T ent_emp');
+    expect(context).toContain('fld_emp_name');
+    expect(context).not.toContain('ent_prod');
+    expect(context).not.toContain('fld_prod_id');
+    expect(context).not.toContain('fld_sal');
+    expect(context).toContain('If answering requires a table or column that is not listed above, say so instead of guessing.');
+
+    expect(stored).toMatchObject({ role: 'assistant', ordinal: 1, queryText: 'SELECT fld_emp_name FROM ent_emp', explanation: 'Names.' });
+    expect(stored.metadata).toMatchObject({ assumptions: ['none'], usedEntityIds: ['ent_emp'], finishReason: 'end_turn' });
+    expect(prisma.store.aiMessage?.map((m) => [m.role, m.ordinal])).toEqual([
+      ['user', 0],
+      ['assistant', 1],
+    ]);
+    expect(prisma.store.aiMessage?.[1]).toMatchObject({ touchedEntityIds: ['ent_emp'], touchedFieldIds: ['fld_emp_name'] });
+    // Validated with no probe (L13).
+    const input = (validator.validate as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as { restrictedProbe?: unknown };
+    expect(input.restrictedProbe).toBeUndefined();
+    expect(events[0]).toBe('block-open');
+    expect(events.at(-1)).toBe('block-close');
+    expect(events.filter((e) => e === 'block-open')).toHaveLength(3);
+  });
+
+  it('429 ai_rate_limited with retryAfter past the per-user window', async () => {
+    const { service } = harness({ counter: 30, seed: { aiThread: [threadRow()] } });
+    const error = await service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'query' }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(429);
+    expect((error as HttpException).getResponse()).toEqual({ code: 'ai_rate_limited', retryAfter: 1200 });
+  });
+
+  it('L25: a thread with a message touching a now-hidden entity 404s whole and leaves the list', async () => {
+    const seed = {
+      aiThread: [threadRow()],
+      aiMessage: [
+        { id: 'm0', threadId: 'thr_1', projectId: PROJECT, role: 'user', ordinal: 0, content: 'q', queryText: null, touchedEntityIds: [], touchedFieldIds: [], metadata: {}, createdAt: new Date(0) },
+        { id: 'm1', threadId: 'thr_1', projectId: PROJECT, role: 'assistant', ordinal: 1, content: 'SELECT … FROM ent_prod', queryText: null, touchedEntityIds: ['ent_prod'], touchedFieldIds: [], metadata: {}, createdAt: new Date(0) },
+      ],
+    };
+    const march = harness({ seed });
+    expect((await march.service.getThread(ANA, 'thr_1')).messages).toHaveLength(2);
+
+    const april = harness({ view: APRIL, seed });
+    await expect(april.service.getThread(ANA, 'thr_1')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(april.service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'query' })).rejects.toBeInstanceOf(NotFoundException);
+    expect(await april.service.listThreads(ANA, PROJECT, mapOf(ANA))).toEqual([]);
+  });
+
+  it('someone else’s thread is 404', async () => {
+    const { service } = harness({ seed: { aiThread: [threadRow({ userId: 'usr_ben' })] } });
+    await expect(service.getThread(ANA, 'thr_1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('AiController SSE', () => {
+  it('writes block events in order and then done', async () => {
+    const { service } = harness({ seed: { aiThread: [threadRow()] } });
+    const writes: string[] = [];
+    const end = vi.fn();
+    const res = {
+      writableEnded: false,
+      on: vi.fn(),
+      status: vi.fn(),
+      setHeader: vi.fn(),
+      flushHeaders: vi.fn(),
+      write: (chunk: string) => writes.push(chunk),
+      end,
+    } as unknown as Response;
+    const req = { auth: { kind: 'user', userId: 'usr_ana', orgId: 'org_1' } } as unknown as Request;
+    const controller = new AiController(service);
+    await controller.postMessage(req, res, 'thr_1', { content: 'names', mode: 'query' });
+
+    const names = writes.map((w) => /^event: (\S+)/.exec(w)?.[1]);
+    const tags = writes
+      .filter((w) => w.startsWith('event: block-open'))
+      .map((w) => (JSON.parse(w.split('data: ')[1] ?? '{}') as { tag: string }).tag);
+    expect(tags).toEqual(['query', 'explanation', 'assumptions']);
+    expect(names.at(-1)).toBe('done');
+    expect(names.filter((n) => n === 'block-open')).toHaveLength(3);
+    expect(names.filter((n) => n === 'block-close')).toHaveLength(3);
+    expect(end).toHaveBeenCalled();
+  });
+});
+
+describe('AiService doc drafts', () => {
+  it('enqueues only after ai:use at every entity', async () => {
+    const { service, add } = harness({ view: { ...MARCH, ai: ['ent_emp'] } });
+    await expect(service.enqueueDocDrafts(ANA, PROJECT, mapOf(ANA), ['ent_emp', 'ent_prod'])).rejects.toMatchObject({ status: 403 });
+    expect(add).not.toHaveBeenCalled();
+    await service.enqueueDocDrafts(ANA, PROJECT, mapOf(ANA), ['ent_emp']);
+    expect(add).toHaveBeenCalledTimes(1);
+  });
+
+  it('the job keeps only suggestions for targets it asked about, replacing a pending one', async () => {
+    const answer = '<doc>\nfield fld_emp_name\nThe employee’s name.\n</doc>\n<doc>\nfield fld_sal\nSalary.\n</doc>\n<doc>\nentity ent_prod\nProducts.\n</doc>';
+    const { service, prisma } = harness({
+      provider: providerStub(answer).provider,
+      seed: { docDraft: [{ id: 'old', projectId: PROJECT, targetType: 'field', targetId: 'fld_emp_name', status: 'pending', content: {}, createdAt: new Date(0) }] },
+    });
+    expect(await service.runDocDraftJob({ projectId: PROJECT, subject: ANA, entityIds: ['ent_emp'] }, 'job_1')).toEqual({ drafted: 1 });
+    expect(prisma.store.docDraft?.map((d) => [d.targetId, d.status, d.jobId])).toEqual([['fld_emp_name', 'pending', 'job_1']]);
+    const [draft] = await service.listDocDrafts(ANA, PROJECT, mapOf(ANA));
+    expect(draft).toMatchObject({ targetType: 'field', targetId: 'fld_emp_name', plainText: 'The employee’s name.' });
+  });
+
+  it('reject and accept need docs:edit at the target; accept writes through DocsService', async () => {
+    const seed = () => ({ docDraft: [{ id: 'd1', projectId: PROJECT, targetType: 'field', targetId: 'fld_emp_name', status: 'pending', content: {}, createdAt: new Date(0) }] });
+    await expect(harness({ seed: seed() }).service.rejectDocDraft(ANA, 'd1')).rejects.toMatchObject({ status: 403 });
+    const editor = harness({ view: { ...MARCH, docsEdit: true }, seed: seed() });
+    expect(await editor.service.rejectDocDraft(ANA, 'd1')).toMatchObject({ id: 'd1' });
+    expect(editor.prisma.store.docDraft?.[0]?.status).toBe('rejected');
+    await expect(harness({ seed: seed() }).service.acceptDocDraft(ANA, 'd1')).rejects.toMatchObject({ status: 403 });
+    const accepter = harness({ view: { ...MARCH, docsEdit: true }, seed: seed() });
+    expect(await accepter.service.acceptDocDraft(ANA, 'd1')).toMatchObject({ id: 'd1' });
+    expect(accepter.write).toHaveBeenCalledWith(ANA, PROJECT, 'field', 'fld_emp_name', { content: {} });
+    expect(accepter.prisma.store.docDraft?.[0]?.status).toBe('accepted');
+  });
+});

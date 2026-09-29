@@ -293,6 +293,13 @@ export function redactedModel(): RedactedModel {
 
 const REFERENCE_MODEL = referenceModel();
 
+/** A fresh reference model with one edit applied — for the migration pairs. */
+function edited(edit: (model: SchemaModel) => void): SchemaModel {
+  const model = referenceModel();
+  edit(model);
+  return model;
+}
+
 function objectOrThrow<T>(value: T | undefined, id: string): T {
   if (value === undefined) throw new Error(`fixture: ${id} is missing`);
   return value;
@@ -349,7 +356,66 @@ export const CONFORMANCE_FIXTURES: ConformanceFixtures = {
       expect: { touchedEntityNames: [], unknownIdentifiers: [], parsed: false },
     },
   ],
-  migrations: [],
+  // §11: one pair per risk class, each a small edit of the reference model. The suite also
+  // runs every pair reversed, so "add a column" doubles as "drop a column" for guarantee 2.
+  migrations: [
+    {
+      name: 'add a column and an index',
+      before: REFERENCE_MODEL,
+      after: edited((m) => {
+        m.objects.field.fd_cust_nick = column({
+          id: 'fd_cust_nick',
+          name: 'nickname',
+          entityId: 'en_customers',
+          ordinal: 3,
+          type: { name: 'text' },
+        });
+        m.objects.index.ix_cust_nick = index({
+          id: 'ix_cust_nick',
+          name: 'customers_nickname_idx',
+          entityId: 'en_customers',
+          columns: [indexColumn({ ordinal: 0, fieldId: 'fd_cust_nick' })],
+        });
+      }),
+      expectDestructive: false,
+      expectLossy: false,
+    },
+    {
+      name: 'drop a column',
+      before: REFERENCE_MODEL,
+      after: edited((m) => {
+        delete m.objects.field.fd_cust_created;
+      }),
+      expectDestructive: true,
+      expectLossy: false,
+    },
+    {
+      name: 'narrow a varchar and require a value',
+      before: REFERENCE_MODEL,
+      after: edited((m) => {
+        const email = objectOrThrow(m.objects.field.fd_cust_email, 'fd_cust_email');
+        m.objects.field.fd_cust_email = { ...email, type: { name: 'varchar', args: [64] } };
+        const customer = objectOrThrow(m.objects.field.fd_ord_customer, 'fd_ord_customer');
+        m.objects.field.fd_ord_customer = { ...customer, isNullable: false };
+      }),
+      expectDestructive: false,
+      expectLossy: true,
+    },
+    {
+      name: 'rename a table, a column and a schema',
+      before: REFERENCE_MODEL,
+      after: edited((m) => {
+        const customers = objectOrThrow(m.objects.entity.en_customers, 'en_customers');
+        m.objects.entity.en_customers = { ...customers, name: 'clients' };
+        const email = objectOrThrow(m.objects.field.fd_cust_email, 'fd_cust_email');
+        m.objects.field.fd_cust_email = { ...email, name: 'email_address' };
+        const billing = objectOrThrow(m.objects.namespace[BILLING], BILLING);
+        m.objects.namespace[BILLING] = { ...billing, name: 'finance' };
+      }),
+      expectDestructive: false,
+      expectLossy: false,
+    },
+  ],
 
   invalidProps: [
     { kind: 'namespace', subKind: null, value: { owner: 42 } },

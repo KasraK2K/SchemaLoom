@@ -1,9 +1,11 @@
+import type { AiProfile } from './ai.js';
 import type { EngineCapabilities } from './capabilities.js';
 import type { DiagnosticMessages, EngineId } from './diagnostics.js';
 import type { Exporter } from './exporter.js';
 import type { Importer } from './importer.js';
+import type { AnnotatedDiff, MigrationGenerator } from './migration.js';
 import type { QueryValidator } from './query.js';
-import type { IrObject, IrObjectRef, SchemaModel } from './ir.js';
+import type { IrObject, IrObjectRef, SchemaDiff, SchemaModel } from './ir.js';
 import type { EnginePropsSchemas } from './props.js';
 import type { TerminologyBundle } from './terminology.js';
 import type { TypeCatalog } from './type-catalog.js';
@@ -67,15 +69,17 @@ export interface EngineDefinition extends EngineStaticFacet {
   readonly importer?: Importer;
   /** step 20 — `Exporter` (§10). Narrowed from `unknown` when the contract landed. */
   readonly exporter?: Exporter;
-  /** step 11 — `annotateDiff(diff, before, after): AnnotatedDiff` */
-  readonly annotateDiff?: unknown;
-  /** phase-gated; presence must equal `features.migrations` */
-  readonly migrationGenerator?: unknown;
+  /** §11.1 — adds risk semantics to a core-produced diff (doc 04 §7.7). Pure and synchronous.
+   *  Returns the branded `AnnotatedDiff`, the only thing the migration generator accepts.
+   *  Optional so an engine can ship before it has risk knowledge; the migration routes need it. */
+  readonly annotateDiff?: (diff: SchemaDiff, before: SchemaModel, after: SchemaModel) => AnnotatedDiff;
+  /** §11.2 — phase-gated; presence must equal `features.migrations` */
+  readonly migrationGenerator?: MigrationGenerator;
   /** Phase 2 — `QueryValidator` (§12). Presence must equal `features.queryValidation`. */
   readonly queryValidator?: QueryValidator;
   /** No feature atom: `aiProfile === undefined` simply hides the AI panel and makes the AI
-   *  routes 400 `engine.feature-unsupported`. */
-  readonly aiProfile?: unknown;
+   *  routes 400 `engine.feature-unsupported`. Narrowed from `unknown` with §13 (Phase 5). */
+  readonly aiProfile?: AiProfile;
 
   /**
    * The engine's only obligation to the permission system (§3.1). REQUIRED, pure, synchronous,

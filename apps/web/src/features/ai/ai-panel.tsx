@@ -1,0 +1,393 @@
+'use client';
+
+import { Button } from '@schemaloom/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEngine } from '@/engines';
+import { irQueryOptions } from '@/features/canvas/ir-query';
+import { useCanvasStore } from '@/features/canvas/store';
+import { createSavedQuery, savedQueriesKey, validateQuery } from '@/features/queries/queries-api';
+import { ValidationNotes, marksOf } from '@/features/queries/queries-panel';
+import { SqlEditor } from '@/features/queries/sql-editor';
+import {
+  aiErrorMessage,
+  aiThreadKey,
+  aiThreadQueryOptions,
+  aiThreadsKey,
+  aiThreadsQueryOptions,
+  createThread,
+  docDraftsKey,
+  docDraftsQueryOptions,
+  queueDocDrafts,
+  reviewDocDraft,
+  streamMessage,
+  type AiMessage,
+  type AiMode,
+} from './ai-api';
+
+/**
+ * DESIGN §4.4 — the AI tab: threads started from the canvas selection, a composer with
+ * Ask / Explain, the streamed answer, and the doc-draft review queue.
+ *
+ * The server decides what the model sees (the caller's redacted view of the selection);
+ * nothing here narrows or widens it. "Tables used" and "add suggested tables" only move the
+ * canvas selection.
+ */
+export function AiPanel({ projectId }: { readonly projectId: string }) {
+  const queryClient = useQueryClient();
+  const selection = useCanvasStore((s) => s.selection);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const threads = useQuery(aiThreadsQueryOptions(projectId));
+
+  const start = useMutation({
+    mutationFn: () => {
+      const ids = [...selection];
+      return createThread(projectId, ids, ids.length === 0 ? 'Whole schema' : `${String(ids.length)} selected`);
+    },
+    onSuccess: (thread) => {
+      void queryClient.invalidateQueries({ queryKey: aiThreadsKey(projectId) });
+      setThreadId(thread.id);
+    },
+  });
+
+  if (threads.error !== null) {
+    return <p className="p-2 text-xs text-text-muted">{aiErrorMessage(threads.error)}</p>;
+  }
+
+  if (threadId !== null) {
+    return (
+      <ThreadView
+        projectId={projectId}
+        threadId={threadId}
+        onBack={() => {
+          setThreadId(null);
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-2 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-text-muted">
+          {selection.size === 0 ? 'No selection: the whole schema you can see' : `${String(selection.size)} selected`}
+        </span>
+        <Button
+          size="sm"
+          disabled={start.isPending}
+          onClick={() => {
+            start.mutate();
+          }}
+        >
+          New conversation
+        </Button>
+      </div>
+      {start.error !== null && (
+        <p role="alert" className="text-xs text-danger-text">
+          {aiErrorMessage(start.error)}
+        </p>
+      )}
+      {(threads.data ?? []).length === 0 ? (
+        <p className="text-xs text-text-subtle">No conversations yet.</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {(threads.data ?? []).map((t) => (
+            <li key={t.id}>
+              <button
+                type="button"
+                className="w-full rounded px-2 py-1 text-left text-sm hover:bg-surface-hover"
+                onClick={() => {
+                  setThreadId(t.id);
+                }}
+              >
+                {t.title}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <DocDrafts projectId={projectId} selection={[...selection]} />
+    </div>
+  );
+}
+
+interface Live {
+  readonly query: string;
+  readonly explanation: string;
+  readonly assumptions: string;
+}
+const NO_LIVE: Live = { query: '', explanation: '', assumptions: '' };
+
+function ThreadView({
+  projectId,
+  threadId,
+  onBack,
+}: {
+  readonly projectId: string;
+  readonly threadId: string;
+  readonly onBack: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const thread = useQuery(aiThreadQueryOptions(threadId));
+  const [mode, setMode] = useState<AiMode>('query');
+  const [content, setContent] = useState('');
+  const [live, setLive] = useState<Live | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const abort = useRef<AbortController | null>(null);
+  useEffect(() => () => abort.current?.abort(), []);
+
+  const send = async (): Promise<void> => {
+    setError(null);
+    setLive(NO_LIVE);
+    abort.current = new AbortController();
+    try {
+      await streamMessage(
+        threadId,
+        { content, mode },
+        (event) => {
+          if (event.type === 'block-delta' && (event.tag === 'query' || event.tag === 'explanation' || event.tag === 'assumptions')) {
+            const tag = event.tag;
+            setLive((prev) => ({ ...(prev ?? NO_LIVE), [tag]: (prev ?? NO_LIVE)[tag] + event.text }));
+          }
+          if (event.type === 'error') setError(aiErrorMessage(null));
+          if (event.type === 'done') setContent('');
+        },
+        abort.current.signal,
+      );
+    } catch (e: unknown) {
+      setError(aiErrorMessage(e));
+    } finally {
+      setLive(null);
+      void queryClient.invalidateQueries({ queryKey: aiThreadKey(threadId) });
+    }
+  };
+
+  if (thread.error !== null) {
+    return (
+      <div className="flex flex-col gap-2 p-2 text-sm">
+        <Button size="sm" variant="ghost" onClick={onBack}>
+          ← Conversations
+        </Button>
+        <p className="text-xs text-text-muted">{aiErrorMessage(thread.error)}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-2 text-sm">
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="ghost" onClick={onBack}>
+          ← Conversations
+        </Button>
+        <span className="truncate text-xs text-text-muted">{thread.data?.title}</span>
+      </div>
+      {(thread.data?.messages ?? []).map((m) =>
+        m.role === 'user' ? (
+          <p key={m.id} className="whitespace-pre-wrap rounded bg-surface-sunken px-2 py-1 text-xs">
+            {m.content}
+          </p>
+        ) : (
+          <AssistantMessage key={m.id} projectId={projectId} title={thread.data?.title ?? 'AI query'} message={m} />
+        ),
+      )}
+      {live !== null && (
+        <div aria-live="polite" className="flex flex-col gap-1 text-xs">
+          {live.explanation !== '' && <p>{live.explanation.trim()}</p>}
+          {live.query !== '' && (
+            <pre className="overflow-auto rounded-md border border-border bg-surface p-2 font-mono">{live.query.trim()}</pre>
+          )}
+          {live.query === '' && live.explanation === '' && <p className="text-text-subtle">Thinking…</p>}
+        </div>
+      )}
+      {error !== null && (
+        <p role="alert" className="text-xs text-danger-text">
+          {error}
+        </p>
+      )}
+      <form
+        className="flex flex-col gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+      >
+        <div role="radiogroup" aria-label="Mode" className="flex gap-1">
+          {(['query', 'explain'] as const).map((m) => (
+            <Button
+              key={m}
+              type="button"
+              size="sm"
+              variant={mode === m ? 'primary' : 'ghost'}
+              role="radio"
+              aria-checked={mode === m}
+              onClick={() => {
+                setMode(m);
+              }}
+            >
+              {m === 'query' ? 'Ask' : 'Explain'}
+            </Button>
+          ))}
+        </div>
+        <textarea
+          aria-label={mode === 'query' ? 'Question' : 'Query to explain'}
+          placeholder={mode === 'query' ? 'Ask about the selected tables…' : 'Paste a query to explain…'}
+          rows={mode === 'query' ? 3 : 6}
+          value={content}
+          onChange={(e) => {
+            setContent(e.target.value);
+          }}
+          className={`rounded-md border border-border bg-surface px-2 py-1 text-xs text-text ${mode === 'explain' ? 'font-mono' : ''}`}
+        />
+        <div className="flex justify-end">
+          <Button type="submit" size="sm" variant="primary" disabled={live !== null || content.trim() === ''}>
+            {live !== null ? 'Answering…' : 'Send'}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function AssistantMessage({
+  projectId,
+  title,
+  message,
+}: {
+  readonly projectId: string;
+  readonly title: string;
+  readonly message: AiMessage;
+}) {
+  const queryClient = useQueryClient();
+  const canValidate = useEngine().capabilities.features.queryValidation;
+  const query = message.queryText;
+  const validation = useQuery({
+    queryKey: ['ai-validate', message.id],
+    queryFn: () => validateQuery(projectId, query ?? ''),
+    enabled: canValidate && query !== null,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const marks = useMemo(() => marksOf(validation.data ?? null), [validation.data]);
+  const save = useMutation({
+    mutationFn: () => createSavedQuery(projectId, { name: title.slice(0, 200), queryText: query ?? '', tags: ['ai'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: savedQueriesKey(projectId) }),
+  });
+  const { usedEntityIds, suggestedEntityIds, assumptions } = message.metadata;
+
+  return (
+    <div className="flex flex-col gap-2 text-xs">
+      {message.explanation !== '' && <p className="whitespace-pre-wrap">{message.explanation}</p>}
+      {message.metadata.finishReason === 'refusal' && <p className="text-text-muted">The assistant declined this request.</p>}
+      {query !== null && <SqlEditor value={query} onChange={() => undefined} marks={marks} />}
+      <ValidationNotes validation={validation.data ?? null} />
+      {assumptions.length > 0 && (
+        <ul className="list-disc pl-4 text-text-muted" aria-label="Assumptions">
+          {assumptions.map((a) => (
+            <li key={a}>{a}</li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap gap-1">
+        {usedEntityIds.length > 0 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              useCanvasStore.getState().select(usedEntityIds, 'replace');
+            }}
+          >
+            Tables used ({usedEntityIds.length})
+          </Button>
+        )}
+        {suggestedEntityIds.length > 0 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              useCanvasStore.getState().select(suggestedEntityIds, 'extend');
+            }}
+          >
+            Add suggested tables ({suggestedEntityIds.length})
+          </Button>
+        )}
+        {query !== null && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={save.isPending || save.isSuccess}
+            onClick={() => {
+              save.mutate();
+            }}
+          >
+            {save.isSuccess ? 'Saved' : 'Save query'}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** "Draft docs with AI" over the selection, and the accept / reject queue it fills. */
+function DocDrafts({ projectId, selection }: { readonly projectId: string; readonly selection: readonly string[] }) {
+  const queryClient = useQueryClient();
+  const drafts = useQuery(docDraftsQueryOptions(projectId));
+  const { data: model } = useQuery(irQueryOptions(projectId));
+  const label = (type: 'entity' | 'field', id: string): string => {
+    const objects = model?.objects;
+    if (type === 'entity') return objects?.entity[id]?.name ?? 'table';
+    const field = objects?.field[id];
+    return field === undefined ? 'column' : `${objects?.entity[field.entityId]?.name ?? ''}.${field.name}`;
+  };
+  const refresh = () => queryClient.invalidateQueries({ queryKey: docDraftsKey(projectId) });
+  const queue = useMutation({ mutationFn: () => queueDocDrafts(projectId, selection) });
+  const review = useMutation({
+    mutationFn: ({ id, verdict }: { id: string; verdict: 'accept' | 'reject' }) => reviewDocDraft(id, verdict),
+    onSettled: refresh,
+  });
+
+  return (
+    <section className="flex flex-col gap-2 border-t border-border pt-2" aria-label="Doc drafts">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium">Documentation drafts</span>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={selection.length === 0 || queue.isPending}
+          onClick={() => {
+            queue.mutate();
+          }}
+        >
+          Draft docs with AI
+        </Button>
+      </div>
+      {queue.isSuccess && <p className="text-xs text-text-muted">Drafting in the background…</p>}
+      {queue.error !== null && <p className="text-xs text-danger-text">{aiErrorMessage(queue.error)}</p>}
+      {review.error !== null && <p className="text-xs text-danger-text">Could not review that draft.</p>}
+      {(drafts.data ?? []).map((d) => (
+        <div key={d.id} className="flex flex-col gap-1 rounded border border-border p-2 text-xs">
+          <span className="font-mono text-text-muted">{label(d.targetType, d.targetId)}</span>
+          <p className="whitespace-pre-wrap">{d.plainText}</p>
+          <div className="flex justify-end gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                review.mutate({ id: d.id, verdict: 'reject' });
+              }}
+            >
+              Reject
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                review.mutate({ id: d.id, verdict: 'accept' });
+              }}
+            >
+              Accept
+            </Button>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}

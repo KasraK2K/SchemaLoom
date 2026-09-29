@@ -80,6 +80,46 @@ export function diffQueryOptions(projectId: string, from: string, to: string | n
   });
 }
 
+const stepSchema = z.object({
+  ordinal: z.number(),
+  phase: z.string(),
+  kind: z.string(),
+  text: z.string(),
+  destructive: z.boolean(),
+  lossy: z.boolean(),
+  requiresTableRewrite: z.boolean(),
+  commentedOut: z.boolean(),
+  reason: z.string().nullable(),
+});
+export type MigrationStep = z.infer<typeof stepSchema>;
+
+/** `GET …/migration/…` (doc 03 §11.2): the engine's plan, reasons already rendered. */
+export const migrationSchema = z.object({
+  steps: z.array(stepSchema),
+  summary: z.object({ total: z.number(), destructive: z.number(), lossy: z.number(), rewrites: z.number() }),
+  unsupported: z.array(z.object({ change: z.string(), reason: z.string() })),
+  script: z.string(),
+  fileExtension: z.string(),
+});
+export type MigrationView = z.infer<typeof migrationSchema>;
+
+/** `to === null` migrates to the current schema. */
+export function migrationQueryOptions(
+  projectId: string,
+  from: string,
+  to: string | null,
+  allowDestructive: boolean,
+) {
+  const path = `${base(projectId)}/${encodeURIComponent(from)}/migration/${
+    to === null ? 'live' : encodeURIComponent(to)
+  }?allowDestructive=${String(allowDestructive)}`;
+  return queryOptions({
+    queryKey: [...snapshotsKey(projectId), 'migration', from, to ?? 'live', allowDestructive],
+    queryFn: async () => migrationSchema.parse(await apiFetch<unknown>(path)),
+    retry: false,
+  });
+}
+
 export async function createSnapshot(
   projectId: string,
   input: { name: string; description?: string },

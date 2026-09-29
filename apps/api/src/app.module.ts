@@ -3,8 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AccessModule } from './access/access.module';
+import { AiModule } from './ai';
 import { AuthModule, JwtAuthGuard } from './auth';
 import { CommentsModule } from './comments';
+import { DocsModule } from './docs';
 import { EnginesModule } from './engines';
 import { JobsModule } from './jobs';
 import { NotificationsModule } from './notifications';
@@ -68,8 +70,10 @@ import { RedisModule } from './redis/redis.module';
     SnapshotsModule,
     SharingModule,
     SavedQueriesModule,
+    AiModule,
     NotificationsModule,
     CommentsModule,
+    DocsModule,
     RealtimeModule,
     JobsModule,
     HealthModule,

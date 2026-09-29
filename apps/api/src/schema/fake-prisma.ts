@@ -42,6 +42,9 @@ const MODELS = [
   'comment',
   'notification',
   'user',
+  'aiThread',
+  'aiMessage',
+  'docDraft',
 ] as const;
 
 /** `parent.create({ data: { columns: { create: [...] } } })` → which table the children
@@ -181,7 +184,7 @@ export function fakePrisma(seed: Partial<Store> = {}, options: FakeOptions = {})
           }
         }
         // Prisma's `@default(cuid())`, for the models whose id the caller never sends.
-        if (!('id' in data) && (model === 'savedQuery' || model === 'notification')) {
+        if (!('id' in data) && (model === 'savedQuery' || model === 'notification' || model === 'aiThread' || model === 'aiMessage' || model === 'docDraft')) {
           data.id = `${model}_${String(rowsOf(model).length + 1)}`;
         }
         if (model === 'comment' || model === 'notification') {
@@ -190,6 +193,7 @@ export function fakePrisma(seed: Partial<Store> = {}, options: FakeOptions = {})
           data.readAt ??= null;
           data.version ??= 0;
         }
+        if (model === 'doc') data.updatedAt ??= new Date();
         rowsOf(model).push(data);
         return Promise.resolve(data);
       },

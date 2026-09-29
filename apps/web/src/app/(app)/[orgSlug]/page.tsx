@@ -47,12 +47,12 @@ export default async function OrgProjectsPage({
       <div className="mx-auto max-w-3xl p-8">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-text">Projects</h1>
-          {(org.orgRole === 'owner' || org.orgRole === 'admin') && (
+          {org.orgRole !== 'guest' && (
             <Link
-              href={`/${orgSlug}/settings/roles`}
+              href={`/${orgSlug}/settings/members`}
               className="text-sm text-text-muted hover:text-text"
             >
-              Roles
+              Settings
             </Link>
           )}
         </div>
