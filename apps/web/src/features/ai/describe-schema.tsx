@@ -40,7 +40,10 @@ export function DescribeSchema({
         />
       </label>
       <div className="flex items-center justify-between gap-2">
-        <span role={draft.error === null ? undefined : 'alert'} className="text-xs text-danger-text">
+        <span
+          role={draft.error === null ? undefined : 'alert'}
+          className="text-xs text-danger-text"
+        >
           {draft.error === null ? '' : aiErrorMessage(draft.error)}
         </span>
         <Button

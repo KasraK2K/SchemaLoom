@@ -33,12 +33,22 @@ describe('createTaggedBlockStream', () => {
   it('yields the same events whatever the chunk size, including a tag split across chunks', () => {
     const whole = run(RESPONSE, RESPONSE.length);
     expect(whole.map((e) => e.type)).toEqual([
-      'block-open', 'block-delta', 'block-close',
-      'block-open', 'block-delta', 'block-close',
-      'block-open', 'block-delta', 'block-close',
+      'block-open',
+      'block-delta',
+      'block-close',
+      'block-open',
+      'block-delta',
+      'block-close',
+      'block-open',
+      'block-delta',
+      'block-close',
     ]);
     for (const size of [1, 2, 3, 5, 7, 13]) expect(run(RESPONSE, size)).toEqual(whole);
-    expect(whole[1]).toEqual({ type: 'block-delta', tag: 'query', text: '\nSELECT * FROM t WHERE a < b AND x <> y\n' });
+    expect(whole[1]).toEqual({
+      type: 'block-delta',
+      tag: 'query',
+      text: '\nSELECT * FROM t WHERE a < b AND x <> y\n',
+    });
   });
 
   it('closes an unterminated block on end()', () => {
@@ -80,11 +90,17 @@ describe('parseAiOutput', () => {
     }
     const out = parseAiOutput('That table is not in the schema I was given.', 'query', OPTIONS);
     expect(out.mode === 'query' && out.query).toBeNull();
-    expect(out.mode === 'query' && out.explanation).toBe('That table is not in the schema I was given.');
+    expect(out.mode === 'query' && out.explanation).toBe(
+      'That table is not in the schema I was given.',
+    );
   });
 
   it('parses draft-docs targets and skips malformed blocks', () => {
-    const out = parseAiOutput('<doc>\nfield fd_1\nThe email.\n</doc><doc>nonsense</doc>', 'draft-docs', OPTIONS);
+    const out = parseAiOutput(
+      '<doc>\nfield fd_1\nThe email.\n</doc><doc>nonsense</doc>',
+      'draft-docs',
+      OPTIONS,
+    );
     expect(out.mode === 'draft-docs' && out.suggestions).toEqual([
       { target: { type: 'field', id: 'fd_1' }, plainText: 'The email.' },
     ]);
@@ -93,12 +109,21 @@ describe('parseAiOutput', () => {
 
   it('parses draft-schema DDL', () => {
     const out = parseAiOutput('<ddl>\nCREATE TABLE a (id int);\n</ddl>', 'draft-schema', OPTIONS);
-    expect(out).toEqual({ mode: 'draft-schema', source: 'CREATE TABLE a (id int);', importFormat: 'ddl', parseWarnings: [] });
+    expect(out).toEqual({
+      mode: 'draft-schema',
+      source: 'CREATE TABLE a (id int);',
+      importFormat: 'ddl',
+      parseWarnings: [],
+    });
   });
 });
 
 describe('defaultJoinPaths', () => {
-  const entity = (id: string, restricted?: true) => ({ id, name: restricted ? '' : id, ...(restricted ? { restricted } : {}) });
+  const entity = (id: string, restricted?: true) => ({
+    id,
+    name: restricted ? '' : id,
+    ...(restricted ? { restricted } : {}),
+  });
   const link = (id: string, from: string, to: string) => ({
     id,
     from: { entityId: from, fieldIds: [] },
@@ -107,24 +132,42 @@ describe('defaultJoinPaths', () => {
   const model = {
     objects: {
       entity: Object.fromEntries(
-        [entity('orders'), entity('items'), entity('products'), entity('secret', true)].map((e) => [e.id, e]),
+        [entity('orders'), entity('items'), entity('products'), entity('secret', true)].map((e) => [
+          e.id,
+          e,
+        ]),
       ),
       link: Object.fromEntries(
-        [link('l1', 'items', 'orders'), link('l2', 'items', 'products'), link('l3', 'orders', 'secret'), link('l4', 'secret', 'products')].map(
-          (l) => [l.id, l],
-        ),
+        [
+          link('l1', 'items', 'orders'),
+          link('l2', 'items', 'products'),
+          link('l3', 'orders', 'secret'),
+          link('l4', 'secret', 'products'),
+        ].map((l) => [l.id, l]),
       ),
     },
   } as unknown as RedactedModel;
 
   it('routes through visible entities only and names what to add', () => {
-    const [path] = defaultJoinPaths({ model, selectedEntityIds: ['orders', 'products'], maxHops: 3, maxSuggestions: 5 });
+    const [path] = defaultJoinPaths({
+      model,
+      selectedEntityIds: ['orders', 'products'],
+      maxHops: 3,
+      maxSuggestions: 5,
+    });
     expect(path?.reason).toBe('orders -> items -> products');
     expect(path?.addedEntityIds).toEqual(['items']);
     expect(path?.connects).toEqual(['orders', 'products']);
   });
 
   it('respects maxHops', () => {
-    expect(defaultJoinPaths({ model, selectedEntityIds: ['orders', 'products'], maxHops: 1, maxSuggestions: 5 })).toEqual([]);
+    expect(
+      defaultJoinPaths({
+        model,
+        selectedEntityIds: ['orders', 'products'],
+        maxHops: 1,
+        maxSuggestions: 5,
+      }),
+    ).toEqual([]);
   });
 });

@@ -39,7 +39,10 @@ const EXPRESSION_KEYS = [
 /** A dotted chain: `salary`, `orders.total`, `public.orders.total`, `"Orders"."Total"`. */
 const IDENTIFIER = '(?:"(?:[^"]|"")*"|[A-Za-z_\\u0080-\\uffff][A-Za-z0-9_$\\u0080-\\uffff]*)';
 const CHAIN_RE = new RegExp(`${IDENTIFIER}(?:\\s*\\.\\s*${IDENTIFIER})*`, 'g');
-const PART_RE = new RegExp(`"((?:[^"]|"")*)"|([A-Za-z_\\u0080-\\uffff][A-Za-z0-9_$\\u0080-\\uffff]*)`, 'g');
+const PART_RE = new RegExp(
+  `"((?:[^"]|"")*)"|([A-Za-z_\\u0080-\\uffff][A-Za-z0-9_$\\u0080-\\uffff]*)`,
+  'g',
+);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

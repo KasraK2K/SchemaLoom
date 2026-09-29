@@ -1,4 +1,9 @@
-import type { BuiltInResourceRole, OrgRole, PermissionAtom, RestrictedFieldMode } from '@schemaloom/contracts';
+import type {
+  BuiltInResourceRole,
+  OrgRole,
+  PermissionAtom,
+  RestrictedFieldMode,
+} from '@schemaloom/contracts';
 import type { ProjectPermissionMap } from '../access';
 import { effectiveRole } from './effective-role';
 

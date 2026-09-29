@@ -88,7 +88,10 @@ export function mergeImport(live: LiveIr, imported: SchemaModel): MergedImport {
   // A new column on an existing table goes after the columns it already has.
   const nextOrdinal = new Map<string, number>();
   for (const field of Object.values(live.objects.field)) {
-    nextOrdinal.set(field.entityId, Math.max(nextOrdinal.get(field.entityId) ?? 0, field.ordinal + 1));
+    nextOrdinal.set(
+      field.entityId,
+      Math.max(nextOrdinal.get(field.entityId) ?? 0, field.ordinal + 1),
+    );
   }
 
   const objects = structuredClone(live.objects) as Record<IrObjectType, Record<string, unknown>>;
@@ -115,7 +118,10 @@ export function mergeImport(live: LiveIr, imported: SchemaModel): MergedImport {
     IR_OBJECT_TYPES.map((type) => [
       type,
       Object.fromEntries(
-        Object.values(retargeted.objects[type] as Record<string, { id: string }>).map((o) => [o.id, o]),
+        Object.values(retargeted.objects[type] as Record<string, { id: string }>).map((o) => [
+          o.id,
+          o,
+        ]),
       ),
     ]),
   ) as unknown as SchemaModel['objects'];

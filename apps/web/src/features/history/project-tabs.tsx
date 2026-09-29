@@ -9,7 +9,13 @@ import { usePathname } from 'next/navigation';
  * caller's atoms, so History is always offered; without `history:view` the page renders
  * the API's refusal as its "not available" state.
  */
-export function ProjectTabs({ orgSlug, projectId }: { readonly orgSlug: string; readonly projectId: string }) {
+export function ProjectTabs({
+  orgSlug,
+  projectId,
+}: {
+  readonly orgSlug: string;
+  readonly projectId: string;
+}) {
   const pathname = usePathname();
   const base = `/${encodeURIComponent(orgSlug)}/p/${encodeURIComponent(projectId)}`;
   const tabs = [

@@ -206,7 +206,9 @@ function QueryEditor({
   const save = useMutation({
     mutationFn: () => {
       const body = { name: name.trim(), queryText: text, tags: parseTags(tags) };
-      return draft.id === null ? createSavedQuery(projectId, body) : updateSavedQuery(draft.id, body);
+      return draft.id === null
+        ? createSavedQuery(projectId, body)
+        : updateSavedQuery(draft.id, body);
     },
     onSuccess: onDone,
   });
@@ -294,6 +296,10 @@ export function marksOf(validation: QueryValidation | null): EditorMark[] {
           ? `Ambiguous: ${i.text}`
           : `Unknown: ${i.text}${i.suggestions.length > 0 ? ` — did you mean ${i.suggestions.join(', ')}?` : ''}`,
     }));
-  const errors = validation.parseErrors.map((e) => ({ from: e.range.start, to: e.range.end, message: e.message }));
+  const errors = validation.parseErrors.map((e) => ({
+    from: e.range.start,
+    to: e.range.end,
+    message: e.message,
+  }));
   return [...flagged, ...errors];
 }

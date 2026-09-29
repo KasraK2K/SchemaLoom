@@ -14,7 +14,13 @@ import { AccessRequestStatus, PrincipalType } from '../generated/prisma/enums';
 import { NotificationsService, type CreatedNotification } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_RATELIMIT } from '../redis/redis.tokens';
-import { AccessWriter, assertNotGuestManager, assertVisible, grantableRole, type Tx } from './access-write';
+import {
+  AccessWriter,
+  assertNotGuestManager,
+  assertVisible,
+  grantableRole,
+  type Tx,
+} from './access-write';
 import type { RequestAccessDto } from './sharing.dto';
 
 type UserSubject = Subject & { kind: 'user' };
@@ -71,16 +77,20 @@ export class AccessRequestsService {
     );
     if (window === null) return;
 
-    const role = body.requestedRoleKey === undefined
-      ? null
-      : await this.prisma.role.findFirst({
-          where: {
-            key: body.requestedRoleKey,
-            isArchived: false,
-            OR: [{ organizationId: null, isBuiltIn: true }, { organizationId: project.organizationId }],
-          },
-          select: { id: true },
-        });
+    const role =
+      body.requestedRoleKey === undefined
+        ? null
+        : await this.prisma.role.findFirst({
+            where: {
+              key: body.requestedRoleKey,
+              isArchived: false,
+              OR: [
+                { organizationId: null, isBuiltIn: true },
+                { organizationId: project.organizationId },
+              ],
+            },
+            select: { id: true },
+          });
 
     let requestId: string;
     try {
@@ -109,7 +119,12 @@ export class AccessRequestsService {
         resourceId: ref.id,
         metadata: { accessRequestId: requestId },
       });
-      const recipients = await this.approvers(project.id, project.organizationId, ref, subject.userId);
+      const recipients = await this.approvers(
+        project.id,
+        project.organizationId,
+        ref,
+        subject.userId,
+      );
       return this.notifications.create(
         tx,
         recipients.map((userId) => ({
@@ -128,7 +143,10 @@ export class AccessRequestsService {
   }
 
   /** Pending requests on resources the actor manages. */
-  async list(projectId: string, map: ProjectPermissionMap): Promise<{ requests: AccessRequestView[] }> {
+  async list(
+    projectId: string,
+    map: ProjectPermissionMap,
+  ): Promise<{ requests: AccessRequestView[] }> {
     const skel = await this.resolver.skeleton(projectId);
     const rows = await this.prisma.accessRequest.findMany({
       where: { projectId, status: AccessRequestStatus.pending },
@@ -168,17 +186,36 @@ export class AccessRequestsService {
 
     const sent = await this.writer.write(subject, request.projectId, async ({ tx, map, skel }) => {
       assertVisible(map, skel, ref);
-      const proposed = materialise({ atoms: role.atoms, canUseAi: false, canViewRestricted: false });
+      const proposed = materialise({
+        atoms: role.atoms,
+        canUseAi: false,
+        canViewRestricted: false,
+      });
       this.resolver.assertMayGrant(map, skel, ref, proposed);
       const current = await this.stillPending(tx, requestId);
-      await assertNotGuestManager(tx, request.project.organizationId, { type: 'user', id: current.requesterId }, proposed);
+      await assertNotGuestManager(
+        tx,
+        request.project.organizationId,
+        { type: 'user', id: current.requesterId },
+        proposed,
+      );
       const member = await tx.orgMember.findUnique({
-        where: { organizationId_userId: { organizationId: request.project.organizationId, userId: current.requesterId } },
+        where: {
+          organizationId_userId: {
+            organizationId: request.project.organizationId,
+            userId: current.requesterId,
+          },
+        },
         select: { id: true },
       });
       if (member === null) throw new ConflictException({ code: 'requester_not_member' });
 
-      const key = { resourceType: ref.type, resourceId: ref.id, principalType: PrincipalType.user, principalId: current.requesterId };
+      const key = {
+        resourceType: ref.type,
+        resourceId: ref.id,
+        principalType: PrincipalType.user,
+        principalId: current.requesterId,
+      };
       const grant = await tx.accessGrant.upsert({
         where: { resourceType_resourceId_principalType_principalId: key },
         update: { roleId: role.id },
@@ -192,9 +229,16 @@ export class AccessRequestsService {
       });
       await tx.accessRequest.update({
         where: { id: requestId },
-        data: { status: AccessRequestStatus.approved, decidedById: subject.userId, decidedAt: new Date() },
+        data: {
+          status: AccessRequestStatus.approved,
+          decidedById: subject.userId,
+          decidedAt: new Date(),
+        },
       });
-      return this.decided(tx, subject, request, 'access_request.approved', { grantId: grant.id, roleKey });
+      return this.decided(tx, subject, request, 'access_request.approved', {
+        grantId: grant.id,
+        roleKey,
+      });
     });
     await this.notifications.deliver(sent);
   }
@@ -263,7 +307,14 @@ export class AccessRequestsService {
   private async decided(
     tx: Tx,
     subject: UserSubject,
-    request: { id: string; projectId: string; requesterId: string; resourceType: string; resourceId: string; project: { organizationId: string } },
+    request: {
+      id: string;
+      projectId: string;
+      requesterId: string;
+      resourceType: string;
+      resourceId: string;
+      project: { organizationId: string };
+    },
     action: string,
     metadata: Record<string, string | null>,
   ): Promise<CreatedNotification[]> {
@@ -285,7 +336,11 @@ export class AccessRequestsService {
         body: metadata.decisionNote ?? null,
         // Only an approval makes the project openable; a denial links nowhere (L17).
         url: approved ? await this.notifications.projectUrl(request.projectId) : null,
-        data: { accessRequestId: request.id, resourceType: request.resourceType, resourceId: request.resourceId },
+        data: {
+          accessRequestId: request.id,
+          resourceType: request.resourceType,
+          resourceId: request.resourceId,
+        },
       },
     ]);
   }
@@ -296,8 +351,15 @@ export class AccessRequestsService {
       where: { id: requestId },
       include: { project: { select: { organizationId: true } } },
     });
-    if (request?.status !== AccessRequestStatus.pending || request.project.organizationId !== subject.orgId) {
-      throw new NotFoundException({ code: 'not_found', resourceType: 'access_request', id: requestId });
+    if (
+      request?.status !== AccessRequestStatus.pending ||
+      request.project.organizationId !== subject.orgId
+    ) {
+      throw new NotFoundException({
+        code: 'not_found',
+        resourceType: 'access_request',
+        id: requestId,
+      });
     }
     return request;
   }
@@ -309,7 +371,11 @@ export class AccessRequestsService {
       select: { status: true, requesterId: true },
     });
     if (row?.status !== AccessRequestStatus.pending) {
-      throw new NotFoundException({ code: 'not_found', resourceType: 'access_request', id: requestId });
+      throw new NotFoundException({
+        code: 'not_found',
+        resourceType: 'access_request',
+        id: requestId,
+      });
     }
     return row;
   }
@@ -317,9 +383,10 @@ export class AccessRequestsService {
   private async exists(projectId: string, ref: ResourceRef): Promise<boolean> {
     if (ref.type === 'project') return ref.id === projectId;
     const where = { id: ref.id, projectId };
-    const row = ref.type === 'area'
-      ? await this.prisma.area.findFirst({ where, select: { id: true } })
-      : await this.prisma.entity.findFirst({ where, select: { id: true } });
+    const row =
+      ref.type === 'area'
+        ? await this.prisma.area.findFirst({ where, select: { id: true } })
+        : await this.prisma.entity.findFirst({ where, select: { id: true } });
     return row !== null;
   }
 
@@ -327,11 +394,18 @@ export class AccessRequestsService {
     projectId: string,
     rows: readonly { resourceType: string; resourceId: string }[],
   ): Promise<Map<string, string>> {
-    const ids = (type: string) => rows.filter((r) => r.resourceType === type).map((r) => r.resourceId);
+    const ids = (type: string) =>
+      rows.filter((r) => r.resourceType === type).map((r) => r.resourceId);
     const [project, areas, entities] = await Promise.all([
       this.prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { name: true } }),
-      this.prisma.area.findMany({ where: { projectId, id: { in: ids('area') } }, select: { id: true, name: true } }),
-      this.prisma.entity.findMany({ where: { projectId, id: { in: ids('entity') } }, select: { id: true, name: true } }),
+      this.prisma.area.findMany({
+        where: { projectId, id: { in: ids('area') } },
+        select: { id: true, name: true },
+      }),
+      this.prisma.entity.findMany({
+        where: { projectId, id: { in: ids('entity') } },
+        select: { id: true, name: true },
+      }),
     ]);
     return new Map([
       [`project:${projectId}`, project.name],

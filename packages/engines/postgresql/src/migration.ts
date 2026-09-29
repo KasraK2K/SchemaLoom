@@ -156,7 +156,8 @@ function generatePlan(input: MigrationInput): MigrationPlan {
   const plan = new Planner();
   const relevant = diff.entries.filter(needsMigrationStep);
   const entryAt = new Map(diff.entries.map((e) => [entryRiskKey(e), e]));
-  const entryOf = (type: IrObjectType, id: Id): DiffEntry | undefined => entryAt.get(keyOf(type, id));
+  const entryOf = (type: IrObjectType, id: Id): DiffEntry | undefined =>
+    entryAt.get(keyOf(type, id));
 
   // --- names -------------------------------------------------------------------------------
   const nsNow = (id: Id): string =>
@@ -186,7 +187,11 @@ function generatePlan(input: MigrationInput): MigrationPlan {
 
   const destructiveStep = (entry: DiffEntry): Partial<Pending> =>
     entryIsDestructive(diff, entry)
-      ? { destructive: true, reasonCode: CODE.migrationDropsData, reasonParams: { object: refOf(entry) } }
+      ? {
+          destructive: true,
+          reasonCode: CODE.migrationDropsData,
+          reasonParams: { object: refOf(entry) },
+        }
       : {};
 
   // --- entities whose DDL is rebuilt or dropped as a whole ---------------------------------
@@ -209,7 +214,8 @@ function generatePlan(input: MigrationInput): MigrationPlan {
   );
   for (const id of kindChanged) {
     const own = entryOf('entity', id);
-    if (own !== undefined) plan.refuse(own, 'kind', 'PostgreSQL cannot turn a table into a view in place');
+    if (own !== undefined)
+      plan.refuse(own, 'kind', 'PostgreSQL cannot turn a table into a view in place');
     for (const child of ownedBy(id)) plan.refuse(child, 'entityId', 'its table changed kind');
   }
 
@@ -219,7 +225,8 @@ function generatePlan(input: MigrationInput): MigrationPlan {
     // An index change on a materialized view is an index change, not a new view.
     if (e.objectType !== 'entity' && e.objectType !== 'field') continue;
     const id = e.objectType === 'entity' ? e.id : e.ownerEntityId;
-    if (id === undefined || kindChanged.has(id) || removedEntities.has(id) || addedEntities.has(id)) continue;
+    if (id === undefined || kindChanged.has(id) || removedEntities.has(id) || addedEntities.has(id))
+      continue;
     const view = after.objects.entity[id];
     if (view !== undefined && VIEW_KINDS.has(view.kind)) recreatedViews.add(id);
   }
@@ -255,7 +262,13 @@ function generatePlan(input: MigrationInput): MigrationPlan {
       rank: 200 + (afterDepths.get(entity.id) ?? 0),
       sort: [nsAfter(entity.namespaceId), entity.name, entity.id],
       kind: kind === 'view' ? 'CREATE VIEW' : 'CREATE MATERIALIZED VIEW',
-      text: createView(kind, qualify(nsAfter(entity.namespaceId), entity.name), body, entity.engineProps, false),
+      text: createView(
+        kind,
+        qualify(nsAfter(entity.namespaceId), entity.name),
+        body,
+        entity.engineProps,
+        false,
+      ),
       covers,
     });
     return true;
@@ -309,7 +322,11 @@ function generatePlan(input: MigrationInput): MigrationPlan {
     const a = after.objects.entity[id];
     const own = entryOf('entity', id);
     const covers = [...(own === undefined ? [] : [own]), ...ownedBy(id)].map(refOf);
-    if (b === undefined || a === undefined || propString(a.engineProps, 'viewDefinition') === undefined) {
+    if (
+      b === undefined ||
+      a === undefined ||
+      propString(a.engineProps, 'viewDefinition') === undefined
+    ) {
       for (const e of [...(own === undefined ? [] : [own]), ...ownedBy(id)]) {
         plan.refuse(e, 'viewDefinition', 'the view has no definition');
       }
@@ -428,7 +445,11 @@ function generatePlan(input: MigrationInput): MigrationPlan {
     const roots = structuralRoots(e);
     const odd = [...roots].find((r) => r !== 'name' && r !== 'namespaceId' && r !== 'engineProps');
     const propPaths = e.properties.filter((p) => p.path[0] === 'engineProps');
-    if (odd !== undefined || propPaths.some((p) => p.path[1] !== 'labels') || (propPaths.length > 0 && e.after.kind !== 'enum')) {
+    if (
+      odd !== undefined ||
+      propPaths.some((p) => p.path[1] !== 'labels') ||
+      (propPaths.length > 0 && e.after.kind !== 'enum')
+    ) {
       plan.refuse(e, odd ?? 'engineProps', 'no ALTER TYPE form for this change');
       continue;
     }
@@ -497,11 +518,14 @@ function generatePlan(input: MigrationInput): MigrationPlan {
     }
     if (e.change === 'added') {
       const entity = e.after;
-      const addedFields = ownedBy(e.id).filter((x) => x.objectType === 'field' && x.change === 'added');
+      const addedFields = ownedBy(e.id).filter(
+        (x) => x.objectType === 'field' && x.change === 'added',
+      );
       const covers = [e, ...addedFields].map(refOf);
       if (VIEW_KINDS.has(entity.kind)) {
         if (!createViewStep(entity, covers)) {
-          for (const x of [e, ...addedFields]) plan.refuse(x, 'viewDefinition', 'the view has no definition');
+          for (const x of [e, ...addedFields])
+            plan.refuse(x, 'viewDefinition', 'the view has no definition');
         }
         continue;
       }
@@ -544,7 +568,11 @@ function generatePlan(input: MigrationInput): MigrationPlan {
     const odd = [...roots].find((r) => r !== 'name' && r !== 'namespaceId' && r !== 'engineProps');
     const propPaths = e.properties.filter((p) => p.path[0] === 'engineProps');
     if (odd !== undefined || propPaths.some((p) => p.path[1] !== 'rowLevelSecurity')) {
-      plan.refuse(e, odd ?? (propPaths.find((p) => p.path[1] !== 'rowLevelSecurity')?.path.join('.') ?? ''), 'no ALTER TABLE form for this change');
+      plan.refuse(
+        e,
+        odd ?? propPaths.find((p) => p.path[1] !== 'rowLevelSecurity')?.path.join('.') ?? '',
+        'no ALTER TABLE form for this change',
+      );
       continue;
     }
     const sort: [string, string, string] = [nsAfter(e.after.namespaceId), e.after.name, e.id];
@@ -588,7 +616,9 @@ function generatePlan(input: MigrationInput): MigrationPlan {
   const entityMid = (id: Id): string => {
     const a = after.objects.entity[id];
     const b = before.objects.entity[id];
-    return a === undefined || b === undefined ? entityNow(id) : qualify(nsNow(b.namespaceId), a.name);
+    return a === undefined || b === undefined
+      ? entityNow(id)
+      : qualify(nsNow(b.namespaceId), a.name);
   };
 
   // --- fields (of tables) ---
@@ -608,7 +638,12 @@ function generatePlan(input: MigrationInput): MigrationPlan {
         kind: 'ALTER TABLE ADD COLUMN',
         text: `ALTER TABLE ${entityNow(entity.id)} ADD COLUMN ${columnDefinition({
           name: e.after.name,
-          type: renderType(e.after, typeContext(after, entity.namespaceId), entity.namespaceId, nsAfter),
+          type: renderType(
+            e.after,
+            typeContext(after, entity.namespaceId),
+            entity.namespaceId,
+            nsAfter,
+          ),
           isNullable: e.after.isNullable,
           props: e.after.engineProps,
         })}`,
@@ -634,8 +669,11 @@ function generatePlan(input: MigrationInput): MigrationPlan {
     }
 
     const roots = structuralRoots(e);
-    const defaultOnly = (p: { path: readonly string[] }) => p.path[0] !== 'engineProps' || p.path[1] === 'default';
-    const odd = [...roots].find((r) => !['name', 'type', 'isNullable', 'ordinal', 'engineProps'].includes(r));
+    const defaultOnly = (p: { path: readonly string[] }) =>
+      p.path[0] !== 'engineProps' || p.path[1] === 'default';
+    const odd = [...roots].find(
+      (r) => !['name', 'type', 'isNullable', 'ordinal', 'engineProps'].includes(r),
+    );
     const badProp = e.properties.find((p) => p.severity === 'structural' && !defaultOnly(p));
     if (odd !== undefined || badProp !== undefined) {
       plan.refuse(e, odd ?? badProp?.path.join('.') ?? '', 'no ALTER COLUMN form for this change');
@@ -665,9 +703,17 @@ function generatePlan(input: MigrationInput): MigrationPlan {
       const risk = typeChangeRisk(before, e.before, after, e.after);
       const customId = e.after.type.customTypeId;
       const carried =
-        risk.same && customId !== null && customId !== undefined && plan.attach(e, keyOf('customType', customId));
+        risk.same &&
+        customId !== null &&
+        customId !== undefined &&
+        plan.attach(e, keyOf('customType', customId));
       if (!carried) {
-        const type = renderType(e.after, typeContext(after, entity.namespaceId), entity.namespaceId, nsAfter);
+        const type = renderType(
+          e.after,
+          typeContext(after, entity.namespaceId),
+          entity.namespaceId,
+          nsAfter,
+        );
         plan.add({
           phase: 'alters',
           operation: 'alter',
@@ -678,9 +724,15 @@ function generatePlan(input: MigrationInput): MigrationPlan {
           lossy: risk.lossy,
           requiresTableRewrite: risk.requiresTableRewrite,
           ...(risk.lossy
-            ? { reasonCode: CODE.migrationTypeNarrowed, reasonParams: { from: risk.from, to: risk.to } }
+            ? {
+                reasonCode: CODE.migrationTypeNarrowed,
+                reasonParams: { from: risk.from, to: risk.to },
+              }
             : risk.requiresTableRewrite
-              ? { reasonCode: CODE.migrationTypeRewrite, reasonParams: { from: risk.from, to: risk.to } }
+              ? {
+                  reasonCode: CODE.migrationTypeRewrite,
+                  reasonParams: { from: risk.from, to: risk.to },
+                }
               : {}),
           covers: [refOf(e)],
         });
@@ -696,7 +748,11 @@ function generatePlan(input: MigrationInput): MigrationPlan {
         kind: adding ? 'ALTER TABLE SET NOT NULL' : 'ALTER TABLE DROP NOT NULL',
         text: `ALTER TABLE ${table} ALTER COLUMN ${column} ${adding ? 'SET' : 'DROP'} NOT NULL`,
         ...(adding
-          ? { requiresTableRewrite: true, reasonCode: CODE.migrationNotNull, reasonParams: { object: refOf(e) } }
+          ? {
+              requiresTableRewrite: true,
+              reasonCode: CODE.migrationNotNull,
+              reasonParams: { object: refOf(e) },
+            }
           : {}),
         covers: [refOf(e)],
       });
@@ -719,9 +775,12 @@ function generatePlan(input: MigrationInput): MigrationPlan {
   // what the step already does. A genuine REORDER is not something PostgreSQL can do in place.
   for (const e of ordinalOnly) {
     const tableId = e.after.entityId;
-    const survivors = fieldsOf(before, tableId).filter((f) => after.objects.field[f.id] !== undefined);
+    const survivors = fieldsOf(before, tableId).filter(
+      (f) => after.objects.field[f.id] !== undefined,
+    );
     const afterOrder = [...survivors].sort(
-      (x, y) => (after.objects.field[x.id]?.ordinal ?? 0) - (after.objects.field[y.id]?.ordinal ?? 0),
+      (x, y) =>
+        (after.objects.field[x.id]?.ordinal ?? 0) - (after.objects.field[y.id]?.ordinal ?? 0),
     );
     const reordered = afterOrder.some((f, i) => f.id !== survivors[i]?.id);
     const cause = reshapedTables.get(tableId);
@@ -819,7 +878,11 @@ function generatePlan(input: MigrationInput): MigrationPlan {
         rank: 2,
         sort: sortOf(l.from.entityId, l.name, l.id),
         kind: 'ALTER TABLE ADD CONSTRAINT',
-        text: addConstraint(entityNow(l.from.entityId), l.name, foreignKeyBody(from, entityNow(l.to.entityId), to, l.engineProps)),
+        text: addConstraint(
+          entityNow(l.from.entityId),
+          l.name,
+          foreignKeyBody(from, entityNow(l.to.entityId), to, l.engineProps),
+        ),
         covers: [refOf(e)],
       });
     };
@@ -847,7 +910,8 @@ function generatePlan(input: MigrationInput): MigrationPlan {
   for (const e of relevant) {
     if (e.objectType !== 'index' || skip(e)) continue;
     if (e.change === 'added') {
-      if (!createIndexStep(e.after, [refOf(e)])) plan.refuse(e, 'columns', 'it references a column not in the target schema');
+      if (!createIndexStep(e.after, [refOf(e)]))
+        plan.refuse(e, 'columns', 'it references a column not in the target schema');
       continue;
     }
     const b = e.before;
@@ -885,7 +949,8 @@ function generatePlan(input: MigrationInput): MigrationPlan {
   // Guarantee 2 is checked by the conformance suite; this is the belt to its braces — an
   // entry nothing above handled is a bug here, and it must surface rather than vanish.
   for (const e of relevant) {
-    if (!plan.isHandled(entryRiskKey(e))) plan.refuse(e, e.objectType, 'not handled by this generator');
+    if (!plan.isHandled(entryRiskKey(e)))
+      plan.refuse(e, e.objectType, 'not handled by this generator');
   }
 
   return assemble(plan, options.allowDestructive, options.transactional);

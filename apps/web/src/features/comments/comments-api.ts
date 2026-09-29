@@ -5,7 +5,11 @@ import { apiFetch } from '@/lib/api-client';
 
 /** Wire shapes of `apps/api/src/comments`. Parsed, not cast: they are network payloads. */
 
-const authorSchema = z.object({ id: z.string().nullable(), name: z.string(), avatarUrl: z.string().nullable() });
+const authorSchema = z.object({
+  id: z.string().nullable(),
+  name: z.string(),
+  avatarUrl: z.string().nullable(),
+});
 
 export const commentSchema = z.object({
   id: z.string(),
@@ -23,7 +27,11 @@ export const commentSchema = z.object({
 });
 export type CommentView = z.infer<typeof commentSchema>;
 
-const candidateSchema = z.object({ id: z.string(), name: z.string(), avatarUrl: z.string().nullable() });
+const candidateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  avatarUrl: z.string().nullable(),
+});
 export type MentionCandidate = z.infer<typeof candidateSchema>;
 
 export interface CommentTarget {
@@ -38,7 +46,11 @@ export interface Thread {
 
 /** Every comment query of a project shares this prefix, so one `comments:changed` or a
  *  write can invalidate the thread list and the counts together. */
-export const commentsKey = (projectId: string): readonly unknown[] => ['project', projectId, 'comments'];
+export const commentsKey = (projectId: string): readonly unknown[] => [
+  'project',
+  projectId,
+  'comments',
+];
 
 const qs = (t: CommentTarget): string =>
   `targetType=${encodeURIComponent(t.targetType)}&targetId=${encodeURIComponent(t.targetId)}`;
@@ -69,8 +81,11 @@ export function mentionCandidatesQueryOptions(projectId: string, target: Comment
     queryFn: async (): Promise<MentionCandidate[]> =>
       z
         .object({ users: z.array(candidateSchema) })
-        .parse(await apiFetch<unknown>(`/projects/${projectId}/comments/mention-candidates?${qs(target)}`))
-        .users,
+        .parse(
+          await apiFetch<unknown>(
+            `/projects/${projectId}/comments/mention-candidates?${qs(target)}`,
+          ),
+        ).users,
   });
 }
 
@@ -78,12 +93,17 @@ export async function createComment(
   projectId: string,
   body: CommentTarget & { parentId?: string; content: unknown },
 ): Promise<CommentView> {
-  return commentSchema.parse(await apiFetch<unknown>(`/projects/${projectId}/comments`, { method: 'POST', body }));
+  return commentSchema.parse(
+    await apiFetch<unknown>(`/projects/${projectId}/comments`, { method: 'POST', body }),
+  );
 }
 
 export async function updateComment(id: string, content: unknown): Promise<CommentView> {
   return commentSchema.parse(
-    await apiFetch<unknown>(`/comments/${encodeURIComponent(id)}`, { method: 'PATCH', body: { content } }),
+    await apiFetch<unknown>(`/comments/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: { content },
+    }),
   );
 }
 
@@ -92,13 +112,19 @@ export async function deleteComment(id: string): Promise<void> {
 }
 
 export async function setResolved(id: string, resolved: boolean): Promise<void> {
-  await apiFetch<unknown>(`/comments/${encodeURIComponent(id)}/${resolved ? 'resolve' : 'reopen'}`, {
-    method: 'POST',
-  });
+  await apiFetch<unknown>(
+    `/comments/${encodeURIComponent(id)}/${resolved ? 'resolve' : 'reopen'}`,
+    {
+      method: 'POST',
+    },
+  );
 }
 
 /** Open threads first (oldest first), then resolved ones. Replies stay in time order. */
-export function toThreads(comments: readonly CommentView[]): { open: Thread[]; resolved: Thread[] } {
+export function toThreads(comments: readonly CommentView[]): {
+  open: Thread[];
+  resolved: Thread[];
+} {
   const replies = new Map<string, CommentView[]>();
   for (const c of comments) {
     if (c.id === c.rootId) continue;
@@ -118,7 +144,11 @@ export function mentionsIn(doc: unknown): { id: string; label: string }[] {
   const out = new Map<string, string>();
   const walk = (node: unknown): void => {
     if (typeof node !== 'object' || node === null) return;
-    const n = node as { type?: unknown; attrs?: { id?: unknown; label?: unknown }; content?: unknown };
+    const n = node as {
+      type?: unknown;
+      attrs?: { id?: unknown; label?: unknown };
+      content?: unknown;
+    };
     if (n.type === 'mention' && typeof n.attrs?.id === 'string') {
       out.set(n.attrs.id, typeof n.attrs.label === 'string' ? n.attrs.label : n.attrs.id);
     }

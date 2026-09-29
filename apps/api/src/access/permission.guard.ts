@@ -274,7 +274,9 @@ function routePathOf(req: Request): string {
 }
 
 const hasStringPath = (value: unknown): value is { path: string } =>
-  typeof value === 'object' && value !== null && typeof (value as { path?: unknown }).path === 'string';
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { path?: unknown }).path === 'string';
 
 /** pino-http's per-request id, when the logger is wired. */
 function requestIdOf(req: Request): string | null {

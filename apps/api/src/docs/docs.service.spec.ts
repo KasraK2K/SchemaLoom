@@ -1,7 +1,17 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { RedactedModel } from '@schemaloom/schema-model';
 import { describe, expect, it, vi } from 'vitest';
-import type { PermissionResolver, ProjectPermissionMap, Subject, VisibilityFilter } from '../access';
+import type {
+  PermissionResolver,
+  ProjectPermissionMap,
+  Subject,
+  VisibilityFilter,
+} from '../access';
 import { fakePrisma, type FakePrisma } from '../schema/fake-prisma';
 import type { SchemaCommits, SchemaLoader } from '../schema';
 import { docPlainText, sanitizeRichText } from './docs-rules';
@@ -38,13 +48,18 @@ function modelFor(who: string): RedactedModel {
       },
       field: {
         fld_name: { id: 'fld_name', entityId: 'ent_open' },
-        fld_sal: full ? { id: 'fld_sal', entityId: 'ent_open' } : { id: 'fld_sal', entityId: 'ent_open', restricted: true },
+        fld_sal: full
+          ? { id: 'fld_sal', entityId: 'ent_open' }
+          : { id: 'fld_sal', entityId: 'ent_open', restricted: true },
       },
     },
   } as unknown as RedactedModel;
 }
 
-const para = (text: string) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] });
+const para = (text: string) => ({
+  type: 'doc',
+  content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+});
 
 const docRow = (targetType: string, targetId: string, text: string, version = 3) => ({
   id: `doc_${targetId}`,
@@ -64,10 +79,12 @@ function setup(seed: Record<string, unknown>[] = []) {
     project: [{ id: P, schemaRevision: 41n }],
   });
   const resolver = {
-    resolveProject: (s: Subject) => Promise.resolve({ subjectKey: keyOf(s) } as unknown as ProjectPermissionMap),
+    resolveProject: (s: Subject) =>
+      Promise.resolve({ subjectKey: keyOf(s) } as unknown as ProjectPermissionMap),
     canOpenProject: (m: ProjectPermissionMap) => ATOMS[m.subjectKey] !== undefined,
     skeleton: vi.fn().mockResolvedValue({}),
-    atomsAt: (m: ProjectPermissionMap, _s: unknown, ref: { id: string }) => new Set(ATOMS[m.subjectKey]?.[ref.id] ?? []),
+    atomsAt: (m: ProjectPermissionMap, _s: unknown, ref: { id: string }) =>
+      new Set(ATOMS[m.subjectKey]?.[ref.id] ?? []),
   } as unknown as PermissionResolver;
   const filter = {
     redactWith: (_raw: unknown, s: Subject) => modelFor(keyOf(s)),
@@ -111,15 +128,29 @@ describe('DocsService.list (docs mode)', () => {
 describe('DocsService.get', () => {
   it('404s a masked field, a stub and an unknown type', async () => {
     const { service } = setup([docRow('field', 'fld_sal', 'Monthly salary')]);
-    await expect(service.get(user('bob'), P, 'field', 'fld_sal')).rejects.toBeInstanceOf(NotFoundException);
-    await expect(service.get(user('bob'), P, 'entity', 'ent_secret')).rejects.toBeInstanceOf(NotFoundException);
-    await expect(service.get(user('bob'), P, 'link', 'lnk_1')).rejects.toBeInstanceOf(NotFoundException);
-    await expect(service.get(user('bob'), P, 'project', 'prj_other')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.get(user('bob'), P, 'field', 'fld_sal')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.get(user('bob'), P, 'entity', 'ent_secret')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.get(user('bob'), P, 'link', 'lnk_1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.get(user('bob'), P, 'project', 'prj_other')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('answers an undocumented visible target with an empty doc at version 0', async () => {
     const doc = await setup().service.get(user('eve'), P, 'entity', 'ent_open');
-    expect(doc).toMatchObject({ version: 0, plainText: '', structured: null, updatedAt: null, canEdit: true });
+    expect(doc).toMatchObject({
+      version: 0,
+      plainText: '',
+      structured: null,
+      updatedAt: null,
+      canEdit: true,
+    });
   });
 
   it('measures docs:edit for a field at its entity', async () => {
@@ -131,22 +162,22 @@ describe('DocsService.get', () => {
 describe('DocsService.write', () => {
   it('404s an invisible target before it checks docs:edit', async () => {
     const { service } = setup();
-    await expect(service.write(user('eve'), P, 'field', 'fld_sal', { content: para('x') })).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-    await expect(service.write(link, P, 'entity', 'ent_open', { content: para('x') })).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.write(user('eve'), P, 'field', 'fld_sal', { content: para('x') }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.write(link, P, 'entity', 'ent_open', { content: para('x') }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('403s a visible target without docs:edit', async () => {
     const { service } = setup();
-    await expect(service.write(user('bob'), P, 'entity', 'ent_open', { content: para('x') })).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-    await expect(service.write(user('eve'), P, 'project', P, { content: para('x') })).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      service.write(user('bob'), P, 'entity', 'ent_open', { content: para('x') }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.write(user('eve'), P, 'project', P, { content: para('x') }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('creates at version 1, derives plainText and emits a doc frame without bumping seq', async () => {
@@ -157,17 +188,33 @@ describe('DocsService.write', () => {
       version: 0,
     });
     expect(doc).toMatchObject({ version: 1, plainText: 'Customer name', canEdit: true });
-    expect(doc.structured).toMatchObject({ businessMeaning: 'Who ordered', allowedValues: [], examples: [] });
+    expect(doc.structured).toMatchObject({
+      businessMeaning: 'Who ordered',
+      allowedValues: [],
+      examples: [],
+    });
     expect(db.store.doc?.[0]).toMatchObject({ plainText: 'Customer name', updatedById: 'eve' });
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ projectId: P, actorUserId: 'eve', seq: 41, changed: {}, removed: [] }),
+      expect.objectContaining({
+        projectId: P,
+        actorUserId: 'eve',
+        seq: 41,
+        changed: {},
+        removed: [],
+      }),
     );
   });
 
   it('bumps the version on update and keeps the stored facts when structured is absent', async () => {
-    const row = { ...docRow('entity', 'ent_open', 'Old'), structured: { targetType: 'entity', businessMeaning: 'Kept', ownerUserId: null } };
+    const row = {
+      ...docRow('entity', 'ent_open', 'Old'),
+      structured: { targetType: 'entity', businessMeaning: 'Kept', ownerUserId: null },
+    };
     const { service } = setup([row]);
-    const doc = await service.write(user('eve'), P, 'entity', 'ent_open', { content: para('New'), version: 3 });
+    const doc = await service.write(user('eve'), P, 'entity', 'ent_open', {
+      content: para('New'),
+      version: 3,
+    });
     expect(doc.version).toBe(4);
     expect(doc.structured).toMatchObject({ businessMeaning: 'Kept' });
   });
@@ -205,18 +252,38 @@ describe('sanitizeRichText', () => {
       type: 'doc',
       attrs: { onload: 'x' },
       content: [
-        { type: 'heading', attrs: { level: 9, class: 'x' }, content: [{ type: 'text', text: 'Title' }] },
+        {
+          type: 'heading',
+          attrs: { level: 9, class: 'x' },
+          content: [{ type: 'text', text: 'Title' }],
+        },
         {
           type: 'paragraph',
           content: [
-            { type: 'text', text: 'safe', marks: [{ type: 'bold' }, { type: 'textStyle', attrs: { color: 'red' } }] },
+            {
+              type: 'text',
+              text: 'safe',
+              marks: [{ type: 'bold' }, { type: 'textStyle', attrs: { color: 'red' } }],
+            },
             { type: 'mention', attrs: { id: 'usr_1', label: 'Ana' } },
-            { type: 'text', text: 'bad', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }] },
-            { type: 'text', text: 'good', marks: [{ type: 'link', attrs: { href: 'https://x.test', target: '_top' } }] },
+            {
+              type: 'text',
+              text: 'bad',
+              marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }],
+            },
+            {
+              type: 'text',
+              text: 'good',
+              marks: [{ type: 'link', attrs: { href: 'https://x.test', target: '_top' } }],
+            },
           ],
         },
         { type: 'image', attrs: { src: 'https://x.test/a.png' } },
-        { type: 'codeBlock', attrs: { language: '"><script>' }, content: [{ type: 'text', text: 'select 1' }] },
+        {
+          type: 'codeBlock',
+          attrs: { language: '"><script>' },
+          content: [{ type: 'text', text: 'select 1' }],
+        },
       ],
     };
     expect(sanitizeRichText(dirty)).toEqual({
@@ -228,10 +295,18 @@ describe('sanitizeRichText', () => {
           content: [
             { type: 'text', text: 'safe', marks: [{ type: 'bold' }] },
             { type: 'text', text: 'bad' },
-            { type: 'text', text: 'good', marks: [{ type: 'link', attrs: { href: 'https://x.test' } }] },
+            {
+              type: 'text',
+              text: 'good',
+              marks: [{ type: 'link', attrs: { href: 'https://x.test' } }],
+            },
           ],
         },
-        { type: 'codeBlock', attrs: { language: null }, content: [{ type: 'text', text: 'select 1' }] },
+        {
+          type: 'codeBlock',
+          attrs: { language: null },
+          content: [{ type: 'text', text: 'select 1' }],
+        },
       ],
     });
   });
@@ -240,7 +315,9 @@ describe('sanitizeRichText', () => {
     expect(sanitizeRichText({ type: 'paragraph' })).toBeNull();
     let deep: Record<string, unknown> = { type: 'text', text: 'bottom' };
     for (let i = 0; i < 100; i++) deep = { type: 'blockquote', content: [deep] };
-    expect(JSON.stringify(sanitizeRichText({ type: 'doc', content: [deep] }))).not.toContain('bottom');
+    expect(JSON.stringify(sanitizeRichText({ type: 'doc', content: [deep] }))).not.toContain(
+      'bottom',
+    );
   });
 });
 
@@ -250,12 +327,24 @@ describe('docPlainText (the excerpt source)', () => {
       type: 'doc',
       content: [
         { type: 'heading', content: [{ type: 'text', text: 'Orders' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'One row per ' }, { type: 'text', text: 'order.' }] },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'One row per ' },
+            { type: 'text', text: 'order.' },
+          ],
+        },
         {
           type: 'bulletList',
           content: [
-            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'a' }] }] },
-            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'b' }] }] },
+            {
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'a' }] }],
+            },
+            {
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'b' }] }],
+            },
           ],
         },
       ],

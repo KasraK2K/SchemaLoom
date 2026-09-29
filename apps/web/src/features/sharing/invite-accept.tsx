@@ -45,7 +45,13 @@ function acceptError(error: unknown, email: string): string {
   return 'Something went wrong. Try again.';
 }
 
-export function InviteAccept({ token, signedIn }: { readonly token: string; readonly signedIn: boolean }) {
+export function InviteAccept({
+  token,
+  signedIn,
+}: {
+  readonly token: string;
+  readonly signedIn: boolean;
+}) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const path = `/invitations/${encodeURIComponent(token)}`;
   const next = encodeURIComponent(`/invite/${encodeURIComponent(token)}`);
@@ -77,8 +83,8 @@ export function InviteAccept({ token, signedIn }: { readonly token: string; read
       <div className="flex flex-col gap-2">
         <h1 className="text-base font-semibold text-text">Invitation not found</h1>
         <p className="text-sm text-text-muted">
-          This invitation has expired, was revoked, or has already been used. Ask whoever
-          invited you to send a new one.
+          This invitation has expired, was revoked, or has already been used. Ask whoever invited
+          you to send a new one.
         </p>
       </div>
     );
@@ -88,10 +94,15 @@ export function InviteAccept({ token, signedIn }: { readonly token: string; read
   const accept = async () => {
     setState({ ...state, pending: true, error: null });
     try {
-      const accepted = AcceptedSchema.parse(await apiFetch<unknown>(`${path}/accept`, { method: 'POST' }));
+      const accepted = AcceptedSchema.parse(
+        await apiFetch<unknown>(`${path}/accept`, { method: 'POST' }),
+      );
       // Make the invited org the active one, the way the create-project form does, then a
       // FULL navigation so every Server Component renders under the new session.
-      await apiFetch('/auth/switch-org', { method: 'POST', body: { organizationId: accepted.organizationId } });
+      await apiFetch('/auth/switch-org', {
+        method: 'POST',
+        body: { organizationId: accepted.organizationId },
+      });
       window.location.assign(
         accepted.projectId === null
           ? `/${accepted.orgSlug}`
@@ -104,7 +115,9 @@ export function InviteAccept({ token, signedIn }: { readonly token: string; read
 
   return (
     <div className="flex flex-col gap-3">
-      <h1 className="text-base font-semibold text-text">You’re invited to {invite.organizationName}</h1>
+      <h1 className="text-base font-semibold text-text">
+        You’re invited to {invite.organizationName}
+      </h1>
       <p className="text-sm text-text-muted">
         This invitation is for <span className="text-text">{invite.email}</span>
         {invite.roleName !== null && <> with the {invite.roleName} role</>}.
@@ -115,7 +128,12 @@ export function InviteAccept({ token, signedIn }: { readonly token: string; read
         </p>
       )}
       {signedIn ? (
-        <Button disabled={state.pending} onClick={() => { void accept(); }}>
+        <Button
+          disabled={state.pending}
+          onClick={() => {
+            void accept();
+          }}
+        >
           Accept invitation
         </Button>
       ) : (

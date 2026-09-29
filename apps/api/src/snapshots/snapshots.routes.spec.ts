@@ -24,7 +24,9 @@ interface Swept extends SweptRoute {
   readonly requirement: PermissionRequirement | undefined;
 }
 
-function sweep(controller: abstract new (...args: never[]) => object = SnapshotsController): Swept[] {
+function sweep(
+  controller: abstract new (...args: never[]) => object = SnapshotsController,
+): Swept[] {
   const prototype: object = controller.prototype;
   const controllerPath = String(Reflect.getMetadata(PATH_METADATA, controller) ?? '');
   const routes: Swept[] = [];
@@ -43,8 +45,7 @@ function sweep(controller: abstract new (...args: never[]) => object = Snapshots
         .replace(/\/+/g, '/')
         .replace(/\/$/, ''),
       markers: markerKeysOn(
-        (key) =>
-          Reflect.getMetadata(key, handler) ?? Reflect.getMetadata(key, controller),
+        (key) => Reflect.getMetadata(key, handler) ?? Reflect.getMetadata(key, controller),
       ),
       source: `${controller.name}.${name}`,
       handler: name,

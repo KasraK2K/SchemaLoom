@@ -14,7 +14,12 @@ import { renderExport } from './export-render';
  * through the side door of a `docs` row.
  */
 
-const docRow = (id: string, targetType: ExportDoc['targetType'], targetId: string, text: string) => ({
+const docRow = (
+  id: string,
+  targetType: ExportDoc['targetType'],
+  targetId: string,
+  text: string,
+) => ({
   id,
   projectId: PROJECT,
   targetType,
@@ -32,10 +37,18 @@ const DOCS = [
 ];
 
 const STORE: Partial<Store> = baseStore({
-  entity: [entityRow('ent_orders', { name: 'orders' }), entityRow('ent_payroll', { name: 'payroll' })],
+  entity: [
+    entityRow('ent_orders', { name: 'orders' }),
+    entityRow('ent_payroll', { name: 'payroll' }),
+  ],
   field: [
     fieldRow('fld_id', 'ent_orders', { name: 'id', dataType: 'uuid' }),
-    fieldRow('fld_salary', 'ent_orders', { name: 'salary', dataType: 'numeric', position: 1, isRestricted: true }),
+    fieldRow('fld_salary', 'ent_orders', {
+      name: 'salary',
+      dataType: 'numeric',
+      position: 1,
+      isRestricted: true,
+    }),
     fieldRow('fld_pay', 'ent_payroll', { name: 'amount', dataType: 'numeric' }),
   ],
   doc: DOCS,
@@ -58,7 +71,10 @@ const redacted = (): RedactedModel =>
     entitiesWithRestrictedFields: new Set(['ent_orders']),
   });
 
-const engine = { id: 'postgresql', capabilities: { exportFormats: [] } } as unknown as EngineDefinition;
+const engine = {
+  id: 'postgresql',
+  capabilities: { exportFormats: [] },
+} as unknown as EngineDefinition;
 
 /** Every text-showing operand of every content stream, concatenated. pdfkit writes each
  *  run as a hex string in WinAnsi, which is Latin-1 for everything this spec prints. */
@@ -92,7 +108,12 @@ describe('visibleDocs', () => {
 
 describe('pdf export', () => {
   it('renders a PDF with table names and full doc text, never a masked field’s doc', async () => {
-    const rendered = await renderExport({ model: redacted(), format: 'pdf', engine, docs: EXPORT_DOCS });
+    const rendered = await renderExport({
+      model: redacted(),
+      format: 'pdf',
+      engine,
+      docs: EXPORT_DOCS,
+    });
 
     expect(rendered.contentType).toBe('application/pdf');
     expect(rendered.fileExtension).toBe('pdf');
@@ -115,7 +136,12 @@ describe('pdf export', () => {
 
 describe('markdown export with docs', () => {
   it('prints the full text where the IR has only an excerpt, and nothing redacted', async () => {
-    const rendered = await renderExport({ model: redacted(), format: 'markdown', engine, docs: EXPORT_DOCS });
+    const rendered = await renderExport({
+      model: redacted(),
+      format: 'markdown',
+      engine,
+      docs: EXPORT_DOCS,
+    });
     const body = rendered.body as string;
 
     expect(body).toContain('Every order a customer placed, in full detail.');

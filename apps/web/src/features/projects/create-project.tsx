@@ -53,7 +53,8 @@ export async function importInto(
     );
   }
   // The queued body is the raw SQL, so confirmed renames ride as a query parameter.
-  const query = renames.length === 0 ? '' : `?renames=${encodeURIComponent(JSON.stringify(renames))}`;
+  const query =
+    renames.length === 0 ? '' : `?renames=${encodeURIComponent(JSON.stringify(renames))}`;
   const { id } = CreatedSchema.parse(
     await apiFetch<unknown>(`${base}/jobs${query}`, { method: 'POST', text: source }),
   );
@@ -105,7 +106,10 @@ export type ImportPreview = z.infer<typeof PreviewSchema>;
  * What an import would do, with rename proposals. `null` above the synchronous cap: the
  * preview takes a JSON body, so a queued-size source imports without rename cards.
  */
-export async function previewImport(projectId: string, source: string): Promise<ImportPreview | null> {
+export async function previewImport(
+  projectId: string,
+  source: string,
+): Promise<ImportPreview | null> {
   if (new Blob([source]).size > SYNC_IMPORT_MAX_BYTES) return null;
   return PreviewSchema.parse(
     await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/import/preview`, {

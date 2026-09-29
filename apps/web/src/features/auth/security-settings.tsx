@@ -53,7 +53,9 @@ function TextInput({
         type={type}
         value={value}
         autoComplete={autoComplete}
-        onChange={(e) => { onChange(e.target.value); }}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
         className="max-w-xs rounded-md border border-border bg-surface px-3 py-2 text-sm text-text"
       />
     </div>
@@ -74,8 +76,8 @@ function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border p-4">
       <p className="text-sm text-text">
-        Save these recovery codes somewhere safe. Each works once, in place of a code from your
-        app. They will not be shown again.
+        Save these recovery codes somewhere safe. Each works once, in place of a code from your app.
+        They will not be shown again.
       </p>
       <ul className="grid grid-cols-2 gap-1 font-mono text-sm text-text">
         {codes.map((c) => (
@@ -112,8 +114,7 @@ function TwoFactorSection() {
     onSuccess: done,
   });
   const disable = useMutation({
-    mutationFn: () =>
-      disableTwoFactor(code.trim() !== '' ? { code: code.trim() } : { password }),
+    mutationFn: () => disableTwoFactor(code.trim() !== '' ? { code: code.trim() } : { password }),
     onSuccess: () => {
       setCode('');
       setPassword('');
@@ -132,10 +133,23 @@ function TwoFactorSection() {
         </p>
       </div>
 
-      {codes !== null && <RecoveryCodes codes={codes} onDone={() => { setCodes(null); }} />}
+      {codes !== null && (
+        <RecoveryCodes
+          codes={codes}
+          onDone={() => {
+            setCodes(null);
+          }}
+        />
+      )}
 
       {me?.twoFactorEnabled === false && enrolment === null && (
-        <Button className="self-start" disabled={enrol.isPending} onClick={() => { enrol.mutate(); }}>
+        <Button
+          className="self-start"
+          disabled={enrol.isPending}
+          onClick={() => {
+            enrol.mutate();
+          }}
+        >
           Set up two-factor
         </Button>
       )}
@@ -146,7 +160,10 @@ function TwoFactorSection() {
         <div className="flex flex-col gap-3">
           <p className="text-sm text-text">
             Add SchemaLoom to your authenticator app with{' '}
-            <a href={enrolment.otpauthUri} className="text-accent-text underline underline-offset-2">
+            <a
+              href={enrolment.otpauthUri}
+              className="text-accent-text underline underline-offset-2"
+            >
               this link
             </a>{' '}
             or by entering the key below, then type the code it shows.
@@ -159,7 +176,9 @@ function TwoFactorSection() {
           <Button
             className="self-start"
             disabled={confirm.isPending || code.trim() === ''}
-            onClick={() => { confirm.mutate(); }}
+            onClick={() => {
+              confirm.mutate();
+            }}
           >
             Turn on
           </Button>
@@ -186,14 +205,18 @@ function TwoFactorSection() {
             <Button
               variant="outline"
               disabled={regenerate.isPending || code.trim() === ''}
-              onClick={() => { regenerate.mutate(); }}
+              onClick={() => {
+                regenerate.mutate();
+              }}
             >
               New recovery codes
             </Button>
             <Button
               variant="danger"
               disabled={disable.isPending || (code.trim() === '' && password === '')}
-              onClick={() => { disable.mutate(); }}
+              onClick={() => {
+                disable.mutate();
+              }}
             >
               Turn off
             </Button>
@@ -236,7 +259,9 @@ function SessionsSection() {
                 variant="outline"
                 size="sm"
                 disabled={revoke.isPending}
-                onClick={() => { revoke.mutate(s.familyId); }}
+                onClick={() => {
+                  revoke.mutate(s.familyId);
+                }}
               >
                 Sign out
               </Button>
@@ -249,7 +274,9 @@ function SessionsSection() {
         variant="outline"
         className="self-start"
         disabled={revokeOthers.isPending || (sessions ?? []).every((s) => s.current)}
-        onClick={() => { revokeOthers.mutate(); }}
+        onClick={() => {
+          revokeOthers.mutate();
+        }}
       >
         Sign out all other devices
       </Button>

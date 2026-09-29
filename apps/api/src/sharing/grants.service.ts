@@ -66,7 +66,11 @@ export interface AccessList {
 }
 
 const CANDIDATE_LIMIT = 10;
-const SHARED_NOUN: Record<ResourceType, string> = { project: 'a project', area: 'an area', entity: 'a table' };
+const SHARED_NOUN: Record<ResourceType, string> = {
+  project: 'a project',
+  area: 'an area',
+  entity: 'a table',
+};
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** The shape `access_grants_email_shape_ck` enforces, checked first so it is a 400. */
 const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -119,8 +123,7 @@ export class GrantsService {
     ]);
 
     const sees = (ref: ResourceRef): boolean => atomsAt(map, skel, ref).has('schema:view');
-    const manages = (ref: ResourceRef): boolean =>
-      atomsAt(map, skel, ref).has('sharing:manage');
+    const manages = (ref: ResourceRef): boolean => atomsAt(map, skel, ref).has('sharing:manage');
 
     // The project node is always present: its name is already disclosed by the project
     // shell (§7.9), and the dialog has no tree to render without a root.
@@ -198,9 +201,14 @@ export class GrantsService {
    * for the same pair UPDATES the grant rather than 409ing — the dialog cannot always
    * know whether a direct grant already exists at the scope it is showing.
    */
-  async create(subject: UserSubject, projectId: string, body: CreateGrantDto): Promise<{ id: string }> {
+  async create(
+    subject: UserSubject,
+    projectId: string,
+    body: CreateGrantDto,
+  ): Promise<{ id: string }> {
     const { organizationId } = await this.projectOrg(projectId);
-    if (body.principalKind === 'email_invite') return this.invite(subject, projectId, organizationId, body);
+    if (body.principalKind === 'email_invite')
+      return this.invite(subject, projectId, organizationId, body);
     await this.assertPrincipalInOrg(body.principalKind, body.principalId, organizationId);
     const role = await grantableRole(this.prisma, organizationId, body.roleKey);
     const ref = { type: body.resourceType, id: body.resourceId };
@@ -209,9 +217,18 @@ export class GrantsService {
 
     const result = await this.writer.write(subject, projectId, async ({ tx, map, skel }) => {
       assertVisible(map, skel, ref);
-      const proposed = materialise({ atoms: role.atoms, canUseAi: body.canUseAi, canViewRestricted: body.canViewRestricted });
+      const proposed = materialise({
+        atoms: role.atoms,
+        canUseAi: body.canUseAi,
+        canViewRestricted: body.canViewRestricted,
+      });
       this.resolver.assertMayGrant(map, skel, ref, proposed);
-      await assertNotGuestManager(tx, organizationId, { type: principalType, id: body.principalId }, proposed);
+      await assertNotGuestManager(
+        tx,
+        organizationId,
+        { type: principalType, id: body.principalId },
+        proposed,
+      );
 
       const key = {
         resourceType: ref.type,
@@ -241,8 +258,15 @@ export class GrantsService {
       // Phase 4 §4 `resource.shared` — a NEW grant to a person, never to yourself. The title
       // names the kind of resource only (L7); the grant itself is what makes it visible.
       let sent: CreatedNotification[] = [];
-      if (before === null && principalType === PrincipalType.user && body.principalId !== subject.userId) {
-        const actor = await tx.user.findUniqueOrThrow({ where: { id: subject.userId }, select: { name: true } });
+      if (
+        before === null &&
+        principalType === PrincipalType.user &&
+        body.principalId !== subject.userId
+      ) {
+        const actor = await tx.user.findUniqueOrThrow({
+          where: { id: subject.userId },
+          select: { name: true },
+        });
         sent = await this.notifications.create(tx, [
           {
             userId: body.principalId,
@@ -263,21 +287,39 @@ export class GrantsService {
   }
 
   /** `PATCH /grants/:id` — role and the two toggles; R4 measured at the grant's resource. */
-  async update(subject: UserSubject, grantId: string, body: UpdateGrantDto): Promise<{ id: string }> {
+  async update(
+    subject: UserSubject,
+    grantId: string,
+    body: UpdateGrantDto,
+  ): Promise<{ id: string }> {
     const grant = await this.editableGrant(subject, grantId);
     const role = await grantableRole(this.prisma, grant.organizationId, body.roleKey);
     const ref = refOf(grant);
 
     return this.writer.write(subject, grant.projectId, async ({ tx, map, skel }) => {
       assertVisible(map, skel, ref);
-      const proposed = materialise({ atoms: role.atoms, canUseAi: body.canUseAi, canViewRestricted: body.canViewRestricted });
+      const proposed = materialise({
+        atoms: role.atoms,
+        canUseAi: body.canUseAi,
+        canViewRestricted: body.canViewRestricted,
+      });
       this.resolver.assertMayGrant(map, skel, ref, proposed);
-      await assertNotGuestManager(tx, grant.organizationId, { type: grant.principalType, id: grant.principalId }, proposed);
+      await assertNotGuestManager(
+        tx,
+        grant.organizationId,
+        { type: grant.principalType, id: grant.principalId },
+        proposed,
+      );
       const before = await tx.accessGrant.findUnique({ where: { id: grantId } });
-      if (before === null) throw new NotFoundException({ code: 'not_found', resourceType: 'grant', id: grantId });
+      if (before === null)
+        throw new NotFoundException({ code: 'not_found', resourceType: 'grant', id: grantId });
       const after = await tx.accessGrant.update({
         where: { id: grantId },
-        data: { roleId: role.id, canUseAi: body.canUseAi, canViewRestricted: body.canViewRestricted },
+        data: {
+          roleId: role.id,
+          canUseAi: body.canUseAi,
+          canViewRestricted: body.canViewRestricted,
+        },
       });
       await this.writer.audit(tx, subject, grant.projectId, grant.organizationId, {
         action: 'grant.updated',
@@ -338,9 +380,18 @@ export class GrantsService {
 
     const result = await this.writer.write(subject, projectId, async ({ tx, map, skel }) => {
       assertVisible(map, skel, ref);
-      const proposed = materialise({ atoms: role.atoms, canUseAi: body.canUseAi, canViewRestricted: body.canViewRestricted });
+      const proposed = materialise({
+        atoms: role.atoms,
+        canUseAi: body.canUseAi,
+        canViewRestricted: body.canViewRestricted,
+      });
       this.resolver.assertMayGrant(map, skel, ref, proposed);
-      await assertNotGuestManager(tx, organizationId, { type: PrincipalType.email_invite, id: email }, proposed);
+      await assertNotGuestManager(
+        tx,
+        organizationId,
+        { type: PrincipalType.email_invite, id: email },
+        proposed,
+      );
 
       const key = {
         resourceType: ref.type,
@@ -351,7 +402,11 @@ export class GrantsService {
       const before = await tx.accessGrant.findUnique({
         where: { resourceType_resourceId_principalType_principalId: key },
       });
-      const modifiers = { roleId: role.id, canUseAi: body.canUseAi, canViewRestricted: body.canViewRestricted };
+      const modifiers = {
+        roleId: role.id,
+        canUseAi: body.canUseAi,
+        canViewRestricted: body.canViewRestricted,
+      };
       const after = await tx.accessGrant.upsert({
         where: { resourceType_resourceId_principalType_principalId: key },
         update: modifiers,
@@ -372,7 +427,12 @@ export class GrantsService {
         action: before === null ? 'grant.created' : 'grant.updated',
         resourceType: ref.type,
         resourceId: ref.id,
-        metadata: { grantId: after.id, invited: email, before: snapshot(before), after: snapshot(after) },
+        metadata: {
+          grantId: after.id,
+          invited: email,
+          before: snapshot(before),
+          after: snapshot(after),
+        },
       });
       const inviter = await tx.user.findUniqueOrThrow({
         where: { id: subject.userId },
@@ -397,7 +457,8 @@ export class GrantsService {
       assertVisible(map, skel, ref);
       this.resolver.assertMayDeleteGrant(map, skel, ref);
       const before = await tx.accessGrant.findUnique({ where: { id: grantId } });
-      if (before === null) throw new NotFoundException({ code: 'not_found', resourceType: 'grant', id: grantId });
+      if (before === null)
+        throw new NotFoundException({ code: 'not_found', resourceType: 'grant', id: grantId });
       await tx.accessGrant.delete({ where: { id: grantId } });
       await this.writer.audit(tx, subject, grant.projectId, grant.organizationId, {
         action: 'grant.deleted',
@@ -410,13 +471,18 @@ export class GrantsService {
 
   // -------------------------------------------------------------------------------------
 
-  private async entries(projectId: string, managed: readonly ResourceNode[]): Promise<AccessEntry[]> {
+  private async entries(
+    projectId: string,
+    managed: readonly ResourceNode[],
+  ): Promise<AccessEntry[]> {
     const names = new Map(managed.map((r) => [`${r.type}:${r.id}`, r.name]));
     const grants = (
       await this.prisma.accessGrant.findMany({
         where: {
           projectId,
-          principalType: { in: [PrincipalType.user, PrincipalType.group, PrincipalType.email_invite] },
+          principalType: {
+            in: [PrincipalType.user, PrincipalType.group, PrincipalType.email_invite],
+          },
           OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
         include: { role: { select: { key: true, name: true, atoms: true } } },
@@ -425,7 +491,9 @@ export class GrantsService {
     ).filter((g) => names.has(`${g.resourceType}:${g.resourceId}`));
 
     const { organizationId } = await this.projectOrg(projectId);
-    const groupIds = [...new Set(grants.filter((g) => g.principalType === 'group').map((g) => g.principalId))];
+    const groupIds = [
+      ...new Set(grants.filter((g) => g.principalType === 'group').map((g) => g.principalId)),
+    ];
     const [groups, memberships] = await Promise.all([
       this.prisma.userGroup.findMany({
         where: { id: { in: groupIds }, organizationId },
@@ -454,7 +522,12 @@ export class GrantsService {
       members.map((m) => [
         m.user.id,
         {
-          principal: { kind: 'user' as const, id: m.user.id, label: m.user.name || m.user.email, orgRole: m.role },
+          principal: {
+            kind: 'user' as const,
+            id: m.user.id,
+            label: m.user.name || m.user.email,
+            orgRole: m.role,
+          },
           orgRole: m.role,
           email: m.user.email,
         },
@@ -492,8 +565,17 @@ export class GrantsService {
       if (g.principalType === 'email_invite') {
         // A pending invite (R11): the principal id IS the lowercased address.
         const key = `email_invite:${g.principalId}`;
-        const principal: PrincipalRef = { kind: 'email_invite', id: g.principalId, label: g.principalId };
-        const entry: AccessEntry = entries.get(key) ?? { principal, orgRole: null, email: g.principalId, grants: [] };
+        const principal: PrincipalRef = {
+          kind: 'email_invite',
+          id: g.principalId,
+          label: g.principalId,
+        };
+        const entry: AccessEntry = entries.get(key) ?? {
+          principal,
+          orgRole: null,
+          email: g.principalId,
+          grants: [],
+        };
         entry.grants.push(wire(g, principal));
         entries.set(key, entry);
         continue;
@@ -506,7 +588,12 @@ export class GrantsService {
       const group = groupRef.get(g.principalId);
       if (group === undefined) continue;
       const key = `group:${group.id}`;
-      const entry: AccessEntry = entries.get(key) ?? { principal: group, orgRole: null, email: null, grants: [] };
+      const entry: AccessEntry = entries.get(key) ?? {
+        principal: group,
+        orgRole: null,
+        email: null,
+        grants: [],
+      };
       entry.grants.push(wire(g, group));
       entries.set(key, entry);
       for (const m of memberships) {
@@ -541,7 +628,9 @@ export class GrantsService {
   private managesAnything(map: ProjectPermissionMap, skel: ProjectSkeleton): boolean {
     if (map.projectAtoms.has('sharing:manage')) return true;
     for (const atoms of map.areaAtoms.values()) if (atoms.has('sharing:manage')) return true;
-    return skel.entities.some((e) => atomsAt(map, skel, { type: 'entity', id: e.id }).has('sharing:manage'));
+    return skel.entities.some((e) =>
+      atomsAt(map, skel, { type: 'entity', id: e.id }).has('sharing:manage'),
+    );
   }
 
   private async projectOrg(projectId: string): Promise<{ organizationId: string }> {
@@ -549,7 +638,8 @@ export class GrantsService {
       where: { id: projectId, deletedAt: null },
       select: { organizationId: true },
     });
-    if (project === null) throw new NotFoundException({ code: 'not_found', resourceType: 'project', id: projectId });
+    if (project === null)
+      throw new NotFoundException({ code: 'not_found', resourceType: 'project', id: projectId });
     return project;
   }
 
@@ -565,7 +655,10 @@ export class GrantsService {
             where: { organizationId_userId: { organizationId, userId: id } },
             select: { id: true },
           })
-        : await this.prisma.userGroup.findFirst({ where: { id, organizationId }, select: { id: true } });
+        : await this.prisma.userGroup.findFirst({
+            where: { id, organizationId },
+            select: { id: true },
+          });
     if (found === null) throw new NotFoundException({ code: 'not_found', resourceType: kind, id });
   }
 

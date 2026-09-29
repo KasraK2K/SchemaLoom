@@ -48,12 +48,18 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
 
   // --- the §4.1 invariant table, in full and in order ---
 
-  if (features.links !== (caps.linkKinds.length > 0)) {
-    fail('links-imply-kinds', `features.links=${String(features.links)} but linkKinds has ${String(caps.linkKinds.length)}`);
+  if (features.links !== caps.linkKinds.length > 0) {
+    fail(
+      'links-imply-kinds',
+      `features.links=${String(features.links)} but linkKinds has ${String(caps.linkKinds.length)}`,
+    );
   }
 
-  if (features.indexes !== (caps.indexTypes.length > 0)) {
-    fail('indexes-imply-types', `features.indexes=${String(features.indexes)} but indexTypes has ${String(caps.indexTypes.length)}`);
+  if (features.indexes !== caps.indexTypes.length > 0) {
+    fail(
+      'indexes-imply-types',
+      `features.indexes=${String(features.indexes)} but indexTypes has ${String(caps.indexTypes.length)}`,
+    );
   }
 
   if (caps.indexTypes.length > 0 && caps.indexTypes.filter((i) => i.isDefault).length !== 1) {
@@ -62,9 +68,11 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
 
   if (caps.entityKinds.length === 0) fail('entity-kinds-present', 'entityKinds is empty');
   const entityDupes = duplicates(caps.entityKinds.map((k) => k.id));
-  if (entityDupes.length > 0) fail('entity-kinds-present', `duplicate entity kind ids: ${entityDupes.join(', ')}`);
+  if (entityDupes.length > 0)
+    fail('entity-kinds-present', `duplicate entity kind ids: ${entityDupes.join(', ')}`);
   const codeDupes = duplicates(caps.entityKinds.map((k) => k.shortCode));
-  if (codeDupes.length > 0) fail('entity-kinds-present', `duplicate shortCodes: ${codeDupes.join(', ')}`);
+  if (codeDupes.length > 0)
+    fail('entity-kinds-present', `duplicate shortCodes: ${codeDupes.join(', ')}`);
   for (const k of caps.entityKinds) {
     if (!/^[A-Z]{1,2}$/.test(k.shortCode)) {
       fail('entity-kinds-present', `shortCode "${k.shortCode}" must match /^[A-Z]{1,2}$/`);
@@ -86,12 +94,18 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
       fail('default-cardinality-allowed', `link kind "${k.id}" has no cardinalities`);
     }
     if (!k.cardinalities.includes(k.defaultCardinality)) {
-      fail('default-cardinality-allowed', `link kind "${k.id}" defaultCardinality ${k.defaultCardinality} is not in its cardinalities`);
+      fail(
+        'default-cardinality-allowed',
+        `link kind "${k.id}" defaultCardinality ${k.defaultCardinality} is not in its cardinalities`,
+      );
     }
   }
 
   if (features.referentialActions && !anyLinkKindEnforced(caps)) {
-    fail('referential-actions-need-enforcement', 'features.referentialActions with no enforced link kind');
+    fail(
+      'referential-actions-need-enforcement',
+      'features.referentialActions with no enforced link kind',
+    );
   }
 
   const endpointKinds = new Set(
@@ -102,7 +116,10 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
       if (side === '*') continue;
       for (const id of side) {
         if (!endpointKinds.has(id)) {
-          fail('link-endpoint-kinds-exist', `link kind "${k.id}" allows entity kind "${id}", which is absent or not canBeLinkEndpoint`);
+          fail(
+            'link-endpoint-kinds-exist',
+            `link kind "${k.id}" allows entity kind "${id}", which is absent or not canBeLinkEndpoint`,
+          );
         }
       }
     }
@@ -112,8 +129,14 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
     fail('namespaces-none', 'namespaces: "none" requires defaultNamespaceName: null');
   }
 
-  if (caps.namespaces !== 'none' && (caps.defaultNamespaceName === null || caps.defaultNamespaceName.length === 0)) {
-    fail('namespaces-some', `namespaces: "${caps.namespaces}" requires a non-empty defaultNamespaceName`);
+  if (
+    caps.namespaces !== 'none' &&
+    (caps.defaultNamespaceName === null || caps.defaultNamespaceName.length === 0)
+  ) {
+    fail(
+      'namespaces-some',
+      `namespaces: "${caps.namespaces}" requires a non-empty defaultNamespaceName`,
+    );
   }
 
   if (caps.maxFieldDepth < 1) fail('depth-sane', 'maxFieldDepth must be >= 1');
@@ -128,9 +151,11 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
   }
 
   const importDupes = duplicates(caps.importFormats.map((f) => f.id));
-  if (importDupes.length > 0) fail('format-ids-unique', `duplicate importFormat ids: ${importDupes.join(', ')}`);
+  if (importDupes.length > 0)
+    fail('format-ids-unique', `duplicate importFormat ids: ${importDupes.join(', ')}`);
   const exportDupes = duplicates(caps.exportFormats.map((f) => f.id));
-  if (exportDupes.length > 0) fail('format-ids-unique', `duplicate exportFormat ids: ${exportDupes.join(', ')}`);
+  if (exportDupes.length > 0)
+    fail('format-ids-unique', `duplicate exportFormat ids: ${exportDupes.join(', ')}`);
   for (const f of caps.importFormats) {
     if (f.maxBytes <= 0) fail('format-ids-unique', `importFormat "${f.id}" needs maxBytes > 0`);
   }
@@ -139,7 +164,8 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
     fail('query-language-present', 'queryLanguage.id and codeMirrorMode must be non-empty');
   }
 
-  if (caps.identifiers.maxLength < 1) fail('identifiers-sane', 'identifiers.maxLength must be >= 1');
+  if (caps.identifiers.maxLength < 1)
+    fail('identifiers-sane', 'identifiers.maxLength must be >= 1');
   let compiled: RegExp | null = null;
   try {
     compiled = new RegExp(caps.identifiers.validUnquoted);
@@ -147,7 +173,10 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
     compiled = null;
   }
   if (compiled === null) {
-    fail('identifiers-sane', `identifiers.validUnquoted is not a valid regex: ${caps.identifiers.validUnquoted}`);
+    fail(
+      'identifiers-sane',
+      `identifiers.validUnquoted is not a valid regex: ${caps.identifiers.validUnquoted}`,
+    );
   }
 
   // `services-match-features` is NOT here: it compares the capabilities against the

@@ -4,9 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
-    "./contract": { "types": "./src/contract.ts", "default": "./src/contract.ts" },
-    "./facet": { "types": "./src/facet.ts", "default": "./src/facet.ts" }
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./contract": {
+      "types": "./src/contract.ts",
+      "default": "./src/contract.ts"
+    },
+    "./facet": {
+      "types": "./src/facet.ts",
+      "default": "./src/facet.ts"
+    }
   },
   "scripts": {
     "lint": "eslint .",
@@ -20,7 +29,10 @@
     "@schemaloom/ui": "workspace:*",
     "lucide-react": "^0.544.0"
   },
-  "peerDependencies": { "react": "catalog:", "react-dom": "catalog:" },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
   "devDependencies": {
     "@schemaloom/config": "workspace:*",
     "@types/react": "catalog:",

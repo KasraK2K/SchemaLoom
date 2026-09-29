@@ -252,7 +252,8 @@ export function defaultImportOptions(): ImportOptions {
     format: FORMAT?.id ?? 'ddl',
     defaultNamespace: CAPABILITIES.defaultNamespaceName,
     // `foldsTo: 'none'` is the SDK's spelling of what §9 calls 'preserve'.
-    caseFolding: CAPABILITIES.identifiers.foldsTo === 'none' ? 'preserve' : CAPABILITIES.identifiers.foldsTo,
+    caseFolding:
+      CAPABILITIES.identifiers.foldsTo === 'none' ? 'preserve' : CAPABILITIES.identifiers.foldsTo,
     engineOptions: {},
   };
 }

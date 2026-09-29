@@ -134,7 +134,8 @@ describe('a realistic e-commerce schema', () => {
     const fields = model.objects.field;
     const describe_ = (linkName: string): string => {
       const link = byName(model.objects.link).get(linkName);
-      const names = (ids: readonly Id[]): string => ids.map((id) => fields[id]?.name ?? '?').join(',');
+      const names = (ids: readonly Id[]): string =>
+        ids.map((id) => fields[id]?.name ?? '?').join(',');
       const side = (endpoint: { entityId: Id; fieldIds: readonly Id[] } | undefined): string =>
         `${entities[endpoint?.entityId ?? '']?.name ?? '?'}(${names(endpoint?.fieldIds ?? [])})`;
       return `${side(link?.from)}->${side(link?.to)}`;
@@ -177,7 +178,13 @@ describe('a realistic e-commerce schema', () => {
     const indexes = byName(model.objects.index);
 
     const composite = indexes.get('orders_customer_id_idx');
-    expect(composite?.columns.map((c) => [c.role, model.objects.field[c.fieldId ?? '']?.name, c.direction])).toEqual([
+    expect(
+      composite?.columns.map((c) => [
+        c.role,
+        model.objects.field[c.fieldId ?? '']?.name,
+        c.direction,
+      ]),
+    ).toEqual([
       ['key', 'customer_id', undefined],
       ['key', 'placed_at', 'desc'],
       ['include', 'total', undefined],

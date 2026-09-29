@@ -38,7 +38,8 @@ export function ProjectList({
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-text">{project.name}</span>
               <span className="block truncate text-xs text-text-subtle">
-                edited <time dateTime={project.updatedAt}>{relativeTime(project.updatedAt, now)}</time>
+                edited{' '}
+                <time dateTime={project.updatedAt}>{relativeTime(project.updatedAt, now)}</time>
               </span>
             </span>
             <span className="shrink-0 rounded-full border border-accent-border bg-accent-subtle px-2 py-0.5 font-mono text-xs text-accent-text">
@@ -46,7 +47,7 @@ export function ProjectList({
             </span>
             {/* `role: null` means area- or entity-scoped access only (doc 05 §7.9) —
                 the caller can open the project but holds no project-level role. */}
-            <span className="hidden shrink-0 rounded-full border border-border px-2 py-0.5 text-xs capitalize text-text-muted sm:inline">
+            <span className="hidden shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-text-muted capitalize sm:inline">
               {project.role ?? 'scoped'}
             </span>
           </Link>

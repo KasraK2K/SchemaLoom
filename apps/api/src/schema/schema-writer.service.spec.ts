@@ -1,11 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { redact } from '@schemaloom/schema-model';
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  PermissionResolver,
-  ProjectPermissionMap,
-  ProjectSkeleton,
-} from '../access';
+import type { PermissionResolver, ProjectPermissionMap, ProjectSkeleton } from '../access';
 import { fakePrisma, type FakePrisma, type Store } from './fake-prisma';
 import {
   PROJECT,
@@ -103,8 +99,9 @@ describe('SchemaWriter — optimistic concurrency (C7)', () => {
       { op: 'update', type: 'field', id: 'fld_total', expectedVersion: 2, patch: { name: 'sum' } },
     ]);
 
-    const error = (await writer.apply(ops, await context()).catch((e: unknown) => e)) as
-      ConflictException;
+    const error = (await writer
+      .apply(ops, await context())
+      .catch((e: unknown) => e)) as ConflictException;
     const body = error.getResponse() as { conflicts: { current: { id: string } }[] };
     // Revision 1 shipped this RAW, which let anyone with `schema:edit` read a hidden
     // field out of a deliberately-stale 409 body.
@@ -320,7 +317,13 @@ describe('SchemaWriter — batch mechanics', () => {
     const { writer, context, assertAll } = harness();
     await writer.apply(
       batch([
-        { op: 'update', type: 'entity', id: 'ent_orders', expectedVersion: 2, patch: { name: 'o' } },
+        {
+          op: 'update',
+          type: 'entity',
+          id: 'ent_orders',
+          expectedVersion: 2,
+          patch: { name: 'o' },
+        },
         { op: 'update', type: 'field', id: 'fld_note', expectedVersion: 0, patch: { name: 'n' } },
       ]),
       await context(),
@@ -338,12 +341,32 @@ describe('SchemaWriter — batch mechanics', () => {
         {
           op: 'create',
           type: 'entity',
-          object: { id: 'ent_new', name: 'new', engineProps: {}, namespaceId: 'ns_public', kind: 'table', areaId: null, position: { x: 0, y: 0 }, color: null },
+          object: {
+            id: 'ent_new',
+            name: 'new',
+            engineProps: {},
+            namespaceId: 'ns_public',
+            kind: 'table',
+            areaId: null,
+            position: { x: 0, y: 0 },
+            color: null,
+          },
         },
         {
           op: 'create',
           type: 'field',
-          object: { id: 'fld_new', name: 'id', engineProps: {}, entityId: 'ent_new', parentFieldId: null, type: { name: 'text' }, isNullable: true, isRestricted: false, isPii: false, isDeprecated: false },
+          object: {
+            id: 'fld_new',
+            name: 'id',
+            engineProps: {},
+            entityId: 'ent_new',
+            parentFieldId: null,
+            type: { name: 'text' },
+            isNullable: true,
+            isRestricted: false,
+            isPii: false,
+            isDeprecated: false,
+          },
         },
       ]),
       await context(),
@@ -360,7 +383,14 @@ describe('SchemaWriter — batch mechanics', () => {
         {
           op: 'create',
           type: 'constraint',
-          object: { id: 'con_u', name: '', engineProps: {}, entityId: 'ent_users', kind: 'unique', fieldIds: ['fld_id'] },
+          object: {
+            id: 'con_u',
+            name: '',
+            engineProps: {},
+            entityId: 'ent_users',
+            kind: 'unique',
+            fieldIds: ['fld_id'],
+          },
         },
       ]),
       await context(),
@@ -387,15 +417,31 @@ describe('SchemaWriter — batch mechanics', () => {
     const generation = (): unknown => prisma.store.project?.[0]?.permGeneration;
 
     await writer.apply(
-      batch([{ op: 'update', type: 'entity', id: 'ent_orders', expectedVersion: 2, patch: { name: 'orders2' } }]),
+      batch([
+        {
+          op: 'update',
+          type: 'entity',
+          id: 'ent_orders',
+          expectedVersion: 2,
+          patch: { name: 'orders2' },
+        },
+      ]),
       await context(),
     );
     expect(generation()).toBe(0);
 
     await writer.apply(
       batch([
-        { op: 'create', type: 'area', object: { id: 'are_a', name: 'A', engineProps: {}, color: 'amber', ordinal: 0 } },
-        { op: 'create', type: 'area', object: { id: 'are_b', name: 'B', engineProps: {}, color: 'amber', ordinal: 1 } },
+        {
+          op: 'create',
+          type: 'area',
+          object: { id: 'are_a', name: 'A', engineProps: {}, color: 'amber', ordinal: 0 },
+        },
+        {
+          op: 'create',
+          type: 'area',
+          object: { id: 'are_b', name: 'B', engineProps: {}, color: 'amber', ordinal: 1 },
+        },
       ]),
       await context(),
     );
@@ -419,18 +465,36 @@ describe('SchemaWriter — saved-query invalidation (doc 02 SavedQuery)', () => 
   it('resets identifiersResolved for the whole project on a rename, in the same transaction', async () => {
     const { prisma, writer, context } = harness();
     await writer.apply(
-      batch([{ op: 'update', type: 'field', id: 'fld_total', expectedVersion: 3, patch: { name: 'sum' } }]),
+      batch([
+        {
+          op: 'update',
+          type: 'field',
+          id: 'fld_total',
+          expectedVersion: 3,
+          patch: { name: 'sum' },
+        },
+      ]),
       await context(),
     );
     expect(resets(prisma)).toHaveLength(1);
     expect(resets(prisma)[0]?.args).toMatchObject({ values: [PROJECT] });
-    expect(String(resets(prisma)[0]?.args.sql)).toMatch(/UPDATE saved_queries SET identifiers_resolved = false WHERE project_id = \?/);
+    expect(String(resets(prisma)[0]?.args.sql)).toMatch(
+      /UPDATE saved_queries SET identifiers_resolved = false WHERE project_id = \?/,
+    );
   });
 
   it('resets on a delete, and not on an edit that keeps every name', async () => {
     const { prisma, writer, context } = harness();
     await writer.apply(
-      batch([{ op: 'update', type: 'field', id: 'fld_total', expectedVersion: 3, patch: { isNullable: false } }]),
+      batch([
+        {
+          op: 'update',
+          type: 'field',
+          id: 'fld_total',
+          expectedVersion: 3,
+          patch: { isNullable: false },
+        },
+      ]),
       await context(),
     );
     expect(resets(prisma)).toHaveLength(0);

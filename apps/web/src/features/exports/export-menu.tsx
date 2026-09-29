@@ -79,7 +79,13 @@ export function ExportMenu({
   );
 }
 
-function ExportMenuInner({ projectId, images }: { readonly projectId: string; readonly images: boolean }) {
+function ExportMenuInner({
+  projectId,
+  images,
+}: {
+  readonly projectId: string;
+  readonly images: boolean;
+}) {
   const engine = useEngine();
   const { run, busy, error } = useExport(projectId);
 

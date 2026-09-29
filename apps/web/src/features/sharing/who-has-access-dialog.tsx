@@ -75,8 +75,8 @@ export function WhoHasAccessDialog({
       <DialogContent className="max-w-xl">
         <DialogTitle>Who has access</DialogTitle>
         <DialogDescription>
-          Access granted here applies to everything inside it, unless something inside has
-          its own grant.
+          Access granted here applies to everything inside it, unless something inside has its own
+          grant.
         </DialogDescription>
         {open && <AccessBody projectId={projectId} />}
       </DialogContent>
@@ -299,12 +299,7 @@ function AccessBody({ projectId }: { readonly projectId: string }) {
         )}
       </ul>
 
-      <ShareLinksPanel
-        projectId={projectId}
-        scope={scope}
-        noun={noun}
-        canManage={data.canManage}
-      />
+      <ShareLinksPanel projectId={projectId} scope={scope} noun={noun} canManage={data.canManage} />
 
       {data.canManage && (
         <AccessRequestsPanel projectId={projectId} roles={data.roles} noun={noun} />

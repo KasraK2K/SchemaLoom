@@ -81,7 +81,10 @@ function visibleParts(model: RedactedModel): Visible {
 
   const entities = Object.values(objects.entity)
     .filter((e) => e.restricted !== true && e.name !== '')
-    .sort((a, b) => byText(namespaceOf(a), namespaceOf(b)) || byText(a.name, b.name) || byText(a.id, b.id));
+    .sort(
+      (a, b) =>
+        byText(namespaceOf(a), namespaceOf(b)) || byText(a.name, b.name) || byText(a.id, b.id),
+    );
   const entityIds = new Set(entities.map((e) => e.id));
 
   const customTypes = new Map(Object.values(objects.customType).map((t) => [t.id, t]));
@@ -92,19 +95,27 @@ function visibleParts(model: RedactedModel): Visible {
 
   const fieldsOf = new Map<Id, Field[]>();
   for (const field of Object.values(objects.field)) {
-    if (field.restricted === true || field.name === '' || !entityIds.has(field.entityId) || typeHidden(field)) continue;
+    if (
+      field.restricted === true ||
+      field.name === '' ||
+      !entityIds.has(field.entityId) ||
+      typeHidden(field)
+    )
+      continue;
     const list = fieldsOf.get(field.entityId) ?? [];
     list.push(field);
     fieldsOf.set(field.entityId, list);
   }
-  for (const list of fieldsOf.values()) list.sort((a, b) => a.ordinal - b.ordinal || byText(a.id, b.id));
+  for (const list of fieldsOf.values())
+    list.sort((a, b) => a.ordinal - b.ordinal || byText(a.id, b.id));
 
   const pk = new Set<Id>();
   const uq = new Set<Id>();
   for (const c of Object.values(objects.constraint)) {
     if (c.restricted === true) continue;
     if (c.kind === 'primaryKey') for (const id of c.fieldIds) pk.add(id);
-    if (c.kind === 'unique' && c.fieldIds.length === 1 && c.fieldIds[0] !== undefined) uq.add(c.fieldIds[0]);
+    if (c.kind === 'unique' && c.fieldIds.length === 1 && c.fieldIds[0] !== undefined)
+      uq.add(c.fieldIds[0]);
   }
   const indexed = new Set<Id>();
   for (const index of Object.values(objects.index)) {
@@ -116,13 +127,18 @@ function visibleParts(model: RedactedModel): Visible {
   }
 
   const links = Object.values(objects.link)
-    .filter((l) => l.restricted !== true && entityIds.has(l.from.entityId) && entityIds.has(l.to.entityId))
+    .filter(
+      (l) =>
+        l.restricted !== true && entityIds.has(l.from.entityId) && entityIds.has(l.to.entityId),
+    )
     .sort((a, b) => byText(a.id, b.id));
 
   const entityRef = (id: Id): string => {
     const e = objects.entity[id];
     if (e === undefined) return '';
-    return e.namespaceId === defaultNs ? ident(e.name) : `${ident(namespaceOf(e))}.${ident(e.name)}`;
+    return e.namespaceId === defaultNs
+      ? ident(e.name)
+      : `${ident(namespaceOf(e))}.${ident(e.name)}`;
   };
 
   return { entities, fieldsOf, entityRef, namespaceOf, pk, uq, indexed, links, customTypes };
@@ -152,7 +168,9 @@ function render(model: RedactedModel, v: Visible, plan: Plan, options: AiContext
     return ` ${scsDocString(excerpt, options.maxDocChars)}`;
   };
 
-  const links = v.links.filter((l) => plan.entityIds.has(l.from.entityId) && plan.entityIds.has(l.to.entityId));
+  const links = v.links.filter(
+    (l) => plan.entityIds.has(l.from.entityId) && plan.entityIds.has(l.to.entityId),
+  );
   const linkFields = new Set(links.flatMap((l) => [...l.from.fieldIds, ...l.to.fieldIds]));
 
   // Pass 1 — which fields go out. Everything below may only name these.
@@ -161,7 +179,9 @@ function render(model: RedactedModel, v: Visible, plan: Plan, options: AiContext
   for (const entity of v.entities) {
     if (!plan.entityIds.has(entity.id)) continue;
     const all = v.fieldsOf.get(entity.id) ?? [];
-    const kept = plan.keyOnly.has(entity.id) ? all.filter((f) => v.pk.has(f.id) || linkFields.has(f.id)) : all;
+    const kept = plan.keyOnly.has(entity.id)
+      ? all.filter((f) => v.pk.has(f.id) || linkFields.has(f.id))
+      : all;
     emitted.set(entity.id, kept);
     for (const f of kept) emittedFieldIds.add(f.id);
   }
@@ -176,12 +196,22 @@ function render(model: RedactedModel, v: Visible, plan: Plan, options: AiContext
   const inline = new Map<Id, Link>();
   for (const l of links) {
     const from = l.from.fieldIds[0];
-    if (l.kind === 'foreignKey' && l.from.fieldIds.length === 1 && from !== undefined && linkOk(l) && !inline.has(from)) {
+    if (
+      l.kind === 'foreignKey' &&
+      l.from.fieldIds.length === 1 &&
+      from !== undefined &&
+      linkOk(l) &&
+      !inline.has(from)
+    ) {
       inline.set(from, l);
     }
   }
 
-  const lines: string[] = [model.engineVersion === '' ? `# ${model.engineId}` : `# ${model.engineId} ${model.engineVersion}`];
+  const lines: string[] = [
+    model.engineVersion === ''
+      ? `# ${model.engineId}`
+      : `# ${model.engineId} ${model.engineVersion}`,
+  ];
   let currentNs: string | null = null;
   const usedTypes = new Set<Id>();
   for (const entity of v.entities) {
@@ -193,7 +223,9 @@ function render(model: RedactedModel, v: Visible, plan: Plan, options: AiContext
       lines.push(`N ${ident(ns)}`);
       currentNs = ns;
     }
-    lines.push(`${SHORT_CODE.get(entity.kind) ?? 'T'} ${ident(entity.name)}${doc(entity.doc?.excerpt)}`);
+    lines.push(
+      `${SHORT_CODE.get(entity.kind) ?? 'T'} ${ident(entity.name)}${doc(entity.doc?.excerpt)}`,
+    );
     for (const field of fields) {
       counts.fields += 1;
       const typeId = field.type.customTypeId;
@@ -218,7 +250,9 @@ function render(model: RedactedModel, v: Visible, plan: Plan, options: AiContext
       const link = inline.get(field.id);
       const to = link?.to.fieldIds[0];
       const ref = to === undefined ? '' : ` -> ${fieldRef(to)}`;
-      lines.push(`  ${[ident(field.name), type, ...flags].join(' ')}${ref}${doc(field.doc?.excerpt)}`);
+      lines.push(
+        `  ${[ident(field.name), type, ...flags].join(' ')}${ref}${doc(field.doc?.excerpt)}`,
+      );
     }
   }
 
@@ -241,7 +275,9 @@ function render(model: RedactedModel, v: Visible, plan: Plan, options: AiContext
       const columns = [...index.columns].sort((a, b) => a.ordinal - b.ordinal);
       // An expression column's text may name anything; a column we are not sending is a name.
       if (!columns.every((c) => c.fieldId !== null && emittedFieldIds.has(c.fieldId))) continue;
-      const keys = columns.filter((c) => c.role === 'key').map((c) => ident(objects.field[c.fieldId ?? '']?.name ?? ''));
+      const keys = columns
+        .filter((c) => c.role === 'key')
+        .map((c) => ident(objects.field[c.fieldId ?? '']?.name ?? ''));
       lines.push(`X ${v.entityRef(index.entityId)} (${keys.join(', ')}) ${index.kind}`);
       counts.indexes += 1;
     }
@@ -255,7 +291,10 @@ function render(model: RedactedModel, v: Visible, plan: Plan, options: AiContext
         : `${v.entityRef(entityId)}(${fieldIds.map((id) => ident(objects.field[id]?.name ?? '')).join(', ')})`;
   const rest = links
     .filter((l) => linkOk(l) && ![...inline.values()].includes(l))
-    .map((l) => `R ${side(l.from.entityId, l.from.fieldIds)} -> ${side(l.to.entityId, l.to.fieldIds)} ${l.cardinality} ${l.kind}`)
+    .map(
+      (l) =>
+        `R ${side(l.from.entityId, l.from.fieldIds)} -> ${side(l.to.entityId, l.to.fieldIds)} ${l.cardinality} ${l.kind}`,
+    )
     .sort(byText);
   lines.push(...rest);
 
@@ -264,19 +303,29 @@ function render(model: RedactedModel, v: Visible, plan: Plan, options: AiContext
 
 // --- §13.2 ----------------------------------------------------------------------------------
 
-export function serializeContext(model: RedactedModel, options: AiContextOptions): AiSerializedContext {
+export function serializeContext(
+  model: RedactedModel,
+  options: AiContextOptions,
+): AiSerializedContext {
   const v = visibleParts(model);
   const all = new Set(v.entities.map((e) => e.id));
   const picked = options.selectedEntityIds.filter((id) => all.has(id));
   const selected = new Set(picked.length === 0 ? all : picked);
   const neighbours = new Set<Id>();
   for (const l of v.links) {
-    if (selected.has(l.from.entityId) && !selected.has(l.to.entityId)) neighbours.add(l.to.entityId);
-    if (selected.has(l.to.entityId) && !selected.has(l.from.entityId)) neighbours.add(l.from.entityId);
+    if (selected.has(l.from.entityId) && !selected.has(l.to.entityId))
+      neighbours.add(l.to.entityId);
+    if (selected.has(l.to.entityId) && !selected.has(l.from.entityId))
+      neighbours.add(l.from.entityId);
   }
   const unselected = new Set([...all].filter((id) => !selected.has(id)));
 
-  let plan: Plan = { entityIds: all, keyOnly: new Set(), docs: options.includeDocs, indexes: options.includeIndexes };
+  let plan: Plan = {
+    entityIds: all,
+    keyOnly: new Set(),
+    docs: options.includeDocs,
+    indexes: options.includeIndexes,
+  };
   let current = render(model, v, plan, options);
   const omitted: { what: 'docs' | 'indexes' | 'fields' | 'entities'; count: number }[] = [];
   const steps: readonly [AiSerializedContext['omitted'][number]['what'], (p: Plan) => Plan][] = [
@@ -359,5 +408,9 @@ export const AI_PROFILE: AiProfile = {
   buildSystemPrompt,
   serializeContext,
   outputInstructions: OUTPUT_INSTRUCTIONS,
-  parseOutput: (text, mode) => parseAiOutput(text, mode, { fenceLanguages: ['sql', 'postgresql', 'pgsql'], importFormat: IMPORT_FORMAT }),
+  parseOutput: (text, mode) =>
+    parseAiOutput(text, mode, {
+      fenceLanguages: ['sql', 'postgresql', 'pgsql'],
+      importFormat: IMPORT_FORMAT,
+    }),
 };

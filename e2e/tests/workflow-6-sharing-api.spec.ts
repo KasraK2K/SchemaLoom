@@ -42,11 +42,19 @@ test.describe('sharing API — who has access, grants, links and requests', () =
   test('the owner sees the tree, the five built-in roles and Dana’s Billing grant', async () => {
     const access = await accessOf(await signIn(SEED_EMAILS.owner));
     expect(access.canManage).toBe(true);
-    expect(access.roles.map((r) => r.key)).toEqual(['viewer', 'commenter', 'documenter', 'editor', 'manager']);
+    expect(access.roles.map((r) => r.key)).toEqual([
+      'viewer',
+      'commenter',
+      'documenter',
+      'editor',
+      'manager',
+    ]);
     expect(access.resources.find((r) => r.id === SEED.areas.billing)?.parentId).toBe(P);
 
     const dana = access.entries.find((e) => e.principal.id === SEED.users.guest.id);
-    expect(dana?.grants.map((g) => [g.resourceId, g.roleKey])).toEqual([[SEED.areas.billing, 'editor']]);
+    expect(dana?.grants.map((g) => [g.resourceId, g.roleKey])).toEqual([
+      [SEED.areas.billing, 'editor'],
+    ]);
   });
 
   test('a guest is refused the dialog outright; a viewer sees no one', async () => {
@@ -64,32 +72,45 @@ test.describe('sharing API — who has access, grants, links and requests', () =
     const analyst = await signIn(SEED_EMAILS.analyst);
 
     const denied = await grant(analyst, {
-      principalKind: 'user', principalId: SEED.users.guest.id,
-      resourceType: 'area', resourceId: SEED.areas.billing, roleKey: 'viewer',
+      principalKind: 'user',
+      principalId: SEED.users.guest.id,
+      resourceType: 'area',
+      resourceId: SEED.areas.billing,
+      roleKey: 'viewer',
     });
     expect(denied.status()).toBe(403);
     expect(await errorCode(denied)).toBe('sharing_not_permitted');
 
     // Make the analyst Billing's manager, then have them try to hand out restricted access.
     const made = await grant(owner, {
-      principalKind: 'user', principalId: SEED.users.member.id,
-      resourceType: 'area', resourceId: SEED.areas.billing, roleKey: 'manager',
+      principalKind: 'user',
+      principalId: SEED.users.member.id,
+      resourceType: 'area',
+      resourceId: SEED.areas.billing,
+      roleKey: 'manager',
     });
     expect(made.status(), await made.text()).toBe(201);
     const { id: managerGrant } = (await made.json()) as { id: string };
 
     try {
       const escalation = await grant(analyst, {
-        principalKind: 'user', principalId: SEED.users.guest.id,
-        resourceType: 'area', resourceId: SEED.areas.billing, roleKey: 'editor', canViewRestricted: true,
+        principalKind: 'user',
+        principalId: SEED.users.guest.id,
+        resourceType: 'area',
+        resourceId: SEED.areas.billing,
+        roleKey: 'editor',
+        canViewRestricted: true,
       });
       expect(escalation.status()).toBe(403);
       expect(await errorCode(escalation)).toBe('escalation');
 
       // R9: nobody may make a guest a manager.
       const guestManager = await grant(owner, {
-        principalKind: 'user', principalId: SEED.users.guest.id,
-        resourceType: 'area', resourceId: SEED.areas.billing, roleKey: 'manager',
+        principalKind: 'user',
+        principalId: SEED.users.guest.id,
+        resourceType: 'area',
+        resourceId: SEED.areas.billing,
+        roleKey: 'manager',
       });
       expect(guestManager.status()).toBe(400);
       expect(await errorCode(guestManager)).toBe('guest_cannot_manage');
@@ -100,7 +121,9 @@ test.describe('sharing API — who has access, grants, links and requests', () =
       const granted = scoped.entries.flatMap((e) => e.grants.map((g) => g.resourceId));
       expect(granted).not.toContain(P);
     } finally {
-      const removed = await owner.api.delete(`/api/grants/${managerGrant}`, { headers: write(owner) });
+      const removed = await owner.api.delete(`/api/grants/${managerGrant}`, {
+        headers: write(owner),
+      });
       expect(removed.status()).toBe(204);
     }
   });
@@ -108,46 +131,67 @@ test.describe('sharing API — who has access, grants, links and requests', () =
   test('an email invite is a pending grant, listed by address, and removing it revokes it', async () => {
     const owner = await signIn(SEED_EMAILS.owner);
     const response = await grant(owner, {
-      principalKind: 'email_invite', principalId: 'New@Example.test',
-      resourceType: 'project', resourceId: P, roleKey: 'viewer',
+      principalKind: 'email_invite',
+      principalId: 'New@Example.test',
+      resourceType: 'project',
+      resourceId: P,
+      roleKey: 'viewer',
     });
     expect(response.status(), await response.text()).toBe(201);
     const { id } = (await response.json()) as { id: string };
 
     try {
-      const pending = (await accessOf(owner)).entries.find((e) => e.principal.kind === 'email_invite');
+      const pending = (await accessOf(owner)).entries.find(
+        (e) => e.principal.kind === 'email_invite',
+      );
       expect(pending?.principal.id).toBe('new@example.test');
       expect(pending?.grants.map((g) => g.roleKey)).toEqual(['viewer']);
     } finally {
       const removed = await owner.api.delete(`/api/grants/${id}`, { headers: write(owner) });
       expect(removed.status()).toBe(204);
     }
-    expect((await accessOf(owner)).entries.some((e) => e.principal.kind === 'email_invite')).toBe(false);
+    expect((await accessOf(owner)).entries.some((e) => e.principal.kind === 'email_invite')).toBe(
+      false,
+    );
   });
 
   test('a share link is returned once, listed without its token, and revoked with its grant', async () => {
     const owner = await signIn(SEED_EMAILS.owner);
     const created = await owner.api.post(`/api/projects/${P}/share-links`, {
       headers: write(owner),
-      data: { resourceType: 'area', resourceId: SEED.areas.billing, expiresAt: null, password: 'hunter2hunter2' },
+      data: {
+        resourceType: 'area',
+        resourceId: SEED.areas.billing,
+        expiresAt: null,
+        password: 'hunter2hunter2',
+      },
     });
     expect(created.status(), await created.text()).toBe(201);
-    const { link, url } = (await created.json()) as { link: { id: string; hasPassword: boolean }; url: string };
+    const { link, url } = (await created.json()) as {
+      link: { id: string; hasPassword: boolean };
+      url: string;
+    };
     expect(url).toMatch(/\/s\/[\w-]{40,}$/);
     expect(link.hasPassword).toBe(true);
 
     const listed = await owner.api.get(`/api/projects/${P}/share-links`);
     const listText = await listed.text();
     expect(listText).toContain(link.id);
-    expect(listText, 'the token is never stored, so it can never be listed').not.toContain(url.split('/s/')[1] ?? '');
+    expect(listText, 'the token is never stored, so it can never be listed').not.toContain(
+      url.split('/s/')[1] ?? '',
+    );
 
     // The link's grant is not in "Who has access" (R25): links have their own section.
     const access = await accessOf(owner);
     expect(access.entries.some((e) => e.principal.id === link.id)).toBe(false);
 
-    const revoked = await owner.api.delete(`/api/share-links/${link.id}`, { headers: write(owner) });
+    const revoked = await owner.api.delete(`/api/share-links/${link.id}`, {
+      headers: write(owner),
+    });
     expect(revoked.status()).toBe(204);
-    expect(await (await owner.api.get(`/api/projects/${P}/share-links`)).text()).not.toContain(link.id);
+    expect(await (await owner.api.get(`/api/projects/${P}/share-links`)).text()).not.toContain(
+      link.id,
+    );
   });
 
   test('an access request is 202 for anything, and approval is a real grant', async () => {
@@ -157,14 +201,23 @@ test.describe('sharing API — who has access, grants, links and requests', () =
     // The non-oracle: a project that does not exist gets the same answer.
     const ghost = await dana.api.post('/api/access-requests', {
       headers: write(dana),
-      data: { projectId: 'prj_does_not_exist_000001', resourceType: 'project', resourceId: 'prj_does_not_exist_000001' },
+      data: {
+        projectId: 'prj_does_not_exist_000001',
+        resourceType: 'project',
+        resourceId: 'prj_does_not_exist_000001',
+      },
     });
     expect(ghost.status()).toBe(202);
 
     // `products` reaches Dana as a stub (workflow 4); the stub's real id is the target.
     const asked = await dana.api.post('/api/access-requests', {
       headers: write(dana),
-      data: { projectId: P, resourceType: 'entity', resourceId: SEED.entities.products, message: 'for the invoice FK' },
+      data: {
+        projectId: P,
+        resourceType: 'entity',
+        resourceId: SEED.entities.products,
+        message: 'for the invoice FK',
+      },
     });
     expect(asked.status()).toBe(202);
 
@@ -191,7 +244,9 @@ test.describe('sharing API — who has access, grants, links and requests', () =
       expect(ir.objects.entity[SEED.entities.products]?.name).toBe('products');
     } finally {
       expect(grantId).toBeDefined();
-      const removed = await owner.api.delete(`/api/grants/${grantId ?? ''}`, { headers: write(owner) });
+      const removed = await owner.api.delete(`/api/grants/${grantId ?? ''}`, {
+        headers: write(owner),
+      });
       expect(removed.status()).toBe(204);
     }
     const after = await fetchIr(dana, P);
@@ -206,7 +261,9 @@ test.describe('sharing API — who has access, grants, links and requests', () =
       data: { projectId: P, resourceType: 'area', resourceId: SEED.areas.catalog },
     });
 
-    const { requests } = (await (await owner.api.get(`/api/projects/${P}/access-requests`)).json()) as {
+    const { requests } = (await (
+      await owner.api.get(`/api/projects/${P}/access-requests`)
+    ).json()) as {
       requests: { id: string; resourceId: string }[];
     };
     const request = requests.find((r) => r.resourceId === SEED.areas.catalog);

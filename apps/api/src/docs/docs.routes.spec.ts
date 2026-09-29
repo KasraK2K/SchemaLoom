@@ -53,8 +53,8 @@ describe('DocsController route markers', () => {
   });
 
   it('exposes only the docs-mode list to a share-link subject (R21)', () => {
-    expect(routes.filter((r) => isShareLinkRoute(r.method, r.path)).map((r) => `${r.method} ${r.path}`)).toEqual([
-      'GET /api/projects/:projectId/docs',
-    ]);
+    expect(
+      routes.filter((r) => isShareLinkRoute(r.method, r.path)).map((r) => `${r.method} ${r.path}`),
+    ).toEqual(['GET /api/projects/:projectId/docs']);
   });
 });

@@ -32,7 +32,8 @@ const path = (projectId: string, t: DocTarget): string =>
 export function docQueryOptions(projectId: string, target: DocTarget) {
   return queryOptions({
     queryKey: [...docsKey(projectId), target.targetType, target.targetId],
-    queryFn: async (): Promise<DocView> => docSchema.parse(await apiFetch<unknown>(path(projectId, target))),
+    queryFn: async (): Promise<DocView> =>
+      docSchema.parse(await apiFetch<unknown>(path(projectId, target))),
   });
 }
 

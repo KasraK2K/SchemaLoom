@@ -26,6 +26,8 @@ describe('exportErrorMessage', () => {
   });
 
   it('passes other failures through', () => {
-    expect(exportErrorMessage(new Error('The upload failed (500).'))).toBe('The upload failed (500).');
+    expect(exportErrorMessage(new Error('The upload failed (500).'))).toBe(
+      'The upload failed (500).',
+    );
   });
 });

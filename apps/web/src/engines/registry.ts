@@ -1,4 +1,8 @@
-import { UnknownEngineError, type EngineId, type EngineStaticFacet } from '@schemaloom/engine-sdk/ui';
+import {
+  UnknownEngineError,
+  type EngineId,
+  type EngineStaticFacet,
+} from '@schemaloom/engine-sdk/ui';
 import type {
   EngineFacetLoader,
   EngineFacetRegistry,

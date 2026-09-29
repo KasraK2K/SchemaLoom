@@ -31,7 +31,8 @@ export function isTombstone(content: unknown): boolean {
 
 type Node = Record<string, unknown>;
 
-const isObject = (v: unknown): v is Node => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isObject = (v: unknown): v is Node =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const childrenOf = (node: Node): unknown[] => (Array.isArray(node.content) ? node.content : []);
 
@@ -50,7 +51,9 @@ const labelOf = (node: Node): string => {
 
 /** A user mention (`@tiptap/extension-mention`): `attrs.id`, no `attrs.targetType`. */
 const isUserMention = (node: Node): boolean =>
-  node.type === 'mention' && typeof attrsOf(node).id === 'string' && attrsOf(node).targetType === undefined;
+  node.type === 'mention' &&
+  typeof attrsOf(node).id === 'string' &&
+  attrsOf(node).targetType === undefined;
 
 /** The user ids a body @-mentions, deduplicated, in document order. */
 export function mentionedUserIds(doc: unknown): string[] {
@@ -96,7 +99,8 @@ export function redactRichText(doc: unknown, rules: RedactionRules): unknown {
     if (node.type === 'mention') {
       const attrs = attrsOf(node);
       if (attrs.targetType !== undefined) {
-        const ok = attrs.targetType === 'entity' && rules.visibleEntityIds.has(String(attrs.targetId));
+        const ok =
+          attrs.targetType === 'entity' && rules.visibleEntityIds.has(String(attrs.targetId));
         if (ok) return node;
         return rules.mode === 'hide'
           ? { type: 'text', text: 'restricted' }

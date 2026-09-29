@@ -17,9 +17,7 @@ import { OrganizationsController } from './organizations.controller';
  */
 function sweep(): SweptRoute[] {
   const prototype: object = OrganizationsController.prototype;
-  const controllerPath = String(
-    Reflect.getMetadata(PATH_METADATA, OrganizationsController) ?? '',
-  );
+  const controllerPath = String(Reflect.getMetadata(PATH_METADATA, OrganizationsController) ?? '');
   const routes: SweptRoute[] = [];
 
   for (const name of Object.getOwnPropertyNames(prototype)) {
@@ -37,8 +35,7 @@ function sweep(): SweptRoute[] {
         .replace(/(?!^)\/$/, ''),
       markers: markerKeysOn(
         (key) =>
-          Reflect.getMetadata(key, handler) ??
-          Reflect.getMetadata(key, OrganizationsController),
+          Reflect.getMetadata(key, handler) ?? Reflect.getMetadata(key, OrganizationsController),
       ),
       source: `OrganizationsController.${name}`,
     });

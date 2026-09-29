@@ -3,7 +3,11 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Authenticated } from '../access';
 import { Public, getPrincipal } from '../auth';
-import { InvitationsService, type AcceptedInvitation, type InvitationView } from './invitations.service';
+import {
+  InvitationsService,
+  type AcceptedInvitation,
+  type InvitationView,
+} from './invitations.service';
 
 /**
  * Doc 05 §6.4 (R11) — the two routes `/invite/[token]` calls.

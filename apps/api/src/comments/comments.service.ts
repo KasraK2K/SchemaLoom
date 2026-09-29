@@ -110,7 +110,10 @@ export class CommentsService {
   }
 
   /** L8 — `{ [entityId]: openThreads }`, counted over targets the caller can see only. */
-  async counts(projectId: string, map: ProjectPermissionMap): Promise<{ counts: Record<string, number> }> {
+  async counts(
+    projectId: string,
+    map: ProjectPermissionMap,
+  ): Promise<{ counts: Record<string, number> }> {
     const skel = await this.resolver.skeleton(projectId);
     const roots = await this.prisma.comment.findMany({
       where: { projectId, parentId: null, resolvedAt: null },
@@ -154,7 +157,12 @@ export class CommentsService {
     let rootId = id;
     if (body.parentId !== undefined) {
       const parent = await this.prisma.comment.findFirst({
-        where: { id: body.parentId, projectId, targetType: body.targetType, targetId: body.targetId },
+        where: {
+          id: body.parentId,
+          projectId,
+          targetType: body.targetType,
+          targetId: body.targetId,
+        },
         select: { rootId: true },
       });
       if (parent === null) throw notFound('comment', body.parentId);
@@ -337,7 +345,15 @@ export class CommentsService {
       where: { id: targetId, projectId },
       select: { entityId: true, isRestricted: true },
     });
-    return field && { projectId, targetType, targetId, entityId: field.entityId, restricted: field.isRestricted };
+    return (
+      field && {
+        projectId,
+        targetType,
+        targetId,
+        entityId: field.entityId,
+        restricted: field.isRestricted,
+      }
+    );
   }
 
   /** A tombstone whose last reply just went has nothing left to hold up. */
@@ -356,7 +372,12 @@ export class CommentsService {
    * L17 — `comment.mentioned` to mentioned viewers, `comment.replied` to earlier thread
    * participants who are viewers and were not just mentioned. Never the author.
    */
-  private async notify(row: Comment, reader: Reader, mentioned: readonly string[], isReply: boolean): Promise<void> {
+  private async notify(
+    row: Comment,
+    reader: Reader,
+    mentioned: readonly string[],
+    isReply: boolean,
+  ): Promise<void> {
     if (mentioned.length === 0 && !isReply) return;
     const viewers = await this.viewerIds(reader.target);
     const eligible = (id: string): boolean => id !== reader.userId && viewers.has(id);
@@ -374,8 +395,14 @@ export class CommentsService {
 
     const [actor, project, url] = await Promise.all([
       this.prisma.user.findFirst({ where: { id: reader.userId }, select: { name: true } }),
-      this.prisma.project.findFirst({ where: { id: row.projectId }, select: { organizationId: true } }),
-      this.notifications.projectUrl(row.projectId, { entity: reader.target.entityId, comment: row.rootId }),
+      this.prisma.project.findFirst({
+        where: { id: row.projectId },
+        select: { organizationId: true },
+      }),
+      this.notifications.projectUrl(row.projectId, {
+        entity: reader.target.entityId,
+        comment: row.rootId,
+      }),
     ]);
     if (project === null) return;
     const name = actor?.name ?? 'Someone';
@@ -413,17 +440,24 @@ export class CommentsService {
   /** Per reader: body through `redactRichText`, authors through the guest rule (§8). */
   private async render(rows: readonly Comment[], reader: Reader): Promise<CommentView[]> {
     const mentionIds = rows.flatMap((r) => r.mentionedIds);
-    const people = [...new Set([...rows.flatMap((r) => (r.authorId === null ? [] : [r.authorId])), ...mentionIds])];
-    const users = people.length === 0
-      ? []
-      : await this.prisma.user.findMany({
-          where: { id: { in: people } },
-          select: { id: true, name: true, avatarUrl: true },
-        });
+    const people = [
+      ...new Set([
+        ...rows.flatMap((r) => (r.authorId === null ? [] : [r.authorId])),
+        ...mentionIds,
+      ]),
+    ];
+    const users =
+      people.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: { id: { in: people } },
+            select: { id: true, name: true, avatarUrl: true },
+          });
     const byId = new Map(users.map((u) => [u.id, u]));
     // A guest sees a person only when that person can see this target too (§7.7, L10).
     const known = reader.map.orgRole === 'guest' ? await this.viewerIds(reader.target) : null;
-    const shows = (userId: string): boolean => userId === reader.userId || known === null || known.has(userId);
+    const shows = (userId: string): boolean =>
+      userId === reader.userId || known === null || known.has(userId);
 
     const rules = {
       visibleEntityIds: this.resolver.visibleEntityIds(reader.map, reader.skel),
@@ -469,7 +503,8 @@ function requireUser(subject: Subject): UserSubject {
   return subject;
 }
 
-const forbidden = (): ForbiddenException => new ForbiddenException({ code: 'forbidden', resourceType: 'comment' });
+const forbidden = (): ForbiddenException =>
+  new ForbiddenException({ code: 'forbidden', resourceType: 'comment' });
 
 /** An empty body (no text, no mention) is a 400, not a blank row. */
 function assertNotEmpty(content: unknown): string {

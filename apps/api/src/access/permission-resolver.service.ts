@@ -143,10 +143,7 @@ export class PermissionResolver {
    * is never measured against a stale map. Bypasses Redis on both read and write; the
    * lock, not the cache, is what serialises it.
    */
-  async resolveProjectUncached(
-    subject: Subject,
-    projectId: string,
-  ): Promise<ProjectPermissionMap> {
+  async resolveProjectUncached(subject: Subject, projectId: string): Promise<ProjectPermissionMap> {
     const rows = await this.readProjectRows([projectId], generationUserId(subject));
     const row = rows.get(projectId);
     if (!row) return emptyMap(projectId, subject);

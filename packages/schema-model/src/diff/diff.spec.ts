@@ -30,7 +30,9 @@ function base(): SchemaModel {
       field('f2', 'customer_id', 'e1', { ordinal: 1 }),
       field('f3', 'id', 'e2', { ordinal: 0 }),
     ]),
-    constraint: byId([constraint('c1', 'orders_pkey', 'e1', { kind: 'primaryKey', fieldIds: ['f1'] })]),
+    constraint: byId([
+      constraint('c1', 'orders_pkey', 'e1', { kind: 'primaryKey', fieldIds: ['f1'] }),
+    ]),
     index: byId([index('i1', 'idx_orders_customer', 'e1')]),
     link: byId([
       link('l1', 'fk_orders_customer', 'e1', 'e2', {

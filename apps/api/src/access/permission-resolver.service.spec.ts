@@ -545,7 +545,9 @@ describe('R23 / §7.7 — resolveResource, the inverse direction', () => {
 
   it('returns nothing for a resource that is not in the project', async () => {
     const w = inverseWorld();
-    expect((await w.resolver.resolveResource(PROJECT, { type: 'entity', id: 'nope' })).size).toBe(0);
+    expect((await w.resolver.resolveResource(PROJECT, { type: 'entity', id: 'nope' })).size).toBe(
+      0,
+    );
     expect((await w.resolver.resolveResource(PROJECT, { type: 'area', id: 'nope' })).size).toBe(0);
   });
 

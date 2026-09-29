@@ -58,7 +58,11 @@ export type HistoryDiff = z.infer<typeof diffSchema>;
 
 const base = (projectId: string) => `/projects/${encodeURIComponent(projectId)}/snapshots`;
 
-export const snapshotsKey = (projectId: string): readonly unknown[] => ['project', projectId, 'snapshots'];
+export const snapshotsKey = (projectId: string): readonly unknown[] => [
+  'project',
+  projectId,
+  'snapshots',
+];
 
 export function snapshotsQueryOptions(projectId: string) {
   return queryOptions({
@@ -96,7 +100,12 @@ export type MigrationStep = z.infer<typeof stepSchema>;
 /** `GET …/migration/…` (doc 03 §11.2): the engine's plan, reasons already rendered. */
 export const migrationSchema = z.object({
   steps: z.array(stepSchema),
-  summary: z.object({ total: z.number(), destructive: z.number(), lossy: z.number(), rewrites: z.number() }),
+  summary: z.object({
+    total: z.number(),
+    destructive: z.number(),
+    lossy: z.number(),
+    rewrites: z.number(),
+  }),
   unsupported: z.array(z.object({ change: z.string(), reason: z.string() })),
   script: z.string(),
   fileExtension: z.string(),
@@ -124,11 +133,15 @@ export async function createSnapshot(
   projectId: string,
   input: { name: string; description?: string },
 ): Promise<Snapshot> {
-  return snapshotSchema.parse(await apiFetch<unknown>(base(projectId), { method: 'POST', body: input }));
+  return snapshotSchema.parse(
+    await apiFetch<unknown>(base(projectId), { method: 'POST', body: input }),
+  );
 }
 
 export async function restoreSnapshot(projectId: string, id: string): Promise<void> {
-  await apiFetch<unknown>(`${base(projectId)}/${encodeURIComponent(id)}/restore`, { method: 'POST' });
+  await apiFetch<unknown>(`${base(projectId)}/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+  });
 }
 
 export async function deleteSnapshot(projectId: string, id: string): Promise<void> {

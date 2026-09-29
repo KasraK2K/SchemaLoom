@@ -67,9 +67,9 @@ describe('GoogleStrategy.validate', () => {
     }) as unknown as Parameters<GoogleStrategy['validate']>[2];
 
   it('accepts a verified Google address', async () => {
-    await expect(strategy().validate('at', 'rt', profile('a@example.com', true))).resolves.toEqual(
-      { userId: 'u1' },
-    );
+    await expect(strategy().validate('at', 'rt', profile('a@example.com', true))).resolves.toEqual({
+      userId: 'u1',
+    });
   });
 
   it('refuses an unverified address — linking is by email', async () => {

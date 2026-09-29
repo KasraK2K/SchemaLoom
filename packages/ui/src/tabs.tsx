@@ -15,10 +15,7 @@ export function TabsList({ className, ...props }: ComponentProps<typeof TabsPrim
   );
 }
 
-export function TabsTrigger({
-  className,
-  ...props
-}: ComponentProps<typeof TabsPrimitive.Trigger>) {
+export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsPrimitive.Trigger>) {
   return (
     <TabsPrimitive.Trigger
       className={cn(
@@ -32,9 +29,6 @@ export function TabsTrigger({
   );
 }
 
-export function TabsContent({
-  className,
-  ...props
-}: ComponentProps<typeof TabsPrimitive.Content>) {
+export function TabsContent({ className, ...props }: ComponentProps<typeof TabsPrimitive.Content>) {
   return <TabsPrimitive.Content className={cn('p-3', className)} {...props} />;
 }

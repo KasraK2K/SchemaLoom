@@ -222,9 +222,7 @@ export function createView(
       'CREATE VIEW',
       qualified,
       `AS ${body}`,
-      checkOption === undefined
-        ? undefined
-        : `WITH ${checkOption.toUpperCase()} CHECK OPTION`,
+      checkOption === undefined ? undefined : `WITH ${checkOption.toUpperCase()} CHECK OPTION`,
     );
   }
   return join(
@@ -355,9 +353,7 @@ export function createIndex(
     `ON ${qualified}`,
     `USING ${method}`,
     `(${keys.map(indexColumnText).join(', ')})`,
-    included.length === 0
-      ? undefined
-      : `INCLUDE (${included.map(quoteIdentifier).join(', ')})`,
+    included.length === 0 ? undefined : `INCLUDE (${included.map(quoteIdentifier).join(', ')})`,
     propBool(props, 'nullsNotDistinct') && 'NULLS NOT DISTINCT',
     withOptions(props),
     mapDefined(propString(props, 'tablespace'), (t) => `TABLESPACE ${quoteIdentifier(t)}`),
@@ -368,14 +364,7 @@ export function createIndex(
 // --- comments (§10.2) ---
 
 export type CommentSubject =
-  | 'TABLE'
-  | 'VIEW'
-  | 'MATERIALIZED VIEW'
-  | 'COLUMN'
-  | 'SCHEMA'
-  | 'TYPE'
-  | 'DOMAIN'
-  | 'INDEX';
+  'TABLE' | 'VIEW' | 'MATERIALIZED VIEW' | 'COLUMN' | 'SCHEMA' | 'TYPE' | 'DOMAIN' | 'INDEX';
 
 export function commentOn(subject: CommentSubject, target: string, body: string): string {
   return `COMMENT ON ${subject} ${target} IS ${body}`;

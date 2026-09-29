@@ -24,10 +24,10 @@ npm error Unsupported URL Type "catalog:": catalog:
 
 Two pnpm-only features are load-bearing here:
 
-| Feature | Where | Why it matters |
-|---|---|---|
-| `catalog:` | `pnpm-workspace.yaml` | One declared version per shared dependency across 9 packages |
-| `node-linker=isolated` | `.npmrc` | Each package's `node_modules` holds only its own declared dependencies, so an undeclared import is an unresolvable module rather than a lucky hoist. This is what makes the package boundaries a fact instead of a lint rule — notably "the API bundle contains no React". |
+| Feature                | Where                 | Why it matters                                                                                                                                                                                                                                                             |
+| ---------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `catalog:`             | `pnpm-workspace.yaml` | One declared version per shared dependency across 9 packages                                                                                                                                                                                                               |
+| `node-linker=isolated` | `.npmrc`              | Each package's `node_modules` holds only its own declared dependencies, so an undeclared import is an unresolvable module rather than a lucky hoist. This is what makes the package boundaries a fact instead of a lint rule — notably "the API bundle contains no React". |
 
 npm resolves `catalog:` before it runs any lifecycle script, so a `preinstall` guard
 (`only-allow`) and `engine-strict` both fire too late to help. Both were tried and
@@ -133,16 +133,16 @@ Dependency edges only ever point downward; `schema-model` depends on nothing but
 
 ## Commands
 
-| Command | Does |
-|---|---|
-| `pnpm dev` | Every package in watch mode plus both apps |
-| `pnpm build` | Full build, dependency-ordered |
-| `pnpm test` | Unit tests only — no Docker needed, stays cacheable |
-| `pnpm test:int` | Integration tests against real Postgres + Redis |
-| `pnpm test:e2e` | Playwright against built apps |
-| `pnpm typecheck` | `tsc --noEmit` everywhere |
-| `pnpm lint` | ESLint, type-aware |
-| `pnpm infra:up` / `infra:down` | Docker services |
+| Command                        | Does                                                |
+| ------------------------------ | --------------------------------------------------- |
+| `pnpm dev`                     | Every package in watch mode plus both apps          |
+| `pnpm build`                   | Full build, dependency-ordered                      |
+| `pnpm test`                    | Unit tests only — no Docker needed, stays cacheable |
+| `pnpm test:int`                | Integration tests against real Postgres + Redis     |
+| `pnpm test:e2e`                | Playwright against built apps                       |
+| `pnpm typecheck`               | `tsc --noEmit` everywhere                           |
+| `pnpm lint`                    | ESLint, type-aware                                  |
+| `pnpm infra:up` / `infra:down` | Docker services                                     |
 
 `test` excludes `*.int.spec.ts` on purpose: integration tests need Docker and a live
 database, which would make `pnpm test` uncacheable and unrunnable on a clean machine.
@@ -156,15 +156,15 @@ database, which would make `pnpm test` uncacheable and unrunnable on a clean mac
 
 Phase 1 was designed before any code was written. The documents are in `docs/phase1/`:
 
-| File | Read it for |
-|---|---|
-| `REVIEW.md` | **Start here.** 500 lines, the whole design |
-| `RECONCILIATION.md` | Decisions that **override** the five documents below |
-| `00-OVERVIEW.md` | 138 decisions, contract ownership, ranked open questions, build order |
-| `01-repo-layout.md` | Tooling, module lists, the dependency-graph proof |
-| `02-prisma-schema.md` | The schema, indexing, cascades, polymorphism |
-| `03-engine-sdk.md` | The engine contract and the "adding MongoDB" proof |
-| `04-schema-model-ir.md` | IR types, the diff engine, redaction shape |
-| `05-permission-resolution.md` | Atoms, the resolver, VisibilityFilter, the leak audit |
+| File                          | Read it for                                                           |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `REVIEW.md`                   | **Start here.** 500 lines, the whole design                           |
+| `RECONCILIATION.md`           | Decisions that **override** the five documents below                  |
+| `00-OVERVIEW.md`              | 138 decisions, contract ownership, ranked open questions, build order |
+| `01-repo-layout.md`           | Tooling, module lists, the dependency-graph proof                     |
+| `02-prisma-schema.md`         | The schema, indexing, cascades, polymorphism                          |
+| `03-engine-sdk.md`            | The engine contract and the "adding MongoDB" proof                    |
+| `04-schema-model-ir.md`       | IR types, the diff engine, redaction shape                            |
+| `05-permission-resolution.md` | Atoms, the resolver, VisibilityFilter, the leak audit                 |
 
 `RECONCILIATION.md` takes precedence where a design document disagrees with it.

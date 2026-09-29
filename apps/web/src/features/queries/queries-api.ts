@@ -67,7 +67,10 @@ export function savedQueriesQueryOptions(projectId: string, tag: string) {
   });
 }
 
-export async function createSavedQuery(projectId: string, body: SavedQueryWrite): Promise<SavedQuery> {
+export async function createSavedQuery(
+  projectId: string,
+  body: SavedQueryWrite,
+): Promise<SavedQuery> {
   return savedQuerySchema.parse(
     await apiFetch<unknown>(`/projects/${projectId}/saved-queries`, { method: 'POST', body }),
   );
@@ -93,7 +96,11 @@ export async function validateQuery(projectId: string, query: string): Promise<Q
 }
 
 /** Statuses the editor underlines. `not-visible` never arrives (core sends no probe). */
-export const FLAGGED_STATUSES: ReadonlySet<string> = new Set(['unknown', 'ambiguous', 'not-visible']);
+export const FLAGGED_STATUSES: ReadonlySet<string> = new Set([
+  'unknown',
+  'ambiguous',
+  'not-visible',
+]);
 
 /** Anything but SELECT is "not read-only" — the generic warning doc 03 §12 asks core for. */
 export function isReadOnly(v: QueryValidation): boolean {
@@ -101,5 +108,12 @@ export function isReadOnly(v: QueryValidation): boolean {
 }
 
 export function parseTags(input: string): string[] {
-  return [...new Set(input.split(',').map((t) => t.trim()).filter((t) => t !== ''))];
+  return [
+    ...new Set(
+      input
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t !== ''),
+    ),
+  ];
 }

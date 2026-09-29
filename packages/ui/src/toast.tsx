@@ -45,8 +45,7 @@ const toastVariants = cva(
 );
 
 export interface ToastProps
-  extends ComponentProps<typeof ToastPrimitive.Root>,
-    VariantProps<typeof toastVariants> {}
+  extends ComponentProps<typeof ToastPrimitive.Root>, VariantProps<typeof toastVariants> {}
 
 export function Toast({ className, tone, ...props }: ToastProps) {
   return <ToastPrimitive.Root className={cn(toastVariants({ tone }), className)} {...props} />;

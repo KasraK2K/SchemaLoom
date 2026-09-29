@@ -29,10 +29,7 @@ import { isTargeted, type SchemaOperation } from './ops';
  * Pure, and takes the already-redacted model: it needs no resolver, no Prisma and no
  * request, and there is nothing here that could accidentally consult the raw model.
  */
-export function assertOpsVisible(
-  redacted: SchemaModel,
-  ops: readonly SchemaOperation[],
-): void {
+export function assertOpsVisible(redacted: SchemaModel, ops: readonly SchemaOperation[]): void {
   for (const op of ops) {
     // A create names no existing target. Its PARENTS (entityId, areaId, link endpoints)
     // are checked by `requirementsOf` + `assertAll`, which 404s an invisible one under

@@ -67,7 +67,7 @@ export interface WriteContext {
   readonly redacted: RedactedModel;
   /**
    * Runs inside the batch's transaction, after the version checks and before the first
-   * write — Phase 4 Q4's automatic snapshot before an import or a restore. It writes no
+   * write ï¿½ Phase 4 Q4's automatic snapshot before an import or a restore. It writes no
    * schema row; a throw rolls the batch back with it.
    */
   readonly beforeWrite?: (tx: SchemaDb) => Promise<void>;
@@ -169,7 +169,13 @@ export class SchemaWriter {
         case 'create': {
           const ordinal =
             op.type === 'field'
-              ? await this.appendOrdinal(tx, projectId, op.object.entityId, op.object.parentFieldId, nextOrdinal)
+              ? await this.appendOrdinal(
+                  tx,
+                  projectId,
+                  op.object.entityId,
+                  op.object.parentFieldId,
+                  nextOrdinal,
+                )
               : 0;
           await createRow(tx, projectId, op, ordinal);
           touched.push({ type: op.type, id: op.object.id });
@@ -434,7 +440,10 @@ export function changesSkeleton(
     if (op.op === 'create' || op.op === 'delete') return op.type === 'entity' || op.type === 'area';
     if (op.op !== 'update') return false;
     const patch = op.patch as Record<string, unknown>;
-    return (op.type === 'entity' && 'areaId' in patch) || (op.type === 'field' && 'isRestricted' in patch);
+    return (
+      (op.type === 'entity' && 'areaId' in patch) ||
+      (op.type === 'field' && 'isRestricted' in patch)
+    );
   });
 }
 
@@ -450,7 +459,8 @@ export function renamesOrDeletesNames(
   return ops.some(
     (op) =>
       named(op.type) &&
-      (op.op === 'delete' || (op.op === 'update' && 'name' in (op.patch as Record<string, unknown>))),
+      (op.op === 'delete' ||
+        (op.op === 'update' && 'name' in (op.patch as Record<string, unknown>))),
   );
 }
 

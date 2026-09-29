@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { NotificationPrefs } from '@schemaloom/contracts';
 import type { Request } from 'express';
@@ -23,7 +34,11 @@ export class NotificationsController {
   list(
     @Req() req: Request,
     @Query() query: ListNotificationsQueryDto,
-  ): Promise<{ notifications: NotificationView[]; unreadCount: number; nextCursor: string | null }> {
+  ): Promise<{
+    notifications: NotificationView[];
+    unreadCount: number;
+    nextCursor: string | null;
+  }> {
     return this.notifications.list(userIdOf(req), query.cursor);
   }
 
@@ -53,7 +68,10 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Turn notification emails on or off, per type' })
   @Authenticated()
   @Patch('auth/me/notification-prefs')
-  updatePrefs(@Req() req: Request, @Body() body: NotificationPrefsPatchDto): Promise<NotificationPrefs> {
+  updatePrefs(
+    @Req() req: Request,
+    @Body() body: NotificationPrefsPatchDto,
+  ): Promise<NotificationPrefs> {
     return this.notifications.updatePrefs(userIdOf(req), body);
   }
 }

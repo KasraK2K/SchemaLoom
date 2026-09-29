@@ -14,11 +14,7 @@ import { sortPath } from './sort-path.js';
  * migration generator's one-`ALTER TABLE`-per-entity pass. Undefined for namespace,
  * customType, area, and for the entity entry itself.
  */
-export function ownerEntityId(
-  model: SchemaModel,
-  type: IrObjectType,
-  id: Id,
-): Id | undefined {
+export function ownerEntityId(model: SchemaModel, type: IrObjectType, id: Id): Id | undefined {
   switch (type) {
     case 'field':
       return model.objects.field[id]?.entityId;

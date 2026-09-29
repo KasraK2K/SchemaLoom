@@ -71,7 +71,13 @@ describe('ProjectsController route markers', () => {
   });
 
   it('gates rename, delete and settings on sharing:manage at the project, not share-link reachable', () => {
-    for (const handler of ['update', 'remove', 'settings', 'updateSettings', 'setRestrictedFieldMode']) {
+    for (const handler of [
+      'update',
+      'remove',
+      'settings',
+      'updateSettings',
+      'setRestrictedFieldMode',
+    ]) {
       const r = route(handler);
       expect(r?.markers).toEqual([PERM_META]);
       expect(r && isShareLinkRoute(r.method, r.path)).toBe(false);

@@ -156,11 +156,7 @@ describe('the engine’s property panels', () => {
     const storage = ui.panels.entity?.find((section) => section.id === 'pg.table.storage');
     if (storage === undefined) throw new Error('no storage section');
     const html = renderToStaticMarkup(
-      <storage.Component
-        {...panelProps}
-        engine={facet}
-        object={entity({ propsRedacted: true })}
-      />,
+      <storage.Component {...panelProps} engine={facet} object={entity({ propsRedacted: true })} />,
     );
     expect(html).toContain('hidden from you');
     expect(html).not.toContain('Tablespace');

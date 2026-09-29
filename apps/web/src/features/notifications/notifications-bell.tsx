@@ -40,7 +40,10 @@ export function NotificationsBell() {
   const { data } = useQuery(notificationsQueryOptions());
 
   useEffect(() => {
-    const socket = io(clientEnv.NEXT_PUBLIC_API_URL, { transports: ['websocket'], withCredentials: true });
+    const socket = io(clientEnv.NEXT_PUBLIC_API_URL, {
+      transports: ['websocket'],
+      withCredentials: true,
+    });
     socket.on('notification:new', () => {
       void queryClient.invalidateQueries({ queryKey: notificationsKey });
     });
@@ -72,7 +75,7 @@ export function NotificationsBell() {
         >
           <Bell className="size-4" aria-hidden="true" />
           {unread === 0 ? null : (
-            <span className="absolute right-1 top-1 min-w-4 rounded-full bg-accent px-1 text-[0.625rem] leading-4 text-on-accent">
+            <span className="absolute top-1 right-1 min-w-4 rounded-full bg-accent px-1 text-[0.625rem] leading-4 text-on-accent">
               {unread > 99 ? '99+' : unread}
             </span>
           )}
@@ -101,10 +104,17 @@ export function NotificationsBell() {
               className="flex flex-col items-start gap-0.5"
               onSelect={() => void open(item)}
             >
-              <span className={cn('text-sm', item.readAt === null ? 'font-medium text-text' : 'text-text-muted')}>
+              <span
+                className={cn(
+                  'text-sm',
+                  item.readAt === null ? 'font-medium text-text' : 'text-text-muted',
+                )}
+              >
                 {item.title}
               </span>
-              {item.body === null ? null : <span className="line-clamp-2 text-xs text-text-muted">{item.body}</span>}
+              {item.body === null ? null : (
+                <span className="line-clamp-2 text-xs text-text-muted">{item.body}</span>
+              )}
               <span className="text-xs text-text-subtle">{relativeTime(item.createdAt)}</span>
             </DropdownMenuItem>
           ))

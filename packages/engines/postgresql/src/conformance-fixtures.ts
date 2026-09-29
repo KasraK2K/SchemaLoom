@@ -336,9 +336,12 @@ export const CONFORMANCE_FIXTURES: ConformanceFixtures = {
   queries: [
     {
       name: 'aliases and a schema-qualified view',
-      query:
-        'SELECT o.id, o.status FROM orders o JOIN billing.order_summary AS s ON s.id = o.id',
-      expect: { touchedEntityNames: ['orders', 'order_summary'], unknownIdentifiers: [], parsed: true },
+      query: 'SELECT o.id, o.status FROM orders o JOIN billing.order_summary AS s ON s.id = o.id',
+      expect: {
+        touchedEntityNames: ['orders', 'order_summary'],
+        unknownIdentifiers: [],
+        parsed: true,
+      },
     },
     {
       name: 'a stub does not resolve by its real name',
@@ -348,7 +351,11 @@ export const CONFORMANCE_FIXTURES: ConformanceFixtures = {
     {
       name: 'a masked field reads like a typo',
       query: 'SELECT total, statuss FROM orders',
-      expect: { touchedEntityNames: ['orders'], unknownIdentifiers: ['total', 'statuss'], parsed: true },
+      expect: {
+        touchedEntityNames: ['orders'],
+        unknownIdentifiers: ['total', 'statuss'],
+        parsed: true,
+      },
     },
     {
       name: 'unparseable',
@@ -446,7 +453,10 @@ export const CONFORMANCE_FIXTURES: ConformanceFixtures = {
       expectReferences: [{ type: 'field', id: 'fd_ord_total' }],
     },
     {
-      object: objectOrThrow(REFERENCE_MODEL.objects.index.ix_orders_status_expr, 'ix_orders_status_expr'),
+      object: objectOrThrow(
+        REFERENCE_MODEL.objects.index.ix_orders_status_expr,
+        'ix_orders_status_expr',
+      ),
       subKind: null,
       expectReferences: [
         { type: 'field', id: 'fd_ord_status' },

@@ -60,11 +60,7 @@ export {
   type SchemaModel,
 } from './model.js';
 
-export {
-  identityNormalizeName,
-  type MatchStrategy,
-  type NormalizeName,
-} from './normalize-name.js';
+export { identityNormalizeName, type MatchStrategy, type NormalizeName } from './normalize-name.js';
 
 export { byLogicalKey, logicalKey } from './logical-key.js';
 

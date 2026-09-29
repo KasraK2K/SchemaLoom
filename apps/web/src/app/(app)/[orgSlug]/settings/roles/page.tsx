@@ -35,8 +35,8 @@ export default async function OrgRolesPage({ params }: { params: Promise<{ orgSl
         <OrgSettingsNav orgSlug={orgSlug} orgRole={org.orgRole} current="roles" />
         <h1 className="text-lg font-semibold text-text">Roles</h1>
         <p className="mt-1 mb-6 text-sm text-text-muted">
-          Custom roles can be used in any grant in {org.name}. Archiving a role hides it from
-          the role pickers; people who already hold it keep their access.
+          Custom roles can be used in any grant in {org.name}. Archiving a role hides it from the
+          role pickers; people who already hold it keep their access.
         </p>
         <RolesManager orgSlug={orgSlug} roles={roles} />
       </div>

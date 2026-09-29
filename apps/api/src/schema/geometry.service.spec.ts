@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  PermissionResolver,
-  ProjectPermissionMap,
-  ProjectSkeleton,
-} from '../access';
+import type { PermissionResolver, ProjectPermissionMap, ProjectSkeleton } from '../access';
 import { fakePrisma } from './fake-prisma';
 import { PROJECT, baseStore, entityRow } from './fixture';
 import { GeometryWriter } from './geometry.service';

@@ -30,13 +30,18 @@ import {
 const ORIGIN = 'http://localhost:3000';
 
 /** `en_open` everyone sees; `en_secret` only Ana. */
-async function modelWith(over: { secretName?: string; openName?: string } = {}): Promise<SchemaModel> {
+async function modelWith(
+  over: { secretName?: string; openName?: string } = {},
+): Promise<SchemaModel> {
   const store = baseStore({
     entity: [
       entityRow('en_open', { name: over.openName ?? 'orders' }),
       entityRow('en_secret', { name: over.secretName ?? 'salaries' }),
     ],
-    field: [fieldRow('fd_open', 'en_open', { name: 'id' }), fieldRow('fd_secret', 'en_secret', { name: 'amount' })],
+    field: [
+      fieldRow('fd_open', 'en_open', { name: 'id' }),
+      fieldRow('fd_secret', 'en_secret', { name: 'amount' }),
+    ],
   });
   const rows = await readProjectRows(fakePrisma(store).client, PROJECT);
   return assembleModel({ projectId: PROJECT, engineId: 'postgresql', engineVersion: '16', rows });
@@ -74,7 +79,8 @@ function harness() {
 
   const gateway = new RealtimeGateway(
     {
-      principalFromCookies: (cookie?: string) => Promise.resolve(cookie ? PRINCIPALS[cookie] : undefined),
+      principalFromCookies: (cookie?: string) =>
+        Promise.resolve(cookie ? PRINCIPALS[cookie] : undefined),
     } as unknown as JwtAuthGuard,
     {
       computeContext: (subject: { kind: string }, projectId: string) =>
@@ -88,7 +94,8 @@ function harness() {
       accessChanged,
       skeleton: () => Promise.resolve({ generation: 4 }),
       // The comments filter reads atoms at the entity; derive them from the same contexts.
-      resolveProject: (subject: { kind: string }) => Promise.resolve({ subjectKey: keyOf(subject) }),
+      resolveProject: (subject: { kind: string }) =>
+        Promise.resolve({ subjectKey: keyOf(subject) }),
       atomsAt: (map: { subjectKey: string }, _skel: unknown, ref: { id: string }) => {
         const ctx = contexts.get(map.subjectKey);
         const atoms = new Set<string>();
@@ -98,13 +105,18 @@ function harness() {
       },
     } as unknown as PermissionResolver,
     {
-      load: () => (model === null ? Promise.reject(new Error('gone')) : Promise.resolve(new RawSchemaModel(model))),
+      load: () =>
+        model === null
+          ? Promise.reject(new Error('gone'))
+          : Promise.resolve(new RawSchemaModel(model)),
     } as unknown as SchemaLoader,
     commits,
     {
       project: {
         findFirst: (args: { where: { id: string } }) =>
-          Promise.resolve(args.where.id === PROJECT && model !== null ? { schemaRevision: 9n } : null),
+          Promise.resolve(
+            args.where.id === PROJECT && model !== null ? { schemaRevision: 9n } : null,
+          ),
       },
       user: { findFirst: () => Promise.resolve({ name: 'Ana' }) },
     } as unknown as PrismaService,
@@ -114,7 +126,10 @@ function harness() {
   );
   gateway.onModuleInit();
 
-  const connect = async (who: string, origin = ORIGIN): Promise<RealtimeSocket & { emit: ReturnType<typeof vi.fn> }> => {
+  const connect = async (
+    who: string,
+    origin = ORIGIN,
+  ): Promise<RealtimeSocket & { emit: ReturnType<typeof vi.fn> }> => {
     const socket = {
       id: `s_${who}`,
       handshake: { headers: { origin, cookie: who } },
@@ -178,7 +193,10 @@ describe('handshake', () => {
 describe('project:subscribe', () => {
   it('replies with the current seq', async () => {
     const ana = await h.connect('ana');
-    await expect(h.gateway.subscribe(ana, { projectId: PROJECT })).resolves.toEqual({ ok: true, seq: 9 });
+    await expect(h.gateway.subscribe(ana, { projectId: PROJECT })).resolves.toEqual({
+      ok: true,
+      seq: 9,
+    });
   });
 
   it('invisible is the same answer as nonexistent', async () => {
@@ -196,7 +214,9 @@ describe('project:subscribe', () => {
       ok: false,
       code: 'not_found',
     });
-    await expect(h.gateway.subscribe(link, { projectId: PROJECT })).resolves.toMatchObject({ ok: true });
+    await expect(h.gateway.subscribe(link, { projectId: PROJECT })).resolves.toMatchObject({
+      ok: true,
+    });
   });
 });
 
@@ -239,8 +259,12 @@ describe('access-changed / permissions:changed', () => {
     h.contexts.set('u:bob', context([], { canOpenProject: false }));
     await h.gateway.accessChanged({ project: PROJECT });
 
-    expect(h.events(ana, SERVER_EVENTS.accessChanged)).toEqual([{ projectId: PROJECT, generation: 4 }]);
-    expect(h.events(bob, SERVER_EVENTS.closed)).toEqual([{ projectId: PROJECT, code: CLOSE_NOT_AVAILABLE }]);
+    expect(h.events(ana, SERVER_EVENTS.accessChanged)).toEqual([
+      { projectId: PROJECT, generation: 4 },
+    ]);
+    expect(h.events(bob, SERVER_EVENTS.closed)).toEqual([
+      { projectId: PROJECT, code: CLOSE_NOT_AVAILABLE },
+    ]);
     expect(bob.disconnect).toHaveBeenCalledWith(true);
 
     // Dropped from the room: the next commit reaches Ana only.
@@ -277,7 +301,14 @@ describe('presence (L16)', () => {
 
     h.gateway.presence(ana, { selection: ['en_open', 'en_secret'], cursor: { x: 1, y: 2 } });
     expect(h.events(bob, SERVER_EVENTS.presence)).toEqual([
-      { peerId: 's_ana', userId: 'ana', name: 'Ana', selection: ['en_open'], cursor: { x: 1, y: 2 }, left: false },
+      {
+        peerId: 's_ana',
+        userId: 'ana',
+        name: 'Ana',
+        selection: ['en_open'],
+        cursor: { x: 1, y: 2 },
+        left: false,
+      },
     ]);
     expect(h.events(link, SERVER_EVENTS.presence)).toEqual([]);
 
@@ -305,11 +336,15 @@ describe('comments:changed (Phase 4 §3.1)', () => {
 
     h.commentsChanged.next(target());
     await settle();
-    expect(h.events(ana, SERVER_EVENTS.commentsChanged)).toEqual([{ targetType: 'entity', targetId: 'en_secret' }]);
+    expect(h.events(ana, SERVER_EVENTS.commentsChanged)).toEqual([
+      { targetType: 'entity', targetId: 'en_secret' },
+    ]);
     expect(h.events(bob, SERVER_EVENTS.commentsChanged)).toEqual([]);
 
     await h.gateway.commentsChanged(target({ targetId: 'en_open', entityId: 'en_open' }));
-    expect(h.events(bob, SERVER_EVENTS.commentsChanged)).toEqual([{ targetType: 'entity', targetId: 'en_open' }]);
+    expect(h.events(bob, SERVER_EVENTS.commentsChanged)).toEqual([
+      { targetType: 'entity', targetId: 'en_open' },
+    ]);
     expect(h.events(link, SERVER_EVENTS.commentsChanged)).toEqual([]);
   });
 
@@ -352,7 +387,9 @@ describe('WS route classification (doc 01 §4.1, R21)', () => {
   });
 
   it('only project:subscribe is share-link reachable, and SHARE_LINK_ROUTES says so', () => {
-    const ws = [...SHARE_LINK_ROUTES].filter((r) => r.startsWith('WS')).map((r) => r.split(/\s+/)[1]);
+    const ws = [...SHARE_LINK_ROUTES]
+      .filter((r) => r.startsWith('WS'))
+      .map((r) => r.split(/\s+/)[1]);
     expect(ws).toEqual(['project:subscribe']);
     expect(ws.every((e) => (WS_EVENTS as readonly string[]).includes(e ?? ''))).toBe(true);
   });

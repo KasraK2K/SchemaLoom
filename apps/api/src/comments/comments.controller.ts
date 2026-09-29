@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import {
@@ -32,13 +44,22 @@ export class CommentsController {
     @Param('projectId') projectId: string,
     @Query() query: CommentTargetQueryDto,
   ): Promise<{ comments: CommentView[] }> {
-    return this.comments.list(subjectOf(req), projectId, mapFor(req, projectId), query.targetType, query.targetId);
+    return this.comments.list(
+      subjectOf(req),
+      projectId,
+      mapFor(req, projectId),
+      query.targetType,
+      query.targetId,
+    );
   }
 
   @ApiOperation({ summary: 'Open threads per table, over tables the caller can see (L8)' })
   @RequireProjectAccess('projectId')
   @Get('projects/:projectId/comments/counts')
-  counts(@Req() req: Request, @Param('projectId') projectId: string): Promise<{ counts: Record<string, number> }> {
+  counts(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+  ): Promise<{ counts: Record<string, number> }> {
     return this.comments.counts(projectId, mapFor(req, projectId));
   }
 
@@ -73,7 +94,11 @@ export class CommentsController {
   @ApiOperation({ summary: 'Edit your own comment' })
   @Authenticated()
   @Patch('comments/:id')
-  update(@Req() req: Request, @Param('id') id: string, @Body() body: UpdateCommentDto): Promise<CommentView> {
+  update(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: UpdateCommentDto,
+  ): Promise<CommentView> {
     return this.comments.update(subjectOf(req), id, body.content);
   }
 
@@ -111,6 +136,7 @@ function subjectOf(req: Request): Subject {
 
 function mapFor(req: Request, projectId: string): ProjectPermissionMap {
   const context = getAccessContext(req);
-  if (context?.projectId !== projectId) throw new ForbiddenException({ code: 'route_not_classified' });
+  if (context?.projectId !== projectId)
+    throw new ForbiddenException({ code: 'route_not_classified' });
   return context.map;
 }

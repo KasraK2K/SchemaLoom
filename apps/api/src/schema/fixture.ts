@@ -128,7 +128,11 @@ export const constraintRow = (id: string, entityId: string, over: Row = {}): Row
   ...over,
 });
 
-export const constraintColumnRow = (constraintId: string, fieldId: string, over: Row = {}): Row => ({
+export const constraintColumnRow = (
+  constraintId: string,
+  fieldId: string,
+  over: Row = {},
+): Row => ({
   constraintId,
   projectId: PROJECT,
   ordinal: 0,
@@ -150,7 +154,12 @@ export const linkRow = (id: string, source: string, target: string, over: Row = 
   ...over,
 });
 
-export const linkEndpointRow = (linkId: string, source: string, target: string, over: Row = {}): Row => ({
+export const linkEndpointRow = (
+  linkId: string,
+  source: string,
+  target: string,
+  over: Row = {},
+): Row => ({
   linkId,
   projectId: PROJECT,
   ordinal: 0,

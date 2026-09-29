@@ -77,7 +77,11 @@ export class DocsService {
   ) {}
 
   /** Docs mode: every doc row whose target the caller can see. */
-  async list(subject: Subject, projectId: string, map?: ProjectPermissionMap): Promise<{ docs: DocView[] }> {
+  async list(
+    subject: Subject,
+    projectId: string,
+    map?: ProjectPermissionMap,
+  ): Promise<{ docs: DocView[] }> {
     const view = await this.view(subject, projectId, map);
     const rows = await this.prisma.doc.findMany({
       where: { projectId },
@@ -86,7 +90,14 @@ export class DocsService {
     return {
       docs: rows
         .filter((row) => targetVisible(view.redacted, projectId, row.targetType, row.targetId))
-        .map((row) => toView(row, row.targetType, row.targetId, this.canEdit(view, row.targetType, row.targetId))),
+        .map((row) =>
+          toView(
+            row,
+            row.targetType,
+            row.targetId,
+            this.canEdit(view, row.targetType, row.targetId),
+          ),
+        ),
     };
   }
 
@@ -100,7 +111,9 @@ export class DocsService {
   ): Promise<DocView> {
     const view = await this.view(subject, projectId, map);
     const type = this.visibleTarget(view, targetType, targetId);
-    const row = await this.prisma.doc.findFirst({ where: { projectId, targetType: type, targetId } });
+    const row = await this.prisma.doc.findFirst({
+      where: { projectId, targetType: type, targetId },
+    });
     return toView(row, type, targetId, this.canEdit(view, type, targetId));
   }
 
@@ -133,12 +146,20 @@ export class DocsService {
       content: content as Prisma.InputJsonValue,
       plainText: docPlainText(content),
       updatedById: subject.userId,
-      ...(structured === undefined ? {} : { structured: structured === null ? Prisma.DbNull : (structured as Prisma.InputJsonValue) }),
+      ...(structured === undefined
+        ? {}
+        : {
+            structured: structured === null ? Prisma.DbNull : (structured as Prisma.InputJsonValue),
+          }),
     };
 
-    const existing = await this.prisma.doc.findFirst({ where: { projectId, targetType: type, targetId } });
+    const existing = await this.prisma.doc.findFirst({
+      where: { projectId, targetType: type, targetId },
+    });
     const stale = async (): Promise<never> => {
-      const current = await this.prisma.doc.findFirst({ where: { projectId, targetType: type, targetId } });
+      const current = await this.prisma.doc.findFirst({
+        where: { projectId, targetType: type, targetId },
+      });
       throw new ConflictException({
         code: 'stale_version',
         current: toView(current, type, targetId, true),
@@ -166,18 +187,30 @@ export class DocsService {
     }
 
     await this.broadcast(projectId, subject.userId);
-    const row = await this.prisma.doc.findFirst({ where: { projectId, targetType: type, targetId } });
+    const row = await this.prisma.doc.findFirst({
+      where: { projectId, targetType: type, targetId },
+    });
     return toView(row, type, targetId, true);
   }
 
   // -------------------------------------------------------------------------------------
 
-  private async view(subject: Subject, projectId: string, known?: ProjectPermissionMap): Promise<CallerView> {
+  private async view(
+    subject: Subject,
+    projectId: string,
+    known?: ProjectPermissionMap,
+  ): Promise<CallerView> {
     const map = known ?? (await this.resolver.resolveProject(subject, projectId));
     // Invisible is 404 (§7.9): a project the caller cannot open does not exist for them.
     if (!this.resolver.canOpenProject(map)) throw notFound('project', projectId);
     const skel = await this.resolver.skeleton(projectId);
-    const redacted = this.filter.redactWith(await this.loader.load(projectId), subject, projectId, map, skel);
+    const redacted = this.filter.redactWith(
+      await this.loader.load(projectId),
+      subject,
+      projectId,
+      map,
+      skel,
+    );
     return { subject, projectId, map, skel, redacted };
   }
 
@@ -238,7 +271,12 @@ function parseStructured(targetType: DocTargetType, raw: unknown): unknown {
   return parsed.data;
 }
 
-function toView(row: Doc | null, targetType: DocTargetType, targetId: string, canEdit: boolean): DocView {
+function toView(
+  row: Doc | null,
+  targetType: DocTargetType,
+  targetId: string,
+  canEdit: boolean,
+): DocView {
   return {
     targetType,
     targetId,

@@ -11,7 +11,13 @@ export { SchemaController } from './schema.controller';
 export { SchemaLoader } from './schema-loader.service';
 export { SchemaCommits, SchemaWriter, type WriteContext } from './schema-writer.service';
 export { GeometryWriter } from './geometry.service';
-export { toCanvas, type CanvasArea, type CanvasEntity, type CanvasLink, type CanvasView } from './canvas';
+export {
+  toCanvas,
+  type CanvasArea,
+  type CanvasEntity,
+  type CanvasLink,
+  type CanvasView,
+} from './canvas';
 export { requirementsOf, type LiveModel, type OpRequirement } from './requirements';
 export { assertOpsVisible } from './visibility-gate';
 export { sortOps } from './op-order';

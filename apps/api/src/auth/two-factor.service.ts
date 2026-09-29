@@ -56,7 +56,8 @@ export class TwoFactorService {
    */
   async enrol(userId: string): Promise<{ secret: string; otpauthUri: string }> {
     const user = await this.user(userId);
-    if (user.totpConfirmedAt !== null) throw new ConflictException({ code: 'TOTP_ALREADY_ENABLED' });
+    if (user.totpConfirmedAt !== null)
+      throw new ConflictException({ code: 'TOTP_ALREADY_ENABLED' });
     const secret = newTotpSecret();
     await this.prisma.user.update({
       where: { id: userId },
@@ -68,7 +69,8 @@ export class TwoFactorService {
   /** Returns the recovery codes — the only time they exist in plaintext. */
   async confirm(userId: string, code: string, ctx: SessionContext): Promise<string[]> {
     const user = await this.user(userId);
-    if (user.totpConfirmedAt !== null) throw new ConflictException({ code: 'TOTP_ALREADY_ENABLED' });
+    if (user.totpConfirmedAt !== null)
+      throw new ConflictException({ code: 'TOTP_ALREADY_ENABLED' });
     if (user.totpSecret === null) throw new BadRequestException({ code: 'TOTP_NOT_ENROLLED' });
     await this.throttle(`mfa:user:${userId}`, PER_USER);
     if (!(await this.checkTotp(userId, user.totpSecret, code))) {
@@ -174,7 +176,13 @@ export class TwoFactorService {
   private async checkTotp(userId: string, encrypted: string, code: string): Promise<boolean> {
     const step = verifyTotp(decryptSecret(encrypted, this.key), code);
     if (step === null) return false;
-    const claimed = await this.rateLimit.set(`totp:used:${userId}:${String(step)}`, '1', 'EX', 120, 'NX');
+    const claimed = await this.rateLimit.set(
+      `totp:used:${userId}:${String(step)}`,
+      '1',
+      'EX',
+      120,
+      'NX',
+    );
     return claimed === 'OK';
   }
 

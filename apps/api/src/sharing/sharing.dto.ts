@@ -57,5 +57,7 @@ export const denyAccessRequestSchema = z.object({
 });
 export class DenyAccessRequestDto extends createZodDto(denyAccessRequestSchema) {}
 
-export const unlockShareLinkSchema = z.object({ password: z.string().max(200).nullable().default(null) });
+export const unlockShareLinkSchema = z.object({
+  password: z.string().max(200).nullable().default(null),
+});
 export class UnlockShareLinkDto extends createZodDto(unlockShareLinkSchema) {}

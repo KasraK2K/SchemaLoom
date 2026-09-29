@@ -20,12 +20,7 @@ import {
 } from '../access';
 import { getSubject } from '../auth';
 import { CreateThreadDto, DocDraftsDto, DraftSchemaDto, PostMessageDto } from './ai.dto';
-import {
-  AiService,
-  type AiMessageView,
-  type AiThreadView,
-  type DocDraftView,
-} from './ai.service';
+import { AiService, type AiMessageView, type AiThreadView, type DocDraftView } from './ai.service';
 
 /**
  * DESIGN §4.2 — the AI assistant. Markers as in `SavedQueriesController`: project-scoped
@@ -48,10 +43,14 @@ export class AiController {
     @Req() req: Request,
     @Param('projectId') projectId: string,
   ): Promise<{ threads: AiThreadView[] }> {
-    return { threads: await this.ai.listThreads(subjectOf(req), projectId, mapFor(req, projectId)) };
+    return {
+      threads: await this.ai.listThreads(subjectOf(req), projectId, mapFor(req, projectId)),
+    };
   }
 
-  @ApiOperation({ summary: 'Start a thread from a canvas selection (ai:use at every selected entity)' })
+  @ApiOperation({
+    summary: 'Start a thread from a canvas selection (ai:use at every selected entity)',
+  })
   @RequireProjectAccess('projectId')
   @Post('projects/:projectId/ai/threads')
   createThread(
@@ -65,7 +64,10 @@ export class AiController {
   @ApiOperation({ summary: 'One thread with its messages; not own or failing L25 is 404' })
   @Authenticated()
   @Get('ai/threads/:id')
-  getThread(@Req() req: Request, @Param('id') id: string): Promise<AiThreadView & { messages: AiMessageView[] }> {
+  getThread(
+    @Req() req: Request,
+    @Param('id') id: string,
+  ): Promise<AiThreadView & { messages: AiMessageView[] }> {
     return this.ai.getThread(subjectOf(req), id);
   }
 
@@ -114,7 +116,12 @@ export class AiController {
     @Param('projectId') projectId: string,
     @Body() body: DocDraftsDto,
   ): Promise<{ jobId: string }> {
-    return this.ai.enqueueDocDrafts(subjectOf(req), projectId, mapFor(req, projectId), body.entityIds);
+    return this.ai.enqueueDocDrafts(
+      subjectOf(req),
+      projectId,
+      mapFor(req, projectId),
+      body.entityIds,
+    );
   }
 
   @ApiOperation({ summary: 'Pending doc drafts on targets the caller can see' })
@@ -124,7 +131,9 @@ export class AiController {
     @Req() req: Request,
     @Param('projectId') projectId: string,
   ): Promise<{ drafts: DocDraftView[] }> {
-    return { drafts: await this.ai.listDocDrafts(subjectOf(req), projectId, mapFor(req, projectId)) };
+    return {
+      drafts: await this.ai.listDocDrafts(subjectOf(req), projectId, mapFor(req, projectId)),
+    };
   }
 
   @ApiOperation({ summary: 'Accept a doc draft (docs:edit at the target)' })
@@ -162,7 +171,9 @@ function errorBody(error: unknown): { code: string } {
   const response = (error as { getResponse?: () => unknown }).getResponse?.();
   const code = (response as { code?: unknown } | undefined)?.code;
   if (typeof code === 'string') return { code };
-  return { code: (error as { name?: unknown }).name === 'AbortError' ? 'aborted' : 'ai_provider_error' };
+  return {
+    code: (error as { name?: unknown }).name === 'AbortError' ? 'aborted' : 'ai_provider_error',
+  };
 }
 
 function subjectOf(req: Request): Subject {
@@ -174,6 +185,7 @@ function subjectOf(req: Request): Subject {
 
 function mapFor(req: Request, projectId: string): ProjectPermissionMap {
   const context = getAccessContext(req);
-  if (context?.projectId !== projectId) throw new ForbiddenException({ code: 'route_not_classified' });
+  if (context?.projectId !== projectId)
+    throw new ForbiddenException({ code: 'route_not_classified' });
   return context.map;
 }

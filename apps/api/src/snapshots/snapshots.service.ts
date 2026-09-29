@@ -48,7 +48,13 @@ import {
 } from '../schema';
 import { writeAutoSnapshot } from './auto-snapshot';
 import { renameOps, type ConfirmedRename } from './import-renames';
-import { blobToLive, loadLiveProject, snapshotBlob, type LiveIr, type LiveProject } from './live-ir';
+import {
+  blobToLive,
+  loadLiveProject,
+  snapshotBlob,
+  type LiveIr,
+  type LiveProject,
+} from './live-ir';
 import { assertFullProjectView, assertSnapshotEngine } from './restore-guards';
 import { mergeImport } from './merge-import';
 import { planImport, planRestore } from './restore-plan';

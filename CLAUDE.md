@@ -18,17 +18,17 @@ behind a pluggable engine boundary.
 
 pnpm + turbo monorepo. **Use pnpm, never npm** (`catalog:` and `node-linker=isolated`).
 
-| Path | What |
-|---|---|
-| `apps/api` | NestJS 11 + Prisma 6 + BullMQ (in-process workers) + S3/MinIO |
-| `apps/web` | Next.js 15 App Router, React Flow canvas, Tailwind |
-| `packages/schema-model` | The IR (`SchemaModel`), diff, `logicalKey`, redaction |
-| `packages/engine-sdk` | `EngineDefinition`, importer/exporter contracts, registry |
-| `packages/engines/postgresql` | The only engine; importer uses `libpg-query` (keep it in `dependencies`, or tsup drops the `.wasm`) |
-| `packages/contracts`, `ui`, `config` | Shared types/atoms, UI kit, tsup/eslint presets |
-| `e2e` | Playwright workflows 1–6 |
-| `docs/deploy.md` | Production: web on Vercel (`apps/web/vercel.json`), api container (`apps/api/Dockerfile`, `--target migrate` for migrations), pinned collation |
-| `docs/phase1` | The approved design (00-OVERVIEW, 01–05, REVIEW). Read the relevant doc before changing its area |
+| Path                                 | What                                                                                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`                           | NestJS 11 + Prisma 6 + BullMQ (in-process workers) + S3/MinIO                                                                                  |
+| `apps/web`                           | Next.js 15 App Router, React Flow canvas, Tailwind                                                                                             |
+| `packages/schema-model`              | The IR (`SchemaModel`), diff, `logicalKey`, redaction                                                                                          |
+| `packages/engine-sdk`                | `EngineDefinition`, importer/exporter contracts, registry                                                                                      |
+| `packages/engines/postgresql`        | The only engine; importer uses `libpg-query` (keep it in `dependencies`, or tsup drops the `.wasm`)                                            |
+| `packages/contracts`, `ui`, `config` | Shared types/atoms, UI kit, tsup/eslint presets                                                                                                |
+| `e2e`                                | Playwright workflows 1–6                                                                                                                       |
+| `docs/deploy.md`                     | Production: web on Vercel (`apps/web/vercel.json`), api container (`apps/api/Dockerfile`, `--target migrate` for migrations), pinned collation |
+| `docs/phase1`                        | The approved design (00-OVERVIEW, 01–05, REVIEW). Read the relevant doc before changing its area                                               |
 
 ## Commands
 
@@ -82,6 +82,7 @@ DEV database.
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
 Rules:
+
 - For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.

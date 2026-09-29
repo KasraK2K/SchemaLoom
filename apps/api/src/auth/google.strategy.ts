@@ -75,10 +75,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 export const googleStrategyProvider = {
   provide: GOOGLE_STRATEGY,
   inject: [ConfigService, AuthService],
-  useFactory: (
-    config: ConfigService<AppEnv, true>,
-    auth: AuthService,
-  ): GoogleStrategy | null =>
+  useFactory: (config: ConfigService<AppEnv, true>, auth: AuthService): GoogleStrategy | null =>
     isGoogleConfigured(config) ? new GoogleStrategy(config, auth) : null,
 };
 

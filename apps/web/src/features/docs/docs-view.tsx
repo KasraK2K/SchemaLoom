@@ -1,6 +1,12 @@
 'use client';
 
-import { createIndex, type Entity, type Field, type SchemaModel, type TypeRef } from '@schemaloom/schema-model';
+import {
+  createIndex,
+  type Entity,
+  type Field,
+  type SchemaModel,
+  type TypeRef,
+} from '@schemaloom/schema-model';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, type ReactNode } from 'react';
 import { useTerminology } from '@/engines';
@@ -19,7 +25,13 @@ import { docsListQueryOptions, fieldFacts, type DocView } from './docs-api';
  *
  * `actions` is the header slot the export menu fills.
  */
-export function DocsView({ projectId, actions }: { readonly projectId: string; readonly actions?: ReactNode }) {
+export function DocsView({
+  projectId,
+  actions,
+}: {
+  readonly projectId: string;
+  readonly actions?: ReactNode;
+}) {
   const ir = useQuery(irQueryOptions(projectId));
   const docs = useQuery(docsListQueryOptions(projectId));
 
@@ -28,7 +40,9 @@ export function DocsView({ projectId, actions }: { readonly projectId: string; r
     const status = error instanceof ApiError ? error.status : 0;
     return (
       <div className="flex h-full items-center justify-center p-8 text-center text-sm text-text-muted">
-        {status === 403 || status === 404 ? 'This project is not available.' : 'Could not load the documentation.'}
+        {status === 403 || status === 404
+          ? 'This project is not available.'
+          : 'Could not load the documentation.'}
       </div>
     );
   }
@@ -53,7 +67,10 @@ function Loaded({
 }) {
   const t = useTerminology();
   const index = useMemo(() => createIndex(model), [model]);
-  const byTarget = useMemo(() => new Map(docs.map((d) => [docKey(d.targetType, d.targetId), d])), [docs]);
+  const byTarget = useMemo(
+    () => new Map(docs.map((d) => [docKey(d.targetType, d.targetId), d])),
+    [docs],
+  );
   const coverage = useMemo(() => docCoverage(model), [model]);
 
   const groups = useMemo(
@@ -83,14 +100,20 @@ function Loaded({
 
   return (
     <div className="flex h-full min-h-0">
-      <nav aria-label={t.term('entity').other} className="w-56 shrink-0 overflow-auto border-r border-border p-3 text-sm">
+      <nav
+        aria-label={t.term('entity').other}
+        className="w-56 shrink-0 overflow-auto border-r border-border p-3 text-sm"
+      >
         {groups.map(({ ns, entities }) => (
           <div key={ns.id} className="mb-3">
-            <p className="mb-1 text-xs font-medium uppercase text-text-subtle">{ns.name}</p>
+            <p className="mb-1 text-xs font-medium text-text-subtle uppercase">{ns.name}</p>
             <ul className="space-y-0.5">
               {entities.map((e) => (
                 <li key={e.id}>
-                  <a href={`#doc-${e.id}`} className="block truncate rounded px-1 font-mono text-xs text-text-muted hover:bg-surface-hover hover:text-text">
+                  <a
+                    href={`#doc-${e.id}`}
+                    className="block truncate rounded px-1 font-mono text-xs text-text-muted hover:bg-surface-hover hover:text-text"
+                  >
                     {e.name}
                   </a>
                 </li>
@@ -102,7 +125,10 @@ function Loaded({
       <main className="min-w-0 flex-1 overflow-auto p-6">
         <header className="mb-6 flex items-center gap-4">
           <h1 className="text-lg font-semibold text-text">Documentation</h1>
-          <div className="flex items-center gap-2 text-xs text-text-muted" title="Visible objects with a doc">
+          <div
+            className="flex items-center gap-2 text-xs text-text-muted"
+            title="Visible objects with a doc"
+          >
             <div
               role="meter"
               aria-label="Documented"
@@ -123,15 +149,19 @@ function Loaded({
           <DocBody doc={projectDoc} />
         </section>
 
-        {groups.flatMap(({ entities }) => entities).map((entity) => (
-          <EntitySection
-            key={entity.id}
-            entity={entity}
-            fields={(index.fieldsByEntity.get(entity.id) ?? []).filter((f) => f.restricted !== true)}
-            byTarget={byTarget}
-            primaryKey={primaryKey}
-          />
-        ))}
+        {groups
+          .flatMap(({ entities }) => entities)
+          .map((entity) => (
+            <EntitySection
+              key={entity.id}
+              entity={entity}
+              fields={(index.fieldsByEntity.get(entity.id) ?? []).filter(
+                (f) => f.restricted !== true,
+              )}
+              byTarget={byTarget}
+              primaryKey={primaryKey}
+            />
+          ))}
       </main>
     </div>
   );

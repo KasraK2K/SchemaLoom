@@ -35,7 +35,14 @@ export const postgresFacet: EngineStaticFacet = {
   normalizeName,
 };
 
-export { CAPABILITIES, DIAGNOSTIC_MESSAGES, PROPS_SCHEMAS, TERMINOLOGY, TYPE_CATALOG, normalizeName };
+export {
+  CAPABILITIES,
+  DIAGNOSTIC_MESSAGES,
+  PROPS_SCHEMAS,
+  TERMINOLOGY,
+  TYPE_CATALOG,
+  normalizeName,
+};
 export { NAMEDATALEN_BYTES, truncateToBytes, utf8ByteLength } from './normalize-name.js';
 export { TYPE_DESCRIPTORS } from './types.js';
 export { CODE } from './messages.js';

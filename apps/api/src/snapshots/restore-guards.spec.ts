@@ -97,9 +97,7 @@ describe('assertFullProjectView — doc 05 R21′', () => {
 
   it('refuses a subject who cannot see every entity', () => {
     expect(() => {
-      assertFullProjectView(
-        context({ visibleEntityIds: new Set(['ent_a']), totalEntityCount: 2 }),
-      );
+      assertFullProjectView(context({ visibleEntityIds: new Set(['ent_a']), totalEntityCount: 2 }));
     }).toThrow(ForbiddenException);
   });
 

@@ -54,7 +54,12 @@ export function InspectorPanel({ projectId }: { readonly projectId: Id }) {
     { value: 'field', label: 'Field', icon: Columns3 },
     { value: 'link', label: 'Link', icon: Link2 },
     { value: 'docs', label: 'Docs', icon: FileText },
-    { value: 'comments', label: 'Comments', icon: MessageSquare, badge: <CommentsTabCount projectId={projectId} /> },
+    {
+      value: 'comments',
+      label: 'Comments',
+      icon: MessageSquare,
+      badge: <CommentsTabCount projectId={projectId} />,
+    },
     { value: 'queries', label: 'Queries', icon: Code2 },
     { value: 'ai', label: 'AI', icon: Sparkles },
   ];
@@ -64,30 +69,38 @@ export function InspectorPanel({ projectId }: { readonly projectId: Id }) {
       {/* Hidden with CSS, not unmounted, so an open editor keeps its state while collapsed. */}
       <div style={{ width }} className={collapsed ? 'hidden' : 'relative h-full min-w-0'}>
         <div className="flex h-full flex-col overflow-auto p-2">
-        <EngineGate
-          projectId={projectId}
-          fallback={<p className="p-2 text-sm text-text-subtle">Loading…</p>}
-        >
-          <InspectorBody projectId={projectId} />
-          <TabsContent value="comments" className="overflow-auto">
-            <CommentsPanel projectId={projectId} />
-          </TabsContent>
-          <TabsContent value="queries" className="overflow-auto">
-            <QueriesPanel projectId={projectId} />
-          </TabsContent>
-          <TabsContent value="docs" className="overflow-auto">
-            <DocsPanel projectId={projectId} />
-          </TabsContent>
-          <TabsContent value="ai" className="overflow-auto">
-            <AiPanel projectId={projectId} />
-          </TabsContent>
-        </EngineGate>
+          <EngineGate
+            projectId={projectId}
+            fallback={<p className="p-2 text-sm text-text-subtle">Loading…</p>}
+          >
+            <InspectorBody projectId={projectId} />
+            <TabsContent value="comments" className="overflow-auto">
+              <CommentsPanel projectId={projectId} />
+            </TabsContent>
+            <TabsContent value="queries" className="overflow-auto">
+              <QueriesPanel projectId={projectId} />
+            </TabsContent>
+            <TabsContent value="docs" className="overflow-auto">
+              <DocsPanel projectId={projectId} />
+            </TabsContent>
+            <TabsContent value="ai" className="overflow-auto">
+              <AiPanel projectId={projectId} />
+            </TabsContent>
+          </EngineGate>
         </div>
-        <ResizeHandle side="right" width={width} bounds={BOUNDS} onResize={setWidth} label="Resize inspector" />
+        <ResizeHandle
+          side="right"
+          width={width}
+          bounds={BOUNDS}
+          onResize={setWidth}
+          label="Resize inspector"
+        />
       </div>
       {/* The rail keeps its 44px slot; the list inside widens leftwards over the panel. */}
       <div className="relative w-11 shrink-0">
-        <TabsList className={`group/rail absolute inset-y-0 right-0 z-20 flex w-11 flex-col items-stretch gap-1 border-b-0 border-border bg-surface px-1 ${collapsed ? '' : 'border-l'} py-2 transition-[width] duration-150 hover:w-40 hover:shadow-lg focus-within:w-40`}>
+        <TabsList
+          className={`group/rail absolute inset-y-0 right-0 z-20 flex w-11 flex-col items-stretch gap-1 border-b-0 border-border bg-surface px-1 ${collapsed ? '' : 'border-l'} py-2 transition-[width] duration-150 focus-within:w-40 hover:w-40 hover:shadow-lg`}
+        >
           {tabs.map((t) => (
             <TabsTrigger
               key={t.value}
@@ -103,7 +116,7 @@ export function InspectorPanel({ projectId }: { readonly projectId: Id }) {
               className="relative mb-0 flex h-9 items-center gap-3 overflow-hidden rounded-md border-b-0 px-2.5 hover:bg-surface-hover data-[state=active]:bg-surface-sunken data-[state=active]:text-text"
             >
               <t.icon className="size-4 shrink-0" aria-hidden="true" />
-              <span className="truncate whitespace-nowrap opacity-0 transition-opacity group-hover/rail:opacity-100 group-focus-within/rail:opacity-100">
+              <span className="truncate whitespace-nowrap opacity-0 transition-opacity group-focus-within/rail:opacity-100 group-hover/rail:opacity-100">
                 {t.label}
               </span>
               {t.badge !== undefined && (

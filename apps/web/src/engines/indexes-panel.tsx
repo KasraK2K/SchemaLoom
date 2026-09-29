@@ -55,9 +55,7 @@ export function IndexesPanel({
         )}
 
         <Button size="sm" variant="outline" onClick={onAdd} className="self-start">
-          {indexes.length === 0
-            ? t.msg('action.addFirst', 'index')
-            : t.msg('action.add', 'index')}
+          {indexes.length === 0 ? t.msg('action.addFirst', 'index') : t.msg('action.add', 'index')}
         </Button>
         {defaultType === undefined ? null : (
           <p className="text-[11px] text-text-subtle">{defaultType.summary}</p>

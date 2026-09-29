@@ -33,7 +33,9 @@ const inbox = async (session: Session): Promise<NotificationRow[]> => {
 };
 
 test.describe('workflow 8 — comments and notifications', () => {
-  test('a mention notifies the viewer who can see the table, and nobody else', async ({ browser }) => {
+  test('a mention notifies the viewer who can see the table, and nobody else', async ({
+    browser,
+  }) => {
     const owner = await signIn(SEED_EMAILS.owner);
     const reader = await signIn(SEED_EMAILS.analyst);
     const guest = await signIn(SEED_EMAILS.freelancer);
@@ -77,7 +79,9 @@ test.describe('workflow 8 — comments and notifications', () => {
       expect(mine?.title).toContain('mentioned you');
       expect((await inbox(guest)).some((n) => n.data.commentId === commentId)).toBe(false);
 
-      const hidden = await guest.api.get(`/api/projects/${P}/comments?targetType=entity&targetId=${PRODUCTS}`);
+      const hidden = await guest.api.get(
+        `/api/projects/${P}/comments?targetType=entity&targetId=${PRODUCTS}`,
+      );
       expect(hidden.status()).toBe(404);
 
       // The bell shows it.
@@ -86,10 +90,14 @@ test.describe('workflow 8 — comments and notifications', () => {
       await page.getByRole('button', { name: /Notifications, \d+ unread/ }).click();
       await expect(page.getByText(mine?.title ?? '').first()).toBeVisible({ timeout: 15_000 });
     } finally {
-      const removed = await owner.api.delete(`/api/comments/${commentId}`, { headers: write(owner) });
+      const removed = await owner.api.delete(`/api/comments/${commentId}`, {
+        headers: write(owner),
+      });
       expect(removed.status()).toBe(204);
       if (notificationId !== undefined) {
-        await reader.api.post(`/api/notifications/${notificationId}/read`, { headers: write(reader) });
+        await reader.api.post(`/api/notifications/${notificationId}/read`, {
+          headers: write(reader),
+        });
       }
     }
   });

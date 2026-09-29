@@ -26,7 +26,10 @@ const marksField = StateField.define<DecorationSet>({
         effect.value
           .filter((m) => m.from < m.to && m.to <= length)
           .map((m) =>
-            Decoration.mark({ class: 'cm-sl-flagged', attributes: { title: m.message } }).range(m.from, m.to),
+            Decoration.mark({ class: 'cm-sl-flagged', attributes: { title: m.message } }).range(
+              m.from,
+              m.to,
+            ),
           ),
         true,
       );

@@ -113,7 +113,10 @@ describe('a corrupt entry degrades to a cache MISS, never to a wrong map', () =>
     ['a bad orgRole', serializeMap(MAP).replace('"member"', '"superuser"')],
     ['a bad mode', serializeMap(MAP).replace('"hide"', '"invisible"')],
     ['a non-numeric validUntil', serializeMap(MAP).replace(String(MAP.validUntil), '"soon"')],
-    ['a malformed area entry', '{"projectId":"p","subjectKey":"u:a","orgRole":null,"projectAtoms":[],"areaAtoms":[["x"]],"entityOverrides":[],"restrictedFieldMode":"mask","validUntil":1}'],
+    [
+      'a malformed area entry',
+      '{"projectId":"p","subjectKey":"u:a","orgRole":null,"projectAtoms":[],"areaAtoms":[["x"]],"entityOverrides":[],"restrictedFieldMode":"mask","validUntil":1}',
+    ],
   ])('rejects %s', (_label, raw) => {
     expect(parseMap(raw)).toBeNull();
   });
@@ -128,7 +131,10 @@ describe('a corrupt entry degrades to a cache MISS, never to a wrong map', () =>
   it.each([
     ['not json', '{'],
     ['a missing generation', '{"areaIds":[],"entities":[],"entitiesWithRestrictedFields":[]}'],
-    ['a malformed entity pair', '{"generation":1,"areaIds":[],"entities":[["a"]],"entitiesWithRestrictedFields":[]}'],
+    [
+      'a malformed entity pair',
+      '{"generation":1,"areaIds":[],"entities":[["a"]],"entitiesWithRestrictedFields":[]}',
+    ],
   ])('rejects a skeleton that is %s', (_label, raw) => {
     expect(parseSkeleton(raw)).toBeNull();
   });

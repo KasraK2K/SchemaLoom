@@ -42,7 +42,11 @@ export function AiPanel({ projectId }: { readonly projectId: string }) {
   const start = useMutation({
     mutationFn: () => {
       const ids = [...selection];
-      return createThread(projectId, ids, ids.length === 0 ? 'Whole schema' : `${String(ids.length)} selected`);
+      return createThread(
+        projectId,
+        ids,
+        ids.length === 0 ? 'Whole schema' : `${String(ids.length)} selected`,
+      );
     },
     onSuccess: (thread) => {
       void queryClient.invalidateQueries({ queryKey: aiThreadsKey(projectId) });
@@ -70,7 +74,9 @@ export function AiPanel({ projectId }: { readonly projectId: string }) {
     <div className="flex flex-col gap-3 p-2 text-sm">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-text-muted">
-          {selection.size === 0 ? 'No selection: the whole schema you can see' : `${String(selection.size)} selected`}
+          {selection.size === 0
+            ? 'No selection: the whole schema you can see'
+            : `${String(selection.size)} selected`}
         </span>
         <Button
           size="sm"
@@ -145,9 +151,15 @@ function ThreadView({
         threadId,
         { content, mode },
         (event) => {
-          if (event.type === 'block-delta' && (event.tag === 'query' || event.tag === 'explanation' || event.tag === 'assumptions')) {
+          if (
+            event.type === 'block-delta' &&
+            (event.tag === 'query' || event.tag === 'explanation' || event.tag === 'assumptions')
+          ) {
             const tag = event.tag;
-            setLive((prev) => ({ ...(prev ?? NO_LIVE), [tag]: (prev ?? NO_LIVE)[tag] + event.text }));
+            setLive((prev) => ({
+              ...(prev ?? NO_LIVE),
+              [tag]: (prev ?? NO_LIVE)[tag] + event.text,
+            }));
           }
           if (event.type === 'error') setError(aiErrorMessage(null));
           if (event.type === 'done') setContent('');
@@ -183,20 +195,29 @@ function ThreadView({
       </div>
       {(thread.data?.messages ?? []).map((m) =>
         m.role === 'user' ? (
-          <p key={m.id} className="whitespace-pre-wrap rounded bg-surface-sunken px-2 py-1 text-xs">
+          <p key={m.id} className="rounded bg-surface-sunken px-2 py-1 text-xs whitespace-pre-wrap">
             {m.content}
           </p>
         ) : (
-          <AssistantMessage key={m.id} projectId={projectId} title={thread.data?.title ?? 'AI query'} message={m} />
+          <AssistantMessage
+            key={m.id}
+            projectId={projectId}
+            title={thread.data?.title ?? 'AI query'}
+            message={m}
+          />
         ),
       )}
       {live !== null && (
         <div aria-live="polite" className="flex flex-col gap-1 text-xs">
           {live.explanation !== '' && <p>{live.explanation.trim()}</p>}
           {live.query !== '' && (
-            <pre className="overflow-auto rounded-md border border-border bg-surface p-2 font-mono">{live.query.trim()}</pre>
+            <pre className="overflow-auto rounded-md border border-border bg-surface p-2 font-mono">
+              {live.query.trim()}
+            </pre>
           )}
-          {live.query === '' && live.explanation === '' && <p className="text-text-subtle">Thinking…</p>}
+          {live.query === '' && live.explanation === '' && (
+            <p className="text-text-subtle">Thinking…</p>
+          )}
         </div>
       )}
       {error !== null && (
@@ -230,7 +251,9 @@ function ThreadView({
         </div>
         <textarea
           aria-label={mode === 'query' ? 'Question' : 'Query to explain'}
-          placeholder={mode === 'query' ? 'Ask about the selected tables…' : 'Paste a query to explain…'}
+          placeholder={
+            mode === 'query' ? 'Ask about the selected tables…' : 'Paste a query to explain…'
+          }
           rows={mode === 'query' ? 3 : 6}
           value={content}
           onChange={(e) => {
@@ -239,7 +262,12 @@ function ThreadView({
           className={`rounded-md border border-border bg-surface px-2 py-1 text-xs text-text ${mode === 'explain' ? 'font-mono' : ''}`}
         />
         <div className="flex justify-end">
-          <Button type="submit" size="sm" variant="primary" disabled={live !== null || content.trim() === ''}>
+          <Button
+            type="submit"
+            size="sm"
+            variant="primary"
+            disabled={live !== null || content.trim() === ''}
+          >
             {live !== null ? 'Answering…' : 'Send'}
           </Button>
         </div>
@@ -269,7 +297,12 @@ function AssistantMessage({
   });
   const marks = useMemo(() => marksOf(validation.data ?? null), [validation.data]);
   const save = useMutation({
-    mutationFn: () => createSavedQuery(projectId, { name: title.slice(0, 200), queryText: query ?? '', tags: ['ai'] }),
+    mutationFn: () =>
+      createSavedQuery(projectId, {
+        name: title.slice(0, 200),
+        queryText: query ?? '',
+        tags: ['ai'],
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: savedQueriesKey(projectId) }),
   });
   const { usedEntityIds, suggestedEntityIds, assumptions } = message.metadata;
@@ -277,7 +310,9 @@ function AssistantMessage({
   return (
     <div className="flex flex-col gap-2 text-xs">
       {message.explanation !== '' && <p className="whitespace-pre-wrap">{message.explanation}</p>}
-      {message.metadata.finishReason === 'refusal' && <p className="text-text-muted">The assistant declined this request.</p>}
+      {message.metadata.finishReason === 'refusal' && (
+        <p className="text-text-muted">The assistant declined this request.</p>
+      )}
       {query !== null && <SqlEditor value={query} onChange={() => undefined} marks={marks} />}
       <ValidationNotes validation={validation.data ?? null} />
       {assumptions.length > 0 && (
@@ -328,7 +363,13 @@ function AssistantMessage({
 }
 
 /** "Draft docs with AI" over the selection, and the accept / reject queue it fills. */
-function DocDrafts({ projectId, selection }: { readonly projectId: string; readonly selection: readonly string[] }) {
+function DocDrafts({
+  projectId,
+  selection,
+}: {
+  readonly projectId: string;
+  readonly selection: readonly string[];
+}) {
   const queryClient = useQueryClient();
   const drafts = useQuery(docDraftsQueryOptions(projectId));
   const { data: model } = useQuery(irQueryOptions(projectId));
@@ -336,12 +377,15 @@ function DocDrafts({ projectId, selection }: { readonly projectId: string; reado
     const objects = model?.objects;
     if (type === 'entity') return objects?.entity[id]?.name ?? 'table';
     const field = objects?.field[id];
-    return field === undefined ? 'column' : `${objects?.entity[field.entityId]?.name ?? ''}.${field.name}`;
+    return field === undefined
+      ? 'column'
+      : `${objects?.entity[field.entityId]?.name ?? ''}.${field.name}`;
   };
   const refresh = () => queryClient.invalidateQueries({ queryKey: docDraftsKey(projectId) });
   const queue = useMutation({ mutationFn: () => queueDocDrafts(projectId, selection) });
   const review = useMutation({
-    mutationFn: ({ id, verdict }: { id: string; verdict: 'accept' | 'reject' }) => reviewDocDraft(id, verdict),
+    mutationFn: ({ id, verdict }: { id: string; verdict: 'accept' | 'reject' }) =>
+      reviewDocDraft(id, verdict),
     onSettled: refresh,
   });
 
@@ -361,8 +405,12 @@ function DocDrafts({ projectId, selection }: { readonly projectId: string; reado
         </Button>
       </div>
       {queue.isSuccess && <p className="text-xs text-text-muted">Drafting in the background…</p>}
-      {queue.error !== null && <p className="text-xs text-danger-text">{aiErrorMessage(queue.error)}</p>}
-      {review.error !== null && <p className="text-xs text-danger-text">Could not review that draft.</p>}
+      {queue.error !== null && (
+        <p className="text-xs text-danger-text">{aiErrorMessage(queue.error)}</p>
+      )}
+      {review.error !== null && (
+        <p className="text-xs text-danger-text">Could not review that draft.</p>
+      )}
       {(drafts.data ?? []).map((d) => (
         <div key={d.id} className="flex flex-col gap-1 rounded border border-border p-2 text-xs">
           <span className="font-mono text-text-muted">{label(d.targetType, d.targetId)}</span>

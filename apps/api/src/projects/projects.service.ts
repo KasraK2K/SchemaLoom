@@ -206,7 +206,10 @@ export class ProjectsService {
         this.createRows(tx, input, engine, slug, actorUserId),
       );
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === UNIQUE_VIOLATION) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === UNIQUE_VIOLATION
+      ) {
         throw new ConflictException({ code: 'project_slug_taken', slug });
       }
       throw error;
@@ -326,7 +329,10 @@ function readSettings(raw: unknown): ProjectSettings {
   return parsed.success ? parsed.data : projectSettingsStoredSchema.parse({});
 }
 
-function toSettingsView(row: { restrictedFieldMode: RestrictedFieldMode; settings: unknown }): ProjectSettingsView {
+function toSettingsView(row: {
+  restrictedFieldMode: RestrictedFieldMode;
+  settings: unknown;
+}): ProjectSettingsView {
   return { restrictedFieldMode: row.restrictedFieldMode, ai: readSettings(row.settings).ai };
 }
 

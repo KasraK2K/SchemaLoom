@@ -64,7 +64,9 @@ function resolverFor(views: Record<string, View>): PermissionResolver {
   const of = (map: ProjectPermissionMap): View => views[map.subjectKey] ?? MARCH;
   return {
     resolveProject: vi.fn((s: Subject) =>
-      Promise.resolve({ subjectKey: s.kind === 'user' ? s.userId : 'link' } as ProjectPermissionMap),
+      Promise.resolve({
+        subjectKey: s.kind === 'user' ? s.userId : 'link',
+      } as ProjectPermissionMap),
     ),
     skeleton: vi.fn().mockResolvedValue(skel),
     canOpenProject: (m: ProjectPermissionMap) => of(m).open ?? true,
@@ -106,7 +108,9 @@ function harness(
 ): { prisma: FakePrisma; service: SavedQueriesService } {
   const prisma = fakePrisma({ ...world(), savedQuery: seed });
   const resolver = resolverFor(views);
-  const registry = { tryGet: () => ({ queryValidator: validator ?? undefined }) } as unknown as EngineRegistry;
+  const registry = {
+    tryGet: () => ({ queryValidator: validator ?? undefined }),
+  } as unknown as EngineRegistry;
   const service = new SavedQueriesService(
     prisma.client,
     new SchemaLoader(prisma.client),
@@ -117,7 +121,8 @@ function harness(
   return { prisma, service };
 }
 
-const mapOf = (s: Subject) => ({ subjectKey: s.kind === 'user' ? s.userId : 'link' }) as ProjectPermissionMap;
+const mapOf = (s: Subject) =>
+  ({ subjectKey: s.kind === 'user' ? s.userId : 'link' }) as ProjectPermissionMap;
 
 const savedRow = (over: Row = {}): Row => ({
   id: 'sq_1',
@@ -138,11 +143,25 @@ const savedRow = (over: Row = {}): Row => ({
 describe('identifiersResolved', () => {
   it('is strict: anything unknown, ambiguous, hidden or unparsed is false', () => {
     expect(identifiersResolved(result())).toBe(true);
-    expect(identifiersResolved(result({ identifiers: [ident({ status: 'alias-local', role: 'alias' })] }))).toBe(true);
-    expect(identifiersResolved(result({ identifiers: [ident({ status: 'unchecked', role: 'function' })] }))).toBe(true);
-    expect(identifiersResolved(result({ identifiers: [ident({ status: 'unchecked', role: 'field' })] }))).toBe(false);
-    expect(identifiersResolved(result({ identifiers: [ident({ status: 'unknown' })] }))).toBe(false);
-    expect(identifiersResolved(result({ identifiers: [ident({ status: 'ambiguous' })] }))).toBe(false);
+    expect(
+      identifiersResolved(
+        result({ identifiers: [ident({ status: 'alias-local', role: 'alias' })] }),
+      ),
+    ).toBe(true);
+    expect(
+      identifiersResolved(
+        result({ identifiers: [ident({ status: 'unchecked', role: 'function' })] }),
+      ),
+    ).toBe(true);
+    expect(
+      identifiersResolved(result({ identifiers: [ident({ status: 'unchecked', role: 'field' })] })),
+    ).toBe(false);
+    expect(identifiersResolved(result({ identifiers: [ident({ status: 'unknown' })] }))).toBe(
+      false,
+    );
+    expect(identifiersResolved(result({ identifiers: [ident({ status: 'ambiguous' })] }))).toBe(
+      false,
+    );
     expect(identifiersResolved(result({ parsed: false }))).toBe(false);
   });
 });
@@ -151,7 +170,9 @@ describe('SavedQueriesService.create', () => {
   it('writes the flag, the touched arrays and the join rows in ONE transaction', async () => {
     const { prisma, service } = harness();
     let inside: string[] = [];
-    const tx = prisma.client.$transaction.bind(prisma.client) as (fn: (t: unknown) => Promise<unknown>) => Promise<unknown>;
+    const tx = prisma.client.$transaction.bind(prisma.client) as (
+      fn: (t: unknown) => Promise<unknown>,
+    ) => Promise<unknown>;
     (prisma.client as unknown as { $transaction: typeof tx }).$transaction = async (fn) => {
       const before = prisma.calls.length;
       const out = await tx(fn);
@@ -159,7 +180,10 @@ describe('SavedQueriesService.create', () => {
       return out;
     };
 
-    const view = await service.create(ANA, PROJECT, mapOf(ANA), { name: 'q', queryText: 'SELECT 1' });
+    const view = await service.create(ANA, PROJECT, mapOf(ANA), {
+      name: 'q',
+      queryText: 'SELECT 1',
+    });
 
     expect(inside).toEqual(['savedQuery.create', 'savedQueryEntity.createMany']);
     expect(prisma.store.savedQuery?.[0]).toMatchObject({
@@ -176,7 +200,10 @@ describe('SavedQueriesService.create', () => {
     const validate = vi.fn().mockResolvedValue(result());
     const { service } = harness({ usr_ana: APRIL }, { validate });
     await service.create(ANA, PROJECT, mapOf(ANA), { name: 'q', queryText: 'SELECT 1' });
-    const input = validate.mock.calls[0]?.[0] as { model: { objects: { entity: object } }; restrictedProbe?: unknown };
+    const input = validate.mock.calls[0]?.[0] as {
+      model: { objects: { entity: object } };
+      restrictedProbe?: unknown;
+    };
     expect(Object.keys(input.model.objects.entity)).toEqual(['ent_emp']);
     expect(input.restrictedProbe).toBeUndefined();
   });
@@ -184,14 +211,22 @@ describe('SavedQueriesService.create', () => {
   it('saves identifiersResolved=false with no join rows when the engine has no validator', async () => {
     const { prisma, service } = harness({}, null);
     await service.create(ANA, PROJECT, mapOf(ANA), { name: 'q', queryText: 'SELECT 1' });
-    expect(prisma.store.savedQuery?.[0]).toMatchObject({ identifiersResolved: false, touchedEntityIds: [] });
+    expect(prisma.store.savedQuery?.[0]).toMatchObject({
+      identifiersResolved: false,
+      touchedEntityIds: [],
+    });
     expect(prisma.store.savedQueryEntity).toEqual([]);
   });
 
   it('still saves an unresolved query, flagged false', async () => {
-    const { prisma, service } = harness({}, {
-      validate: vi.fn().mockResolvedValue(result({ identifiers: [ident({ status: 'unknown' })] })),
-    });
+    const { prisma, service } = harness(
+      {},
+      {
+        validate: vi
+          .fn()
+          .mockResolvedValue(result({ identifiers: [ident({ status: 'unknown' })] })),
+      },
+    );
     await service.create(ANA, PROJECT, mapOf(ANA), { name: 'q', queryText: 'SELECT * FROM nope' });
     expect(prisma.store.savedQuery?.[0]?.identifiersResolved).toBe(false);
   });
@@ -212,8 +247,12 @@ describe('SavedQueriesService reads (L25)', () => {
   });
 
   it('an unresolved row is served only to a complete view', async () => {
-    const seed = [savedRow({ identifiersResolved: false, touchedEntityIds: [], touchedFieldIds: [] })];
-    expect(await harness({ usr_ana: APRIL }, null, seed).service.list(ANA, PROJECT, mapOf(ANA))).toEqual([]);
+    const seed = [
+      savedRow({ identifiersResolved: false, touchedEntityIds: [], touchedFieldIds: [] }),
+    ];
+    expect(
+      await harness({ usr_ana: APRIL }, null, seed).service.list(ANA, PROJECT, mapOf(ANA)),
+    ).toEqual([]);
     expect(await harness({}, null, seed).service.list(ANA, PROJECT, mapOf(ANA))).toHaveLength(1);
   });
 
@@ -245,7 +284,9 @@ describe('SavedQueriesService update/delete authorisation', () => {
 
   it('anyone else who can see it gets 403', async () => {
     const { service } = harness({}, null, [savedRow()]);
-    await expect(service.update(BEN, 'sq_1', { name: 'x' })).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.update(BEN, 'sq_1', { name: 'x' })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
     await expect(service.remove(BEN, 'sq_1')).rejects.toBeInstanceOf(ForbiddenException);
     expect((await service.get(BEN, 'sq_1')).canEdit).toBe(false);
   });
@@ -259,10 +300,15 @@ describe('SavedQueriesService update/delete authorisation', () => {
   });
 
   it('an update re-validates and rewrites the join rows (restoring a reset flag)', async () => {
-    const validate = vi.fn().mockResolvedValue(result({ touchedEntityIds: ['ent_emp'], touchedFieldIds: [] }));
+    const validate = vi
+      .fn()
+      .mockResolvedValue(result({ touchedEntityIds: ['ent_emp'], touchedFieldIds: [] }));
     const again = harness({}, { validate }, [savedRow({ identifiersResolved: false })]);
     await again.service.update(ANA, 'sq_1', { queryText: 'SELECT name FROM employees' });
-    expect(again.prisma.store.savedQuery?.[0]).toMatchObject({ identifiersResolved: true, touchedEntityIds: ['ent_emp'] });
+    expect(again.prisma.store.savedQuery?.[0]).toMatchObject({
+      identifiersResolved: true,
+      touchedEntityIds: ['ent_emp'],
+    });
     expect(again.prisma.store.savedQueryEntity?.map((r) => r.entityId)).toEqual(['ent_emp']);
   });
 });
@@ -278,6 +324,8 @@ describe('SavedQueriesService.validate', () => {
 
   it('returns the validator result', async () => {
     const { service } = harness();
-    expect((await service.validate(ANA, PROJECT, mapOf(ANA), 'SELECT 1')).statementKinds).toEqual(['SELECT']);
+    expect((await service.validate(ANA, PROJECT, mapOf(ANA), 'SELECT 1')).statementKinds).toEqual([
+      'SELECT',
+    ]);
   });
 });

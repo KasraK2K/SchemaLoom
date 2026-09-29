@@ -197,18 +197,30 @@ describe('VisibilityFilter.filterQueryRows (doc 05 L25)', () => {
   });
 
   it('omits a resolved row touching a masked field, and one touching a field absent from the index', () => {
-    expect(filter.filterQueryRows([row({ touchedFieldIds: ['fd_salary'] })], ctx(), fieldVis)).toEqual([]);
-    expect(filter.filterQueryRows([row({ touchedFieldIds: ['fd_gone'] })], ctx(), fieldVis)).toEqual([]);
+    expect(
+      filter.filterQueryRows([row({ touchedFieldIds: ['fd_salary'] })], ctx(), fieldVis),
+    ).toEqual([]);
+    expect(
+      filter.filterQueryRows([row({ touchedFieldIds: ['fd_gone'] })], ctx(), fieldVis),
+    ).toEqual([]);
   });
 
   it('keeps an unresolved row only for a complete view (R21′)', () => {
-    const unresolved = row({ identifiersResolved: false, touchedEntityIds: [], touchedFieldIds: [] });
+    const unresolved = row({
+      identifiersResolved: false,
+      touchedEntityIds: [],
+      touchedFieldIds: [],
+    });
     expect(filter.filterQueryRows([unresolved], ctx(), fieldVis)).toHaveLength(1);
     expect(
       filter.filterQueryRows([unresolved], ctx({ visibleEntityIds: new Set(['en_1']) }), fieldVis),
     ).toEqual([]);
     expect(
-      filter.filterQueryRows([unresolved], ctx({ restrictedOkEntityIds: new Set(['en_1']) }), fieldVis),
+      filter.filterQueryRows(
+        [unresolved],
+        ctx({ restrictedOkEntityIds: new Set(['en_1']) }),
+        fieldVis,
+      ),
       'every entity visible but a restricted field still masked is not complete',
     ).toEqual([]);
   });

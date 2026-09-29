@@ -180,6 +180,7 @@ export class SharingController {
 /** The map the guard already resolved (§10.4: no second resolve per request). */
 function mapFor(req: Request, projectId: string): ProjectPermissionMap {
   const context = getAccessContext(req);
-  if (context?.projectId !== projectId) throw new ForbiddenException({ code: 'route_not_classified' });
+  if (context?.projectId !== projectId)
+    throw new ForbiddenException({ code: 'route_not_classified' });
   return context.map;
 }

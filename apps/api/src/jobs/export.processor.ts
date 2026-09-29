@@ -66,7 +66,9 @@ export class ExportProcessor {
         skel,
       );
       // A hidden table leaves no stub behind, so the model alone cannot say it is partial.
-      const partialView = !isCompleteView(this.visibility.contextFrom(subject, projectId, map, skel));
+      const partialView = !isCompleteView(
+        this.visibility.contextFrom(subject, projectId, map, skel),
+      );
       // The engine id travels ON the model, so there is no second project read and no way
       // for the two to disagree. `get` throws `UnknownEngineError` for an engine this
       // deployment does not carry, which fails the job rather than emitting wrong DDL.
@@ -76,10 +78,23 @@ export class ExportProcessor {
       const docs = DOC_FORMATS.has(format)
         ? await this.prisma.doc.findMany({
             where: { projectId },
-            select: { id: true, targetType: true, targetId: true, plainText: true, structured: true },
+            select: {
+              id: true,
+              targetType: true,
+              targetId: true,
+              plainText: true,
+              structured: true,
+            },
           })
         : [];
-      const rendered = await renderExport({ model, format, engine, docs, options: data.options, partialView });
+      const rendered = await renderExport({
+        model,
+        format,
+        engine,
+        docs,
+        options: data.options,
+        partialView,
+      });
 
       const storageKey = exportObjectKey(projectId, exportJobId, rendered.fileExtension);
       const body =
@@ -116,7 +131,12 @@ export class ExportProcessor {
    * `export.ready` to the requester. The title names the format only (L7: no schema
    * names in a stored title). Best effort: the artifact is already written and `done`.
    */
-  private async notifyReady({ exportJobId, projectId, subject, format }: ExportJobData): Promise<void> {
+  private async notifyReady({
+    exportJobId,
+    projectId,
+    subject,
+    format,
+  }: ExportJobData): Promise<void> {
     if (subject.kind !== 'user') return;
     try {
       const project = await this.prisma.project.findFirst({

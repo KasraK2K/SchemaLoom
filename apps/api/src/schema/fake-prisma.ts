@@ -184,7 +184,14 @@ export function fakePrisma(seed: Partial<Store> = {}, options: FakeOptions = {})
           }
         }
         // Prisma's `@default(cuid())`, for the models whose id the caller never sends.
-        if (!('id' in data) && (model === 'savedQuery' || model === 'notification' || model === 'aiThread' || model === 'aiMessage' || model === 'docDraft')) {
+        if (
+          !('id' in data) &&
+          (model === 'savedQuery' ||
+            model === 'notification' ||
+            model === 'aiThread' ||
+            model === 'aiMessage' ||
+            model === 'docDraft')
+        ) {
           data.id = `${model}_${String(rowsOf(model).length + 1)}`;
         }
         if (model === 'comment' || model === 'notification') {

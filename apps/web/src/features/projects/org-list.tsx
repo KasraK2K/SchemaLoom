@@ -22,7 +22,7 @@ export function OrgList({ orgs }: { orgs: readonly OrganizationSummary[] }) {
               <span className="block truncate text-sm font-medium text-text">{org.name}</span>
               <span className="block truncate font-mono text-xs text-text-subtle">{org.slug}</span>
             </span>
-            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs capitalize text-text-muted">
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-text-muted capitalize">
               {org.orgRole}
             </span>
           </Link>
@@ -41,8 +41,8 @@ export function NoOrganizations() {
     <div className="mt-6 rounded-lg border border-border bg-surface p-6 text-center shadow-panel">
       <h2 className="text-sm font-medium text-text">You are not in an organisation yet</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-text-muted">
-        Projects live inside an organisation. Create one to start designing, or ask a
-        colleague to invite you to theirs.
+        Projects live inside an organisation. Create one to start designing, or ask a colleague to
+        invite you to theirs.
       </p>
       <CreateOrganization />
     </div>

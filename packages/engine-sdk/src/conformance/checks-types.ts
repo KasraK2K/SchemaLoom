@@ -18,13 +18,18 @@ export const TYPE_CHECKS: readonly ConformanceCheck[] = [
         const ref = catalog.buildRef({ name: spelling, dimensions }, typeContext);
         const resolved = catalog.resolve(ref, typeContext);
         if (resolved.status !== 'builtin' || resolved.descriptor?.id !== expectId) {
-          problems.push(`${spelling} resolved as ${resolved.status}/${resolved.descriptor?.id ?? '-'}`);
+          problems.push(
+            `${spelling} resolved as ${resolved.status}/${resolved.descriptor?.id ?? '-'}`,
+          );
           return;
         }
         const formatted = catalog.format(resolved);
         // `format(resolve(buildRef(x)))` must be a fixed point: the stored ref is canonical,
         // so feeding the rendered spelling back in cannot drift.
-        const again = catalog.resolve(catalog.buildRef({ name: formatted }, typeContext), typeContext);
+        const again = catalog.resolve(
+          catalog.buildRef({ name: formatted }, typeContext),
+          typeContext,
+        );
         if (catalog.format(again) !== formatted) {
           problems.push(`${spelling} formats to ${formatted} then to ${catalog.format(again)}`);
         }

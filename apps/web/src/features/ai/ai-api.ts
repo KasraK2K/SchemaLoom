@@ -57,16 +57,25 @@ export type DocDraft = z.infer<typeof docDraftSchema>;
 
 export type AiMode = 'query' | 'explain';
 
-export const aiThreadsKey = (projectId: string): readonly unknown[] => ['project', projectId, 'ai-threads'];
+export const aiThreadsKey = (projectId: string): readonly unknown[] => [
+  'project',
+  projectId,
+  'ai-threads',
+];
 export const aiThreadKey = (threadId: string): readonly unknown[] => ['ai-thread', threadId];
-export const docDraftsKey = (projectId: string): readonly unknown[] => ['project', projectId, 'doc-drafts'];
+export const docDraftsKey = (projectId: string): readonly unknown[] => [
+  'project',
+  projectId,
+  'doc-drafts',
+];
 
 export function aiThreadsQueryOptions(projectId: string) {
   return queryOptions({
     queryKey: aiThreadsKey(projectId),
     queryFn: async (): Promise<AiThread[]> =>
-      z.object({ threads: z.array(aiThreadSchema) }).parse(await apiFetch<unknown>(`/projects/${projectId}/ai/threads`))
-        .threads,
+      z
+        .object({ threads: z.array(aiThreadSchema) })
+        .parse(await apiFetch<unknown>(`/projects/${projectId}/ai/threads`)).threads,
     retry: false,
   });
 }
@@ -74,12 +83,17 @@ export function aiThreadsQueryOptions(projectId: string) {
 export function aiThreadQueryOptions(threadId: string) {
   return queryOptions({
     queryKey: aiThreadKey(threadId),
-    queryFn: async () => threadWithMessagesSchema.parse(await apiFetch<unknown>(`/ai/threads/${threadId}`)),
+    queryFn: async () =>
+      threadWithMessagesSchema.parse(await apiFetch<unknown>(`/ai/threads/${threadId}`)),
     retry: false,
   });
 }
 
-export async function createThread(projectId: string, entityIds: readonly string[], title: string): Promise<AiThread> {
+export async function createThread(
+  projectId: string,
+  entityIds: readonly string[],
+  title: string,
+): Promise<AiThread> {
   return aiThreadSchema.parse(
     await apiFetch<unknown>(`/projects/${projectId}/ai/threads`, {
       method: 'POST',
@@ -92,24 +106,37 @@ export function docDraftsQueryOptions(projectId: string) {
   return queryOptions({
     queryKey: docDraftsKey(projectId),
     queryFn: async (): Promise<DocDraft[]> =>
-      z.object({ drafts: z.array(docDraftSchema) }).parse(await apiFetch<unknown>(`/projects/${projectId}/ai/doc-drafts`))
-        .drafts,
+      z
+        .object({ drafts: z.array(docDraftSchema) })
+        .parse(await apiFetch<unknown>(`/projects/${projectId}/ai/doc-drafts`)).drafts,
     retry: false,
   });
 }
 
-export async function queueDocDrafts(projectId: string, entityIds: readonly string[]): Promise<void> {
-  await apiFetch<unknown>(`/projects/${projectId}/ai/doc-drafts`, { method: 'POST', body: { entityIds } });
+export async function queueDocDrafts(
+  projectId: string,
+  entityIds: readonly string[],
+): Promise<void> {
+  await apiFetch<unknown>(`/projects/${projectId}/ai/doc-drafts`, {
+    method: 'POST',
+    body: { entityIds },
+  });
 }
 
 export async function reviewDocDraft(id: string, verdict: 'accept' | 'reject'): Promise<void> {
   await apiFetch<unknown>(`/ai/doc-drafts/${id}/${verdict}`, { method: 'POST' });
 }
 
-export async function draftSchema(projectId: string, description: string): Promise<{ source: string; importFormat: string }> {
-  return z
-    .object({ source: z.string(), importFormat: z.string() })
-    .parse(await apiFetch<unknown>(`/projects/${projectId}/ai/draft-schema`, { method: 'POST', body: { description } }));
+export async function draftSchema(
+  projectId: string,
+  description: string,
+): Promise<{ source: string; importFormat: string }> {
+  return z.object({ source: z.string(), importFormat: z.string() }).parse(
+    await apiFetch<unknown>(`/projects/${projectId}/ai/draft-schema`, {
+      method: 'POST',
+      body: { description },
+    }),
+  );
 }
 
 // --- server-sent events -------------------------------------------------------------------
@@ -171,8 +198,13 @@ export async function streamMessage(
     for (const frame of parser.push(decoder.decode(value, { stream: true }))) {
       const data: unknown = JSON.parse(frame.data);
       if (frame.event === 'done') onEvent({ type: 'done', message: aiMessageSchema.parse(data) });
-      else if (frame.event === 'error') onEvent({ type: 'error', code: z.object({ code: z.string() }).parse(data).code });
-      else if (frame.event === 'block-delta') onEvent({ type: 'block-delta', ...z.object({ tag: z.string(), text: z.string() }).parse(data) });
+      else if (frame.event === 'error')
+        onEvent({ type: 'error', code: z.object({ code: z.string() }).parse(data).code });
+      else if (frame.event === 'block-delta')
+        onEvent({
+          type: 'block-delta',
+          ...z.object({ tag: z.string(), text: z.string() }).parse(data),
+        });
       else if (frame.event === 'block-open' || frame.event === 'block-close') {
         onEvent({ type: frame.event, tag: z.object({ tag: z.string() }).parse(data).tag });
       }
@@ -183,7 +215,8 @@ export async function streamMessage(
 /** The three statuses DESIGN §4.4 names, in words. */
 export function aiErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 503 && error.code === 'ai_not_configured') return 'AI is not configured on this server.';
+    if (error.status === 503 && error.code === 'ai_not_configured')
+      return 'AI is not configured on this server.';
     if (error.status === 403) {
       return error.code === 'ai_disabled'
         ? 'AI is turned off for this project.'
@@ -197,7 +230,8 @@ export function aiErrorMessage(error: unknown): string {
         : `Too many AI requests. Try again in ${String(minutes)} min.`;
     }
     if (error.status === 404) return 'This conversation is no longer available.';
-    if (error.code === 'ai_selection_unavailable') return 'The tables this conversation was about no longer exist.';
+    if (error.code === 'ai_selection_unavailable')
+      return 'The tables this conversation was about no longer exist.';
   }
   return 'The assistant could not answer. Try again.';
 }

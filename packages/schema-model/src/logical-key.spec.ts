@@ -60,7 +60,10 @@ describe('logicalKey — the shapes §6.1 names', () => {
   });
 
   it('index: kept on its name — two indexes on one column are different objects', () => {
-    const m = f.model({ ...base.objects, index: f.byId([f.index('i1', 'idx_orders_customer', 'e1')]) });
+    const m = f.model({
+      ...base.objects,
+      index: f.byId([f.index('i1', 'idx_orders_customer', 'e1')]),
+    });
     expect(logicalKey(m, 'index', 'i1')).toBe('idx:public.orders#idx_orders_customer');
   });
 
@@ -89,9 +92,7 @@ describe('logicalKey — the shapes §6.1 names', () => {
         }),
       ]),
     });
-    expect(logicalKey(m, 'link', 'l1')).toBe(
-      'lnk:public.orders(customer_id)->public.orders(id)',
-    );
+    expect(logicalKey(m, 'link', 'l1')).toBe('lnk:public.orders(customer_id)->public.orders(id)');
   });
 });
 
@@ -143,9 +144,7 @@ describe('logicalKey — injectivity, the cases revision 1 broke', () => {
         f.link('l2', 'fk_other', 'e1', 'e2', { cardinality: 'N:M' }),
       ]),
     });
-    expect(logicalKey(m, 'link', 'l1')).toBe(
-      'lnk:public.orders()->public.customers()@fk_draft',
-    );
+    expect(logicalKey(m, 'link', 'l1')).toBe('lnk:public.orders()->public.customers()@fk_draft');
     expect(logicalKey(m, 'link', 'l1')).not.toBe(logicalKey(m, 'link', 'l2'));
   });
 
@@ -218,7 +217,9 @@ describe('logicalKey — normalizeName (§6.3)', () => {
       entity: f.byId([f.entity('e9', 'Orders', 'n9')]),
       field: f.byId([f.field('f9', 'ID', 'e9')]),
     });
-    expect(logicalKey(imported, 'entity', 'e9', lower)).toBe(logicalKey(live, 'entity', 'e1', lower));
+    expect(logicalKey(imported, 'entity', 'e9', lower)).toBe(
+      logicalKey(live, 'entity', 'e1', lower),
+    );
     expect(logicalKey(imported, 'field', 'f9', lower)).toBe(logicalKey(live, 'field', 'f1', lower));
   });
 

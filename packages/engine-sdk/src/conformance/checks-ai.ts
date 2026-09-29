@@ -1,5 +1,10 @@
 import { expect } from 'vitest';
-import { AI_MODES, DEFAULT_AI_CONTEXT_OPTIONS, type AiContextOptions, type AiProfile } from '../ai.js';
+import {
+  AI_MODES,
+  DEFAULT_AI_CONTEXT_OPTIONS,
+  type AiContextOptions,
+  type AiProfile,
+} from '../ai.js';
 import { IR_OBJECT_TYPES, type IrBase, type RedactedModel, type SchemaModel } from '../ir.js';
 import type { ConformanceCheck } from './check.js';
 import { cloneModel, type CheckContext } from './context.js';
@@ -61,7 +66,9 @@ export const AI_CHECKS: readonly ConformanceCheck[] = [
       expect(full.omitted).toEqual([]);
       expect(full.approxTokens).toBe(Math.ceil(full.text.length / 3.6));
 
-      const first = Object.values(model.objects.entity).sort((a, b) => a.name.localeCompare(b.name))[0];
+      const first = Object.values(model.objects.entity).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      )[0];
       for (const selectedEntityIds of [[], first === undefined ? [] : [first.id]]) {
         for (const tokenBudget of [500, 1]) {
           const small = p.serializeContext(model, { ...WIDE, selectedEntityIds, tokenBudget });
@@ -93,7 +100,8 @@ export const AI_CHECKS: readonly ConformanceCheck[] = [
       let restrictedCount = 0;
       for (const type of IR_OBJECT_TYPES) {
         const bag: Record<string, IrBase> = redacted.objects[type];
-        for (const object of Object.values(bag)) if (object.restricted !== true) visibleNames.add(object.name);
+        for (const object of Object.values(bag))
+          if (object.restricted !== true) visibleNames.add(object.name);
       }
       for (const type of IR_OBJECT_TYPES) {
         const bag: Record<string, IrBase> = redacted.objects[type];
@@ -104,7 +112,8 @@ export const AI_CHECKS: readonly ConformanceCheck[] = [
           // The redacted copy has blanked its name; the reference model has the real one.
           for (const name of [object.name, original[object.id]?.name ?? '']) {
             for (const token of tokens(name)) {
-              if (!visibleNames.has(token) && seen.has(token)) leaked.push(`${type} ${object.id}: ${token}`);
+              if (!visibleNames.has(token) && seen.has(token))
+                leaked.push(`${type} ${object.id}: ${token}`);
             }
           }
         }
@@ -112,7 +121,9 @@ export const AI_CHECKS: readonly ConformanceCheck[] = [
       expect(restrictedCount).toBeGreaterThan(0);
       expect(leaked).toEqual([]);
       // A stub has no name; a line that names it would carry an empty slot.
-      expect(text.split('\n').filter((line) => line.includes('-> .') || /->\s*$/.test(line))).toEqual([]);
+      expect(
+        text.split('\n').filter((line) => line.includes('-> .') || /->\s*$/.test(line)),
+      ).toEqual([]);
     },
   },
   {
@@ -128,7 +139,8 @@ export const AI_CHECKS: readonly ConformanceCheck[] = [
       const withDoc = (excerpt: string): RedactedModel => {
         const clone = cloneModel(ctx.fixtures.referenceModel);
         const entity = clone.objects.entity[target.id];
-        if (entity !== undefined) clone.objects.entity[target.id] = { ...entity, doc: { id: 'doc_conformance', excerpt } };
+        if (entity !== undefined)
+          clone.objects.entity[target.id] = { ...entity, doc: { id: 'doc_conformance', excerpt } };
         return ctx.fixtures.redactForExport(clone);
       };
       const plain = p.serializeContext(withDoc('plain'), WIDE).text;

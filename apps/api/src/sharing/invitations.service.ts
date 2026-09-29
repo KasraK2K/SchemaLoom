@@ -84,7 +84,11 @@ export class InvitationsService {
             where: { id: inv.accessGrantId },
             select: { role: { select: { name: true } } },
           });
-    return { organizationName: inv.organization.name, email: inv.email, roleName: grant?.role.name ?? null };
+    return {
+      organizationName: inv.organization.name,
+      email: inv.email,
+      roleName: grant?.role.name ?? null,
+    };
   }
 
   async accept(userId: string, token: string): Promise<AcceptedInvitation> {
@@ -184,7 +188,10 @@ export class InvitationsService {
       });
       await tx.user.update({ where: { id: userId }, data: { permGeneration: { increment: 1 } } });
     });
-    await this.resolver.invalidate({ user: userId, ...(projectId === null ? {} : { project: projectId }) });
+    await this.resolver.invalidate({
+      user: userId,
+      ...(projectId === null ? {} : { project: projectId }),
+    });
 
     return { organizationId: found.organizationId, orgSlug: found.organization.slug, projectId };
   }

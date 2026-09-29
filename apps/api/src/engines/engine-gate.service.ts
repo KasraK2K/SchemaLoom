@@ -30,10 +30,7 @@ export interface ProjectEngineRef {
   readonly enginePluginVersion: string;
 }
 
-export type EngineReadOnlyReason = Extract<
-  EngineVersionVerdict,
-  { action: 'read-only' }
->['reason'];
+export type EngineReadOnlyReason = Extract<EngineVersionVerdict, { action: 'read-only' }>['reason'];
 
 export interface WritableEngineState {
   readonly mode: 'read-write';
@@ -87,9 +84,7 @@ export class ProjectReadOnlyException extends HttpException {
  * §15: evaluated when a project is opened and **re-checked on every write**. A caller that
  * holds a `ProjectEngineState` from the open path passes it here rather than resolving twice.
  */
-export function assertWritable(
-  state: ProjectEngineState,
-): asserts state is WritableEngineState {
+export function assertWritable(state: ProjectEngineState): asserts state is WritableEngineState {
   if (state.mode === 'read-only') throw new ProjectReadOnlyException(state);
 }
 

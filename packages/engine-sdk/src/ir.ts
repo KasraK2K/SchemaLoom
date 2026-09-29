@@ -45,7 +45,12 @@ export type {
   SchemaDiff,
 } from '@schemaloom/schema-model';
 
-export { IR_OBJECT_TYPES, MAX_FIELD_DEPTH, diffModels, isEmptyDiff } from '@schemaloom/schema-model';
+export {
+  IR_OBJECT_TYPES,
+  MAX_FIELD_DEPTH,
+  diffModels,
+  isEmptyDiff,
+} from '@schemaloom/schema-model';
 
 import type { Id, IrObjectType } from '@schemaloom/schema-model';
 

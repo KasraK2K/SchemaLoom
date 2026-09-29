@@ -32,9 +32,7 @@ const EMPTY_REFS: ObjectRefs = { entityIds: [], fieldIds: [] };
  * has to stay safe (doc 04 §2.1).
  */
 export const toProps = (value: unknown): Props =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Props)
-    : {};
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Props) : {};
 
 /**
  * `refs` is server-owned (§8.3) and doc 05 R27 reads it to decide whether to blank a
@@ -252,7 +250,12 @@ export async function readProjectRows(db: SchemaDb, projectId: string): Promise<
 }
 
 /** Which ids to read back, per object type. */
-export type TouchedIds = Readonly<Record<'area' | 'namespace' | 'customType' | 'entity' | 'field' | 'constraint' | 'index' | 'link', readonly string[]>>;
+export type TouchedIds = Readonly<
+  Record<
+    'area' | 'namespace' | 'customType' | 'entity' | 'field' | 'constraint' | 'index' | 'link',
+    readonly string[]
+  >
+>;
 
 /**
  * The same shapes, restricted to the objects one batch touched (§8.6 rule 8's
@@ -267,11 +270,7 @@ export async function readTouchedRows(
   projectId: string,
   ids: TouchedIds,
 ): Promise<AssemblyRows> {
-  const docTargets = [
-    ...ids.area,
-    ...ids.entity,
-    ...ids.field,
-  ];
+  const docTargets = [...ids.area, ...ids.entity, ...ids.field];
   const [
     area,
     namespace,

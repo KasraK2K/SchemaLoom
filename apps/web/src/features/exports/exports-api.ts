@@ -50,7 +50,11 @@ export async function runServerExport(projectId: string, format: string): Promis
 }
 
 /** Upload a browser-rendered image and return its download link. */
-export async function runImageExport(projectId: string, format: ImageFormat, blob: Blob): Promise<string> {
+export async function runImageExport(
+  projectId: string,
+  format: ImageFormat,
+  blob: Blob,
+): Promise<string> {
   const job = await startExport(projectId, { format, sizeBytes: blob.size });
   if (job.uploadUrl === undefined) throw new Error('The server did not return an upload URL.');
   // Content-Type and Content-Length are signed into the URL: send exactly the declared type.

@@ -32,7 +32,10 @@ export function CanvasSearch({ model }: { readonly model: SchemaModel }) {
 
   return (
     <div className="relative w-64">
-      <Search className="pointer-events-none absolute left-2 top-2 size-3.5 text-text-subtle" aria-hidden="true" />
+      <Search
+        className="pointer-events-none absolute top-2 left-2 size-3.5 text-text-subtle"
+        aria-hidden="true"
+      />
       <input
         type="search"
         role="combobox"
@@ -55,7 +58,7 @@ export function CanvasSearch({ model }: { readonly model: SchemaModel }) {
           else return;
           e.preventDefault();
         }}
-        className="h-8 w-full rounded-md border border-border bg-surface pl-7 pr-2 text-xs text-text shadow-panel placeholder:text-text-subtle"
+        className="h-8 w-full rounded-md border border-border bg-surface pr-2 pl-7 text-xs text-text shadow-panel placeholder:text-text-subtle"
       />
       {hits.length === 0 ? null : (
         <ul
@@ -64,17 +67,26 @@ export function CanvasSearch({ model }: { readonly model: SchemaModel }) {
           className="absolute z-10 mt-1 max-h-80 w-full overflow-auto rounded-md border border-border bg-surface-raised p-1 text-xs shadow-panel"
         >
           {hits.map((hit, i) => (
-            <li key={`${hit.entityId}:${hit.fieldId ?? ''}`} role="option" aria-selected={i === active}>
+            <li
+              key={`${hit.entityId}:${hit.fieldId ?? ''}`}
+              role="option"
+              aria-selected={i === active}
+            >
               <button
                 type="button"
-                className={cn('w-full rounded px-2 py-1 text-left', i === active && 'bg-surface-hover')}
+                className={cn(
+                  'w-full rounded px-2 py-1 text-left',
+                  i === active && 'bg-surface-hover',
+                )}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   pick(hit);
                 }}
               >
                 <span className="font-mono text-text">{hit.label}</span>
-                {hit.snippet === null ? null : <span className="block truncate text-text-muted">{hit.snippet}</span>}
+                {hit.snippet === null ? null : (
+                  <span className="block truncate text-text-muted">{hit.snippet}</span>
+                )}
               </button>
             </li>
           ))}

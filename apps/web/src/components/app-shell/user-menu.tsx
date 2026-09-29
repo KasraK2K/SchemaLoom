@@ -26,7 +26,9 @@ export function UserMenu() {
         <DropdownMenuItem
           onSelect={() => {
             // Full navigation: middleware must see `sl_presence` gone.
-            void signOut().finally(() => { window.location.assign('/login'); });
+            void signOut().finally(() => {
+              window.location.assign('/login');
+            });
           }}
         >
           Sign out

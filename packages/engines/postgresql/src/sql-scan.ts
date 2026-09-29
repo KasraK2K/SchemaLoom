@@ -135,7 +135,11 @@ export function splitStatements(source: string): readonly SourceChunk[] {
 
 /** Narrow `[from, to)` to the first code character and the last non-whitespace one, or null
  *  when the span holds nothing but whitespace and comments. */
-function trimToCode(source: string, from: number, to: number): { start: number; end: number } | null {
+function trimToCode(
+  source: string,
+  from: number,
+  to: number,
+): { start: number; end: number } | null {
   let start = from;
   while (start < to) {
     const char = source[start];

@@ -10,15 +10,15 @@ import type { Id, RedactedModel } from './ir.js';
  * `parsed: false` with `parseErrors` and whatever identifiers the parser recovered.
  */
 export type IdentifierRole =
-  | 'namespace' | 'entity' | 'field' | 'alias' | 'function' | 'custom-type' | 'unknown';
+  'namespace' | 'entity' | 'field' | 'alias' | 'function' | 'custom-type' | 'unknown';
 
 export type ResolutionStatus =
-  | 'resolved'     // found in the IR
-  | 'alias-local'  // a query-local alias, correctly not in the IR
-  | 'unknown'      // no such object
-  | 'ambiguous'    // matches more than one entity in scope
-  | 'not-visible'  // exists, but the user may not see it (§12.1)
-  | 'unchecked';   // inside a construct the validator does not resolve (raw JSON path, CTE body)
+  | 'resolved' // found in the IR
+  | 'alias-local' // a query-local alias, correctly not in the IR
+  | 'unknown' // no such object
+  | 'ambiguous' // matches more than one entity in scope
+  | 'not-visible' // exists, but the user may not see it (§12.1)
+  | 'unchecked'; // inside a construct the validator does not resolve (raw JSON path, CTE body)
 
 export interface IdentifierResolution {
   /** exactly as written in the query, including quoting: "public"."orders" */

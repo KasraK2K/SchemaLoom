@@ -43,18 +43,27 @@ export function GroupsManager({
 
   const create = async (event: SyntheticEvent) => {
     event.preventDefault();
-    if (await run(() => apiFetch(base, { method: 'POST', body: { name: newName.trim() } }))) setNewName('');
+    if (await run(() => apiFetch(base, { method: 'POST', body: { name: newName.trim() } })))
+      setNewName('');
   };
 
   return (
     <div className="flex flex-col gap-4">
       {error !== null && (
-        <p role="alert" className="rounded-md border border-danger px-3 py-2 text-sm text-danger-text">
+        <p
+          role="alert"
+          className="rounded-md border border-danger px-3 py-2 text-sm text-danger-text"
+        >
           {error}
         </p>
       )}
       {canManage && (
-        <form className="flex gap-2" onSubmit={(event) => { void create(event); }}>
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            void create(event);
+          }}
+        >
           <input
             required
             maxLength={120}
@@ -62,7 +71,9 @@ export function GroupsManager({
             placeholder="New group name"
             className={`${INPUT} flex-1`}
             value={newName}
-            onChange={(event) => { setNewName(event.target.value); }}
+            onChange={(event) => {
+              setNewName(event.target.value);
+            }}
           />
           <Button type="submit" size="sm" disabled={newName.trim() === ''}>
             Create group
@@ -72,7 +83,14 @@ export function GroupsManager({
       {groups.length === 0 && <p className="text-sm text-text-subtle">No groups yet.</p>}
       <ul className="flex flex-col gap-3">
         {groups.map((group) => (
-          <GroupCard key={group.id} base={base} group={group} members={members} canManage={canManage} run={run} />
+          <GroupCard
+            key={group.id}
+            base={base}
+            group={group}
+            members={members}
+            canManage={canManage}
+            run={run}
+          />
         ))}
       </ul>
     </div>
@@ -107,9 +125,11 @@ function GroupCard({
             className="flex flex-1 gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              void run(() => apiFetch(url, { method: 'PATCH', body: { name: name.trim() } })).then((ok) => {
-                if (ok) setRenaming(false);
-              });
+              void run(() => apiFetch(url, { method: 'PATCH', body: { name: name.trim() } })).then(
+                (ok) => {
+                  if (ok) setRenaming(false);
+                },
+              );
             }}
           >
             <input
@@ -118,12 +138,22 @@ function GroupCard({
               aria-label="Group name"
               className={`${INPUT} flex-1`}
               value={name}
-              onChange={(event) => { setName(event.target.value); }}
+              onChange={(event) => {
+                setName(event.target.value);
+              }}
             />
             <Button type="submit" size="sm" disabled={name.trim() === ''}>
               Save
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => { setRenaming(false); setName(group.name); }}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setRenaming(false);
+                setName(group.name);
+              }}
+            >
               Cancel
             </Button>
           </form>
@@ -137,14 +167,22 @@ function GroupCard({
         )}
         {canManage && !renaming && (
           <>
-            <Button size="sm" variant="ghost" onClick={() => { setRenaming(true); }}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setRenaming(true);
+              }}
+            >
               Rename
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => {
-                if (window.confirm(`Delete the group "${group.name}"? Access it grants is removed.`)) {
+                if (
+                  window.confirm(`Delete the group "${group.name}"? Access it grants is removed.`)
+                ) {
                   void run(() => apiFetch(url, { method: 'DELETE' }));
                 }
               }}
@@ -166,7 +204,9 @@ function GroupCard({
                 size="sm"
                 variant="ghost"
                 aria-label={`Remove ${m.name} from ${group.name}`}
-                onClick={() => { void run(() => apiFetch(`${url}/members/${m.userId}`, { method: 'DELETE' })); }}
+                onClick={() => {
+                  void run(() => apiFetch(`${url}/members/${m.userId}`, { method: 'DELETE' }));
+                }}
               >
                 Remove
               </Button>
@@ -180,7 +220,9 @@ function GroupCard({
           className="mt-2 flex gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            void run(() => apiFetch(`${url}/members`, { method: 'POST', body: { userId: adding } })).then((ok) => {
+            void run(() =>
+              apiFetch(`${url}/members`, { method: 'POST', body: { userId: adding } }),
+            ).then((ok) => {
               if (ok) setAdding('');
             });
           }}
@@ -189,7 +231,9 @@ function GroupCard({
             aria-label={`Add a member to ${group.name}`}
             className={`${INPUT} flex-1`}
             value={adding}
-            onChange={(event) => { setAdding(event.target.value); }}
+            onChange={(event) => {
+              setAdding(event.target.value);
+            }}
           >
             <option value="">Add a member…</option>
             {addable.map((m) => (

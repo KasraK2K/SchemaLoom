@@ -34,7 +34,9 @@ export const LINK_CHECKS: readonly ConformanceCheck[] = [
           );
         }
         if (result.ok && !result.allowedCardinalities.includes(link.cardinality)) {
-          problems.push(`${link.id} carries cardinality ${link.cardinality}, which its kind forbids`);
+          problems.push(
+            `${link.id} carries cardinality ${link.cardinality}, which its kind forbids`,
+          );
         }
       }
       expect(problems).toEqual([]);

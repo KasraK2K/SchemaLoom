@@ -34,7 +34,10 @@ export class UpdateMemberDto extends createZodDto(updateMemberSchema) {}
 const groupName = z.string().trim().min(1).max(120);
 const groupDescription = z.string().trim().max(500).nullable();
 
-export const createGroupSchema = z.object({ name: groupName, description: groupDescription.optional() });
+export const createGroupSchema = z.object({
+  name: groupName,
+  description: groupDescription.optional(),
+});
 export class CreateGroupDto extends createZodDto(createGroupSchema) {}
 
 export const updateGroupSchema = z.object({

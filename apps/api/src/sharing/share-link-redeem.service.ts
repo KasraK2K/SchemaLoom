@@ -1,4 +1,11 @@
-import { HttpException, HttpStatus, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import { TokensService } from '../auth';
 import { verifyPassword } from '../auth/password';

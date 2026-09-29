@@ -23,7 +23,11 @@ describe('diagnostic ordering (§2.5)', () => {
       diag({ code: 'e.a', target: { type: 'field', id: 'f1', propPath: ['b'] } }),
       diag({ code: 'e.a', target: { type: 'field', id: 'f1', propPath: ['a'] } }),
     ];
-    expect(sortDiagnostics(input).map((d) => `${d.target.type}/${d.target.id}/${d.code}/${(d.target.propPath ?? []).join('.')}`)).toEqual([
+    expect(
+      sortDiagnostics(input).map(
+        (d) => `${d.target.type}/${d.target.id}/${d.code}/${(d.target.propPath ?? []).join('.')}`,
+      ),
+    ).toEqual([
       'project/p1/e.a/',
       'entity/e1/e.a/',
       'entity/e9/e.a/',
@@ -43,7 +47,10 @@ describe('diagnostic ordering (§2.5)', () => {
   });
 
   it('does not mutate its input', () => {
-    const input = [diag({ target: { type: 'field', id: 'z' } }), diag({ target: { type: 'entity', id: 'a' } })];
+    const input = [
+      diag({ target: { type: 'field', id: 'z' } }),
+      diag({ target: { type: 'entity', id: 'a' } }),
+    ];
     const before = [...input];
     sortDiagnostics(input);
     expect(input).toEqual(before);

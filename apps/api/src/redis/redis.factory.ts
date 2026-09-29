@@ -25,9 +25,7 @@ export function redisOptionsFor(role: RedisRole, keyPrefix: string): RedisOption
   const base: RedisOptions = { keyPrefix: `${keyPrefix}${SEGMENT[role]}` };
   // BullMQ's blocking reads need unlimited retries and no ready check; both are
   // wrong for a cache or a counter, which is why this is a per-role branch.
-  return role === 'queue'
-    ? { ...base, maxRetriesPerRequest: null, enableReadyCheck: false }
-    : base;
+  return role === 'queue' ? { ...base, maxRetriesPerRequest: null, enableReadyCheck: false } : base;
 }
 
 export function createRedisClient(

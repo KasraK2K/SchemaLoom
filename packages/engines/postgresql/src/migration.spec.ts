@@ -1,4 +1,8 @@
-import { renderMigrationScript, type MigrationPlan, type SchemaModel } from '@schemaloom/engine-sdk';
+import {
+  renderMigrationScript,
+  type MigrationPlan,
+  type SchemaModel,
+} from '@schemaloom/engine-sdk';
 import { diffModels } from '@schemaloom/schema-model';
 import { describe, expect, it } from 'vitest';
 import { annotateDiff, typeChangeRisk } from './annotate.js';
@@ -11,7 +15,11 @@ import { MIGRATION_GENERATOR } from './migration.js';
  * guarantees over any engine's fixtures; this file asserts the SQL PostgreSQL needs.
  */
 
-async function migrate(before: SchemaModel, after: SchemaModel, allowDestructive = false): Promise<MigrationPlan> {
+async function migrate(
+  before: SchemaModel,
+  after: SchemaModel,
+  allowDestructive = false,
+): Promise<MigrationPlan> {
   const diff = annotateDiff(diffModels(before, after, { ignoreCosmetic: true }), before, after);
   return MIGRATION_GENERATOR.generate({
     diff,
@@ -46,7 +54,11 @@ describe('the fixture pairs', () => {
     const { before, after } = pair('drop a column');
     const guarded = await migrate(before, after);
     expect(guarded.steps).toMatchObject([
-      { text: 'ALTER TABLE public.customers DROP COLUMN created_at', destructive: true, commentedOut: true },
+      {
+        text: 'ALTER TABLE public.customers DROP COLUMN created_at',
+        destructive: true,
+        commentedOut: true,
+      },
     ]);
     expect(renderMigrationScript(guarded, { separator: ';', lineComment: '--' })).toContain(
       '-- ALTER TABLE public.customers DROP COLUMN created_at;',
@@ -111,7 +123,9 @@ describe('whole-model scripts', () => {
 describe('custom types', () => {
   const withLabels = (labels: string[]) =>
     model({
-      customTypes: [customType({ id: 'ct', name: 'mood', namespaceId: 'public', engineProps: { labels } })],
+      customTypes: [
+        customType({ id: 'ct', name: 'mood', namespaceId: 'public', engineProps: { labels } }),
+      ],
     });
 
   it('appends an enum label with ADD VALUE', async () => {
@@ -133,7 +147,9 @@ describe('custom types', () => {
   it('lets a type rename carry its columns: no ALTER COLUMN TYPE', async () => {
     const build = (name: string) =>
       model({
-        customTypes: [customType({ id: 'ct', name, namespaceId: 'public', engineProps: { labels: ['a'] } })],
+        customTypes: [
+          customType({ id: 'ct', name, namespaceId: 'public', engineProps: { labels: ['a'] } }),
+        ],
         entities: [table({ id: 't', name: 't', namespaceId: 'public' })],
         fields: [column({ id: 'c', name: 'c', entityId: 't', type: { name, customTypeId: 'ct' } })],
       });
@@ -168,7 +184,17 @@ describe('columns', () => {
 
   it('recreates a view whose definition changed', async () => {
     const view = (sql: string) =>
-      model({ entities: [table({ id: 'v', name: 'v', namespaceId: 'public', kind: 'view', engineProps: { viewDefinition: sql } })] });
+      model({
+        entities: [
+          table({
+            id: 'v',
+            name: 'v',
+            namespaceId: 'public',
+            kind: 'view',
+            engineProps: { viewDefinition: sql },
+          }),
+        ],
+      });
     expect(texts(await migrate(view('SELECT 1'), view('SELECT 2')))).toEqual([
       'DROP VIEW public.v',
       'CREATE VIEW public.v AS SELECT 2',
@@ -179,7 +205,10 @@ describe('columns', () => {
 describe('typeChangeRisk', () => {
   const risk = (from: { name: string; args?: number[] }, to: { name: string; args?: number[] }) => {
     const m = (type: typeof from) =>
-      model({ entities: [table({ id: 't', namespaceId: 'public' })], fields: [column({ id: 'c', entityId: 't', type })] });
+      model({
+        entities: [table({ id: 't', namespaceId: 'public' })],
+        fields: [column({ id: 'c', entityId: 't', type })],
+      });
     const b = m(from);
     const a = m(to);
     const bf = b.objects.field.c;

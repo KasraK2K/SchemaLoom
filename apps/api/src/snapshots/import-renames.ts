@@ -56,7 +56,8 @@ export function renameOps(
         created.find((e) => e.namespaceId === entity.namespaceId) ??
         refuse(index, created.length > 0 ? 'cross_namespace' : 'unknown_target');
       const collides = Object.values(live.objects.entity).some(
-        (e) => e.id !== fromId && e.namespaceId === entity.namespaceId && norm(e.name) === norm(toName),
+        (e) =>
+          e.id !== fromId && e.namespaceId === entity.namespaceId && norm(e.name) === norm(toName),
       );
       if (collides) refuse(index, 'name_collision');
       const key = `ent:${entity.namespaceId}:${norm(toName)}`;

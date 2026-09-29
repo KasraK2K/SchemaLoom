@@ -76,7 +76,12 @@ describe('<ValidationNotes>', () => {
   });
 
   it('counts unknown and ambiguous identifiers, and stays quiet for a clean SELECT', () => {
-    const ident = { range: { start: 0, end: 1 }, role: 'entity', messageCode: null, suggestions: [] };
+    const ident = {
+      range: { start: 0, end: 1 },
+      role: 'entity',
+      messageCode: null,
+      suggestions: [],
+    };
     const v = validation({
       identifiers: [
         { ...ident, text: 'a', status: 'unknown' },

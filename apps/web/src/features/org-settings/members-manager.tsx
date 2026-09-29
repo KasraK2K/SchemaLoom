@@ -48,7 +48,10 @@ export function MembersManager({
   return (
     <div className="flex flex-col gap-4">
       {error !== null && (
-        <p role="alert" className="rounded-md border border-danger px-3 py-2 text-sm text-danger-text">
+        <p
+          role="alert"
+          className="rounded-md border border-danger px-3 py-2 text-sm text-danger-text"
+        >
           {error}
         </p>
       )}
@@ -58,7 +61,11 @@ export function MembersManager({
           const editable = manages && (orgRole === 'owner' || member.role !== 'owner');
           const choices = orgRole === 'owner' ? ORG_ROLES : ORG_ROLES.filter((r) => r !== 'owner');
           return (
-            <li key={member.userId} className="flex items-center gap-3 p-3" data-testid="org-member">
+            <li
+              key={member.userId}
+              className="flex items-center gap-3 p-3"
+              data-testid="org-member"
+            >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-text">{member.name}</p>
                 <p className="truncate text-xs text-text-muted">{member.email}</p>
@@ -71,7 +78,9 @@ export function MembersManager({
                     value={member.role}
                     onChange={(event) => {
                       const role = event.target.value as OrgRole;
-                      void run(() => apiFetch(`${base}/${member.userId}`, { method: 'PATCH', body: { role } }));
+                      void run(() =>
+                        apiFetch(`${base}/${member.userId}`, { method: 'PATCH', body: { role } }),
+                      );
                     }}
                   >
                     {choices.map((role) => (
@@ -84,7 +93,11 @@ export function MembersManager({
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      if (window.confirm(`Remove ${member.name} from the organisation? Their grants stop working immediately.`)) {
+                      if (
+                        window.confirm(
+                          `Remove ${member.name} from the organisation? Their grants stop working immediately.`,
+                        )
+                      ) {
                         void run(() => apiFetch(`${base}/${member.userId}`, { method: 'DELETE' }));
                       }
                     }}

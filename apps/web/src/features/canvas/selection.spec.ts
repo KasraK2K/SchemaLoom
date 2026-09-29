@@ -16,8 +16,16 @@ describe('selection reducer', () => {
       { id: 'b', selected: true },
     ]);
     expect([...click]).toEqual(['b']);
-    expect([...applySelectChanges(click, [{ id: 'c', selected: true }])].sort()).toEqual(['b', 'c']);
-    expect(applySelectChanges(selectOnly(['a', 'b']), [{ id: 'a', selected: false }, { id: 'b', selected: false }]).size).toBe(0);
+    expect([...applySelectChanges(click, [{ id: 'c', selected: true }])].sort()).toEqual([
+      'b',
+      'c',
+    ]);
+    expect(
+      applySelectChanges(selectOnly(['a', 'b']), [
+        { id: 'a', selected: false },
+        { id: 'b', selected: false },
+      ]).size,
+    ).toBe(0);
   });
 
   it('replaces the whole selection', () => {

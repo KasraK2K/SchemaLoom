@@ -111,7 +111,9 @@ export function ProjectActions({ id, name }: { readonly id: string; readonly nam
                   })
                   .catch((caught: unknown) => {
                     setError(
-                      caught instanceof ApiError ? caught.message : 'Something went wrong. Try again.',
+                      caught instanceof ApiError
+                        ? caught.message
+                        : 'Something went wrong. Try again.',
                     );
                   })
                   .finally(() => {

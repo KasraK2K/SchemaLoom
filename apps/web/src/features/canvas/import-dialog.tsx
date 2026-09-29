@@ -99,10 +99,13 @@ export function ImportDialog({
 
   const entities = (candidates ?? []).filter((c): c is EntityCandidate => c.type === 'entity');
   const fields = (candidates ?? []).filter((c): c is FieldCandidate => c.type === 'field');
-  const renamedEntity = new Set(entities.filter((c) => confirmed.has(`entity:${c.fromId}`)).map((c) => c.fromId));
+  const renamedEntity = new Set(
+    entities.filter((c) => confirmed.has(`entity:${c.fromId}`)).map((c) => c.fromId),
+  );
   const proposedEntity = new Set(entities.map((c) => c.fromId));
   /** A field pair inside a table rename only applies when that rename is confirmed. */
-  const fieldApplies = (c: FieldCandidate) => !proposedEntity.has(c.entityId) || renamedEntity.has(c.entityId);
+  const fieldApplies = (c: FieldCandidate) =>
+    !proposedEntity.has(c.entityId) || renamedEntity.has(c.entityId);
 
   const submitRenames = () => {
     const tables = entities.filter((c) => confirmed.has(`entity:${c.fromId}`));
@@ -128,7 +131,9 @@ export function ImportDialog({
   };
 
   const notApplied = result?.report.statements.filter((s) => s.status !== 'applied') ?? [];
-  const renamedTo = new Set(entities.filter((c) => confirmed.has(`entity:${c.fromId}`)).map((c) => c.toName));
+  const renamedTo = new Set(
+    entities.filter((c) => confirmed.has(`entity:${c.fromId}`)).map((c) => c.toName),
+  );
   const unchanged = (result?.existing ?? []).filter((name) => !renamedTo.has(name));
   const matchedFields = fields.filter((c) => !proposedEntity.has(c.entityId));
 
@@ -137,18 +142,20 @@ export function ImportDialog({
       <DialogContent className="max-w-2xl">
         <DialogTitle>Import SQL</DialogTitle>
         <DialogDescription>
-          Adds what the project does not have yet. Existing objects are left unchanged, except
-          for renames you confirm.
+          Adds what the project does not have yet. Existing objects are left unchanged, except for
+          renames you confirm.
         </DialogDescription>
         {result !== null ? (
           <div className="mt-4 flex flex-col gap-2 text-xs">
             <p className="text-sm text-text">
-              {result.report.statementCount - notApplied.length} of{' '}
-              {result.report.statementCount} statements applied.
+              {result.report.statementCount - notApplied.length} of {result.report.statementCount}{' '}
+              statements applied.
             </p>
             {renamed.length > 0 && <p className="text-text-muted">Renamed: {renamed.join(', ')}</p>}
             {unchanged.length > 0 && (
-              <p className="text-text-muted">Already in the project, left unchanged: {unchanged.join(', ')}</p>
+              <p className="text-text-muted">
+                Already in the project, left unchanged: {unchanged.join(', ')}
+              </p>
             )}
             {notApplied.length > 0 && (
               <ul className="flex max-h-64 flex-col gap-2 overflow-auto">
@@ -192,7 +199,7 @@ export function ImportDialog({
                     fields
                       .filter((f) => f.entityId === c.fromId)
                       .map((f) => (
-                        <div key={f.fromId} className="mt-2 border-t border-border pl-4 pt-2">
+                        <div key={f.fromId} className="mt-2 border-t border-border pt-2 pl-4">
                           <RenameCard
                             label={`Column ${f.fromName} → ${f.toName}`}
                             reason={f.reason}

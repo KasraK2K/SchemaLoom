@@ -143,7 +143,13 @@ describe('OrganizationsService.listProjects', () => {
 
   it('shows a guest (an accepted email invite) only the projects it was granted', async () => {
     const guest = new Map<string, ProjectPermissionMap>([
-      ['prj_open', mapOf('prj_open', { orgRole: 'guest', projectAtoms: new Set<PermissionAtom>(['schema:view', 'export:run']) })],
+      [
+        'prj_open',
+        mapOf('prj_open', {
+          orgRole: 'guest',
+          projectAtoms: new Set<PermissionAtom>(['schema:view', 'export:run']),
+        }),
+      ],
       ['prj_closed', mapOf('prj_closed', { orgRole: 'guest' })],
       ['prj_area', mapOf('prj_area', { orgRole: 'guest' })],
     ]);
@@ -158,11 +164,7 @@ describe('OrganizationsService.listProjects', () => {
 
     // Doc 05 §10.4. An org with 200 projects must cost one resolve, not 200.
     expect(h.resolveProjects).toHaveBeenCalledTimes(1);
-    expect(h.resolveProjects.mock.calls[0]?.[1]).toEqual([
-      'prj_open',
-      'prj_closed',
-      'prj_area',
-    ]);
+    expect(h.resolveProjects.mock.calls[0]?.[1]).toEqual(['prj_open', 'prj_closed', 'prj_area']);
     // Built from the membership row this method verified, not from the session's active
     // org — which is what lets a user in three orgs list all three.
     expect(h.resolveProjects.mock.calls[0]?.[0]).toEqual({
@@ -226,9 +228,7 @@ describe('OrganizationsService workspaces', () => {
     );
     const prisma = {
       orgMember: {
-        findFirst: vi
-          .fn()
-          .mockResolvedValue(role === null ? null : { organizationId: ORG, role }),
+        findFirst: vi.fn().mockResolvedValue(role === null ? null : { organizationId: ORG, role }),
       },
       workspace: {
         findMany: vi.fn().mockResolvedValue([{ id: 'ws_0', name: 'General', slug: 'general' }]),

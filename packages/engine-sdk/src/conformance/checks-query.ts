@@ -43,9 +43,7 @@ export const QUERY_CHECKS: readonly ConformanceCheck[] = [
       for (const fixture of ctx.fixtures.queries) {
         const result = await validate(ctx, fixture.query);
         const touched = result.touchedEntityIds.map((id) => entities[id]?.name);
-        const unknown = result.identifiers
-          .filter((i) => i.status === 'unknown')
-          .map((i) => i.text);
+        const unknown = result.identifiers.filter((i) => i.status === 'unknown').map((i) => i.text);
         expect({ name: fixture.name, parsed: result.parsed, touched, unknown }).toEqual({
           name: fixture.name,
           parsed: fixture.expect.parsed,

@@ -57,10 +57,16 @@ export class ShareLinksService {
       orderBy: { createdAt: 'desc' },
     });
     const grants = await this.prisma.accessGrant.findMany({
-      where: { projectId, principalType: PrincipalType.share_link, principalId: { in: rows.map((r) => r.id) } },
+      where: {
+        projectId,
+        principalType: PrincipalType.share_link,
+        principalId: { in: rows.map((r) => r.id) },
+      },
       select: { principalId: true, resourceType: true, resourceId: true },
     });
-    const target = new Map(grants.map((g) => [g.principalId, { type: g.resourceType, id: g.resourceId }]));
+    const target = new Map(
+      grants.map((g) => [g.principalId, { type: g.resourceType, id: g.resourceId }]),
+    );
     const names = await this.names(projectId);
 
     const links: ShareLinkView[] = [];
@@ -87,11 +93,25 @@ export class ShareLinksService {
       assertVisible(map, skel, ref);
       // §7.12: the role is ALWAYS the built-in viewer, so R4 is checked against exactly
       // that — and R17's `schema:view` ceiling is defence in depth, not the only control.
-      this.resolver.assertMayGrant(map, skel, ref, materialise({ atoms: viewer.atoms, canUseAi: false, canViewRestricted: false }));
-      const project = await tx.project.findUniqueOrThrow({ where: { id: projectId }, select: { organizationId: true } });
+      this.resolver.assertMayGrant(
+        map,
+        skel,
+        ref,
+        materialise({ atoms: viewer.atoms, canUseAi: false, canViewRestricted: false }),
+      );
+      const project = await tx.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { organizationId: true },
+      });
 
       const row = await tx.shareLink.create({
-        data: { projectId, tokenHash: hashShareToken(token), passwordHash, expiresAt, createdById: subject.userId },
+        data: {
+          projectId,
+          tokenHash: hashShareToken(token),
+          passwordHash,
+          expiresAt,
+          createdById: subject.userId,
+        },
       });
       await tx.accessGrant.create({
         data: {
@@ -109,7 +129,11 @@ export class ShareLinksService {
         action: 'share_link.created',
         resourceType: ref.type,
         resourceId: ref.id,
-        metadata: { shareLinkId: row.id, hasPassword: passwordHash !== null, expiresAt: body.expiresAt },
+        metadata: {
+          shareLinkId: row.id,
+          hasPassword: passwordHash !== null,
+          expiresAt: body.expiresAt,
+        },
       });
       return row;
     });
@@ -138,13 +162,16 @@ export class ShareLinksService {
 
     await this.writer.write(subject, link.projectId, async ({ tx, map, skel }) => {
       // A link whose grant is already gone (a pre-R25 row) is revoked at the project.
-      const ref: ResourceRef = grant === null
-        ? { type: 'project', id: link.projectId }
-        : ({ type: grant.resourceType, id: grant.resourceId });
+      const ref: ResourceRef =
+        grant === null
+          ? { type: 'project', id: link.projectId }
+          : { type: grant.resourceType, id: grant.resourceId };
       assertVisible(map, skel, ref);
       this.resolver.assertMayDeleteGrant(map, skel, ref);
       await tx.shareLink.update({ where: { id: linkId }, data: { revokedAt: new Date() } });
-      await tx.accessGrant.deleteMany({ where: { principalType: PrincipalType.share_link, principalId: linkId } });
+      await tx.accessGrant.deleteMany({
+        where: { principalType: PrincipalType.share_link, principalId: linkId },
+      });
       await this.writer.audit(tx, subject, link.projectId, link.project.organizationId, {
         action: 'share_link.revoked',
         resourceType: ref.type,
@@ -155,7 +182,14 @@ export class ShareLinksService {
   }
 
   private view(
-    row: { id: string; createdAt: Date; expiresAt: Date | null; passwordHash: string | null; accessCount: number; lastAccessedAt: Date | null },
+    row: {
+      id: string;
+      createdAt: Date;
+      expiresAt: Date | null;
+      passwordHash: string | null;
+      accessCount: number;
+      lastAccessedAt: Date | null;
+    },
     ref: ResourceRef,
     resourceName: string,
   ): ShareLinkView {

@@ -73,7 +73,8 @@ export class ExportsService {
 
   async create(subject: User, projectId: string, input: CreateExportInput): Promise<ExportJobView> {
     const { format } = input;
-    if (isImageFormat(format)) return this.createUpload(subject, projectId, format, input.sizeBytes);
+    if (isImageFormat(format))
+      return this.createUpload(subject, projectId, format, input.sizeBytes);
     await this.assertServerFormat(projectId, format);
 
     const row = await this.prisma.exportJob.create({
@@ -180,7 +181,10 @@ export class ExportsService {
       select: { engineId: true },
     });
     const engine = project === null ? undefined : this.registry.tryGet(project.engineId);
-    if (engine?.exporter === undefined || !engine.capabilities.exportFormats.some((f) => f.id === format)) {
+    if (
+      engine?.exporter === undefined ||
+      !engine.capabilities.exportFormats.some((f) => f.id === format)
+    ) {
       throw new BadRequestException({ code: 'export_format_unsupported', format });
     }
   }

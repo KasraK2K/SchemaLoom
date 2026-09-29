@@ -1,6 +1,14 @@
 'use client';
 
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle, cn } from '@schemaloom/ui';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  cn,
+} from '@schemaloom/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useMemo, useState, type ReactNode } from 'react';
@@ -35,7 +43,13 @@ const errorText = (caught: unknown): string =>
  * The web does not know the caller's atoms, so the tab is always shown and a caller
  * without `history:view` gets the API's refusal rendered as "not available" here.
  */
-export function HistoryView({ orgSlug, projectId }: { readonly orgSlug: string; readonly projectId: string }) {
+export function HistoryView({
+  orgSlug,
+  projectId,
+}: {
+  readonly orgSlug: string;
+  readonly projectId: string;
+}) {
   const list = useQuery(snapshotsQueryOptions(projectId));
   const [selected, setSelected] = useState<string | null>(null);
   const [compareTo, setCompareTo] = useState<string | null>(null);
@@ -61,7 +75,10 @@ export function HistoryView({ orgSlug, projectId }: { readonly orgSlug: string; 
 
   return (
     <div className="flex h-full min-h-0">
-      <section aria-label="Snapshots" className="flex w-80 shrink-0 flex-col gap-3 overflow-auto border-r border-border p-3">
+      <section
+        aria-label="Snapshots"
+        className="flex w-80 shrink-0 flex-col gap-3 overflow-auto border-r border-border p-3"
+      >
         <TakeSnapshot projectId={projectId} />
         {list.isPending ? (
           <p className="text-xs text-text-subtle">Loading…</p>
@@ -85,7 +102,9 @@ export function HistoryView({ orgSlug, projectId }: { readonly orgSlug: string; 
                 >
                   <span className="flex items-center gap-2 text-sm text-text">
                     <span className="truncate">{s.name}</span>
-                    <span className="rounded bg-surface-sunken px-1 text-[10px] uppercase text-text-muted">{s.kind}</span>
+                    <span className="rounded bg-surface-sunken px-1 text-[10px] text-text-muted uppercase">
+                      {s.kind}
+                    </span>
                   </span>
                   <span className="text-xs text-text-subtle">{relativeTime(s.createdAt)}</span>
                 </button>
@@ -122,7 +141,10 @@ function TakeSnapshot({ projectId }: { readonly projectId: string }) {
   const [note, setNote] = useState('');
   const create = useMutation({
     mutationFn: () =>
-      createSnapshot(projectId, { name: name.trim(), ...(note.trim() === '' ? {} : { description: note.trim() }) }),
+      createSnapshot(projectId, {
+        name: name.trim(),
+        ...(note.trim() === '' ? {} : { description: note.trim() }),
+      }),
     onSuccess: async () => {
       setName('');
       setNote('');
@@ -225,7 +247,9 @@ function DiffPane({
           variant={showSql && !sqlBlocked ? 'outline' : 'ghost'}
           aria-pressed={showSql && !sqlBlocked}
           disabled={sqlBlocked}
-          title={sqlBlocked ? 'Migration SQL needs access to every table in the project.' : undefined}
+          title={
+            sqlBlocked ? 'Migration SQL needs access to every table in the project.' : undefined
+          }
           onClick={() => {
             setShowSql((on) => !on);
           }}
@@ -246,7 +270,11 @@ function DiffPane({
           size="sm"
           variant="outline"
           disabled={live.data?.fullView !== true}
-          title={live.data?.fullView === false ? 'Restoring needs access to every table in the project.' : undefined}
+          title={
+            live.data?.fullView === false
+              ? 'Restoring needs access to every table in the project.'
+              : undefined
+          }
           onClick={() => {
             setRestoring(true);
           }}
@@ -257,9 +285,13 @@ function DiffPane({
           <DeleteButton projectId={projectId} snapshotId={snapshot.id} onDeleted={onDeleted} />
         )}
       </header>
-      {snapshot.description !== null && <p className="text-xs text-text-muted">{snapshot.description}</p>}
+      {snapshot.description !== null && (
+        <p className="text-xs text-text-muted">{snapshot.description}</p>
+      )}
       {live.data?.fullView === false && (
-        <p className="text-xs text-text-muted">Restore is unavailable: it needs access to every table in the project.</p>
+        <p className="text-xs text-text-muted">
+          Restore is unavailable: it needs access to every table in the project.
+        </p>
       )}
       {showSql && !sqlBlocked ? (
         <MigrationPane projectId={projectId} from={snapshot} to={compareTo} />
@@ -315,11 +347,14 @@ function MigrationPane({
     const status = plan.error instanceof ApiError ? plan.error.status : 0;
     return (
       <p role="alert" className="text-xs text-danger-text">
-        {status === 403 ? 'Migration SQL needs access to every table in the project.' : errorText(plan.error)}
+        {status === 403
+          ? 'Migration SQL needs access to every table in the project.'
+          : errorText(plan.error)}
       </p>
     );
   }
-  if (plan.data === undefined) return <p className="text-xs text-text-subtle">Generating the migration…</p>;
+  if (plan.data === undefined)
+    return <p className="text-xs text-text-subtle">Generating the migration…</p>;
 
   const { steps, summary, unsupported, script, fileExtension } = plan.data;
   const download = () => {
@@ -366,13 +401,15 @@ function MigrationPane({
       </div>
       {!allowDestructive && summary.destructive > 0 && (
         <p className="text-xs text-text-muted">
-          Destructive steps are commented out in the script. Tick “Include destructive steps” to run them.
+          Destructive steps are commented out in the script. Tick “Include destructive steps” to run
+          them.
         </p>
       )}
       {unsupported.length > 0 && (
         <details open className="rounded border border-warning bg-warning-subtle">
           <summary className="cursor-pointer px-2 py-1.5 text-xs font-medium text-warning-text">
-            {unsupported.length} change{unsupported.length === 1 ? ' needs' : 's need'} a manual step
+            {unsupported.length} change{unsupported.length === 1 ? ' needs' : 's need'} a manual
+            step
           </summary>
           <ul className="flex flex-col gap-0.5 border-t border-warning px-2 py-1.5 text-xs text-text">
             {unsupported.map((u, i) => (
@@ -407,18 +444,25 @@ function StepRow({ step }: { readonly step: MigrationStep }) {
             : 'border-border',
       )}
     >
-      <span className="flex flex-wrap items-center gap-2 text-[10px] uppercase text-text-subtle">
+      <span className="flex flex-wrap items-center gap-2 text-[10px] text-text-subtle uppercase">
         <span>{step.kind}</span>
         {step.destructive && <span className="text-danger-text">destructive</span>}
         {step.lossy && <span className="text-warning-text">lossy</span>}
         {step.requiresTableRewrite && <span>locks the table</span>}
         {step.commentedOut && <span>commented out</span>}
       </span>
-      <pre className={cn('whitespace-pre-wrap font-mono text-xs text-text', step.commentedOut && 'opacity-60 line-through')}>
+      <pre
+        className={cn(
+          'font-mono text-xs whitespace-pre-wrap text-text',
+          step.commentedOut && 'line-through opacity-60',
+        )}
+      >
         {step.text}
       </pre>
       {step.reason !== null && (
-        <span className={cn('text-xs', step.destructive ? 'text-danger-text' : 'text-text-muted')}>{step.reason}</span>
+        <span className={cn('text-xs', step.destructive ? 'text-danger-text' : 'text-text-muted')}>
+          {step.reason}
+        </span>
       )}
     </li>
   );
@@ -459,8 +503,12 @@ function DiffBody({
         return (
           <details key={entityId} open className="rounded border border-border">
             <summary className="flex cursor-pointer items-center gap-2 px-2 py-1.5 text-sm text-text">
-              <span className="font-medium">{own === undefined ? (entityName(entityId) ?? entityId) : entryName(own)}</span>
-              <span className="text-xs text-text-subtle">{entries.length} change{entries.length === 1 ? '' : 's'}</span>
+              <span className="font-medium">
+                {own === undefined ? (entityName(entityId) ?? entityId) : entryName(own)}
+              </span>
+              <span className="text-xs text-text-subtle">
+                {entries.length} change{entries.length === 1 ? '' : 's'}
+              </span>
               {href !== null && (
                 <Link href={href} className="ml-auto text-xs text-accent hover:underline">
                   Show on canvas
@@ -477,7 +525,9 @@ function DiffBody({
       })}
       {other.length > 0 && (
         <details open className="rounded border border-border">
-          <summary className="cursor-pointer px-2 py-1.5 text-sm font-medium text-text">Other</summary>
+          <summary className="cursor-pointer px-2 py-1.5 text-sm font-medium text-text">
+            Other
+          </summary>
           <ul className="flex flex-col border-t border-border">
             {other.map((e) => (
               <EntryRow key={`${e.objectType}:${e.id}`} entry={e} />
@@ -502,7 +552,9 @@ function EntryRow({ entry }: { readonly entry: DiffEntry }) {
     entry.change === 'changed' ? [...new Set(properties.map((p) => p.severity))] : ['structural'];
   const governance = severities.includes('governance');
   return (
-    <li className={cn('flex flex-col gap-1 px-2 py-1.5 text-xs', governance && 'bg-warning-subtle')}>
+    <li
+      className={cn('flex flex-col gap-1 px-2 py-1.5 text-xs', governance && 'bg-warning-subtle')}
+    >
       <span className="flex flex-wrap items-center gap-2">
         <span
           className={cn(
@@ -525,7 +577,10 @@ function EntryRow({ entry }: { readonly entry: DiffEntry }) {
       {properties.length > 0 && (
         <ul className="flex flex-col gap-0.5 pl-4 font-mono text-text-muted">
           {properties.map((p) => (
-            <li key={p.path.join('.')} className={cn(p.severity === 'governance' && 'text-warning-text')}>
+            <li
+              key={p.path.join('.')}
+              className={cn(p.severity === 'governance' && 'text-warning-text')}
+            >
               {p.path.join('.')}: {show(p.before)} → {show(p.after)}
             </li>
           ))}
@@ -535,12 +590,20 @@ function EntryRow({ entry }: { readonly entry: DiffEntry }) {
   );
 }
 
-function Chip({ children, warn = false }: { readonly children: ReactNode; readonly warn?: boolean }) {
+function Chip({
+  children,
+  warn = false,
+}: {
+  readonly children: ReactNode;
+  readonly warn?: boolean;
+}) {
   return (
     <span
       className={cn(
         'rounded border px-1.5 text-[10px]',
-        warn ? 'border-warning bg-warning-subtle text-warning-text' : 'border-border text-text-muted',
+        warn
+          ? 'border-warning bg-warning-subtle text-warning-text'
+          : 'border-border text-text-muted',
       )}
     >
       {children}
@@ -577,14 +640,18 @@ function RestoreDialog({
     removed: live.counts.added,
   });
   return (
-    <Dialog open={open} onOpenChange={(next) => {
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
         if (!restore.isPending) onOpenChange(next);
-      }}>
+      }}
+    >
       <DialogContent>
         <DialogTitle>Restore “{snapshot.name}”?</DialogTitle>
         <DialogDescription>
-          Current schema → this snapshot: {summary}. A snapshot of the current schema is taken first, so this can be
-          undone. Access settings (restricted columns, areas) are kept as they are now.
+          Current schema → this snapshot: {summary}. A snapshot of the current schema is taken
+          first, so this can be undone. Access settings (restricted columns, areas) are kept as they
+          are now.
         </DialogDescription>
         {restore.error !== null && (
           <p role="alert" className="text-xs text-danger-text">

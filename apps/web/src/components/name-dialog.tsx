@@ -47,7 +47,9 @@ export function NameDialog({
                 onOpenChange(false);
               })
               .catch((caught: unknown) => {
-                setError(caught instanceof ApiError ? caught.message : 'Something went wrong. Try again.');
+                setError(
+                  caught instanceof ApiError ? caught.message : 'Something went wrong. Try again.',
+                );
               })
               .finally(() => {
                 setBusy(false);

@@ -172,7 +172,7 @@ function byteMapper(text: string): (byte: number) => number {
   // eslint-disable-next-line no-control-regex
   if (!/[^\x00-\x7f]/.test(text)) return (byte) => Math.min(byte, text.length);
   const map: number[] = [];
-  for (let i = 0; i < text.length; ) {
+  for (let i = 0; i < text.length;) {
     const char = String.fromCodePoint(text.codePointAt(i) ?? 0);
     for (let k = 0; k < utf8ByteLength(char); k += 1) map.push(i);
     i += char.length;
@@ -195,13 +195,17 @@ function editDistance(a: string, b: string): number {
 }
 
 /** Up to three near misses, closest first, then alphabetical. */
-function nearMisses(written: string, candidates: Iterable<{ key: string; label: string }>): string[] {
+function nearMisses(
+  written: string,
+  candidates: Iterable<{ key: string; label: string }>,
+): string[] {
   const limit = written.length <= 3 ? 1 : Math.max(2, Math.floor(written.length / 3));
   const scored = new Map<string, number>();
   for (const { key, label } of candidates) {
     if (key === written) continue;
     const distance = editDistance(written, key);
-    if (distance <= limit && (scored.get(label) ?? Infinity) > distance) scored.set(label, distance);
+    if (distance <= limit && (scored.get(label) ?? Infinity) > distance)
+      scored.set(label, distance);
   }
   return [...scored]
     .sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
@@ -578,7 +582,8 @@ class Walk {
   }
 
   private visitExcept(node: AstNode, skip: readonly string[], scope: Scope): void {
-    for (const [key, value] of Object.entries(node)) if (!skip.includes(key)) this.visit(value, scope);
+    for (const [key, value] of Object.entries(node))
+      if (!skip.includes(key)) this.visit(value, scope);
   }
 
   private columnRef(node: AstNode, scope: Scope): void {
@@ -633,7 +638,8 @@ class Walk {
 
     const keys: { key: string; label: string }[] = [];
     for (let s: Scope | null = scope; s !== null; s = s.parent) {
-      for (const source of s.sources) if (source.key !== '') keys.push({ key: source.key, label: source.key });
+      for (const source of s.sources)
+        if (source.key !== '') keys.push({ key: source.key, label: source.key });
     }
     const text = this.query.slice(parts[0]?.start ?? 0, parts[parts.length - 1]?.end ?? 0);
     this.emit(parts, 'alias', 'unknown', {
@@ -682,7 +688,8 @@ class Walk {
         if (source.entity === null) continue;
         const field = this.fieldNamed(source.entity, name);
         if (field !== undefined) matches.push({ entity: source.entity, field });
-        for (const f of this.fieldsOf(source.entity)) candidates.push({ key: this.fold(f.name), label: f.name });
+        for (const f of this.fieldsOf(source.entity))
+          candidates.push({ key: this.fold(f.name), label: f.name });
       }
       const text = this.query.slice(parts[0]?.start ?? 0, parts[parts.length - 1]?.end ?? 0);
       const [only] = matches;
@@ -698,7 +705,10 @@ class Walk {
         return;
       }
       if (only !== undefined) {
-        this.emit(parts, 'field', 'resolved', { targetId: only.field.id, entityId: only.entity.id });
+        this.emit(parts, 'field', 'resolved', {
+          targetId: only.field.id,
+          entityId: only.entity.id,
+        });
         this.touch(parts[0]?.start ?? 0, 'field', only.field.id);
         return;
       }

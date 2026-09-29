@@ -57,7 +57,12 @@ export function GrantRow({
     deciding !== undefined && !roles.some((option) => option.key === deciding.roleKey)
       ? [
           ...roles,
-          { key: deciding.roleKey, name: `${deciding.roleName} (archived)`, atoms: deciding.atoms, builtIn: false },
+          {
+            key: deciding.roleKey,
+            name: `${deciding.roleName} (archived)`,
+            atoms: deciding.atoms,
+            builtIn: false,
+          },
         ]
       : roles;
   const role = options.find((option) => option.key === deciding?.roleKey) ?? options[0];
@@ -204,9 +209,7 @@ function GrantToggle({
   readonly onToggle: (atom: ToggleAtom, on: boolean) => void;
 }) {
   const state =
-    role === undefined
-      ? { checked: on, disabled: true, note: null }
-      : toggleState(role, atom, on);
+    role === undefined ? { checked: on, disabled: true, note: null } : toggleState(role, atom, on);
   const disabled = state.disabled || readOnly || lockedNote !== null;
   const note = state.note ?? (lockedNote !== null && !state.disabled ? lockedNote : null);
 

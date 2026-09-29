@@ -64,8 +64,18 @@ export interface ExportJobResult {
 
 /** The two Phase 1 transactional emails (`MailService`), off the request path. */
 export type EmailJobData =
-  | { readonly kind: 'verify-email'; readonly to: string; readonly name: string; readonly token: string }
-  | { readonly kind: 'password-reset'; readonly to: string; readonly name: string; readonly token: string };
+  | {
+      readonly kind: 'verify-email';
+      readonly to: string;
+      readonly name: string;
+      readonly token: string;
+    }
+  | {
+      readonly kind: 'password-reset';
+      readonly to: string;
+      readonly name: string;
+      readonly token: string;
+    };
 
 export interface ValidateJobData {
   readonly projectId: string;

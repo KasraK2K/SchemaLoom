@@ -318,7 +318,9 @@ function driftingCells(committed: readonly string[], generated: readonly string[
   const end = Math.max(committed.length, generated.length);
   for (let i = 0; i < end && out.length < 50; i += 1) {
     if (committed[i] === generated[i]) continue;
-    out.push(`row ${String(i + 1)}: was "${committed[i] ?? '<absent>'}" now "${generated[i] ?? '<absent>'}"`);
+    out.push(
+      `row ${String(i + 1)}: was "${committed[i] ?? '<absent>'}" now "${generated[i] ?? '<absent>'}"`,
+    );
   }
   return out;
 }

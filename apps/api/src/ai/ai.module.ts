@@ -22,7 +22,11 @@ const queueProvider: Provider = {
 class DocDraftWorker implements OnModuleDestroy {
   private readonly worker: Worker<DocDraftJobData>;
 
-  constructor(ai: AiService, @Inject(BULL_CONNECTION) bull: BullConnection, @Inject(AI_DOC_DRAFTS) private readonly queue: Queue) {
+  constructor(
+    ai: AiService,
+    @Inject(BULL_CONNECTION) bull: BullConnection,
+    @Inject(AI_DOC_DRAFTS) private readonly queue: Queue,
+  ) {
     this.worker = new Worker<DocDraftJobData>(
       AI_DOC_DRAFTS_QUEUE,
       (job: Job<DocDraftJobData>) => ai.runDocDraftJob(job.data, job.id ?? null),

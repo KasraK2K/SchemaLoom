@@ -94,7 +94,9 @@ describe('buildEdges', () => {
   });
 
   it('takes its appearance from the engine, keyed by link kind', () => {
-    const styles = { foreignKey: { sourceMarker: 'many', targetMarker: 'one', dashed: false } } as const;
+    const styles = {
+      foreignKey: { sourceMarker: 'many', targetMarker: 'one', dashed: false },
+    } as const;
     const edge = buildEdges(model, styles).find((e) => e.id === 'l_orders_customers');
     expect(edge?.data?.style?.targetMarker).toBe('one');
   });

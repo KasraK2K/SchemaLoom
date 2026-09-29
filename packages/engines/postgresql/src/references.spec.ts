@@ -1,6 +1,15 @@
 import type { IrObject, IrObjectRef, SchemaModel } from '@schemaloom/engine-sdk';
 import { describe, expect, it } from 'vitest';
-import { column, constraint, customType, index, indexColumn, model, ns, table } from './fixture-model.js';
+import {
+  column,
+  constraint,
+  customType,
+  index,
+  indexColumn,
+  model,
+  ns,
+  table,
+} from './fixture-model.js';
 import { extractReferences } from './references.js';
 
 /**

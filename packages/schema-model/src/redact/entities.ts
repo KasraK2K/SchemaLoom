@@ -47,9 +47,7 @@ export function redactEntities(
       entity.areaId !== null && survivingAreaIds.has(entity.areaId) ? entity.areaId : null;
 
     const kept = applyPropsRule({ ...entity, areaId }, plan);
-    out[entity.id] = degradedEntityIds.has(entity.id)
-      ? { ...kept, propsRedacted: true }
-      : kept;
+    out[entity.id] = degradedEntityIds.has(entity.id) ? { ...kept, propsRedacted: true } : kept;
   }
   return out;
 }

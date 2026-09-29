@@ -100,7 +100,10 @@ describe('validateModel', () => {
   it('catches a nesting cycle instead of hanging', () => {
     const model = valid();
     model.objects.field.f1 = f.field('f1', 'id', 'e1', { parentFieldId: 'f2' });
-    model.objects.field.f2 = f.field('f2', 'customer_id', 'e1', { ordinal: 1, parentFieldId: 'f1' });
+    model.objects.field.f2 = f.field('f2', 'customer_id', 'e1', {
+      ordinal: 1,
+      parentFieldId: 'f1',
+    });
 
     const cycles = of(validateModel(model), 'FIELD_PARENT_CYCLE');
     expect(cycles.map((i) => i.objectId).sort()).toEqual(['f1', 'f2']);

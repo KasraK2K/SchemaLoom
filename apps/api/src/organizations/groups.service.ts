@@ -57,7 +57,12 @@ export class GroupsService {
     return toView(group);
   }
 
-  async update(userId: string, orgSlug: string, groupId: string, dto: UpdateGroupDto): Promise<GroupView> {
+  async update(
+    userId: string,
+    orgSlug: string,
+    groupId: string,
+    dto: UpdateGroupDto,
+  ): Promise<GroupView> {
     const organizationId = await this.admin(userId, orgSlug);
     const before = await this.group(organizationId, groupId);
     if (dto.name !== undefined) await this.assertNameFree(organizationId, dto.name, groupId);
@@ -103,14 +108,20 @@ export class GroupsService {
   }
 
   /** Idempotent. The user must already belong to the org; a guest may (doc 05 §3.2). */
-  async addMember(actorId: string, orgSlug: string, groupId: string, userId: string): Promise<GroupView> {
+  async addMember(
+    actorId: string,
+    orgSlug: string,
+    groupId: string,
+    userId: string,
+  ): Promise<GroupView> {
     const organizationId = await this.admin(actorId, orgSlug);
     await this.group(organizationId, groupId);
     const target = await this.prisma.orgMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
       select: { userId: true },
     });
-    if (target === null) throw new NotFoundException({ code: 'not_found', resourceType: 'org_member', id: userId });
+    if (target === null)
+      throw new NotFoundException({ code: 'not_found', resourceType: 'org_member', id: userId });
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.groupMember.create({ data: { groupId, userId } });
@@ -124,12 +135,22 @@ export class GroupsService {
     return toView(await this.group(organizationId, groupId));
   }
 
-  async removeMember(actorId: string, orgSlug: string, groupId: string, userId: string): Promise<void> {
+  async removeMember(
+    actorId: string,
+    orgSlug: string,
+    groupId: string,
+    userId: string,
+  ): Promise<void> {
     const organizationId = await this.admin(actorId, orgSlug);
     await this.group(organizationId, groupId);
     await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.groupMember.deleteMany({ where: { groupId, userId } });
-      if (count === 0) throw new NotFoundException({ code: 'not_found', resourceType: 'group_member', id: userId });
+      if (count === 0)
+        throw new NotFoundException({
+          code: 'not_found',
+          resourceType: 'group_member',
+          id: userId,
+        });
       await tx.user.update({ where: { id: userId }, data: { permGeneration: { increment: 1 } } });
       await audit(tx, organizationId, actorId, 'group.member_removed', groupId, { userId });
     });
@@ -144,14 +165,22 @@ export class GroupsService {
   }
 
   private async group(organizationId: string, groupId: string) {
-    const group = await this.prisma.userGroup.findFirst({ where: { id: groupId, organizationId }, select: GROUP });
-    if (group === null) throw new NotFoundException({ code: 'not_found', resourceType: 'group', id: groupId });
+    const group = await this.prisma.userGroup.findFirst({
+      where: { id: groupId, organizationId },
+      select: GROUP,
+    });
+    if (group === null)
+      throw new NotFoundException({ code: 'not_found', resourceType: 'group', id: groupId });
     return group;
   }
 
   /** No DB constraint backs this (doc 02 has none on `user_groups.name`); two groups with
    *  one name would make the access dialog ambiguous. ponytail: check-then-write. */
-  private async assertNameFree(organizationId: string, name: string, exceptId: string | null): Promise<void> {
+  private async assertNameFree(
+    organizationId: string,
+    name: string,
+    exceptId: string | null,
+  ): Promise<void> {
     const clash = await this.prisma.userGroup.findFirst({
       where: {
         organizationId,
@@ -189,7 +218,10 @@ function toView(g: {
 }
 
 function bumpOrg(tx: Prisma.TransactionClient, organizationId: string): Promise<unknown> {
-  return tx.organization.update({ where: { id: organizationId }, data: { permGeneration: { increment: 1 } } });
+  return tx.organization.update({
+    where: { id: organizationId },
+    data: { permGeneration: { increment: 1 } },
+  });
 }
 
 function audit(
@@ -201,6 +233,13 @@ function audit(
   metadata: Prisma.InputJsonValue,
 ): Promise<unknown> {
   return tx.auditLog.create({
-    data: { organizationId, actorUserId, action, resourceType: 'group', resourceId: groupId, metadata },
+    data: {
+      organizationId,
+      actorUserId,
+      action,
+      resourceType: 'group',
+      resourceId: groupId,
+      metadata,
+    },
   });
 }

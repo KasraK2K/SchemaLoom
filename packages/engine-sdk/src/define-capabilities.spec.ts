@@ -53,11 +53,17 @@ describe('defineCapabilities', () => {
   });
 
   it('entity-kinds-present rejects an empty list', () => {
-    expectRule('entity-kinds-present', { entityKinds: [], linkKinds: [], features: { indexes: true } });
+    expectRule('entity-kinds-present', {
+      entityKinds: [],
+      linkKinds: [],
+      features: { indexes: true },
+    });
   });
 
   it('entity-kinds-present rejects a duplicate shortCode', () => {
-    expectRule('entity-kinds-present', { entityKinds: [TABLE_KIND, { ...VIEW_KIND, shortCode: 'T' }] });
+    expectRule('entity-kinds-present', {
+      entityKinds: [TABLE_KIND, { ...VIEW_KIND, shortCode: 'T' }],
+    });
   });
 
   it('entity-kinds-present rejects a shortCode outside /^[A-Z]{1,2}$/', () => {
@@ -118,8 +124,20 @@ describe('defineCapabilities', () => {
   it('format-ids-unique', () => {
     expectRule('format-ids-unique', {
       exportFormats: [
-        { id: 'ddl', displayName: 'a', fileExtension: 'sql', supportsComments: true, supportsDrops: true },
-        { id: 'ddl', displayName: 'b', fileExtension: 'sql', supportsComments: false, supportsDrops: false },
+        {
+          id: 'ddl',
+          displayName: 'a',
+          fileExtension: 'sql',
+          supportsComments: true,
+          supportsDrops: true,
+        },
+        {
+          id: 'ddl',
+          displayName: 'b',
+          fileExtension: 'sql',
+          supportsComments: false,
+          supportsDrops: false,
+        },
       ],
     });
   });

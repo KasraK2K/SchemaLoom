@@ -1,9 +1,5 @@
 import type { EngineDefinition, ExportInput, ExportResult } from '@schemaloom/engine-sdk';
-import {
-  assembleModel,
-  type RedactedModel,
-  type SchemaModel,
-} from '@schemaloom/schema-model';
+import { assembleModel, type RedactedModel, type SchemaModel } from '@schemaloom/schema-model';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { fakePrisma, type Store } from '../schema/fake-prisma';
 import {
@@ -39,7 +35,10 @@ import {
  * actually tell an exporter that something was taken out of it.
  */
 const STORE: Partial<Store> = baseStore({
-  entity: [entityRow('ent_orders', { name: 'orders' }), entityRow('ent_secret', { name: 'payroll' })],
+  entity: [
+    entityRow('ent_orders', { name: 'orders' }),
+    entityRow('ent_secret', { name: 'payroll' }),
+  ],
   field: [
     fieldRow('fld_id', 'ent_orders', { name: 'id', dataType: 'uuid', isNullable: false }),
     fieldRow('fld_total', 'ent_orders', {
@@ -79,8 +78,20 @@ const partial = (): RedactedModel =>
 
 const EXPORT_RESULT: ExportResult = {
   statements: [
-    { ordinal: 0, phase: 'entities', kind: 'CREATE TABLE', text: 'CREATE TABLE orders ()', target: null },
-    { ordinal: 1, phase: 'indexes', kind: 'CREATE INDEX', text: 'CREATE INDEX i ON orders (id)', target: null },
+    {
+      ordinal: 0,
+      phase: 'entities',
+      kind: 'CREATE TABLE',
+      text: 'CREATE TABLE orders ()',
+      target: null,
+    },
+    {
+      ordinal: 1,
+      phase: 'indexes',
+      kind: 'CREATE INDEX',
+      text: 'CREATE INDEX i ON orders (id)',
+      target: null,
+    },
   ],
   separator: ';',
   incomplete: false,
@@ -97,7 +108,13 @@ function fakeEngine(result: ExportResult = EXPORT_RESULT): {
     capabilities: {
       queryLanguage: { lineComment: '--' },
       exportFormats: [
-        { id: 'ddl', displayName: 'SQL DDL', fileExtension: 'sql', supportsComments: true, supportsDrops: true },
+        {
+          id: 'ddl',
+          displayName: 'SQL DDL',
+          fileExtension: 'sql',
+          supportsComments: true,
+          supportsDrops: true,
+        },
       ],
     },
     exporter: { export: exported },
@@ -144,9 +161,9 @@ describe('ir-json', () => {
 
   it('is incomplete when redaction touched something', async () => {
     const { engine } = fakeEngine();
-    expect((await renderExport({ model: everything(), format: 'ir-json', engine })).incomplete).toBe(
-      false,
-    );
+    expect(
+      (await renderExport({ model: everything(), format: 'ir-json', engine })).incomplete,
+    ).toBe(false);
     expect((await renderExport({ model: partial(), format: 'ir-json', engine })).incomplete).toBe(
       true,
     );
@@ -202,7 +219,8 @@ describe('an engine format', () => {
   it('is incomplete when EITHER the engine or redaction says so', async () => {
     const dropped = fakeEngine({ ...EXPORT_RESULT, incomplete: true });
     expect(
-      (await renderExport({ model: everything(), format: 'ddl', engine: dropped.engine })).incomplete,
+      (await renderExport({ model: everything(), format: 'ddl', engine: dropped.engine }))
+        .incomplete,
     ).toBe(true);
 
     const clean = fakeEngine();

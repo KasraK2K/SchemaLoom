@@ -1,4 +1,8 @@
-import type { IdentifierResolution, QueryValidationResult, RedactedModel } from '@schemaloom/engine-sdk';
+import type {
+  IdentifierResolution,
+  QueryValidationResult,
+  RedactedModel,
+} from '@schemaloom/engine-sdk';
 import { renderDiagnostic } from '@schemaloom/engine-sdk';
 import { describe, expect, it } from 'vitest';
 import { redactedModel } from './conformance-fixtures.js';
@@ -46,7 +50,9 @@ describe('the query validator', () => {
   });
 
   it('resolves qualified, unqualified and aliased columns, in source order', async () => {
-    const result = await run('SELECT o.id, email, orders.total FROM orders JOIN customers c ON c.id = customer_id');
+    const result = await run(
+      'SELECT o.id, email, orders.total FROM orders JOIN customers c ON c.id = customer_id',
+    );
     // `o` is not in FROM (the table has no alias `o`), so it is an unknown qualifier.
     expect(result.identifiers.map(brief)).toEqual([
       'o:alias:unknown',
@@ -106,7 +112,8 @@ describe('the query validator', () => {
       'i:alias:alias-local',
       '"public".Orders:entity:resolved=en_orders',
     ]);
-    for (const i of result.identifiers) expect(query.slice(i.range.start, i.range.end)).toBe(i.text);
+    for (const i of result.identifiers)
+      expect(query.slice(i.range.start, i.range.end)).toBe(i.text);
     // `invoices` is not on the search path
     const bare = await run('SELECT 1 FROM invoices');
     expect(bare.identifiers[0]?.status).toBe('unknown');
@@ -162,8 +169,16 @@ describe('the query validator', () => {
   });
 
   it('touches every visible field for `*`, deduped in first-appearance order', async () => {
-    const result = await run('SELECT c.email, o.* FROM orders o JOIN customers c ON c.id = o.id, orders o2');
-    expect(result.touchedFieldIds).toEqual(['fd_c_email', 'fd_o_id', 'fd_o_cust', 'fd_o_total', 'fd_c_id']);
+    const result = await run(
+      'SELECT c.email, o.* FROM orders o JOIN customers c ON c.id = o.id, orders o2',
+    );
+    expect(result.touchedFieldIds).toEqual([
+      'fd_c_email',
+      'fd_o_id',
+      'fd_o_cust',
+      'fd_o_total',
+      'fd_c_id',
+    ]);
     expect(result.touchedEntityIds).toEqual(['en_orders', 'en_customers']);
   });
 
@@ -173,7 +188,9 @@ describe('the query validator', () => {
         'DELETE FROM customers WHERE email IS NULL; CREATE TABLE fresh (a int CHECK (a > 0))',
     );
     expect(result.statementKinds).toEqual(['INSERT', 'UPDATE', 'DELETE', 'CREATE TABLE']);
-    expect(result.identifiers.filter((i) => i.status === 'unknown').map((i) => i.text)).toEqual(['nope']);
+    expect(result.identifiers.filter((i) => i.status === 'unknown').map((i) => i.text)).toEqual([
+      'nope',
+    ]);
     expect(result.identifiers.find((i) => i.text === 'fresh')?.status).toBe('unchecked');
   });
 

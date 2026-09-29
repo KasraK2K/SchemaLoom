@@ -5,9 +5,27 @@ import { fixtureEngine } from './fixture-engine.js';
 import type { EngineDefinition } from './definition.js';
 
 const ANNOUNCED: readonly AnnouncedEngine[] = [
-  { id: 'mongodb', displayName: 'MongoDB', paradigm: 'document', icon: 'leaf', summary: 'Collections and documents' },
-  { id: 'fixturesql', displayName: 'Fixture SQL', paradigm: 'relational', icon: 'database', summary: 'announced too' },
-  { id: 'neo4j', displayName: 'Neo4j', paradigm: 'graph', icon: 'share-2', summary: 'Nodes and relationships' },
+  {
+    id: 'mongodb',
+    displayName: 'MongoDB',
+    paradigm: 'document',
+    icon: 'leaf',
+    summary: 'Collections and documents',
+  },
+  {
+    id: 'fixturesql',
+    displayName: 'Fixture SQL',
+    paradigm: 'relational',
+    icon: 'database',
+    summary: 'announced too',
+  },
+  {
+    id: 'neo4j',
+    displayName: 'Neo4j',
+    paradigm: 'graph',
+    icon: 'share-2',
+    summary: 'Nodes and relationships',
+  },
 ];
 
 describe('EngineRegistry', () => {
@@ -82,7 +100,10 @@ describe('EngineRegistry', () => {
     const second: EngineDefinition = { ...fixtureEngine, id: 'aaa', displayName: 'AAA SQL' };
     registry.register(fixtureEngine);
     registry.register(second);
-    expect(registry.catalog().available.map((e) => e.displayName)).toEqual(['AAA SQL', 'Fixture SQL']);
+    expect(registry.catalog().available.map((e) => e.displayName)).toEqual([
+      'AAA SQL',
+      'Fixture SQL',
+    ]);
     expect(registry.catalog().comingSoon.map((e) => e.displayName)).toEqual(['MongoDB', 'Neo4j']);
   });
 });

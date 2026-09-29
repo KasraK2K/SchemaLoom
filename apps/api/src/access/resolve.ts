@@ -354,8 +354,7 @@ export function computeProjectMap(input: ComputeInput): ProjectPermissionMap {
   const entityOverrides = new Map<string, AtomSet>();
   for (const e of skel.entities) {
     const mine = entityAll.get(e.id) ?? EMPTY_ATOMS;
-    const inherited =
-      e.areaId === null ? projectAtoms : (areaAtoms.get(e.areaId) ?? EMPTY_ATOMS);
+    const inherited = e.areaId === null ? projectAtoms : (areaAtoms.get(e.areaId) ?? EMPTY_ATOMS);
     if (!sameSet(mine, inherited)) entityOverrides.set(e.id, mine);
   }
 

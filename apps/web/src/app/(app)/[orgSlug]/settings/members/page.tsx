@@ -34,8 +34,8 @@ export default async function OrgMembersPage({ params }: { params: Promise<{ org
         <OrgSettingsNav orgSlug={orgSlug} orgRole={org.orgRole} current="members" />
         <h1 className="text-lg font-semibold text-text">Members</h1>
         <p className="mt-1 mb-6 text-sm text-text-muted">
-          Everyone in {org.name}. To invite someone new, share a project with their email
-          from its Share dialog.
+          Everyone in {org.name}. To invite someone new, share a project with their email from its
+          Share dialog.
         </p>
         <MembersManager orgSlug={orgSlug} orgRole={org.orgRole} members={members} />
       </div>

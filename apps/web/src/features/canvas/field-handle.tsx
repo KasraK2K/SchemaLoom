@@ -15,11 +15,23 @@ import { NODE_HANDLE, fieldHandleId, type HandleSide } from './handles';
  * `.sl-handle` (globals.css) carries the appearance: React Flow's own default handle is a
  * dark dot with a white border and no notion of the theme.
  */
-const position = (side: HandleSide): Position => (side === 'target' ? Position.Left : Position.Right);
+const position = (side: HandleSide): Position =>
+  side === 'target' ? Position.Left : Position.Right;
 
-export function FieldHandle({ fieldId, side }: { readonly fieldId: Id; readonly side: HandleSide }) {
+export function FieldHandle({
+  fieldId,
+  side,
+}: {
+  readonly fieldId: Id;
+  readonly side: HandleSide;
+}) {
   return (
-    <Handle id={fieldHandleId(fieldId, side)} type={side} position={position(side)} className="sl-handle" />
+    <Handle
+      id={fieldHandleId(fieldId, side)}
+      type={side}
+      position={position(side)}
+      className="sl-handle"
+    />
   );
 }
 
@@ -38,8 +50,18 @@ export const NoFieldHandle = (): null => null;
 export function NodeHandles() {
   return (
     <>
-      <Handle id={NODE_HANDLE.target} type="target" position={Position.Left} className="sl-handle sl-handle--node" />
-      <Handle id={NODE_HANDLE.source} type="source" position={Position.Right} className="sl-handle sl-handle--node" />
+      <Handle
+        id={NODE_HANDLE.target}
+        type="target"
+        position={Position.Left}
+        className="sl-handle sl-handle--node"
+      />
+      <Handle
+        id={NODE_HANDLE.source}
+        type="source"
+        position={Position.Right}
+        className="sl-handle sl-handle--node"
+      />
     </>
   );
 }

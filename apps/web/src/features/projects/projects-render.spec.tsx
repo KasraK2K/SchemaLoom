@@ -102,7 +102,9 @@ describe('<NoProjects>', () => {
       <NoProjects
         orgId="org_1"
         orgSlug="acme"
-        engines={[{ id: 'pg', displayName: 'PG', importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }] }]}
+        engines={[
+          { id: 'pg', displayName: 'PG', importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }] },
+        ]}
       />,
     );
     expect(html).toContain('Start blank');

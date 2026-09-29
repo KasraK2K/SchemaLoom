@@ -129,8 +129,12 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   useEffect(() => {
     if (!expired) return;
     apiFetch('/auth/refresh', { method: 'POST' })
-      .then(() => { window.location.replace(safeNextPath(params.get('next'))); })
-      .catch(() => { setFormError('Your session expired. Sign in again.'); });
+      .then(() => {
+        window.location.replace(safeNextPath(params.get('next')));
+      })
+      .catch(() => {
+        setFormError('Your session expired. Sign in again.');
+      });
   }, [expired, params]);
 
   const form = useForm<FormValues>({
@@ -151,7 +155,10 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
       if (isSignUp) {
         await signUp({ email: values.email, password: values.password, name: values.name });
       } else {
-        destination = afterFirstFactor(await signIn(values.email, values.password), params.get('next'));
+        destination = afterFirstFactor(
+          await signIn(values.email, values.password),
+          params.get('next'),
+        );
       }
       // A FULL navigation, not router.push: the API just set `sl_presence` on this
       // domain and the Next middleware has to see it. A client-side push can re-run
@@ -256,7 +263,9 @@ function OAuthButtons() {
   useEffect(() => {
     fetchOAuthProviders()
       .then(setProviders)
-      .catch(() => { setProviders(null); });
+      .catch(() => {
+        setProviders(null);
+      });
   }, []);
   if (providers === null) return null;
   const enabled = (Object.keys(PROVIDER_LABELS) as (keyof OAuthProviders)[]).filter(

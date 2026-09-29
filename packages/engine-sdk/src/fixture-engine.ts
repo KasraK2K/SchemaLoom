@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import type { CapabilitiesInput, EntityKindDescriptor, LinkKindDescriptor } from './capabilities.js';
+import type {
+  CapabilitiesInput,
+  EntityKindDescriptor,
+  LinkKindDescriptor,
+} from './capabilities.js';
 import { createTypeCatalog } from './create-type-catalog.js';
 import { defineCapabilities } from './define-capabilities.js';
 import type { EngineDefinition, EngineStaticFacet } from './definition.js';
@@ -31,7 +35,15 @@ export const TYPE_DESCRIPTORS: readonly TypeDescriptor[] = [
     category: 'string',
     aliases: ['character varying'],
     parameters: [
-      { kind: 'number', name: 'length', label: 'Length', required: false, min: 1, max: 10485760, default: 255 },
+      {
+        kind: 'number',
+        name: 'length',
+        label: 'Length',
+        required: false,
+        min: 1,
+        max: 10485760,
+        default: 255,
+      },
     ],
     supportsArray: true,
     preferredForCategory: true,
@@ -44,8 +56,24 @@ export const TYPE_DESCRIPTORS: readonly TypeDescriptor[] = [
     category: 'numeric',
     aliases: ['decimal'],
     parameters: [
-      { kind: 'number', name: 'precision', label: 'Precision', required: false, min: 1, max: 1000, default: null },
-      { kind: 'number', name: 'scale', label: 'Scale', required: false, min: 0, max: 1000, default: null },
+      {
+        kind: 'number',
+        name: 'precision',
+        label: 'Precision',
+        required: false,
+        min: 1,
+        max: 1000,
+        default: null,
+      },
+      {
+        kind: 'number',
+        name: 'scale',
+        label: 'Scale',
+        required: false,
+        min: 0,
+        max: 1000,
+        default: null,
+      },
     ],
     supportsArray: true,
     preferredForCategory: false,
@@ -66,7 +94,15 @@ export const TYPE_DESCRIPTORS: readonly TypeDescriptor[] = [
         options: ['Point', 'LineString', 'Polygon'],
         default: 'Point',
       },
-      { kind: 'number', name: 'srid', label: 'SRID', required: false, min: 0, max: 999999, default: 4326 },
+      {
+        kind: 'number',
+        name: 'srid',
+        label: 'SRID',
+        required: false,
+        min: 0,
+        max: 999999,
+        default: 4326,
+      },
     ],
     supportsArray: false,
     preferredForCategory: true,
@@ -120,9 +156,7 @@ export const FOREIGN_KEY_KIND: LinkKindDescriptor = {
 };
 
 /** A valid relational capabilities input. Specs clone and break one field at a time. */
-export function relationalInput(
-  overrides: Partial<CapabilitiesInput> = {},
-): CapabilitiesInput {
+export function relationalInput(overrides: Partial<CapabilitiesInput> = {}): CapabilitiesInput {
   return {
     engineId: 'fixturesql',
     features: {

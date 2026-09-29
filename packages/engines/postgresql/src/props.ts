@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { constantProps, type EnginePropsResolver, type EnginePropsSchemas } from '@schemaloom/engine-sdk';
+import {
+  constantProps,
+  type EnginePropsResolver,
+  type EnginePropsSchemas,
+} from '@schemaloom/engine-sdk';
 
 /**
  * `engineProps` schemas (doc 03 §6). Everything PostgreSQL knows and core does not lives

@@ -3,7 +3,11 @@
  * `access_grants`, so this barrel is the whole contract other modules may use.
  */
 export { AccessModule } from './access.module';
-export { PermissionResolver, type AccessScope, type ProjectRow } from './permission-resolver.service';
+export {
+  PermissionResolver,
+  type AccessScope,
+  type ProjectRow,
+} from './permission-resolver.service';
 export { PermissionGuard } from './permission.guard';
 export {
   VisibilityFilter,

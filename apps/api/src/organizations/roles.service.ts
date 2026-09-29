@@ -106,13 +106,22 @@ export class RolesService {
 
     // A custom key must never shadow a built-in one: grant writes look roles up by key.
     const slug = slugify(dto.name);
-    const base = slug === '' || (BUILT_IN_ROLE_ORDER as readonly string[]).includes(slug) ? `${slug || 'role'}-custom` : slug;
+    const base =
+      slug === '' || (BUILT_IN_ROLE_ORDER as readonly string[]).includes(slug)
+        ? `${slug || 'role'}-custom`
+        : slug;
     for (let attempt = 0; ; attempt++) {
       const key = attempt === 0 ? base : `${base}-${randomBytes(3).toString('hex')}`;
       try {
         return await this.prisma.$transaction(async (tx) => {
           const role = await tx.role.create({
-            data: { organizationId, key, name: dto.name, description: dto.description ?? null, atoms },
+            data: {
+              organizationId,
+              key,
+              name: dto.name,
+              description: dto.description ?? null,
+              atoms,
+            },
             select: ROLE,
           });
           await audit(tx, organizationId, userId, 'role.created', role.id, { key, atoms });
@@ -131,9 +140,15 @@ export class RolesService {
   }
 
   /** Name, description, atoms and archival. The key is stable: it is what grants send. */
-  async update(userId: string, orgSlug: string, roleId: string, dto: UpdateRoleDto): Promise<RoleView> {
+  async update(
+    userId: string,
+    orgSlug: string,
+    roleId: string,
+    dto: UpdateRoleDto,
+  ): Promise<RoleView> {
     const { organizationId, role: orgRole } = await this.admin(userId, orgSlug);
-    const atoms = dto.atoms === undefined ? undefined : validateCustomRole({ atoms: dto.atoms }, orgRole);
+    const atoms =
+      dto.atoms === undefined ? undefined : validateCustomRole({ atoms: dto.atoms }, orgRole);
     const before = await this.customRole(organizationId, roleId);
     const atomsChanged = atoms !== undefined && atoms.join() !== before.atoms.join();
 
@@ -186,20 +201,28 @@ export class RolesService {
 
     await this.prisma.$transaction(async (tx) => {
       const grants = await tx.accessGrant.count({ where: { roleId } });
-      if (grants > 0) throw new ConflictException({ code: 'role_in_use', grants, remedy: 'archive' });
+      if (grants > 0)
+        throw new ConflictException({ code: 'role_in_use', grants, remedy: 'archive' });
       await tx.role.delete({ where: { id: roleId } });
       await tx.organization.update({
         where: { id: organizationId },
         data: { permGeneration: { increment: 1 } },
       });
-      await audit(tx, organizationId, userId, 'role.deleted', roleId, { key: role.key, atoms: role.atoms });
+      await audit(tx, organizationId, userId, 'role.deleted', roleId, {
+        key: role.key,
+        atoms: role.atoms,
+      });
     });
     await this.resolver.invalidate({ org: organizationId });
   }
 
   private async customRole(organizationId: string, roleId: string) {
-    const role = await this.prisma.role.findFirst({ where: { id: roleId, organizationId }, select: ROLE });
-    if (role === null) throw new NotFoundException({ code: 'not_found', resourceType: 'role', id: roleId });
+    const role = await this.prisma.role.findFirst({
+      where: { id: roleId, organizationId },
+      select: ROLE,
+    });
+    if (role === null)
+      throw new NotFoundException({ code: 'not_found', resourceType: 'role', id: roleId });
     return role;
   }
 
@@ -212,7 +235,10 @@ export class RolesService {
   }
 
   /** V1 for every write: the caller's membership, owner or admin, or the 404/403. */
-  private async admin(userId: string, orgSlug: string): Promise<{ organizationId: string; role: OrgRole }> {
+  private async admin(
+    userId: string,
+    orgSlug: string,
+  ): Promise<{ organizationId: string; role: OrgRole }> {
     const member = await this.membership(userId, orgSlug);
     if (member === null) throw new NotFoundException({ code: 'not_found' });
     assertRoleAdmin(member.role);
@@ -266,6 +292,13 @@ function audit(
   metadata: Prisma.InputJsonValue,
 ): Promise<unknown> {
   return tx.auditLog.create({
-    data: { organizationId, actorUserId, action, resourceType: 'role', resourceId: roleId, metadata },
+    data: {
+      organizationId,
+      actorUserId,
+      action,
+      resourceType: 'role',
+      resourceId: roleId,
+      metadata,
+    },
   });
 }

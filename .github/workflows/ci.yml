@@ -27,6 +27,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --check .
       - run: pnpm turbo lint typecheck test build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:3001

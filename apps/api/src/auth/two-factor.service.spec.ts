@@ -27,7 +27,14 @@ function fakeRedis() {
 
 function setup() {
   const secret = newTotpSecret();
-  const codes = [{ id: 'r1', userId: 'u1', codeHash: hashRecoveryCode('abcde-fghij'), usedAt: null as Date | null }];
+  const codes = [
+    {
+      id: 'r1',
+      userId: 'u1',
+      codeHash: hashRecoveryCode('abcde-fghij'),
+      usedAt: null as Date | null,
+    },
+  ];
   const prisma = {
     user: {
       findUnique: () =>
@@ -41,7 +48,9 @@ function setup() {
     },
     recoveryCode: {
       findFirst: ({ where }: { where: { codeHash: string; usedAt: null } }) =>
-        Promise.resolve(codes.find((c) => c.codeHash === where.codeHash && c.usedAt === null) ?? null),
+        Promise.resolve(
+          codes.find((c) => c.codeHash === where.codeHash && c.usedAt === null) ?? null,
+        ),
       updateMany: ({ where }: { where: { id: string } }) => {
         const hit = codes.filter((c) => c.id === where.id && c.usedAt === null);
         for (const c of hit) c.usedAt = new Date();

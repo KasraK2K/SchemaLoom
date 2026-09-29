@@ -26,7 +26,10 @@ function parseSemver(version: string): readonly [number, number, number] {
   return [at(0), at(1), at(2)];
 }
 
-function compare(a: readonly [number, number, number], b: readonly [number, number, number]): number {
+function compare(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+): number {
   return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
 }
 

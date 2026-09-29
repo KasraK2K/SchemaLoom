@@ -49,6 +49,8 @@ describe('parseRenames', () => {
 
   it('refuses malformed JSON and a wrong shape with 400', () => {
     expect(() => parseRenames('{nope')).toThrow(BadRequestException);
-    expect(() => parseRenames('[{"type":"table","fromId":"x","toName":"y"}]')).toThrow(BadRequestException);
+    expect(() => parseRenames('[{"type":"table","fromId":"x","toName":"y"}]')).toThrow(
+      BadRequestException,
+    );
   });
 });

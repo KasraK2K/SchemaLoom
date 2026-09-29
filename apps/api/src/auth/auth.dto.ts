@@ -29,7 +29,11 @@ export class EmailOnlyDto extends createZodDto(emailOnlySchema) {}
  */
 export const magicLinkSchema = z.object({
   email,
-  next: z.string().max(512).regex(/^\/(?![/\\])/).optional(),
+  next: z
+    .string()
+    .max(512)
+    .regex(/^\/(?![/\\])/)
+    .optional(),
 });
 export class MagicLinkDto extends createZodDto(magicLinkSchema) {}
 

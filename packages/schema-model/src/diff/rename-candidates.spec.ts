@@ -55,7 +55,11 @@ describe('renameCandidates — entities', () => {
     const after = m([entity('n1', 'tags', 'ns1')], cols('n1', ['id']));
     const out = renameCandidates(before, after);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ fromId: 'e1', toId: 'n1', reason: 'similar name, 1 of 1 columns match' });
+    expect(out[0]).toMatchObject({
+      fromId: 'e1',
+      toId: 'n1',
+      reason: 'similar name, 1 of 1 columns match',
+    });
   });
 
   it('is greedy: each entity appears in at most one candidate, best score first', () => {
@@ -86,7 +90,10 @@ describe('renameCandidates — entities', () => {
 
 describe('renameCandidates — fields', () => {
   const matched = (oldCols: Field[], newCols: Field[]) =>
-    renameCandidates(m([entity('e1', 't', 'ns1')], oldCols), m([entity('e1', 't', 'ns1')], newCols));
+    renameCandidates(
+      m([entity('e1', 't', 'ns1')], oldCols),
+      m([entity('e1', 't', 'ns1')], newCols),
+    );
 
   it('pairs a field in a matched entity at the same position with the same type', () => {
     const out = matched(
@@ -115,16 +122,29 @@ describe('renameCandidates — fields', () => {
   it('pairs by name similarity >= 0.6 when the position moved', () => {
     const out = matched(
       [field('f2', 'created', 'e1', { ordinal: 1 })],
-      [field('x0', 'id', 'e1', { ordinal: 0, type: { name: 'int4' } }), field('x2', 'created_at', 'e1', { ordinal: 3 })],
+      [
+        field('x0', 'id', 'e1', { ordinal: 0, type: { name: 'int4' } }),
+        field('x2', 'created_at', 'e1', { ordinal: 3 }),
+      ],
     );
-    expect(out).toEqual([expect.objectContaining({ fromId: 'f2', toId: 'x2', reason: 'same type, similar name' })]);
+    expect(out).toEqual([
+      expect.objectContaining({ fromId: 'f2', toId: 'x2', reason: 'same type, similar name' }),
+    ]);
   });
 
   it('proposes field pairs inside a proposed entity rename, owned by the project entity', () => {
-    const before = m([entity('e1', 'customer', 'ns1')], cols('e1', ['id', 'email', 'name', 'mail']));
-    const after = m([entity('n1', 'customers', 'ns1')], cols('n1', ['id', 'email', 'name', 'mail_2']));
+    const before = m(
+      [entity('e1', 'customer', 'ns1')],
+      cols('e1', ['id', 'email', 'name', 'mail']),
+    );
+    const after = m(
+      [entity('n1', 'customers', 'ns1')],
+      cols('n1', ['id', 'email', 'name', 'mail_2']),
+    );
     const fields = renameCandidates(before, after).filter((c) => c.type === 'field');
-    expect(fields).toEqual([expect.objectContaining({ entityId: 'e1', fromName: 'mail', toName: 'mail_2' })]);
+    expect(fields).toEqual([
+      expect.objectContaining({ entityId: 'e1', fromName: 'mail', toName: 'mail_2' }),
+    ]);
   });
 
   it('gives each field at most one candidate', () => {

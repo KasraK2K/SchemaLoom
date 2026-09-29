@@ -22,16 +22,24 @@ export function SidebarFrame({ children }: { readonly children: ReactNode }) {
     >
       <button
         type="button"
-        onClick={() => { setCollapsed(!collapsed); }}
+        onClick={() => {
+          setCollapsed(!collapsed);
+        }}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         aria-expanded={!collapsed}
-        className="m-2 mb-0 flex size-8 items-center justify-center self-end rounded-md text-text-muted hover:bg-surface-hover hover:text-text group-data-[collapsed=true]/sidebar:self-center"
+        className="m-2 mb-0 flex size-8 items-center justify-center self-end rounded-md text-text-muted group-data-[collapsed=true]/sidebar:self-center hover:bg-surface-hover hover:text-text"
       >
         {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
       </button>
       <div className="min-h-0 flex-1">{children}</div>
       {!collapsed && (
-        <ResizeHandle side="left" width={width} bounds={BOUNDS} onResize={setWidth} label="Resize sidebar" />
+        <ResizeHandle
+          side="left"
+          width={width}
+          bounds={BOUNDS}
+          onResize={setWidth}
+          label="Resize sidebar"
+        />
       )}
     </nav>
   );

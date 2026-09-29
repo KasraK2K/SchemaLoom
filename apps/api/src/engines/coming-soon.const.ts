@@ -14,11 +14,53 @@ import type { AnnouncedEngine } from '@schemaloom/engine-sdk';
  * is untouched either way.
  */
 export const COMING_SOON: readonly AnnouncedEngine[] = [
-  { id: 'mysql', displayName: 'MySQL', paradigm: 'relational', icon: 'database', summary: 'MySQL 8 and MariaDB' },
-  { id: 'sqlserver', displayName: 'SQL Server', paradigm: 'relational', icon: 'database', summary: 'Microsoft SQL Server 2019+' },
-  { id: 'sqlite', displayName: 'SQLite', paradigm: 'relational', icon: 'database', summary: 'Embedded SQL' },
-  { id: 'mongodb', displayName: 'MongoDB', paradigm: 'document', icon: 'leaf', summary: 'Collections and documents' },
-  { id: 'dynamodb', displayName: 'DynamoDB', paradigm: 'key-value', icon: 'zap', summary: 'AWS key-value and document store' },
-  { id: 'cassandra', displayName: 'Cassandra', paradigm: 'wide-column', icon: 'columns', summary: 'Wide-column store' },
-  { id: 'neo4j', displayName: 'Neo4j', paradigm: 'graph', icon: 'share-2', summary: 'Nodes and relationships' },
+  {
+    id: 'mysql',
+    displayName: 'MySQL',
+    paradigm: 'relational',
+    icon: 'database',
+    summary: 'MySQL 8 and MariaDB',
+  },
+  {
+    id: 'sqlserver',
+    displayName: 'SQL Server',
+    paradigm: 'relational',
+    icon: 'database',
+    summary: 'Microsoft SQL Server 2019+',
+  },
+  {
+    id: 'sqlite',
+    displayName: 'SQLite',
+    paradigm: 'relational',
+    icon: 'database',
+    summary: 'Embedded SQL',
+  },
+  {
+    id: 'mongodb',
+    displayName: 'MongoDB',
+    paradigm: 'document',
+    icon: 'leaf',
+    summary: 'Collections and documents',
+  },
+  {
+    id: 'dynamodb',
+    displayName: 'DynamoDB',
+    paradigm: 'key-value',
+    icon: 'zap',
+    summary: 'AWS key-value and document store',
+  },
+  {
+    id: 'cassandra',
+    displayName: 'Cassandra',
+    paradigm: 'wide-column',
+    icon: 'columns',
+    summary: 'Wide-column store',
+  },
+  {
+    id: 'neo4j',
+    displayName: 'Neo4j',
+    paradigm: 'graph',
+    icon: 'share-2',
+    summary: 'Nodes and relationships',
+  },
 ];

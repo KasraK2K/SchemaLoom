@@ -43,8 +43,14 @@ describe('collapseGrants (R11a)', () => {
       data: { roleId: 'r_docs', canUseAi: true },
       needsReview: true,
     });
-    expect(collapseGrants(docsOnly, manager)).toMatchObject({ data: { roleId: 'r_docs' }, needsReview: true });
-    expect(collapseGrants(manager, analyst)).toMatchObject({ data: { roleId: 'r_manager' }, needsReview: true });
+    expect(collapseGrants(docsOnly, manager)).toMatchObject({
+      data: { roleId: 'r_docs' },
+      needsReview: true,
+    });
+    expect(collapseGrants(manager, analyst)).toMatchObject({
+      data: { roleId: 'r_manager' },
+      needsReview: true,
+    });
   });
 
   it('keeps the longer expiry, and null (never) wins', () => {
@@ -69,7 +75,9 @@ function harness(world: World = {}) {
     (name: string, value?: unknown) =>
     (arg?: unknown): Promise<unknown> => {
       calls.push(name);
-      return Promise.resolve(typeof value === 'function' ? (value as (a: unknown) => unknown)(arg) : value);
+      return Promise.resolve(
+        typeof value === 'function' ? (value as (a: unknown) => unknown)(arg) : value,
+      );
     };
   const invitation =
     world.invitation === undefined
@@ -133,9 +141,21 @@ function harness(world: World = {}) {
     },
     auditLog: { create: auditCreate },
   };
-  const prisma = { ...db, $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn(db) } as unknown as PrismaService;
+  const prisma = {
+    ...db,
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn(db),
+  } as unknown as PrismaService;
   const service = new InvitationsService(prisma, { invalidate } as unknown as PermissionResolver);
-  return { service, calls, orgMemberUpsert, grantUpdate, grantDelete, auditCreate, userUpdate, invalidate };
+  return {
+    service,
+    calls,
+    orgMemberUpsert,
+    grantUpdate,
+    grantDelete,
+    auditCreate,
+    userUpdate,
+    invalidate,
+  };
 }
 
 const actions = (audit: ReturnType<typeof vi.fn>) =>
@@ -156,7 +176,9 @@ describe('InvitationsService.accept (R11)', () => {
       data: { principalType: 'user', principalId: USER },
     });
     expect(actions(h.auditCreate)).toEqual(['grant.invite_converted']);
-    expect(h.userUpdate.mock.calls[0]?.[0]).toMatchObject({ data: { permGeneration: { increment: 1 } } });
+    expect(h.userUpdate.mock.calls[0]?.[0]).toMatchObject({
+      data: { permGeneration: { increment: 1 } },
+    });
     expect(h.invalidate).toHaveBeenCalledWith({ user: USER, project: 'prj_1' });
     expect(out).toEqual({ organizationId: ORG, orgSlug: 'acme', projectId: 'prj_1' });
   });
@@ -173,14 +195,20 @@ describe('InvitationsService.accept (R11)', () => {
       },
     });
     await h.service.accept(USER, TOKEN);
-    expect(h.grantUpdate.mock.calls[0]?.[0]).toMatchObject({ where: { id: 'g_existing' }, data: { roleId: 'r_docs' } });
+    expect(h.grantUpdate.mock.calls[0]?.[0]).toMatchObject({
+      where: { id: 'g_existing' },
+      data: { roleId: 'r_docs' },
+    });
     expect(h.grantDelete).toHaveBeenCalledWith({ where: { id: 'g_pending' } });
     expect(actions(h.auditCreate)).toEqual(['grant.invite_merge_review', 'grant.invite_converted']);
   });
 
   it('refuses an unverified email and a different email', async () => {
     await expect(
-      harness({ user: { email: 'bob@example.com', emailVerifiedAt: null } }).service.accept(USER, TOKEN),
+      harness({ user: { email: 'bob@example.com', emailVerifiedAt: null } }).service.accept(
+        USER,
+        TOKEN,
+      ),
     ).rejects.toMatchObject({ response: { code: 'email_not_verified' } });
     const other = harness({ user: { email: 'eve@example.com', emailVerifiedAt: new Date() } });
     await expect(other.service.accept(USER, TOKEN)).rejects.toMatchObject({

@@ -121,7 +121,8 @@ export function buildEdges(
 
   return Object.values(model.objects.link)
     .filter(
-      (link) => entities[link.from.entityId] !== undefined && entities[link.to.entityId] !== undefined,
+      (link) =>
+        entities[link.from.entityId] !== undefined && entities[link.to.entityId] !== undefined,
     )
     .map((link) => ({
       id: link.id,

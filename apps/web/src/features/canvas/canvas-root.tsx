@@ -34,7 +34,13 @@ function NotAvailable() {
   );
 }
 
-function LiveCanvas({ projectId, readOnly }: { readonly projectId: Id; readonly readOnly: boolean }) {
+function LiveCanvas({
+  projectId,
+  readOnly,
+}: {
+  readonly projectId: Id;
+  readonly readOnly: boolean;
+}) {
   const { data } = useSuspenseQuery(irQueryOptions(projectId));
   return (
     <ReactFlowProvider>

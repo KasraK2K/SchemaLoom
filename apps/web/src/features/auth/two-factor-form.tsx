@@ -39,7 +39,9 @@ export function TwoFactorForm() {
         <input
           id={id}
           value={code}
-          onChange={(e) => { setCode(e.target.value); }}
+          onChange={(e) => {
+            setCode(e.target.value);
+          }}
           autoComplete="one-time-code"
           autoFocus
           aria-describedby={`${id}-hint`}

@@ -287,10 +287,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async verifyEmail(token: string): Promise<void> {
-    const consumed = await this.verification.consume(
-      token,
-      VerificationPurpose.email_verification,
-    );
+    const consumed = await this.verification.consume(token, VerificationPurpose.email_verification);
     if (!consumed.userId) return;
     await this.prisma.user.updateMany({
       where: { id: consumed.userId, emailVerifiedAt: null },
@@ -308,11 +305,7 @@ export class AuthService implements OnModuleInit {
       select: { id: true, name: true },
     });
     if (!user) return;
-    const token = await this.verification.issue(
-      VerificationPurpose.password_reset,
-      email,
-      user.id,
-    );
+    const token = await this.verification.issue(VerificationPurpose.password_reset, email, user.id);
     await this.mail.sendPasswordResetEmail(email, user.name, token);
   }
 
@@ -369,13 +362,20 @@ export class AuthService implements OnModuleInit {
     });
     if (existing) {
       if (existing.emailVerifiedAt === null) {
-        await this.prisma.user.update({ where: { id: existing.id }, data: { emailVerifiedAt: now } });
+        await this.prisma.user.update({
+          where: { id: existing.id },
+          data: { emailVerifiedAt: now },
+        });
       }
       return existing.id;
     }
     try {
       const created = await this.prisma.user.create({
-        data: { email: consumed.email, name: consumed.email.split('@')[0] ?? consumed.email, emailVerifiedAt: now },
+        data: {
+          email: consumed.email,
+          name: consumed.email.split('@')[0] ?? consumed.email,
+          emailVerifiedAt: now,
+        },
         select: { id: true },
       });
       return created.id;

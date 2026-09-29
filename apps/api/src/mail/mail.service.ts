@@ -75,7 +75,9 @@ export class MailService {
 
   /** No name: the address may not belong to an account yet. */
   async sendMagicLinkEmail(to: string, token: string, next?: string): Promise<void> {
-    const url = this.link('/magic-link', token) + (next === undefined ? '' : `&next=${encodeURIComponent(next)}`);
+    const url =
+      this.link('/magic-link', token) +
+      (next === undefined ? '' : `&next=${encodeURIComponent(next)}`);
     await this.send({
       to,
       subject: 'Your SchemaLoom sign-in link',
@@ -90,7 +92,12 @@ export class MailService {
   }
 
   /** Doc 05 §6.4 (R11). The page GETs the invite and POSTs the accept once signed in. */
-  async sendInvitationEmail(to: string, inviterName: string, orgName: string, token: string): Promise<void> {
+  async sendInvitationEmail(
+    to: string,
+    inviterName: string,
+    orgName: string,
+    token: string,
+  ): Promise<void> {
     const base = this.config.get('WEB_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
     const url = `${base}/invite/${encodeURIComponent(token)}`;
     const body = `${inviterName} shared a schema in ${orgName} with you on SchemaLoom. The invitation expires in 7 days.`;
@@ -106,7 +113,12 @@ export class MailService {
    * Phase 4 §4 — one in-app notification, mirrored by email when the recipient's pref is
    * on. `title` is templated from ids (doc 05 L7/L17) and never quotes schema text.
    */
-  async sendNotificationEmail(to: string, name: string, title: string, path: string | null): Promise<void> {
+  async sendNotificationEmail(
+    to: string,
+    name: string,
+    title: string,
+    path: string | null,
+  ): Promise<void> {
     const base = this.config.get('WEB_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
     const url = `${base}${path ?? '/'}`;
     await this.send({

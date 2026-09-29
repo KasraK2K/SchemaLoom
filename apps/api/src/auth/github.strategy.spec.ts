@@ -20,7 +20,9 @@ function configWith(overrides: Partial<Record<keyof AppEnv, string>>) {
 describe('GitHub strategy registration', () => {
   it('is absent unless both env vars are set', () => {
     expect(isGitHubConfigured(configWith({}))).toBe(false);
-    expect(githubStrategyProvider.useFactory(configWith({ GITHUB_CLIENT_ID: 'id' }), {} as AuthService)).toBeNull();
+    expect(
+      githubStrategyProvider.useFactory(configWith({ GITHUB_CLIENT_ID: 'id' }), {} as AuthService),
+    ).toBeNull();
     expect(
       githubStrategyProvider.useFactory(
         configWith({ GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 's' }),

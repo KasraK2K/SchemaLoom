@@ -139,25 +139,46 @@ export function classify(statement: unknown): StatementClass {
 
 export function declareStatement(statement: unknown, ctx: StatementContext): void {
   const schema = unwrap(statement, 'CreateSchemaStmt');
-  if (schema !== undefined) { declareSchema(schema, ctx); return; }
+  if (schema !== undefined) {
+    declareSchema(schema, ctx);
+    return;
+  }
 
   const enumType = unwrap(statement, 'CreateEnumStmt');
-  if (enumType !== undefined) { declareEnum(enumType, ctx); return; }
+  if (enumType !== undefined) {
+    declareEnum(enumType, ctx);
+    return;
+  }
 
   const domain = unwrap(statement, 'CreateDomainStmt');
-  if (domain !== undefined) { declareDomain(domain, ctx); return; }
+  if (domain !== undefined) {
+    declareDomain(domain, ctx);
+    return;
+  }
 
   const composite = unwrap(statement, 'CompositeTypeStmt');
-  if (composite !== undefined) { declareComposite(composite, ctx); return; }
+  if (composite !== undefined) {
+    declareComposite(composite, ctx);
+    return;
+  }
 
   const view = unwrap(statement, 'ViewStmt');
-  if (view !== undefined) { declareView(view, ctx); return; }
+  if (view !== undefined) {
+    declareView(view, ctx);
+    return;
+  }
 
   const matview = unwrap(statement, 'CreateTableAsStmt');
-  if (matview !== undefined) { declareMaterializedView(matview, ctx); return; }
+  if (matview !== undefined) {
+    declareMaterializedView(matview, ctx);
+    return;
+  }
 
   const table = unwrap(statement, 'CreateStmt');
-  if (table !== undefined) { declareTable(table, ctx); return; }
+  if (table !== undefined) {
+    declareTable(table, ctx);
+    return;
+  }
 }
 
 function declareSchema(node: AstNode, ctx: StatementContext): void {
@@ -443,18 +464,28 @@ function declareColumn(
 
 export function dependentStatement(statement: unknown, ctx: StatementContext): void {
   const table = unwrap(statement, 'CreateStmt');
-  if (table !== undefined) { tableConstraints(table, ctx); return; }
+  if (table !== undefined) {
+    tableConstraints(table, ctx);
+    return;
+  }
 
   const index = unwrap(statement, 'IndexStmt');
-  if (index !== undefined) { createIndex(index, ctx); return; }
+  if (index !== undefined) {
+    createIndex(index, ctx);
+    return;
+  }
 
   const alter = unwrap(statement, 'AlterTableStmt');
-  if (alter !== undefined) { alterTable(alter, ctx); return; }
+  if (alter !== undefined) {
+    alterTable(alter, ctx);
+    return;
+  }
 }
 
 function tableConstraints(node: AstNode, ctx: StatementContext): void {
   const target = rangeVar(node.relation);
-  const entity = target === undefined ? undefined : ctx.model.findEntity(target.schema, target.name);
+  const entity =
+    target === undefined ? undefined : ctx.model.findEntity(target.schema, target.name);
   if (entity === undefined) return; // pass 1 already reported why
 
   const limits = elementBoundaries(node);
@@ -559,9 +590,7 @@ function applyForeignKey(
   const target = rangeVar(constraint.pktable);
   const to = target === undefined ? undefined : ctx.model.findEntity(target.schema, target.name);
   if (to === undefined) {
-    ctx.loss(
-      `the foreign key on "${entity.name}" references a table that is not in this import`,
-    );
+    ctx.loss(`the foreign key on "${entity.name}" references a table that is not in this import`);
     return;
   }
 
@@ -607,7 +636,8 @@ function applyForeignKey(
 
 function createIndex(node: AstNode, ctx: StatementContext): void {
   const target = rangeVar(node.relation);
-  const entity = target === undefined ? undefined : ctx.model.findEntity(target.schema, target.name);
+  const entity =
+    target === undefined ? undefined : ctx.model.findEntity(target.schema, target.name);
   if (entity === undefined) {
     ctx.loss('the index is on a table that is not in this import');
     return;
@@ -697,7 +727,8 @@ function indexColumn(
 
 function alterTable(node: AstNode, ctx: StatementContext): void {
   const target = rangeVar(node.relation);
-  const entity = target === undefined ? undefined : ctx.model.findEntity(target.schema, target.name);
+  const entity =
+    target === undefined ? undefined : ctx.model.findEntity(target.schema, target.name);
   if (entity === undefined) {
     ctx.loss('the ALTER TABLE names a table that is not in this import');
     return;

@@ -55,7 +55,8 @@ export function renderPdf(model: RedactedModel, options: RenderDocsOptions = {})
       heading(`${entity.name} (${entity.kind})`, 13);
       body(docText(docs, entity));
       for (const fact of facts(docs.get(entity.id))) body(fact);
-      if (entity.propsRedacted === true) muted('Some properties of this object are hidden from you.');
+      if (entity.propsRedacted === true)
+        muted('Some properties of this object are hidden from you.');
       if (fields.length === 0) muted('No columns.');
       for (const field of fields) fieldBlock(field);
     }
@@ -99,7 +100,9 @@ function facts(doc: ExportDoc | undefined): string[] {
     const values = allowedValues
       .filter(
         (v): v is { value: string; meaning?: unknown } =>
-          typeof v === 'object' && v !== null && typeof (v as { value?: unknown }).value === 'string',
+          typeof v === 'object' &&
+          v !== null &&
+          typeof (v as { value?: unknown }).value === 'string',
       )
       .map((v) =>
         typeof v.meaning === 'string' && v.meaning !== '' ? `${v.value} = ${v.meaning}` : v.value,

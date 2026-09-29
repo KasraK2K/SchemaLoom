@@ -21,7 +21,9 @@ const rename = async (owner: Session, name: string): Promise<void> => {
     data: {
       batchId: randomUUID(),
       projectId: P,
-      ops: [{ op: 'update', type: 'entity', id: CUSTOMERS, expectedVersion: version, patch: { name } }],
+      ops: [
+        { op: 'update', type: 'entity', id: CUSTOMERS, expectedVersion: version, patch: { name } },
+      ],
     },
   });
   expect(response.status(), await response.text()).toBe(201);
@@ -41,7 +43,9 @@ test.describe('workflow 7 — realtime', () => {
     try {
       await rename(owner, 'clients_live');
       await expect(page.getByText('clients_live').first()).toBeVisible({ timeout: 15_000 });
-      expect(await page.evaluate(() => (globalThis as unknown as { __noReload?: boolean }).__noReload)).toBe(true);
+      expect(
+        await page.evaluate(() => (globalThis as unknown as { __noReload?: boolean }).__noReload),
+      ).toBe(true);
     } finally {
       await rename(owner, 'customers');
     }

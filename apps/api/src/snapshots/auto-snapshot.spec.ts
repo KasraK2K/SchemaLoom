@@ -19,7 +19,12 @@ function fakeTx(rows: SnapRow[]): SchemaDb {
   return {
     snapshot: {
       create: ({ data }: { data: { projectId: string; kind: string } }) => {
-        rows.push({ id: `new_${String(rows.length)}`, projectId: data.projectId, kind: data.kind, createdAt: NOW });
+        rows.push({
+          id: `new_${String(rows.length)}`,
+          projectId: data.projectId,
+          kind: data.kind,
+          createdAt: NOW,
+        });
         return Promise.resolve({ id: 'x' });
       },
       findMany: ({ skip }: { skip: number }) =>
@@ -62,14 +67,19 @@ async function run(rows: SnapRow[]): Promise<SnapRow[]> {
 
 describe('writeAutoSnapshot pruning (Phase 4 Q4)', () => {
   it('keeps the newest 50 non-manual snapshots however old they are', async () => {
-    const rows = Array.from({ length: AUTO_SNAPSHOTS_KEPT - 1 }, (_, i) => row(i, 'import', 200 * DAY + i));
+    const rows = Array.from({ length: AUTO_SNAPSHOTS_KEPT - 1 }, (_, i) =>
+      row(i, 'import', 200 * DAY + i),
+    );
     const after = await run(rows);
     expect(after).toHaveLength(AUTO_SNAPSHOTS_KEPT);
   });
 
   it('prunes beyond the newest 50 only what is older than 90 days', async () => {
     const recent = Array.from({ length: 55 }, (_, i) => row(i, 'restore', DAY + i));
-    const old = Array.from({ length: 5 }, (_, i) => ({ ...row(i, 'import', 91 * DAY + i), id: `old_${String(i)}` }));
+    const old = Array.from({ length: 5 }, (_, i) => ({
+      ...row(i, 'import', 91 * DAY + i),
+      id: `old_${String(i)}`,
+    }));
     const after = await run([...recent, ...old]);
     // 61 non-manual: the 11 beyond the newest 50 are 6 recent (kept) + 5 old (pruned).
     expect(after).toHaveLength(56);

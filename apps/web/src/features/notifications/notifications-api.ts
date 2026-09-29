@@ -34,7 +34,8 @@ export const notificationPrefsKey = ['auth', 'me', 'notification-prefs'] as cons
 export function notificationsQueryOptions() {
   return queryOptions({
     queryKey: notificationsKey,
-    queryFn: async (): Promise<NotificationPage> => pageSchema.parse(await apiFetch<unknown>('/notifications')),
+    queryFn: async (): Promise<NotificationPage> =>
+      pageSchema.parse(await apiFetch<unknown>('/notifications')),
     // Without a socket the bell still catches up when the tab regains focus (DESIGN §4).
     refetchOnWindowFocus: true,
   });
@@ -56,7 +57,9 @@ export function notificationPrefsQueryOptions() {
   });
 }
 
-export async function updateNotificationPrefs(patch: NotificationPrefsPatch): Promise<NotificationPrefs> {
+export async function updateNotificationPrefs(
+  patch: NotificationPrefsPatch,
+): Promise<NotificationPrefs> {
   return notificationPrefsStoredSchema.parse(
     await apiFetch<unknown>('/auth/me/notification-prefs', { method: 'PATCH', body: patch }),
   );

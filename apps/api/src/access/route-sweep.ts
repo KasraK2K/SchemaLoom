@@ -175,8 +175,7 @@ const isExcluded = (
 ): boolean =>
   excludes.some(
     (e) =>
-      e.pathRegex.test(path) &&
-      (e.requestMethod === RequestMethod.ALL || e.requestMethod === verb),
+      e.pathRegex.test(path) && (e.requestMethod === RequestMethod.ALL || e.requestMethod === verb),
   );
 
 /** A route handler's HTTP verb, or `null` when the method is not a route at all. */

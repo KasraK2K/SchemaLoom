@@ -9,7 +9,12 @@ import {
   type OnGatewayDisconnect,
   type OnGatewayInit,
 } from '@nestjs/websockets';
-import { redact, redactPatch, type RawSchemaModel, type RedactedModel } from '@schemaloom/schema-model';
+import {
+  redact,
+  redactPatch,
+  type RawSchemaModel,
+  type RedactedModel,
+} from '@schemaloom/schema-model';
 import type { Subscription } from 'rxjs';
 import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
@@ -277,11 +282,15 @@ export class RealtimeGateway
       projectIds.map((projectId) =>
         this.serial(projectId, async () => {
           const sockets = [...(this.rooms.get(projectId) ?? [])].filter(
-            (s) => scope.user === undefined || scope.project !== undefined || s.data.userId === scope.user,
+            (s) =>
+              scope.user === undefined ||
+              scope.project !== undefined ||
+              s.data.userId === scope.user,
           );
           if (sockets.length === 0) return;
           const raw = await this.load(projectId);
-          const generation = raw === null ? 0 : (await this.resolver.skeleton(projectId)).generation;
+          const generation =
+            raw === null ? 0 : (await this.resolver.skeleton(projectId)).generation;
           for (const socket of sockets) {
             if ((await this.refresh(socket, raw)) === null) continue;
             socket.emit(SERVER_EVENTS.accessChanged, { projectId, generation });
@@ -306,7 +315,10 @@ export class RealtimeGateway
       if (subject?.kind !== 'user') continue;
       const map = await this.resolver.resolveProject(subject, target.projectId);
       if (!seesTarget(this.resolver.atomsAt(map, skel, ref), target)) continue;
-      socket.emit(SERVER_EVENTS.commentsChanged, { targetType: target.targetType, targetId: target.targetId });
+      socket.emit(SERVER_EVENTS.commentsChanged, {
+        targetType: target.targetType,
+        targetId: target.targetId,
+      });
     }
   }
 

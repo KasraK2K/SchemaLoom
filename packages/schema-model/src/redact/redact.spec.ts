@@ -16,8 +16,7 @@ const viewer = (over: Parameters<typeof ctx>[0] = {}) =>
     ...over,
   });
 
-const run = (model: SchemaModel, context = viewer()) =>
-  redact(new RawSchemaModel(model), context);
+const run = (model: SchemaModel, context = viewer()) => redact(new RawSchemaModel(model), context);
 
 describe('redact — the redacted model is a valid model', () => {
   it('parses against the same zod schema and carries redacted: true', () => {
@@ -80,10 +79,7 @@ describe('L2 — link and FK names', () => {
   it('leaves fieldIds alone when only a MASKED field is involved', () => {
     const model = f.model({
       namespace: f.byId([f.namespace(DEFAULT_NS, 'public', { isDefault: true })]),
-      entity: f.byId([
-        f.entity('ent_a', 'a', DEFAULT_NS),
-        f.entity('ent_b', 'b', DEFAULT_NS),
-      ]),
+      entity: f.byId([f.entity('ent_a', 'a', DEFAULT_NS), f.entity('ent_b', 'b', DEFAULT_NS)]),
       field: f.byId([
         f.field('fld_a', 'a_id', 'ent_a'),
         f.field('fld_b', 'secret', 'ent_b', { isRestricted: true }),
@@ -336,8 +332,9 @@ describe('R-1 — restricted and propsRedacted are independent', () => {
     expect(field?.restricted).toBeUndefined();
     // The exporter's rule is `skip if restricted && type === 'entity'`, `keep if
     // propsRedacted`. Any `if (obj.restricted)` path must leave this object alone.
-    expect(Object.values(run(workflowModel()).objects.field).filter((x) => x.restricted === true))
-      .toHaveLength(1);
+    expect(
+      Object.values(run(workflowModel()).objects.field).filter((x) => x.restricted === true),
+    ).toHaveLength(1);
   });
 
   it('an entity whose badges were degraded is marked propsRedacted, never restricted', () => {

@@ -140,7 +140,11 @@ function annotateField(
   return entry.properties.map((p): PropertyChange => {
     if (risk !== null && isTypePath(p)) {
       return risk.lossy
-        ? { ...p, destructive: false, note: `${risk.from} → ${risk.to} may truncate or reject existing values` }
+        ? {
+            ...p,
+            destructive: false,
+            note: `${risk.from} → ${risk.to} may truncate or reject existing values`,
+          }
         : { ...p, destructive: false };
     }
     if (p.path[0] === 'isNullable' && p.before === true && p.after === false) {
@@ -163,7 +167,11 @@ function annotateCustomType(
   );
 }
 
-export function annotateDiff(diff: SchemaDiff, before: SchemaModel, after: SchemaModel): AnnotatedDiff {
+export function annotateDiff(
+  diff: SchemaDiff,
+  before: SchemaModel,
+  after: SchemaModel,
+): AnnotatedDiff {
   const entryRisk: Record<string, EntryRisk> = {};
   const entries = diff.entries.map((entry): DiffEntry => {
     if (entry.change === 'removed') {
@@ -173,8 +181,10 @@ export function annotateDiff(diff: SchemaDiff, before: SchemaModel, after: Schem
       return entry;
     }
     if (entry.change !== 'changed') return entry;
-    if (entry.objectType === 'field') return { ...entry, properties: annotateField(entry, before, after) };
-    if (entry.objectType === 'customType') return { ...entry, properties: annotateCustomType(entry) };
+    if (entry.objectType === 'field')
+      return { ...entry, properties: annotateField(entry, before, after) };
+    if (entry.objectType === 'customType')
+      return { ...entry, properties: annotateCustomType(entry) };
     return { ...entry, properties: entry.properties.map((p) => ({ ...p, destructive: false })) };
   });
 

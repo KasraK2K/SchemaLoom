@@ -38,7 +38,10 @@ export function orgMembership(
 export function assertMayList(orgRole: OrgRole | null): void {
   if (orgRole === null) throw new NotFoundException({ code: 'not_found' });
   if (orgRole === 'guest') {
-    throw new ForbiddenException({ code: 'forbidden_org_role', required: ['owner', 'admin', 'member'] });
+    throw new ForbiddenException({
+      code: 'forbidden_org_role',
+      required: ['owner', 'admin', 'member'],
+    });
   }
 }
 
@@ -88,17 +91,30 @@ export class MembersService {
     return rows.map(toView);
   }
 
-  async setRole(actorId: string, orgSlug: string, targetId: string, role: OrgRole): Promise<MemberView> {
-    const organizationId = await this.change(actorId, orgSlug, targetId, role, async (tx, before) => {
-      await tx.orgMember.update({
-        where: { organizationId_userId: { organizationId: before.organizationId, userId: targetId } },
-        data: { role },
-      });
-      await audit(tx, before.organizationId, actorId, 'org_member.role_changed', targetId, {
-        before: before.role,
-        after: role,
-      });
-    });
+  async setRole(
+    actorId: string,
+    orgSlug: string,
+    targetId: string,
+    role: OrgRole,
+  ): Promise<MemberView> {
+    const organizationId = await this.change(
+      actorId,
+      orgSlug,
+      targetId,
+      role,
+      async (tx, before) => {
+        await tx.orgMember.update({
+          where: {
+            organizationId_userId: { organizationId: before.organizationId, userId: targetId },
+          },
+          data: { role },
+        });
+        await audit(tx, before.organizationId, actorId, 'org_member.role_changed', targetId, {
+          before: before.role,
+          after: role,
+        });
+      },
+    );
     const row = await this.prisma.orgMember.findUniqueOrThrow({
       where: { organizationId_userId: { organizationId, userId: targetId } },
       select: MEMBER,
@@ -117,7 +133,9 @@ export class MembersService {
         where: { userId: targetId, group: { organizationId: before.organizationId } },
       });
       await tx.orgMember.delete({
-        where: { organizationId_userId: { organizationId: before.organizationId, userId: targetId } },
+        where: {
+          organizationId_userId: { organizationId: before.organizationId, userId: targetId },
+        },
       });
       await audit(tx, before.organizationId, actorId, 'org_member.removed', targetId, {
         role: before.role,
@@ -131,7 +149,10 @@ export class MembersService {
     orgSlug: string,
     targetId: string,
     next: OrgRole | null,
-    write: (tx: Prisma.TransactionClient, before: { organizationId: string; role: OrgRole }) => Promise<void>,
+    write: (
+      tx: Prisma.TransactionClient,
+      before: { organizationId: string; role: OrgRole },
+    ) => Promise<void>,
   ): Promise<string> {
     const actor = await orgMembership(this.prisma, actorId, orgSlug);
     if (actor === null) throw new NotFoundException({ code: 'not_found' });
@@ -152,7 +173,12 @@ export class MembersService {
         }),
         tx.orgMember.count({ where: { organizationId, role: 'owner' } }),
       ]);
-      if (target === null) throw new NotFoundException({ code: 'not_found', resourceType: 'org_member', id: targetId });
+      if (target === null)
+        throw new NotFoundException({
+          code: 'not_found',
+          resourceType: 'org_member',
+          id: targetId,
+        });
       assertMemberChange(me?.role ?? null, target.role, next, owners);
       await write(tx, { organizationId, role: target.role });
       await tx.user.update({ where: { id: targetId }, data: { permGeneration: { increment: 1 } } });
@@ -168,8 +194,18 @@ const MEMBER = {
   user: { select: { id: true, name: true, email: true } },
 } as const;
 
-function toView(r: { role: OrgRole; joinedAt: Date; user: { id: string; name: string; email: string } }): MemberView {
-  return { userId: r.user.id, name: r.user.name, email: r.user.email, role: r.role, joinedAt: r.joinedAt.toISOString() };
+function toView(r: {
+  role: OrgRole;
+  joinedAt: Date;
+  user: { id: string; name: string; email: string };
+}): MemberView {
+  return {
+    userId: r.user.id,
+    name: r.user.name,
+    email: r.user.email,
+    role: r.role,
+    joinedAt: r.joinedAt.toISOString(),
+  };
 }
 
 function audit(
@@ -181,6 +217,13 @@ function audit(
   metadata: Prisma.InputJsonValue,
 ): Promise<unknown> {
   return tx.auditLog.create({
-    data: { organizationId, actorUserId, action, resourceType: 'user', resourceId: userId, metadata },
+    data: {
+      organizationId,
+      actorUserId,
+      action,
+      resourceType: 'user',
+      resourceId: userId,
+      metadata,
+    },
   });
 }

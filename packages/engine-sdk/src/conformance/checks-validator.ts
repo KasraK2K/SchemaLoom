@@ -50,7 +50,10 @@ export function staleReferenceCandidate(
 export function emitsQuickFixes(ctx: CheckContext): boolean {
   if (ctx.validator === null) return false;
   try {
-    const models = [ctx.fixtures.referenceModel, brokenCopy(ctx.engine, ctx.fixtures.referenceModel)];
+    const models = [
+      ctx.fixtures.referenceModel,
+      brokenCopy(ctx.engine, ctx.fixtures.referenceModel),
+    ];
     return models.some((m) => diagnose(ctx, m).some((d) => d.quickFix !== undefined));
   } catch {
     // This runs at COLLECTION time. A validator that throws is a real failure, but it belongs
@@ -88,7 +91,10 @@ export const VALIDATOR_CHECKS: readonly ConformanceCheck[] = [
     requires: 'validator',
     run: (ctx) => {
       // §2.5's ordering contract is what makes a cached diagnostic payload diff-stable.
-      for (const model of [ctx.fixtures.referenceModel, brokenCopy(ctx.engine, ctx.fixtures.referenceModel)]) {
+      for (const model of [
+        ctx.fixtures.referenceModel,
+        brokenCopy(ctx.engine, ctx.fixtures.referenceModel),
+      ]) {
         const result = diagnose(ctx, model);
         expect(sortDiagnostics(result)).toEqual(result);
       }

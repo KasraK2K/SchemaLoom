@@ -163,7 +163,12 @@ describe('checkLink — declarative rules', () => {
       target: { entityId: 'customers', fieldIds: ['customers.id'] },
     };
     expect(
-      checkLink({ engine: fixtureFacet, model: baseModel(), linkKindId: 'foreignKey', ...selfEndpoints }).ok,
+      checkLink({
+        engine: fixtureFacet,
+        model: baseModel(),
+        linkKindId: 'foreignKey',
+        ...selfEndpoints,
+      }).ok,
     ).toBe(true);
 
     const strict: EngineStaticFacet = {
@@ -172,7 +177,12 @@ describe('checkLink — declarative rules', () => {
         relationalInput({ linkKinds: [{ ...FOREIGN_KEY_KIND, allowSelfReference: false }] }),
       ),
     };
-    const result = checkLink({ engine: strict, model: baseModel(), linkKindId: 'foreignKey', ...selfEndpoints });
+    const result = checkLink({
+      engine: strict,
+      model: baseModel(),
+      linkKindId: 'foreignKey',
+      ...selfEndpoints,
+    });
     expect(result.reasons[0]?.code).toBe('link.selfNotAllowed');
   });
 
@@ -245,7 +255,13 @@ describe('checkLink — on a redacted model (§7.1)', () => {
         entity: { ...base.objects.entity, customers: { ...hidden, restricted: true } },
       },
     };
-    const result = checkLink({ engine: fixtureFacet, model, linkKindId: 'foreignKey', source, target });
+    const result = checkLink({
+      engine: fixtureFacet,
+      model,
+      linkKindId: 'foreignKey',
+      source,
+      target,
+    });
     expect(result.ok).toBe(true);
     expect(result.reasons).toEqual([]);
     expect(result.suggestedCardinality).toBeNull();
@@ -260,7 +276,9 @@ describe('checkLink — on a redacted model (§7.1)', () => {
       redacted: true,
       objects: { ...base.objects, field: remaining },
     };
-    expect(checkLink({ engine: fixtureFacet, model, linkKindId: 'foreignKey', source, target }).ok).toBe(true);
+    expect(
+      checkLink({ engine: fixtureFacet, model, linkKindId: 'foreignKey', source, target }).ok,
+    ).toBe(true);
   });
 
   it('still applies the real rules on an unredacted model, which is what the server holds', () => {

@@ -28,17 +28,17 @@ describe('validateCustomRole (doc 05 §4.2)', () => {
   });
 
   it('V2: names every unknown atom', () => {
-    expect(thrown(() => validateCustomRole({ atoms: ['docs:edit', 'root', 'sudo'] }, 'admin'))).toMatchObject({
+    expect(
+      thrown(() => validateCustomRole({ atoms: ['docs:edit', 'root', 'sudo'] }, 'admin')),
+    ).toMatchObject({
       response: { code: 'unknown_atom', unknown: ['root', 'sudo'] },
     });
   });
 
   it('V3: closes over schema:view, dedupes, and stores in canonical order', () => {
-    expect(validateCustomRole({ atoms: ['export:run', 'docs:edit', 'export:run'] }, 'owner')).toEqual([
-      'schema:view',
-      'docs:edit',
-      'export:run',
-    ]);
+    expect(
+      validateCustomRole({ atoms: ['export:run', 'docs:edit', 'export:run'] }, 'owner'),
+    ).toEqual(['schema:view', 'docs:edit', 'export:run']);
   });
 
   it('V4: an empty role is refused', () => {
@@ -52,10 +52,19 @@ function harness(over: { orgRole?: string; grantCount?: number; role?: unknown }
   const tx = {
     role: {
       create: vi.fn(({ data }: { data: Record<string, unknown> }) =>
-        Promise.resolve({ id: 'rl_new', description: null, isBuiltIn: false, isArchived: false, ...data }),
+        Promise.resolve({
+          id: 'rl_new',
+          description: null,
+          isBuiltIn: false,
+          isArchived: false,
+          ...data,
+        }),
       ),
       update: vi.fn(({ data }: { data: Record<string, unknown> }) =>
-        Promise.resolve({ ...(over.role as object), ...Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)) }),
+        Promise.resolve({
+          ...(over.role as object),
+          ...Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)),
+        }),
       ),
       delete: vi.fn().mockResolvedValue({}),
     },
@@ -72,7 +81,11 @@ function harness(over: { orgRole?: string; grantCount?: number; role?: unknown }
     $transaction: (fn: (t: unknown) => Promise<unknown>) => fn(tx),
   } as unknown as PrismaService;
   const invalidate = vi.fn().mockResolvedValue(undefined);
-  return { service: new RolesService(prisma, { invalidate } as unknown as PermissionResolver), tx, invalidate };
+  return {
+    service: new RolesService(prisma, { invalidate } as unknown as PermissionResolver),
+    tx,
+    invalidate,
+  };
 }
 
 const analyst = {
@@ -118,7 +131,9 @@ describe('RolesService', () => {
 
   it('refuses every write to a plain member (V1)', async () => {
     const h = harness({ orgRole: 'member', role: analyst });
-    await expect(h.service.update(USER, 'acme', 'rl_1', { archived: true })).rejects.toMatchObject({ status: 403 });
+    await expect(h.service.update(USER, 'acme', 'rl_1', { archived: true })).rejects.toMatchObject({
+      status: 403,
+    });
     await expect(h.service.remove(USER, 'acme', 'rl_1')).rejects.toMatchObject({ status: 403 });
   });
 });

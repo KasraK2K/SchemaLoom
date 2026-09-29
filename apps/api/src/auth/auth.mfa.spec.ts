@@ -16,7 +16,10 @@ interface UserRow {
   totpConfirmedAt: Date | null;
 }
 
-function setup(users: UserRow[], consumed: { userId: string | null; email: string } = { userId: null, email: '' }) {
+function setup(
+  users: UserRow[],
+  consumed: { userId: string | null; email: string } = { userId: null, email: '' },
+) {
   const prisma = {
     user: {
       findUnique: ({ where }: { where: { id: string } }) =>
@@ -24,7 +27,10 @@ function setup(users: UserRow[], consumed: { userId: string | null; email: strin
       findFirst: ({ where }: { where: { email: string } }) =>
         Promise.resolve(users.find((u) => u.email === where.email) ?? null),
       update: ({ where, data }: { where: { id: string }; data: Partial<UserRow> }) => {
-        Object.assign(users.find((u) => u.id === where.id)!, data);
+        Object.assign(
+          users.find((u) => u.id === where.id)!,
+          data,
+        );
         return Promise.resolve({});
       },
       updateMany: ({ where, data }: { where: { id: string }; data: Partial<UserRow> }) => {
@@ -43,7 +49,12 @@ function setup(users: UserRow[], consumed: { userId: string | null; email: strin
   const tokens = {
     accessTtlSec: 900,
     startSession: vi.fn((userId: string) =>
-      Promise.resolve({ refreshToken: 'rt', familyId: 'f', userId, expiresAt: new Date(Date.now() + 60_000) }),
+      Promise.resolve({
+        refreshToken: 'rt',
+        familyId: 'f',
+        userId,
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
     ),
     issueAccessToken: vi.fn(() => Promise.resolve('at')),
     issueMfaChallenge: vi.fn((userId: string) => Promise.resolve(`challenge:${userId}`)),
@@ -57,7 +68,9 @@ function setup(users: UserRow[], consumed: { userId: string | null; email: strin
   };
   const twoFactor = {
     throttle: vi.fn(() => Promise.resolve()),
-    verifySecondFactor: vi.fn((_userId: string, code: string) => Promise.resolve(code === '123456')),
+    verifySecondFactor: vi.fn((_userId: string, code: string) =>
+      Promise.resolve(code === '123456'),
+    ),
   };
   const verification = { consume: vi.fn(() => Promise.resolve(consumed)) };
   const config = { get: () => 'csrf-secret' } as unknown as ConfigService<AppEnv, true>;
@@ -72,8 +85,18 @@ function setup(users: UserRow[], consumed: { userId: string | null; email: strin
   return { auth, tokens, twoFactor, users };
 }
 
-const plain: UserRow = { id: 'u1', email: 'a@example.com', emailVerifiedAt: new Date(), totpConfirmedAt: null };
-const guarded: UserRow = { id: 'u2', email: 'b@example.com', emailVerifiedAt: new Date(), totpConfirmedAt: new Date() };
+const plain: UserRow = {
+  id: 'u1',
+  email: 'a@example.com',
+  emailVerifiedAt: new Date(),
+  totpConfirmedAt: null,
+};
+const guarded: UserRow = {
+  id: 'u2',
+  email: 'b@example.com',
+  emailVerifiedAt: new Date(),
+  totpConfirmedAt: new Date(),
+};
 
 describe('the 2FA login gate', () => {
   it('opens a session for a user without 2FA', async () => {
@@ -104,7 +127,10 @@ describe('the 2FA login gate', () => {
 
 describe('magic link consume', () => {
   it('verifies the address of the user the link was issued to', async () => {
-    const { auth, users } = setup([{ ...plain, emailVerifiedAt: null }], { userId: 'u1', email: plain.email });
+    const { auth, users } = setup([{ ...plain, emailVerifiedAt: null }], {
+      userId: 'u1',
+      email: plain.email,
+    });
     expect(await auth.consumeMagicLink('t')).toBe('u1');
     expect(users[0]!.emailVerifiedAt).toBeInstanceOf(Date);
   });
@@ -113,7 +139,12 @@ describe('magic link consume', () => {
     const { auth, users } = setup([], { userId: null, email: 'new@example.com' });
     const userId = await auth.consumeMagicLink('t');
     expect(users).toEqual([
-      expect.objectContaining({ id: userId, email: 'new@example.com', name: 'new', emailVerifiedAt: expect.any(Date) }),
+      expect.objectContaining({
+        id: userId,
+        email: 'new@example.com',
+        name: 'new',
+        emailVerifiedAt: expect.any(Date),
+      }),
     ]);
   });
 
@@ -135,25 +166,32 @@ describe('emailing an address is capped before the account lookup', () => {
     ['requestMagicLink', 'email:magic:a@example.com'],
     ['requestPasswordReset', 'email:reset:a@example.com'],
     ['resendVerification', 'email:verify:a@example.com'],
-  ] as const)('%s throttles on the normalised address, and a refusal sends nothing', async (method, key) => {
-    const { auth, twoFactor } = setup([{ ...plain, emailVerifiedAt: null }]);
-    const refused = new Error('rate_limited');
-    twoFactor.throttle.mockImplementationOnce(() => Promise.reject(refused));
-    // Mail and VerificationService.issue are absent from the fixture: reaching either
-    // would throw a TypeError instead of the throttle's own error.
-    await expect(auth[method](' A@Example.com ')).rejects.toBe(refused);
-    expect(twoFactor.throttle).toHaveBeenCalledWith(key, { limit: 5, windowSec: 3600 });
-  });
+  ] as const)(
+    '%s throttles on the normalised address, and a refusal sends nothing',
+    async (method, key) => {
+      const { auth, twoFactor } = setup([{ ...plain, emailVerifiedAt: null }]);
+      const refused = new Error('rate_limited');
+      twoFactor.throttle.mockImplementationOnce(() => Promise.reject(refused));
+      // Mail and VerificationService.issue are absent from the fixture: reaching either
+      // would throw a TypeError instead of the throttle's own error.
+      await expect(auth[method](' A@Example.com ')).rejects.toBe(refused);
+      expect(twoFactor.throttle).toHaveBeenCalledWith(key, { limit: 5, windowSec: 3600 });
+    },
+  );
 });
 
 describe('the magic link `next`', () => {
-  const accepts = (next: string) => magicLinkSchema.safeParse({ email: 'a@example.com', next }).success;
+  const accepts = (next: string) =>
+    magicLinkSchema.safeParse({ email: 'a@example.com', next }).success;
 
   it('carries a same-origin path, such as an invitation', () => {
     expect(accepts('/invite/abc')).toBe(true);
   });
 
-  it.each(['https://evil.test', '//evil.test', '/\\evil.test', 'invite/abc'])('refuses %s', (next) => {
-    expect(accepts(next)).toBe(false);
-  });
+  it.each(['https://evil.test', '//evil.test', '/\\evil.test', 'invite/abc'])(
+    'refuses %s',
+    (next) => {
+      expect(accepts(next)).toBe(false);
+    },
+  );
 });

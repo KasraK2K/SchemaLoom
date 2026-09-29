@@ -77,10 +77,7 @@ export class GitHubStrategy extends PassportStrategy(Strategy, 'github') {
 export const githubStrategyProvider = {
   provide: GITHUB_STRATEGY,
   inject: [ConfigService, AuthService],
-  useFactory: (
-    config: ConfigService<AppEnv, true>,
-    auth: AuthService,
-  ): GitHubStrategy | null =>
+  useFactory: (config: ConfigService<AppEnv, true>, auth: AuthService): GitHubStrategy | null =>
     isGitHubConfigured(config) ? new GitHubStrategy(config, auth) : null,
 };
 

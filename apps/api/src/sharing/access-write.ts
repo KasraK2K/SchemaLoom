@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   PermissionResolver,
   atomsAt,
@@ -140,7 +145,14 @@ export async function grantableRole(
 ): Promise<GrantableRole> {
   const role = await db.role.findFirst({
     where: { key, OR: [{ organizationId: null, isBuiltIn: true }, { organizationId }] },
-    select: { id: true, key: true, name: true, atoms: true, organizationId: true, isArchived: true },
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      atoms: true,
+      organizationId: true,
+      isArchived: true,
+    },
   });
   if (role === null) throw new BadRequestException({ code: 'unknown_role', roleKey: key });
   assertRoleUsable(role, organizationId);
@@ -182,7 +194,8 @@ export async function assertNotGuestManager(
   atoms: AtomSet,
 ): Promise<void> {
   if (!atoms.has('sharing:manage')) return;
-  if (principal.type === 'email_invite') throw new BadRequestException({ code: 'guest_cannot_manage' });
+  if (principal.type === 'email_invite')
+    throw new BadRequestException({ code: 'guest_cannot_manage' });
   if (principal.type !== 'user') return;
   const member = await db.orgMember.findUnique({
     where: { organizationId_userId: { organizationId, userId: principal.id } },

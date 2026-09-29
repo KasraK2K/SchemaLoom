@@ -26,18 +26,37 @@ const MODEL = model({
     column({ id: 'o_cust', name: 'customer_id', entityId: 'orders', type: { name: 'integer' } }),
     column({ id: 'o_alt', name: 'cust_alt', entityId: 'orders', type: { name: 'uuid' } }),
     column({ id: 'o_name', name: 'label', entityId: 'orders', type: { name: 'text' } }),
-    column({ id: 'oo_cust', name: 'customer_id', entityId: 'old_orders', type: { name: 'integer' } }),
+    column({
+      id: 'oo_cust',
+      name: 'customer_id',
+      entityId: 'old_orders',
+      type: { name: 'integer' },
+    }),
     column({ id: 'p_total', name: 'total', entityId: 'payroll', type: { name: 'integer' } }),
   ],
   constraints: [
-    constraint({ id: 'pk_customers', entityId: 'customers', kind: 'primaryKey', fieldIds: ['c_id'] }),
-    constraint({ id: 'uq_customers', entityId: 'customers', kind: 'unique', fieldIds: ['c_id', 'c_alt'] }),
+    constraint({
+      id: 'pk_customers',
+      entityId: 'customers',
+      kind: 'primaryKey',
+      fieldIds: ['c_id'],
+    }),
+    constraint({
+      id: 'uq_customers',
+      entityId: 'customers',
+      kind: 'unique',
+      fieldIds: ['c_id', 'c_alt'],
+    }),
   ],
 });
 
 const at = (entityId: string, ...fieldIds: string[]): LinkEndpoint => ({ entityId, fieldIds });
 
-const check = (source: LinkEndpoint, target: LinkEndpoint, kind: string | null = 'foreignKey'): LinkCheck =>
+const check = (
+  source: LinkEndpoint,
+  target: LinkEndpoint,
+  kind: string | null = 'foreignKey',
+): LinkCheck =>
   checkLink({ engine: postgresFacet, model: MODEL, linkKindId: kind, source, target });
 
 const reasons = (result: LinkCheck): readonly string[] => result.reasons.map((r) => r.code);

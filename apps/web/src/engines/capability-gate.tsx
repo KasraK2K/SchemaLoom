@@ -33,6 +33,7 @@ export function CapabilityGate({
   const { capabilities } = useEngine();
   // Neither supplied is a caller bug, and rendering the children would silently defeat the
   // gate. Closed is the safe direction.
-  const ok = feature === undefined ? (when?.(capabilities) ?? false) : capabilities.features[feature];
+  const ok =
+    feature === undefined ? (when?.(capabilities) ?? false) : capabilities.features[feature];
   return <>{ok ? children : (fallback ?? null)}</>;
 }

@@ -53,10 +53,7 @@ function withProp(props: EngineProps, name: string, value: unknown): EngineProps
   return { ...props, [name]: value };
 }
 
-function diagnosticFor(
-  diagnostics: readonly Diagnostic[],
-  name: string,
-): Diagnostic | undefined {
+function diagnosticFor(diagnostics: readonly Diagnostic[], name: string): Diagnostic | undefined {
   return diagnostics.find((d) => d.target.propPath?.[0] === name);
 }
 
@@ -80,9 +77,7 @@ export function propsSection<T extends PropsBearing>(
     if (spec.visibleFor?.(object) === false) return null;
     if (object.propsRedacted === true) {
       return (
-        <p className="px-1 py-2 text-xs text-text-subtle">
-          Some properties are hidden from you.
-        </p>
+        <p className="px-1 py-2 text-xs text-text-subtle">Some properties are hidden from you.</p>
       );
     }
 

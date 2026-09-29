@@ -22,7 +22,9 @@ export async function confirmTwoFactor(code: string): Promise<string[]> {
   return RecoveryCodesSchema.parse(data).recoveryCodes;
 }
 
-export async function disableTwoFactor(proof: { code: string } | { password: string }): Promise<void> {
+export async function disableTwoFactor(
+  proof: { code: string } | { password: string },
+): Promise<void> {
   await apiFetch<unknown>('/auth/2fa/disable', { method: 'POST', body: proof });
 }
 

@@ -50,8 +50,8 @@ export function CanvasEmptyState({
       <div className="text-center">
         <h1 className="text-lg font-semibold text-text">This project is empty</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Three ways to begin. You can mix them later — importing does not overwrite what
-          you have drawn.
+          Three ways to begin. You can mix them later — importing does not overwrite what you have
+          drawn.
         </p>
       </div>
 

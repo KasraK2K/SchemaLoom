@@ -72,12 +72,7 @@ function groupIds(touched: readonly { type: IrObjectType; id: Id }[]): TouchedId
  * deleted by a later op in the same batch — a legitimate outcome, reported through
  * `removed` instead.
  */
-function copyOne(
-  model: SchemaModel,
-  changed: IrCollections,
-  type: IrObjectType,
-  id: Id,
-): boolean {
+function copyOne(model: SchemaModel, changed: IrCollections, type: IrObjectType, id: Id): boolean {
   switch (type) {
     case 'area': {
       const o = model.objects.area[id];

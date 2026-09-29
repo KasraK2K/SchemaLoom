@@ -178,9 +178,9 @@ describe('PermissionGuard — fail closed', () => {
 
   it('lets a @Public() route through with no principal at all', async () => {
     const { guard, resolver } = makeGuard(mapOf([]), skeletonOf([]));
-    await expect(
-      guard.canActivate(contextFor(request(), Routes.prototype.login)),
-    ).resolves.toBe(true);
+    await expect(guard.canActivate(contextFor(request(), Routes.prototype.login))).resolves.toBe(
+      true,
+    );
     expect(resolver.resolveProject).not.toHaveBeenCalled();
   });
 
@@ -236,17 +236,17 @@ describe('PermissionGuard — @RequirePermission', () => {
   it('denies an INSUFFICIENT grant with 403 — visible, but short of the atom', async () => {
     const { guard } = makeGuard(mapOf(['schema:view']), skel);
     const req = request({ auth: ANA, method: 'PATCH', params: { id: 'ent_1' } });
-    await expect(
-      guard.canActivate(contextFor(req, Routes.prototype.updateEntity)),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.updateEntity))).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('denies an INVISIBLE resource with 404, not 403 — no existence oracle', async () => {
     const { guard } = makeGuard(mapOf([]), skel);
     const req = request({ auth: ANA, method: 'PATCH', params: { id: 'ent_1' } });
-    await expect(
-      guard.canActivate(contextFor(req, Routes.prototype.updateEntity)),
-    ).rejects.toThrow(NotFoundException);
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.updateEntity))).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
 
@@ -380,9 +380,9 @@ describe('PermissionGuard — @RequireProjectAccess and @RequireOrgRole', () => 
     );
 
     resolver.orgRole.mockResolvedValue('member');
-    await expect(
-      guard.canActivate(contextFor(req, Routes.prototype.createGroup)),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.createGroup))).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('@RequireOrgRole 404s another organisation, without asking the database', async () => {
@@ -407,9 +407,9 @@ describe('PermissionGuard — §10.5 denial logging', () => {
     (guard as unknown as { logger: { warn: unknown } }).logger = { warn };
     const req = request({ auth: ANA, method: 'PATCH', params: { id: 'ent_1' } });
 
-    await expect(
-      guard.canActivate(contextFor(req, Routes.prototype.updateEntity)),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.updateEntity))).rejects.toThrow(
+      ForbiddenException,
+    );
 
     expect(warn).toHaveBeenCalledTimes(1);
     const line = String(warn.mock.calls[0]?.[0]);

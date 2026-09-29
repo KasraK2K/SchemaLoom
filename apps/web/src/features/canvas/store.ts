@@ -1,14 +1,6 @@
 import type { Id, Point } from '@schemaloom/schema-model';
 import { create } from 'zustand';
-import {
-  canRedo,
-  canUndo,
-  emptyHistory,
-  record,
-  redo,
-  undo,
-  type History,
-} from './history';
+import { canRedo, canUndo, emptyHistory, record, redo, undo, type History } from './history';
 import {
   EMPTY_SELECTION,
   applySelect,

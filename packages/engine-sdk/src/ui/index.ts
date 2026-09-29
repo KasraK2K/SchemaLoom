@@ -91,12 +91,7 @@ export {
 } from '../diagnostics.js';
 
 // --- link rules (§7) — the canvas calls the SHARED checker, never a UI-local copy ---
-export {
-  checkLink,
-  type LinkCheck,
-  type LinkCheckInput,
-  type LinkCheckReason,
-} from '../links.js';
+export { checkLink, type LinkCheck, type LinkCheckInput, type LinkCheckReason } from '../links.js';
 
 // --- engineProps (§6) — the inspector validates locally before a round trip ---
 export {

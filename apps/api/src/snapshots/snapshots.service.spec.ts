@@ -18,7 +18,14 @@ import { ENGINE_MANIFEST } from '../engines/engines.manifest';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SchemaOperationBatch, SchemaWriter, WriteContext } from '../schema';
 import { fakePrisma, type Row, type Store } from '../schema/fake-prisma';
-import { PROJECT, baseStore, entityRow, fieldRow, projectRow, storeContext } from '../schema/fixture';
+import {
+  PROJECT,
+  baseStore,
+  entityRow,
+  fieldRow,
+  projectRow,
+  storeContext,
+} from '../schema/fixture';
 import { blobToLive } from './live-ir';
 import { liveFrom } from './test-fixture';
 import { SnapshotEngineMismatchException } from './restore-guards';
@@ -99,9 +106,7 @@ function harness(
       findMany: (args: Row = {}): Promise<Row[]> => {
         const where = (args.where ?? {}) as Row;
         const notKind = (where.kind as Row | undefined)?.not;
-        const hits = [...rows]
-          .reverse()
-          .filter((r) => notKind === undefined || r.kind !== notKind);
+        const hits = [...rows].reverse().filter((r) => notKind === undefined || r.kind !== notKind);
         return Promise.resolve(hits.slice((args.skip as number | undefined) ?? 0));
       },
       deleteMany: (args: Row = {}): Promise<{ count: number }> => {
@@ -113,7 +118,8 @@ function harness(
           const idOk = ids === undefined ? r.id === where.id : ids.includes(r.id as string);
           const kind = where.kind as string | Row | undefined;
           const kindOk =
-            kind === undefined || (typeof kind === 'string' ? r.kind === kind : r.kind !== kind.not);
+            kind === undefined ||
+            (typeof kind === 'string' ? r.kind === kind : r.kind !== kind.not);
           if (idOk && r.projectId === where.projectId && kindOk) {
             rows.splice(i, 1);
           }
@@ -169,15 +175,16 @@ function harness(
           over.realEngine === true
             ? ENGINE_MANIFEST[0]
             : ({
-            capabilities: {
-              importFormats: [{ id: 'ddl' }],
-              defaultNamespaceName: 'public',
-              identifiers: { foldsTo: 'lower' },
-            },
-            importer: {
-              import: () => Promise.resolve({ model: over.imported, report: { statementCount: 1 } }),
-            },
-          }) as unknown as EngineDefinition,
+                capabilities: {
+                  importFormats: [{ id: 'ddl' }],
+                  defaultNamespaceName: 'public',
+                  identifiers: { foldsTo: 'lower' },
+                },
+                importer: {
+                  import: () =>
+                    Promise.resolve({ model: over.imported, report: { statementCount: 1 } }),
+                },
+              } as unknown as EngineDefinition),
       } as unknown as EngineRegistry,
       {
         resolveProject: () => Promise.resolve(CTX.map),
@@ -278,13 +285,9 @@ describe('SnapshotsService.diff', () => {
 
 describe('SnapshotsService.restore', () => {
   const setup = (engine?: string): Harness =>
-    harness(
-      storeOf(
-        { entity: [entityRow('ent_a'), entityRow('ent_b')] },
-        engine ?? '1.0.0',
-      ),
-      { engine: engine ?? '1.0.0' },
-    );
+    harness(storeOf({ entity: [entityRow('ent_a'), entityRow('ent_b')] }, engine ?? '1.0.0'), {
+      engine: engine ?? '1.0.0',
+    });
 
   /** Snapshot both entities, then drop one from the live store so restore must re-create it. */
   const snapshotThenDrop = async (h: Harness): Promise<string> => {
@@ -346,10 +349,9 @@ describe('SnapshotsService.restore', () => {
   });
 
   it('refuses a caller whose view of the project is partial (R21′)', async () => {
-    const h = harness(
-      storeOf({ entity: [entityRow('ent_a'), entityRow('ent_b')] }),
-      { context: { visibleEntityIds: new Set(['ent_a']) } },
-    );
+    const h = harness(storeOf({ entity: [entityRow('ent_a'), entityRow('ent_b')] }), {
+      context: { visibleEntityIds: new Set(['ent_a']) },
+    });
     const { id } = await h.service.create(CTX, { name: 'v1' });
 
     await expect(h.service.restore(CTX, id)).rejects.toThrow(ForbiddenException);
@@ -381,7 +383,9 @@ describe('SnapshotsService.importSource', () => {
   /** What the importer hands back: its OWN default namespace id, as a real one does. */
   const importedModel = async (): Promise<SchemaModel> => {
     const live = await liveFrom(storeOf({ entity: [entityRow('ent_a')] }));
-    return JSON.parse(JSON.stringify(live).replaceAll('"ns_public"', '"ns_imported"')) as SchemaModel;
+    return JSON.parse(
+      JSON.stringify(live).replaceAll('"ns_public"', '"ns_imported"'),
+    ) as SchemaModel;
   };
 
   it('creates the imported objects inside the project’s own default namespace', async () => {
@@ -483,16 +487,21 @@ describe('SnapshotsService.migration (Phase 5 §3)', () => {
     expect(view.steps.map((s) => s.kind)).toEqual(['CREATE TABLE']);
     expect(view.steps[0]?.covers).toContainEqual({ type: 'field', id: 'fld_n' });
     expect(view.script).toBe(
-      ['BEGIN;', '', 'CREATE TABLE public.invoices (', '  total text', ');', '', 'COMMIT;'].join('\n'),
+      ['BEGIN;', '', 'CREATE TABLE public.invoices (', '  total text', ');', '', 'COMMIT;'].join(
+        '\n',
+      ),
     );
     expect(view.fileExtension).toBe('sql');
     expect(h.writeCalls()).toEqual([]); // generating writes nothing
   });
 
   it('comments a DROP TABLE out, names it in the reason, and runs it only when allowed', async () => {
-    const h = harness(storeOf({ entity: [entityRow('ent_a'), entityRow('ent_b', { name: 'legacy' })] }), {
-      realEngine: true,
-    });
+    const h = harness(
+      storeOf({ entity: [entityRow('ent_a'), entityRow('ent_b', { name: 'legacy' })] }),
+      {
+        realEngine: true,
+      },
+    );
     const { id } = await h.service.create(CTX, { name: 'v1' });
     h.store.entity = (h.store.entity ?? []).filter((e) => e.id !== 'ent_b');
 
@@ -503,7 +512,10 @@ describe('SnapshotsService.migration (Phase 5 §3)', () => {
     expect(guarded.steps[0]?.reason).toContain('legacy');
     expect(guarded.script).toContain('-- DROP TABLE public.legacy;');
 
-    const allowed = await h.service.migration(CTX, id, null, { ...OPTIONS, allowDestructive: true });
+    const allowed = await h.service.migration(CTX, id, null, {
+      ...OPTIONS,
+      allowDestructive: true,
+    });
     expect(allowed.steps[0]?.commentedOut).toBe(false);
   });
 
@@ -529,13 +541,17 @@ describe('SnapshotsService.migration (Phase 5 §3)', () => {
 
   it('is 404 for a snapshot of another project', async () => {
     const h = harness(storeOf(), { realEngine: true });
-    await expect(h.service.migration(CTX, 'snap_nope', null, OPTIONS)).rejects.toMatchObject({ status: 404 });
+    await expect(h.service.migration(CTX, 'snap_nope', null, OPTIONS)).rejects.toMatchObject({
+      status: 404,
+    });
   });
 
   it('is 422 when the engine ships no migration generator', async () => {
     const h = harness(storeOf());
     const { id } = await h.service.create(CTX, { name: 'v1' });
-    await expect(h.service.migration(CTX, id, null, OPTIONS)).rejects.toMatchObject({ status: 422 });
+    await expect(h.service.migration(CTX, id, null, OPTIONS)).rejects.toMatchObject({
+      status: 422,
+    });
   });
 });
 
@@ -600,7 +616,9 @@ describe('SnapshotsService.importSource with confirmed renames (Phase 4 Q1)', ()
         ],
       }),
     );
-    return JSON.parse(JSON.stringify(imported).replaceAll('"ns_public"', '"ns_imported"')) as SchemaModel;
+    return JSON.parse(
+      JSON.stringify(imported).replaceAll('"ns_public"', '"ns_imported"'),
+    ) as SchemaModel;
   };
   const project = () =>
     storeOf({
@@ -621,7 +639,12 @@ describe('SnapshotsService.importSource with confirmed renames (Phase 4 Q1)', ()
     expect(preview.existing).toEqual([]);
     expect(preview.renameCandidates).toEqual([
       expect.objectContaining({ type: 'entity', fromId: 'ent_customer', toName: 'customers' }),
-      expect.objectContaining({ type: 'field', entityId: 'ent_customer', fromId: 'f_mail', toName: 'email_address' }),
+      expect.objectContaining({
+        type: 'field',
+        entityId: 'ent_customer',
+        fromId: 'f_mail',
+        toName: 'email_address',
+      }),
     ]);
     expect(h.apply).not.toHaveBeenCalled();
     expect(h.rows).toEqual([]);
@@ -639,8 +662,20 @@ describe('SnapshotsService.importSource with confirmed renames (Phase 4 Q1)', ()
     const first = h.apply.mock.calls[0]?.[0];
     expect(first?.ops).toEqual(
       expect.arrayContaining([
-        { op: 'update', type: 'entity', id: 'ent_customer', expectedVersion: 3, patch: { name: 'customers' } },
-        { op: 'update', type: 'field', id: 'f_mail', expectedVersion: 2, patch: { name: 'email_address' } },
+        {
+          op: 'update',
+          type: 'entity',
+          id: 'ent_customer',
+          expectedVersion: 3,
+          patch: { name: 'customers' },
+        },
+        {
+          op: 'update',
+          type: 'field',
+          id: 'f_mail',
+          expectedVersion: 2,
+          patch: { name: 'email_address' },
+        },
       ]),
     );
     // After the rename the SQL table matches by key: nothing is created, the id survives,
@@ -696,7 +731,12 @@ describe('SnapshotsService.importSource with confirmed renames (Phase 4 Q1)', ()
 
   it('refuses a rename across namespaces', async () => {
     const seed = project();
-    seed.namespace?.push({ ...(seed.namespace[0]!), id: 'ns_billing', name: 'billing', isDefault: false });
+    seed.namespace?.push({
+      ...seed.namespace[0]!,
+      id: 'ns_billing',
+      name: 'billing',
+      isDefault: false,
+    });
     const entity = seed.entity?.[0];
     if (entity !== undefined) entity.namespaceId = 'ns_billing';
     const h = harness(seed, { imported: await renamedSql() });

@@ -72,7 +72,11 @@ export interface EngineDefinition extends EngineStaticFacet {
   /** §11.1 — adds risk semantics to a core-produced diff (doc 04 §7.7). Pure and synchronous.
    *  Returns the branded `AnnotatedDiff`, the only thing the migration generator accepts.
    *  Optional so an engine can ship before it has risk knowledge; the migration routes need it. */
-  readonly annotateDiff?: (diff: SchemaDiff, before: SchemaModel, after: SchemaModel) => AnnotatedDiff;
+  readonly annotateDiff?: (
+    diff: SchemaDiff,
+    before: SchemaModel,
+    after: SchemaModel,
+  ) => AnnotatedDiff;
   /** §11.2 — phase-gated; presence must equal `features.migrations` */
   readonly migrationGenerator?: MigrationGenerator;
   /** Phase 2 — `QueryValidator` (§12). Presence must equal `features.queryValidation`. */

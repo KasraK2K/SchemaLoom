@@ -138,9 +138,7 @@ export class ImportModel {
   }
 
   findEntity(schema: string | undefined, name: string): Entity | undefined {
-    const direct = this.entityByKey.get(
-      this.entityKey(schema ?? this.defaultNamespaceName, name),
-    );
+    const direct = this.entityByKey.get(this.entityKey(schema ?? this.defaultNamespaceName, name));
     if (direct !== undefined || schema !== undefined) return direct;
     // An unqualified reference in a script that qualified the definition: PostgreSQL would
     // resolve it through `search_path`, which an imported file does not carry. One unique
@@ -150,7 +148,13 @@ export class ImportModel {
     return matches.length === 1 ? matches[0] : undefined;
   }
 
-  addField(entity: Entity, name: string, type: TypeRef, isNullable: boolean, engineProps: EngineProps): Field {
+  addField(
+    entity: Entity,
+    name: string,
+    type: TypeRef,
+    isNullable: boolean,
+    engineProps: EngineProps,
+  ): Field {
     const ordinal = this.ordinals.get(entity.id) ?? 0;
     this.ordinals.set(entity.id, ordinal + 1);
     const created: Field = {
@@ -269,7 +273,11 @@ export class ImportModel {
     dimensions: number,
   ): TypeRef {
     return TYPE_CATALOG.buildRef(
-      { name: spelling, ...(args.length > 0 ? { args } : {}), ...(dimensions > 0 ? { dimensions } : {}) },
+      {
+        name: spelling,
+        ...(args.length > 0 ? { args } : {}),
+        ...(dimensions > 0 ? { dimensions } : {}),
+      },
       this.typeContext(namespaceId),
     );
   }

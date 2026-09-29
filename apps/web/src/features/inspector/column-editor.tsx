@@ -35,7 +35,8 @@ function message(caught: unknown): string {
   if (!(caught instanceof ApiError)) return 'Could not save. Try again.';
   if (caught.status === 409) return 'Someone else changed this. It has been refreshed; try again.';
   if (caught.code === 'duplicate_name') return 'That name is already used here.';
-  if (caught.status === 403 || caught.status === 404) return 'You do not have permission to edit this.';
+  if (caught.status === 403 || caught.status === 404)
+    return 'You do not have permission to edit this.';
   return caught.message.endsWith('Exception') ? 'Could not save. Try again.' : caught.message;
 }
 
@@ -152,7 +153,12 @@ export function ColumnRow({
   useEffect(() => {
     setTypeDraft(field.type);
   }, [field.type, field.version]);
-  useEffect(() => () => { clearTimeout(timer.current); }, []);
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const pk = primaryKeyOf(model, entity.id);
   const supportsPk = facet.capabilities.constraintKinds.some(
@@ -414,7 +420,12 @@ export function EntityEditor({
                 setNewName(e.target.value);
               }}
             />
-            <Button type="submit" variant="outline" size="sm" disabled={addOps.busy || newName.trim() === ''}>
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              disabled={addOps.busy || newName.trim() === ''}
+            >
               Add
             </Button>
           </form>

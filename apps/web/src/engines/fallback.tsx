@@ -144,11 +144,9 @@ function FallbackNode({
  * input costs one round trip and comes back as a diagnostic. Generate the form when a second
  * engine ships without a UI package.
  */
-function RawPropsEditor<T extends { readonly engineProps: EngineProps; readonly propsRedacted?: true }>({
-  object,
-  readOnly,
-  onChange,
-}: PropertyPanelProps<T>) {
+function RawPropsEditor<
+  T extends { readonly engineProps: EngineProps; readonly propsRedacted?: true },
+>({ object, readOnly, onChange }: PropertyPanelProps<T>) {
   const [draft, setDraft] = useState<string | null>(null);
   const text = draft ?? JSON.stringify(object.engineProps, null, 2);
   const parsed = ((): EngineProps | null => {
@@ -163,7 +161,9 @@ function RawPropsEditor<T extends { readonly engineProps: EngineProps; readonly 
   })();
 
   if (object.propsRedacted === true) {
-    return <p className="px-1 py-2 text-xs text-text-subtle">Some properties are hidden from you.</p>;
+    return (
+      <p className="px-1 py-2 text-xs text-text-subtle">Some properties are hidden from you.</p>
+    );
   }
 
   return (

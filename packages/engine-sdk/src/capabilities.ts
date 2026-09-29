@@ -1,4 +1,12 @@
-import type { Cardinality, ConstraintKind, CustomTypeKind, EntityKind, IndexKind, LinkKind, OpenKind } from './ir.js';
+import type {
+  Cardinality,
+  ConstraintKind,
+  CustomTypeKind,
+  EntityKind,
+  IndexKind,
+  LinkKind,
+  OpenKind,
+} from './ir.js';
 import type { TypeDescriptor } from './type-catalog.js';
 
 /**
@@ -165,8 +173,10 @@ export interface EngineCapabilities {
   readonly exportFormats: readonly ExportFormatDescriptor[];
 }
 
-export interface CapabilitiesInput
-  extends Omit<EngineCapabilities, 'features' | 'typeCatalogSupportsArrays'> {
+export interface CapabilitiesInput extends Omit<
+  EngineCapabilities,
+  'features' | 'typeCatalogSupportsArrays'
+> {
   /** DEVIATION from doc 03 §4.1, which omits it: `CapabilitiesContradictionError` is specified
    *  to carry `engineId`, and `defineCapabilities` sees only this object. */
   readonly engineId: string;

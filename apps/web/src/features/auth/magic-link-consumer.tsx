@@ -26,8 +26,12 @@ export function MagicLinkConsumer() {
       return;
     }
     consumeMagicLink(token)
-      .then((result) => { window.location.assign(afterFirstFactor(result, params.get('next'))); })
-      .catch((e: unknown) => { setError(messageFor(e)); });
+      .then((result) => {
+        window.location.assign(afterFirstFactor(result, params.get('next')));
+      })
+      .catch((e: unknown) => {
+        setError(messageFor(e));
+      });
   }, [params]);
 
   if (error === null) return <p className="mt-6 text-sm text-text-muted">Signing you in…</p>;

@@ -34,8 +34,14 @@ export default async function ProjectDocsPage({
           </span>
         }
       >
-        <EngineGate projectId={projectId} fallback={<p className="p-4 text-sm text-text-subtle">Loading…</p>}>
-          <DocsView projectId={projectId} actions={<ExportMenu projectId={projectId} images={false} />} />
+        <EngineGate
+          projectId={projectId}
+          fallback={<p className="p-4 text-sm text-text-subtle">Loading…</p>}
+        >
+          <DocsView
+            projectId={projectId}
+            actions={<ExportMenu projectId={projectId} images={false} />}
+          />
         </EngineGate>
       </AppShell>
     </HydrationBoundary>

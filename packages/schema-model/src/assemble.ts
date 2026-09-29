@@ -183,7 +183,10 @@ export function assembleModel(input: AssemblyInput): SchemaModel {
     objects.constraint[row.id] = constraint;
   }
 
-  const indexColumns = sortBuckets(groupBy(rows.indexColumn, (c) => c.indexId), byOrdinal);
+  const indexColumns = sortBuckets(
+    groupBy(rows.indexColumn, (c) => c.indexId),
+    byOrdinal,
+  );
   for (const row of rows.index) {
     const index: Index = {
       id: row.id,
@@ -206,7 +209,10 @@ export function assembleModel(input: AssemblyInput): SchemaModel {
     objects.index[row.id] = index;
   }
 
-  const linkEndpoints = sortBuckets(groupBy(rows.linkEndpoint, (e) => e.linkId), byOrdinal);
+  const linkEndpoints = sortBuckets(
+    groupBy(rows.linkEndpoint, (e) => e.linkId),
+    byOrdinal,
+  );
   for (const row of rows.link) {
     const endpoints = linkEndpoints.get(row.id) ?? [];
     const link: Link = {

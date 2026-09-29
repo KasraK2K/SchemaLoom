@@ -27,7 +27,9 @@ const codes = (parts: ModelParts, objectIds?: readonly string[]): readonly strin
 /** One table, one integer column, nothing wrong with it. */
 const CLEAN: ModelParts = {
   entities: [table({ id: 'e1', name: 'orders' })],
-  fields: [column({ id: 'f1', name: 'total', entityId: 'e1', type: { name: 'numeric', args: [10, 2] } })],
+  fields: [
+    column({ id: 'f1', name: 'total', entityId: 'e1', type: { name: 'numeric', args: [10, 2] } }),
+  ],
 };
 
 describe('a valid model produces nothing', () => {
@@ -38,23 +40,50 @@ describe('a valid model produces nothing', () => {
   it('is silent for a fully furnished schema', () => {
     expect(
       codes({
-        customTypes: [customType({ id: 'ct1', name: 'order_status', engineProps: { labels: ['new'] } })],
+        customTypes: [
+          customType({ id: 'ct1', name: 'order_status', engineProps: { labels: ['new'] } }),
+        ],
         entities: [table({ id: 'e1', name: 'orders' }), table({ id: 'e2', name: 'customers' })],
         fields: [
-          column({ id: 'f1', name: 'id', entityId: 'e1', type: { name: 'integer' }, engineProps: { identity: 'always' } }),
-          column({ id: 'f2', name: 'status', entityId: 'e1', type: { name: 'order_status', customTypeId: 'ct1' } }),
+          column({
+            id: 'f1',
+            name: 'id',
+            entityId: 'e1',
+            type: { name: 'integer' },
+            engineProps: { identity: 'always' },
+          }),
+          column({
+            id: 'f2',
+            name: 'status',
+            entityId: 'e1',
+            type: { name: 'order_status', customTypeId: 'ct1' },
+          }),
           column({ id: 'f3', name: 'customer_id', entityId: 'e1', type: { name: 'integer' } }),
           column({ id: 'f4', name: 'id', entityId: 'e2', type: { name: 'integer' } }),
         ],
         constraints: [
           constraint({ id: 'c1', entityId: 'e2', kind: 'primaryKey', fieldIds: ['f4'] }),
-          constraint({ id: 'c2', entityId: 'e1', kind: 'check', engineProps: { expression: 'id > 0' } }),
+          constraint({
+            id: 'c2',
+            entityId: 'e1',
+            kind: 'check',
+            engineProps: { expression: 'id > 0' },
+          }),
         ],
         indexes: [
-          index({ id: 'i1', name: 'orders_status', entityId: 'e1', columns: [indexColumn({ fieldId: 'f2' })] }),
+          index({
+            id: 'i1',
+            name: 'orders_status',
+            entityId: 'e1',
+            columns: [indexColumn({ fieldId: 'f2' })],
+          }),
         ],
         links: [
-          link({ id: 'l1', from: { entityId: 'e1', fieldIds: ['f3'] }, to: { entityId: 'e2', fieldIds: ['f4'] } }),
+          link({
+            id: 'l1',
+            from: { entityId: 'e1', fieldIds: ['f3'] },
+            to: { entityId: 'e2', fieldIds: ['f4'] },
+          }),
         ],
       }),
     ).toEqual([]);
@@ -81,7 +110,15 @@ describe('identifiers', () => {
     expect(
       codes({
         entities: [table({ id: 'e1', name: 'orders' })],
-        constraints: [constraint({ id: 'c1', name: '', entityId: 'e1', kind: 'check', engineProps: { expression: 'true' } })],
+        constraints: [
+          constraint({
+            id: 'c1',
+            name: '',
+            entityId: 'e1',
+            kind: 'check',
+            engineProps: { expression: 'true' },
+          }),
+        ],
       }),
     ).toEqual([]);
   });
@@ -131,7 +168,12 @@ describe('types', () => {
       codes({
         entities: [table({ id: 'e1', name: 'orders' })],
         fields: [
-          column({ id: 'f1', name: 'x', entityId: 'e1', type: { name: 'order_status', customTypeId: 'gone' } }),
+          column({
+            id: 'f1',
+            name: 'x',
+            entityId: 'e1',
+            type: { name: 'order_status', customTypeId: 'gone' },
+          }),
         ],
       }),
     ).toEqual([CODE.customTypeDangling]);
@@ -141,7 +183,9 @@ describe('types', () => {
 describe('column flag combinations', () => {
   const field = (props: Record<string, unknown>, type = 'integer'): ModelParts => ({
     entities: [table({ id: 'e1', name: 'orders' })],
-    fields: [column({ id: 'f1', name: 'x', entityId: 'e1', type: { name: type }, engineProps: props })],
+    fields: [
+      column({ id: 'f1', name: 'x', entityId: 'e1', type: { name: type }, engineProps: props }),
+    ],
   });
 
   it('refuses identity on a non-integer column', () => {
@@ -171,8 +215,18 @@ describe('column flag combinations', () => {
     const found = run({
       entities: [table({ id: 'e1', name: 'orders' })],
       fields: [
-        column({ id: 'f1', name: 'net', entityId: 'e1', engineProps: { generatedExpression: 'gross * 2' } }),
-        column({ id: 'f2', name: 'gross', entityId: 'e1', engineProps: { generatedExpression: 'base * 3' } }),
+        column({
+          id: 'f1',
+          name: 'net',
+          entityId: 'e1',
+          engineProps: { generatedExpression: 'gross * 2' },
+        }),
+        column({
+          id: 'f2',
+          name: 'gross',
+          entityId: 'e1',
+          engineProps: { generatedExpression: 'base * 3' },
+        }),
         column({ id: 'f3', name: 'base', entityId: 'e1' }),
       ],
     });
@@ -185,17 +239,26 @@ describe('constraints', () => {
   const orders = table({ id: 'e1', name: 'orders' });
 
   it('flags a CHECK with no body', () => {
-    const found = run({ entities: [orders], constraints: [constraint({ id: 'c1', entityId: 'e1', kind: 'check' })] });
+    const found = run({
+      entities: [orders],
+      constraints: [constraint({ id: 'c1', entityId: 'e1', kind: 'check' })],
+    });
     expect(found.map((d) => d.code)).toEqual([CODE.constraintMissingExpression]);
     expect(found[0]?.target.propPath).toEqual(['expression']);
   });
 
   it('flags an EXCLUDE with no body, and leaves a primary key alone', () => {
     expect(
-      codes({ entities: [orders], constraints: [constraint({ id: 'c1', entityId: 'e1', kind: 'exclusion' })] }),
+      codes({
+        entities: [orders],
+        constraints: [constraint({ id: 'c1', entityId: 'e1', kind: 'exclusion' })],
+      }),
     ).toEqual([CODE.constraintMissingExpression]);
     expect(
-      codes({ entities: [orders], constraints: [constraint({ id: 'c1', entityId: 'e1', kind: 'primaryKey' })] }),
+      codes({
+        entities: [orders],
+        constraints: [constraint({ id: 'c1', entityId: 'e1', kind: 'primaryKey' })],
+      }),
     ).toEqual([]);
   });
 
@@ -203,7 +266,9 @@ describe('constraints', () => {
     expect(
       codes({
         entities: [orders],
-        constraints: [constraint({ id: 'c1', entityId: 'e1', kind: 'primaryKey', fieldIds: ['ghost'] })],
+        constraints: [
+          constraint({ id: 'c1', entityId: 'e1', kind: 'primaryKey', fieldIds: ['ghost'] }),
+        ],
       }),
     ).toEqual([CODE.columnMissing]);
   });
@@ -223,38 +288,59 @@ describe('indexes', () => {
   });
 
   it('flags UNIQUE on an access method that cannot enforce it', () => {
-    expect(codes(parts({ id: 'i1', name: 'i', entityId: 'e1', kind: 'hash', isUnique: true }))).toEqual([
-      CODE.indexUniqueUnsupported,
-    ]);
-    expect(codes(parts({ id: 'i1', name: 'i', entityId: 'e1', kind: 'btree', isUnique: true }))).toEqual([]);
+    expect(
+      codes(parts({ id: 'i1', name: 'i', entityId: 'e1', kind: 'hash', isUnique: true })),
+    ).toEqual([CODE.indexUniqueUnsupported]);
+    expect(
+      codes(parts({ id: 'i1', name: 'i', entityId: 'e1', kind: 'btree', isUnique: true })),
+    ).toEqual([]);
   });
 
   it('flags INCLUDE columns on an access method that cannot carry them', () => {
-    const include = [indexColumn({ fieldId: 'f1' }), indexColumn({ ordinal: 1, fieldId: 'f1', role: 'include' })];
-    expect(codes(parts({ id: 'i1', name: 'i', entityId: 'e1', kind: 'gin', columns: include }))).toEqual([
-      CODE.indexIncludeUnsupported,
-    ]);
-    expect(codes(parts({ id: 'i1', name: 'i', entityId: 'e1', kind: 'btree', columns: include }))).toEqual([]);
+    const include = [
+      indexColumn({ fieldId: 'f1' }),
+      indexColumn({ ordinal: 1, fieldId: 'f1', role: 'include' }),
+    ];
+    expect(
+      codes(parts({ id: 'i1', name: 'i', entityId: 'e1', kind: 'gin', columns: include })),
+    ).toEqual([CODE.indexIncludeUnsupported]);
+    expect(
+      codes(parts({ id: 'i1', name: 'i', entityId: 'e1', kind: 'btree', columns: include })),
+    ).toEqual([]);
   });
 
   it('flags an index over a column that no longer exists', () => {
     expect(
-      codes(parts({ id: 'i1', name: 'i', entityId: 'e1', columns: [indexColumn({ fieldId: 'ghost' })] })),
+      codes(
+        parts({
+          id: 'i1',
+          name: 'i',
+          entityId: 'e1',
+          columns: [indexColumn({ fieldId: 'ghost' })],
+        }),
+      ),
     ).toEqual([CODE.columnMissing]);
   });
 });
 
 describe('custom types', () => {
   it('flags an enum with no labels', () => {
-    expect(codes({ customTypes: [customType({ id: 'ct1', name: 'status', kind: 'enum' })] })).toEqual([
-      CODE.enumNoLabels,
-    ]);
+    expect(
+      codes({ customTypes: [customType({ id: 'ct1', name: 'status', kind: 'enum' })] }),
+    ).toEqual([CODE.enumNoLabels]);
   });
 
   it('leaves a domain alone', () => {
     expect(
       codes({
-        customTypes: [customType({ id: 'ct1', name: 'positive', kind: 'domain', engineProps: { baseType: 'integer' } })],
+        customTypes: [
+          customType({
+            id: 'ct1',
+            name: 'positive',
+            kind: 'domain',
+            engineProps: { baseType: 'integer' },
+          }),
+        ],
       }),
     ).toEqual([]);
   });
@@ -268,7 +354,13 @@ describe('links that survived checkLink', () => {
         column({ id: 'f1', name: 'label', entityId: 'e1', type: { name: 'text' } }),
         column({ id: 'f2', name: 'id', entityId: 'e2', type: { name: 'integer' } }),
       ],
-      links: [link({ id: 'l1', from: { entityId: 'e1', fieldIds: ['f1'] }, to: { entityId: 'e2', fieldIds: ['f2'] } })],
+      links: [
+        link({
+          id: 'l1',
+          from: { entityId: 'e1', fieldIds: ['f1'] },
+          to: { entityId: 'e2', fieldIds: ['f2'] },
+        }),
+      ],
     });
     expect(found.map((d) => d.code)).toEqual([CODE.linkInvalid]);
     expect(found[0]?.params.reason).toBe('link.typeMismatch');

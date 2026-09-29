@@ -52,10 +52,7 @@ export function isDiffedProperty(key: string): boolean {
   return !EXCLUDED.has(key);
 }
 
-export function severityFor(
-  objectType: IrObjectType,
-  path: readonly string[],
-): PropertySeverity {
+export function severityFor(objectType: IrObjectType, path: readonly string[]): PropertySeverity {
   const root = path[0];
   if (root === undefined) return 'structural';
   // `Area.ordinal` is legend order, hence cosmetic; `Field.ordinal` and an index column's

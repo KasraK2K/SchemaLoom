@@ -107,7 +107,9 @@ describe('JwtAuthGuard', () => {
       { subject: 'u9', secret: 'a-different-secret-that-is-long-enough!!', audience: 'sl_access' },
     );
     await expect(
-      new JwtAuthGuard(reflector(false), tokens).canActivate(context(request(`sl_access=${token}`))),
+      new JwtAuthGuard(reflector(false), tokens).canActivate(
+        context(request(`sl_access=${token}`)),
+      ),
     ).rejects.toThrow();
   });
 });

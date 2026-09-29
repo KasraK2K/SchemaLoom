@@ -12,7 +12,12 @@ import type { Id, IrObjectRef, RedactedModel } from './ir.js';
 
 export type AiMode = 'query' | 'explain' | 'draft-docs' | 'draft-schema';
 
-export const AI_MODES = ['query', 'explain', 'draft-docs', 'draft-schema'] as const satisfies readonly AiMode[];
+export const AI_MODES = [
+  'query',
+  'explain',
+  'draft-docs',
+  'draft-schema',
+] as const satisfies readonly AiMode[];
 
 export interface AiPromptContext {
   readonly projectName: string;
@@ -266,9 +271,18 @@ export function parseAiOutput(
     let source = first('ddl');
     if (source === null) {
       source = firstFencedBlock(safeText, options.fenceLanguages);
-      warnings.push(source === null ? 'no <ddl> block in the response' : 'accepted a bare fenced block as the DDL');
+      warnings.push(
+        source === null
+          ? 'no <ddl> block in the response'
+          : 'accepted a bare fenced block as the DDL',
+      );
     }
-    return { mode, source: source ?? '', importFormat: options.importFormat, parseWarnings: warnings };
+    return {
+      mode,
+      source: source ?? '',
+      importFormat: options.importFormat,
+      parseWarnings: warnings,
+    };
   }
 
   let query = first('query');
@@ -339,10 +353,17 @@ export function defaultJoinPaths(input: JoinPathInput): readonly JoinPathSuggest
     edge(b, a, link.id);
   }
   for (const list of adjacency.values()) {
-    list.sort((x, y) => name(x.to).localeCompare(name(y.to)) || x.to.localeCompare(y.to) || x.linkId.localeCompare(y.linkId));
+    list.sort(
+      (x, y) =>
+        name(x.to).localeCompare(name(y.to)) ||
+        x.to.localeCompare(y.to) ||
+        x.linkId.localeCompare(y.linkId),
+    );
   }
 
-  const selected = [...new Set(input.selectedEntityIds)].filter(visible).sort((a, b) => name(a).localeCompare(name(b)) || a.localeCompare(b));
+  const selected = [...new Set(input.selectedEntityIds)]
+    .filter(visible)
+    .sort((a, b) => name(a).localeCompare(name(b)) || a.localeCompare(b));
   const selectedSet = new Set(selected);
   const out: JoinPathSuggestion[] = [];
 
@@ -367,7 +388,7 @@ export function defaultJoinPaths(input: JoinPathInput): readonly JoinPathSuggest
     for (const goal of selected.slice(i + 1)) {
       if (!previous.has(goal)) continue;
       const steps: JoinPathStep[] = [];
-      for (let at = goal; at !== start; ) {
+      for (let at = goal; at !== start;) {
         const step = previous.get(at);
         if (step === undefined) break;
         steps.unshift({ linkId: step.linkId, fromEntityId: step.from, toEntityId: at });

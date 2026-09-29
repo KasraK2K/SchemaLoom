@@ -1,4 +1,9 @@
-import { ConflictException, ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { BUILTIN_ROLE_IDS, PERMISSION_ATOMS, type PermissionAtom } from '@schemaloom/contracts';
 import type { EngineDefinition, EngineRegistry } from '@schemaloom/engine-sdk';
 import { describe, expect, it, vi } from 'vitest';
@@ -237,7 +242,12 @@ describe('ProjectsService settings writes', () => {
         fn({ tx, map, skel: {} }),
     );
     const writer = { write, audit } as unknown as AccessWriter;
-    const service = new ProjectsService({} as PrismaService, {} as PermissionResolver, {} as EngineRegistry, writer);
+    const service = new ProjectsService(
+      {} as PrismaService,
+      {} as PermissionResolver,
+      {} as EngineRegistry,
+      writer,
+    );
     return { service, tx, write, audit };
   }
   const subject = { kind: 'user' as const, userId: ACTOR, orgId: ORG };

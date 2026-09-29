@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { NAMEDATALEN_BYTES, normalizeName, truncateToBytes, utf8ByteLength } from './normalize-name.js';
+import {
+  NAMEDATALEN_BYTES,
+  normalizeName,
+  truncateToBytes,
+  utf8ByteLength,
+} from './normalize-name.js';
 
 describe('normalizeName — case folding', () => {
   it('folds an unquoted identifier to lower case', () => {

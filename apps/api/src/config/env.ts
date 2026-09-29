@@ -97,8 +97,7 @@ export const envSchema = z
     // §11.4: Google id and secret are both-or-neither. Same pattern for GitHub.
     for (const provider of ['GOOGLE', 'GITHUB'] as const) {
       const id = provider === 'GOOGLE' ? env.GOOGLE_CLIENT_ID : env.GITHUB_CLIENT_ID;
-      const secret =
-        provider === 'GOOGLE' ? env.GOOGLE_CLIENT_SECRET : env.GITHUB_CLIENT_SECRET;
+      const secret = provider === 'GOOGLE' ? env.GOOGLE_CLIENT_SECRET : env.GITHUB_CLIENT_SECRET;
       if (Boolean(id) !== Boolean(secret)) {
         ctx.addIssue({
           code: 'custom',

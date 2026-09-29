@@ -75,7 +75,9 @@ function assertPropsAccepted(ctx: CheckContext, model: SchemaModel, origin: stri
       result: parseEngineProps(ctx.engine, bag.kind, bag.subKind, bag.value),
     }))
     .filter((entry) => !entry.result.ok)
-    .map((entry) => `${origin}: ${entry.bag.kind}/${entry.bag.subKind ?? '(none)'} ${entry.bag.id}`);
+    .map(
+      (entry) => `${origin}: ${entry.bag.kind}/${entry.bag.subKind ?? '(none)'} ${entry.bag.id}`,
+    );
   expect(rejected).toEqual([]);
 }
 
@@ -89,7 +91,8 @@ function assertReportShape(report: ImportReport, model: SchemaModel): readonly s
 
   let previousEnd = -1;
   for (const [index, statement] of report.statements.entries()) {
-    if (statement.ordinal !== index) problems.push(`ordinal ${String(statement.ordinal)} is not ${String(index)}`);
+    if (statement.ordinal !== index)
+      problems.push(`ordinal ${String(statement.ordinal)} is not ${String(index)}`);
     if (statement.range.start < previousEnd) {
       problems.push(`statement ${String(index)} overlaps the one before it`);
     }
@@ -108,7 +111,9 @@ function assertReportShape(report: ImportReport, model: SchemaModel): readonly s
     for (const ref of statement.producedObjects) {
       const bag: Record<Id, unknown> = model.objects[ref.type];
       if (bag[ref.id] === undefined) {
-        problems.push(`statement ${String(index)} produced ${ref.type} ${ref.id}, which is not in the model`);
+        problems.push(
+          `statement ${String(index)} produced ${ref.type} ${ref.id}, which is not in the model`,
+        );
       }
     }
   }
@@ -122,7 +127,9 @@ function assertReportShape(report: ImportReport, model: SchemaModel): readonly s
   for (const status of IMPORT_STATEMENT_STATUSES) {
     const actual = report.statements.filter((s) => s.status === status).length;
     if (actual !== report.countsByStatus[status]) {
-      problems.push(`countsByStatus.${status} is ${String(report.countsByStatus[status])}, not ${String(actual)}`);
+      problems.push(
+        `countsByStatus.${status} is ${String(report.countsByStatus[status])}, not ${String(actual)}`,
+      );
     }
   }
 
@@ -138,14 +145,18 @@ export const IMPORT_CHECKS: readonly ConformanceCheck[] = [
       for (const fixture of requireFixtures(ctx)) {
         const result = await runImport(ctx, fixture);
         expect(result.report.statementCount).toBeGreaterThan(0);
-        problems.push(...assertReportShape(result.report, result.model).map((p) => `${fixture.name}: ${p}`));
+        problems.push(
+          ...assertReportShape(result.report, result.model).map((p) => `${fixture.name}: ${p}`),
+        );
 
         // `objectCounts` drives "will create 12 tables, 34 columns, 8 links" (§9.1), so it
         // has to be the truth about the model and not a running tally that drifted.
         const actual = objectCounts(result.model);
         for (const [type, count] of Object.entries(result.report.objectCounts)) {
           if (actual[type as IrObjectType] !== count) {
-            problems.push(`${fixture.name}: objectCounts.${type} is ${String(count)}, not ${String(actual[type as IrObjectType])}`);
+            problems.push(
+              `${fixture.name}: objectCounts.${type} is ${String(count)}, not ${String(actual[type as IrObjectType])}`,
+            );
           }
         }
       }
@@ -164,7 +175,9 @@ export const IMPORT_CHECKS: readonly ConformanceCheck[] = [
         for (const statement of report.statements) {
           if (statement.status === 'applied') continue;
           if (statement.reason === null || statement.reason.trim().length === 0) {
-            problems.push(`${fixture.name}: ${statement.kind} is ${statement.status} with no reason`);
+            problems.push(
+              `${fixture.name}: ${statement.kind} is ${statement.status} with no reason`,
+            );
           }
         }
 
@@ -272,7 +285,9 @@ export const IMPORT_CHECKS: readonly ConformanceCheck[] = [
         const first = await runImport(ctx, fixture);
         const once = renderExport(await runExport(ctx, ctx.fixtures.redactForExport(first.model)));
         const second = await runImport(ctx, fixture, once, 're');
-        const twice = renderExport(await runExport(ctx, ctx.fixtures.redactForExport(second.model)));
+        const twice = renderExport(
+          await runExport(ctx, ctx.fixtures.redactForExport(second.model)),
+        );
 
         // The DDL reaches a fixed point after ONE round trip. Without this, an exporter that
         // renders `varchar(255)` and an importer that reads it back as `character varying`
@@ -282,4 +297,3 @@ export const IMPORT_CHECKS: readonly ConformanceCheck[] = [
     },
   },
 ];
-

@@ -197,11 +197,15 @@ export interface RenderMigrationOptions {
  * The plan as one script. A commented-out step keeps its text, every line behind the line
  * comment, so the file is complete and running it as-is executes nothing destructive.
  */
-export function renderMigrationScript(plan: MigrationPlan, options: RenderMigrationOptions): string {
+export function renderMigrationScript(
+  plan: MigrationPlan,
+  options: RenderMigrationOptions,
+): string {
   const separator = options.separator ?? '';
   const comment = options.lineComment ?? '--';
   const lines: string[] = [];
-  if (plan.transaction !== null && plan.steps.length > 0) lines.push(plan.transaction.begin + separator, '');
+  if (plan.transaction !== null && plan.steps.length > 0)
+    lines.push(plan.transaction.begin + separator, '');
   for (const step of plan.steps) {
     const text = step.text + separator;
     if (!step.commentedOut) {
@@ -211,6 +215,7 @@ export function renderMigrationScript(plan: MigrationPlan, options: RenderMigrat
     lines.push(`${comment} DESTRUCTIVE — remove the comment markers to run:`);
     for (const line of text.split('\n')) lines.push(`${comment} ${line}`);
   }
-  if (plan.transaction !== null && plan.steps.length > 0) lines.push('', plan.transaction.commit + separator);
+  if (plan.transaction !== null && plan.steps.length > 0)
+    lines.push('', plan.transaction.commit + separator);
   return lines.join('\n');
 }

@@ -25,7 +25,10 @@ describe('grantableRole / assertRoleUsable (R3, archival)', () => {
     const d = db(role());
     await expect(grantableRole(d, ORG, 'analyst')).resolves.toMatchObject({ id: 'rl_analyst' });
     expect((d.role.findFirst as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toMatchObject({
-      where: { key: 'analyst', OR: [{ organizationId: null, isBuiltIn: true }, { organizationId: ORG }] },
+      where: {
+        key: 'analyst',
+        OR: [{ organizationId: null, isBuiltIn: true }, { organizationId: ORG }],
+      },
     });
   });
 
@@ -37,10 +40,14 @@ describe('grantableRole / assertRoleUsable (R3, archival)', () => {
       crossOrg = error;
     }
     expect(crossOrg).toMatchObject({ status: 403, response: { code: 'role_cross_org' } });
-    await expect(grantableRole(db(role({ isArchived: true })), ORG, 'analyst')).rejects.toMatchObject({
+    await expect(
+      grantableRole(db(role({ isArchived: true })), ORG, 'analyst'),
+    ).rejects.toMatchObject({
       response: { code: 'role_archived' },
     });
-    await expect(grantableRole(db(null), ORG, 'nope')).rejects.toMatchObject({ response: { code: 'unknown_role' } });
+    await expect(grantableRole(db(null), ORG, 'nope')).rejects.toMatchObject({
+      response: { code: 'unknown_role' },
+    });
   });
 
   it('accepts a built-in (organizationId null) from any org', () => {
@@ -55,7 +62,9 @@ describe('assertNotGuestManager (R9)', () => {
   const view = new Set<PermissionAtom>(['schema:view']);
 
   it('refuses sharing:manage to a guest user and to an email invite (a guest-to-be)', async () => {
-    await expect(assertNotGuestManager(db(null, { role: 'guest' }), ORG, { type: 'user', id: 'u1' }, manage)).rejects.toMatchObject({
+    await expect(
+      assertNotGuestManager(db(null, { role: 'guest' }), ORG, { type: 'user', id: 'u1' }, manage),
+    ).rejects.toMatchObject({
       response: { code: 'guest_cannot_manage' },
     });
     await expect(
@@ -64,8 +73,14 @@ describe('assertNotGuestManager (R9)', () => {
   });
 
   it('lets a member manage and a guest view', async () => {
-    await expect(assertNotGuestManager(db(null, { role: 'member' }), ORG, { type: 'user', id: 'u1' }, manage)).resolves.toBeUndefined();
-    await expect(assertNotGuestManager(db(null, { role: 'guest' }), ORG, { type: 'user', id: 'u1' }, view)).resolves.toBeUndefined();
-    await expect(assertNotGuestManager(db(null), ORG, { type: 'email_invite', id: 'x@example.com' }, view)).resolves.toBeUndefined();
+    await expect(
+      assertNotGuestManager(db(null, { role: 'member' }), ORG, { type: 'user', id: 'u1' }, manage),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertNotGuestManager(db(null, { role: 'guest' }), ORG, { type: 'user', id: 'u1' }, view),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertNotGuestManager(db(null), ORG, { type: 'email_invite', id: 'x@example.com' }, view),
+    ).resolves.toBeUndefined();
   });
 });

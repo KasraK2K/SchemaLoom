@@ -37,7 +37,9 @@ const entityIdNamed = async (session: Session, name: string): Promise<string | u
   Object.values((await fetchIr(session, P)).objects.entity).find((e) => e.name === name)?.id;
 
 test.describe('workflow 9 — history, live diff and rename on import', () => {
-  test('snapshot → edit → live diff; re-import with a confirmed rename keeps the id', async ({ browser }) => {
+  test('snapshot → edit → live diff; re-import with a confirmed rename keeps the id', async ({
+    browser,
+  }) => {
     const owner = await signIn(SEED_EMAILS.owner);
     const created = await owner.api.post(`/api/projects/${P}/snapshots`, {
       headers: write(owner),
@@ -54,7 +56,9 @@ test.describe('workflow 9 — history, live diff and rename on import', () => {
       const live = await owner.api.get(`/api/projects/${P}/snapshots/${before.id}/diff/live`);
       expect(live.status(), await live.text()).toBe(200);
       const diff = (await live.json()) as Diff;
-      expect(diff.entries).toContainEqual(expect.objectContaining({ change: 'added', objectType: 'entity', id: oldId }));
+      expect(diff.entries).toContainEqual(
+        expect.objectContaining({ change: 'added', objectType: 'entity', id: oldId }),
+      );
       expect(diff.counts.added).toBeGreaterThan(0);
       expect(diff.fullView).toBe(true);
 
@@ -86,7 +90,9 @@ test.describe('workflow 9 — history, live diff and rename on import', () => {
       expect(await entityIdNamed(owner, OLD)).toBeUndefined();
 
       // Q4: the applied import wrote a `kind = import` snapshot first.
-      const list = (await (await owner.api.get(`/api/projects/${P}/snapshots`)).json()) as { kind: string }[];
+      const list = (await (await owner.api.get(`/api/projects/${P}/snapshots`)).json()) as {
+        kind: string;
+      }[];
       expect(list.some((s) => s.kind === 'import')).toBe(true);
     } finally {
       const restored = await owner.api.post(`/api/projects/${P}/snapshots/${before.id}/restore`, {

@@ -22,7 +22,12 @@ describe('searchModel', () => {
       doc: { id: 'd2', excerpt: 'Free text from the checkout' },
     };
     expect(searchModel(model, 'checkout')).toEqual([
-      { entityId: ORDERS, fieldId: ORDER_NOTE, label: 'orders.note', snippet: 'Free text from the checkout' },
+      {
+        entityId: ORDERS,
+        fieldId: ORDER_NOTE,
+        label: 'orders.note',
+        snippet: 'Free text from the checkout',
+      },
     ]);
     expect(searchModel(model, 'customer_id').map((h) => h.label)).toEqual(['orders.customer_id']);
   });

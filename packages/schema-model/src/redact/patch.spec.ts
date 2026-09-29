@@ -61,7 +61,10 @@ describe('redactPatch — the visibility transition (doc 04 §8.7)', () => {
 
   it('hidden → visible: the full post-image', () => {
     const before = view(workflowModel(), viewer());
-    const after = view(workflowModel(), viewer({ visibleEntityIds: new Set(['en_1', 'en_2', 'en_3']) }));
+    const after = view(
+      workflowModel(),
+      viewer({ visibleEntityIds: new Set(['en_1', 'en_2', 'en_3']) }),
+    );
     const out = redactPatch(NO_OP, before, after);
     expect(out?.changed.field?.fd_7?.name).toBe('id');
     expect(out?.changed.entity?.en_3?.name).toBe('payroll_runs');

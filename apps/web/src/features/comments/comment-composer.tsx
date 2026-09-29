@@ -103,7 +103,8 @@ export function CommentComposer({
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': 'Comment',
-        class: 'min-h-16 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-none',
+        class:
+          'min-h-16 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-none',
       },
     },
     onUpdate: ({ editor: e }) => {
@@ -125,12 +126,19 @@ export function CommentComposer({
     <div className="flex flex-col gap-1.5">
       <EditorContent editor={editor} />
       {menu !== null && menu.items.length > 0 ? (
-        <ul role="listbox" aria-label="People" className="rounded-md border border-border bg-surface-raised p-1 text-sm">
+        <ul
+          role="listbox"
+          aria-label="People"
+          className="rounded-md border border-border bg-surface-raised p-1 text-sm"
+        >
           {menu.items.map((item, i) => (
             <li key={item.id} role="option" aria-selected={i === menu.index}>
               <button
                 type="button"
-                className={cn('w-full rounded px-2 py-1 text-left', i === menu.index && 'bg-surface-hover')}
+                className={cn(
+                  'w-full rounded px-2 py-1 text-left',
+                  i === menu.index && 'bg-surface-hover',
+                )}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   menu.pick(item);
@@ -143,7 +151,11 @@ export function CommentComposer({
         </ul>
       ) : null}
       {unreachable.map((m) => (
-        <p key={m.id} role="status" className="rounded bg-warning-subtle px-2 py-1 text-xs text-warning-text">
+        <p
+          key={m.id}
+          role="status"
+          className="rounded bg-warning-subtle px-2 py-1 text-xs text-warning-text"
+        >
           {m.label} cannot see this {noun} — they will not be notified.
         </p>
       ))}
@@ -185,22 +197,44 @@ function render(node: Node, key: string): ReactNode {
     case 'hardBreak':
       return <br key={key} />;
     case 'bulletList':
-      return <ul key={key} className="list-disc pl-5">{kids}</ul>;
+      return (
+        <ul key={key} className="list-disc pl-5">
+          {kids}
+        </ul>
+      );
     case 'orderedList':
-      return <ol key={key} className="list-decimal pl-5">{kids}</ol>;
+      return (
+        <ol key={key} className="list-decimal pl-5">
+          {kids}
+        </ol>
+      );
     case 'listItem':
       return <li key={key}>{kids}</li>;
     case 'heading':
-      return <p key={key} className="font-semibold">{kids}</p>;
+      return (
+        <p key={key} className="font-semibold">
+          {kids}
+        </p>
+      );
     case 'codeBlock':
-      return <pre key={key} className="overflow-auto rounded bg-surface-sunken p-2 font-mono text-xs">{kids}</pre>;
+      return (
+        <pre key={key} className="overflow-auto rounded bg-surface-sunken p-2 font-mono text-xs">
+          {kids}
+        </pre>
+      );
     case 'horizontalRule':
       return <hr key={key} className="border-border" />;
     case 'blockquote':
-      return <blockquote key={key} className="border-l-2 border-border pl-2 text-text-muted">{kids}</blockquote>;
+      return (
+        <blockquote key={key} className="border-l-2 border-border pl-2 text-text-muted">
+          {kids}
+        </blockquote>
+      );
     case 'mention':
       return node.attrs?.restricted === true ? (
-        <span key={key} className="rounded bg-surface-sunken px-1 text-text-subtle">restricted</span>
+        <span key={key} className="rounded bg-surface-sunken px-1 text-text-subtle">
+          restricted
+        </span>
       ) : (
         <span key={key} className="rounded bg-accent-subtle px-1 text-accent-text">
           @{typeof node.attrs?.label === 'string' ? node.attrs.label : ''}
@@ -217,7 +251,12 @@ function render(node: Node, key: string): ReactNode {
         // The API keeps only http(s)/mailto hrefs (docs-rules.ts).
         else if (mark.type === 'link' && typeof mark.attrs?.href === 'string') {
           out = (
-            <a href={mark.attrs.href} target="_blank" rel="noopener noreferrer nofollow" className="text-accent-text underline">
+            <a
+              href={mark.attrs.href}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className="text-accent-text underline"
+            >
               {out}
             </a>
           );

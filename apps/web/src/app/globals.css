@@ -70,11 +70,7 @@ div.react-flow {
   --xy-minimap-node-background-color-default: var(--color-border);
   --xy-minimap-node-stroke-color-default: transparent;
 
-  --xy-selection-background-color-default: color-mix(
-    in srgb,
-    var(--color-accent) 12%,
-    transparent
-  );
+  --xy-selection-background-color-default: color-mix(in srgb, var(--color-accent) 12%, transparent);
   --xy-selection-border-default: 1px dotted var(--color-accent);
   --xy-node-boxshadow-selected-default: none;
   --xy-attribution-background-color-default: transparent;

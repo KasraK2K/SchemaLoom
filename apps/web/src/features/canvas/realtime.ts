@@ -88,7 +88,10 @@ export function handlePatch(
     void queryClient.invalidateQueries({ queryKey: irQueryKey(projectId) });
   } else {
     try {
-      queryClient.setQueryData<SchemaModel>(irQueryKey(projectId), (m) => m && applyPatch(m, frame));
+      queryClient.setQueryData<SchemaModel>(
+        irQueryKey(projectId),
+        (m) => m && applyPatch(m, frame),
+      );
     } catch {
       // A post-image that fails the schema: do not guess, reload the model.
       void queryClient.invalidateQueries({ queryKey: irQueryKey(projectId) });
@@ -138,7 +141,10 @@ export const selectPeersOn =
 // The hook
 // ------------------------------------------------------------------------------------
 
-export function useRealtime(projectId: Id, { presence }: { readonly presence: boolean }): {
+export function useRealtime(
+  projectId: Id,
+  { presence }: { readonly presence: boolean },
+): {
   readonly unavailable: boolean;
 } {
   const queryClient = useQueryClient();

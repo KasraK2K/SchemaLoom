@@ -130,10 +130,7 @@ export function createIndex(model: SchemaModel, opts?: IndexOptions): ModelIndex
     if (entity.areaId !== null) pushTo(entitiesByArea, entity.areaId, entity);
     const ns = o.namespace[entity.namespaceId];
     const nsName = ns === undefined ? '' : ns.name;
-    entityByQualifiedName.set(
-      `${normalizeName(nsName)}.${normalizeName(entity.name)}`,
-      entity.id,
-    );
+    entityByQualifiedName.set(`${normalizeName(nsName)}.${normalizeName(entity.name)}`, entity.id);
   }
 
   for (const field of Object.values(o.field)) {

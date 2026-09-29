@@ -42,10 +42,7 @@ export interface OrgRoleRequirement {
 }
 
 /** §10.1 — one atom at one resource. */
-export const RequirePermission = (
-  atom: PermissionAtom,
-  where: ResourceLocator,
-): CustomDecorator =>
+export const RequirePermission = (atom: PermissionAtom, where: ResourceLocator): CustomDecorator =>
   SetMetadata(PERM_META, { atom, wheres: [where] } satisfies PermissionRequirement);
 
 /**

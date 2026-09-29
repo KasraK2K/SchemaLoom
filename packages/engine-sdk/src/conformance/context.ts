@@ -1,6 +1,13 @@
 import type { EngineDefinition, EngineStaticFacet } from '../definition.js';
 import type { Diagnostic, EngineContext, EnginePropsKind } from '../diagnostics.js';
-import { IR_OBJECT_TYPES, type Id, type IrBase, type IrObjectType, type ObjectRefs, type SchemaModel } from '../ir.js';
+import {
+  IR_OBJECT_TYPES,
+  type Id,
+  type IrBase,
+  type IrObjectType,
+  type ObjectRefs,
+  type SchemaModel,
+} from '../ir.js';
 import type { TypeResolutionContext } from '../type-catalog.js';
 import type { ConformanceFixtures } from './types.js';
 

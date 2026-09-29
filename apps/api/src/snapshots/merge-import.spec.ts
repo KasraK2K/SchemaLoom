@@ -1,6 +1,12 @@
 import type { SchemaModel } from '@schemaloom/schema-model';
 import { describe, expect, it } from 'vitest';
-import { baseStore, constraintColumnRow, constraintRow, entityRow, fieldRow } from '../schema/fixture';
+import {
+  baseStore,
+  constraintColumnRow,
+  constraintRow,
+  entityRow,
+  fieldRow,
+} from '../schema/fixture';
 import { mergeImport } from './merge-import';
 import { planImport } from './restore-plan';
 import { liveFrom } from './test-fixture';
@@ -18,20 +24,24 @@ const ids = () => `b${String(++n)}`;
 
 describe('mergeImport', () => {
   it('adds new tables and new columns, and retargets them onto existing ids', async () => {
-    const live = await liveFrom(baseStore({
-      entity: [entityRow('ent_orders', { name: 'orders' })],
-      field: [fieldRow('fld_id', 'ent_orders', { name: 'id', position: 0 })],
-    }));
-    const imported = await importedFrom(baseStore({
-      entity: [
-        entityRow('ent_orders', { name: 'orders' }),
-        entityRow('ent_users', { name: 'users' }),
-      ],
-      field: [
-        fieldRow('fld_id', 'ent_orders', { name: 'id', position: 0 }),
-        fieldRow('fld_total', 'ent_orders', { name: 'total', position: 1 }),
-      ],
-    }));
+    const live = await liveFrom(
+      baseStore({
+        entity: [entityRow('ent_orders', { name: 'orders' })],
+        field: [fieldRow('fld_id', 'ent_orders', { name: 'id', position: 0 })],
+      }),
+    );
+    const imported = await importedFrom(
+      baseStore({
+        entity: [
+          entityRow('ent_orders', { name: 'orders' }),
+          entityRow('ent_users', { name: 'users' }),
+        ],
+        field: [
+          fieldRow('fld_id', 'ent_orders', { name: 'id', position: 0 }),
+          fieldRow('fld_total', 'ent_orders', { name: 'total', position: 1 }),
+        ],
+      }),
+    );
 
     const merged = mergeImport(live, imported);
     const [batch] = planImport(live, merged.model, ids, 'Import SQL');
@@ -50,7 +60,9 @@ describe('mergeImport', () => {
 
   it('never plans a delete for a table the source does not mention', async () => {
     const live = await liveFrom(baseStore({ entity: [entityRow('ent_keep', { name: 'keep' })] }));
-    const imported = await importedFrom(baseStore({ entity: [entityRow('ent_new', { name: 'new' })] }));
+    const imported = await importedFrom(
+      baseStore({ entity: [entityRow('ent_new', { name: 'new' })] }),
+    );
 
     const ops = planImport(live, mergeImport(live, imported).model, ids, 'Import SQL').flatMap(
       (b) => b.ops,
@@ -63,16 +75,23 @@ describe('mergeImport', () => {
       constraint: [constraintRow(id, 'ent_t', { name: '' })],
       constraintColumn: [constraintColumnRow(id, field)],
     });
-    const live = await liveFrom(baseStore({
-      entity: [entityRow('ent_t', { name: 't' })],
-      field: [fieldRow('fld_a', 'ent_t', { name: 'a' })],
-      ...pk('con_pk', 'fld_a'),
-    }));
-    const imported = await importedFrom(baseStore({
-      entity: [entityRow('ent_t', { name: 't' })],
-      field: [fieldRow('fld_a', 'ent_t', { name: 'a' }), fieldRow('fld_b', 'ent_t', { name: 'b' })],
-      ...pk('con_pk', 'fld_b'),
-    }));
+    const live = await liveFrom(
+      baseStore({
+        entity: [entityRow('ent_t', { name: 't' })],
+        field: [fieldRow('fld_a', 'ent_t', { name: 'a' })],
+        ...pk('con_pk', 'fld_a'),
+      }),
+    );
+    const imported = await importedFrom(
+      baseStore({
+        entity: [entityRow('ent_t', { name: 't' })],
+        field: [
+          fieldRow('fld_a', 'ent_t', { name: 'a' }),
+          fieldRow('fld_b', 'ent_t', { name: 'b' }),
+        ],
+        ...pk('con_pk', 'fld_b'),
+      }),
+    );
 
     expect(Object.keys(mergeImport(live, imported).model.objects.constraint)).toEqual(['con_pk']);
   });

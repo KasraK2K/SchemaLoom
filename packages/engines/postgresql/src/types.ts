@@ -266,11 +266,7 @@ const SPECS: readonly TypeSpec[] = [
 export const TYPE_DESCRIPTORS: readonly TypeDescriptor[] = SPECS.map(describe);
 
 /** The integer types an identity column may use (validator rule `identity-non-integer`). */
-export const IDENTITY_TYPE_IDS: ReadonlySet<string> = new Set([
-  'smallint',
-  'integer',
-  'bigint',
-]);
+export const IDENTITY_TYPE_IDS: ReadonlySet<string> = new Set(['smallint', 'integer', 'bigint']);
 
 /**
  * Beyond exact equality. PostgreSQL will create a foreign key between any two types that

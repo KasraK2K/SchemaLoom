@@ -43,13 +43,17 @@ export function CommentsPanel({ projectId }: { readonly projectId: Id }) {
   const entity = only === undefined ? undefined : model.objects.entity[only];
   const field = selectedFieldId === null ? undefined : model.objects.field[selectedFieldId];
   if (entity === undefined) {
-    return <p className="p-2 text-sm text-text-muted">{t.msg('inspector.noSelection', 'entity')}</p>;
+    return (
+      <p className="p-2 text-sm text-text-muted">{t.msg('inspector.noSelection', 'entity')}</p>
+    );
   }
   if (entity.restricted === true || field?.restricted === true) {
     return <p className="p-2 text-sm text-text-subtle">restricted</p>;
   }
   const target: CommentTarget =
-    field === undefined ? { targetType: 'entity', targetId: entity.id } : { targetType: 'field', targetId: field.id };
+    field === undefined
+      ? { targetType: 'entity', targetId: entity.id }
+      : { targetType: 'field', targetId: field.id };
   const noun = t.term(field === undefined ? 'entity' : 'field').one.toLowerCase();
   return (
     <TargetComments
@@ -88,14 +92,19 @@ function TargetComments({
   const me = useQuery({ queryKey: ['auth', 'me'], queryFn: fetchMe });
   const refresh = () => queryClient.invalidateQueries({ queryKey: commentsKey(projectId) });
   const post = useMutation({
-    mutationFn: (body: { parentId?: string; content: JSONContent }) => createComment(projectId, { ...target, ...body }),
+    mutationFn: (body: { parentId?: string; content: JSONContent }) =>
+      createComment(projectId, { ...target, ...body }),
     onSuccess: refresh,
   });
 
   if (comments.isPending) return <p className="p-2 text-sm text-text-subtle">Loading…</p>;
   if (comments.isError) {
     const gone = comments.error instanceof ApiError && comments.error.status === 404;
-    return <p className="p-2 text-sm text-text-subtle">{gone ? 'restricted' : 'Comments could not be loaded.'}</p>;
+    return (
+      <p className="p-2 text-sm text-text-subtle">
+        {gone ? 'restricted' : 'Comments could not be loaded.'}
+      </p>
+    );
   }
   const { open, resolved } = toThreads(comments.data);
   const shared = {
@@ -124,7 +133,11 @@ function TargetComments({
         busy={post.isPending}
         onSubmit={(content) => post.mutateAsync({ content })}
       />
-      {post.isError ? <p role="alert" className="text-xs text-danger-text">Could not post the comment.</p> : null}
+      {post.isError ? (
+        <p role="alert" className="text-xs text-danger-text">
+          Could not post the comment.
+        </p>
+      ) : null}
       {resolved.length > 0 ? (
         <details className="text-sm">
           <summary className="cursor-pointer text-text-muted">Resolved ({resolved.length})</summary>
@@ -180,11 +193,24 @@ function ThreadCard({ thread, ...shared }: { readonly thread: Thread } & Shared)
         />
       ) : (
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={() => { setReplying(true); }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setReplying(true);
+            }}
+          >
             Reply
           </Button>
           {root.canResolve ? (
-            <Button variant="ghost" size="sm" disabled={toggle.isPending} onClick={() => { toggle.mutate(); }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={toggle.isPending}
+              onClick={() => {
+                toggle.mutate();
+              }}
+            >
               {root.resolvedAt === null ? 'Resolve' : 'Reopen'}
             </Button>
           ) : null}
@@ -203,9 +229,12 @@ function CommentItem({ comment, ...shared }: { readonly comment: CommentView } &
       await shared.refresh();
     },
   });
-  const remove = useMutation({ mutationFn: () => deleteComment(comment.id), onSuccess: shared.refresh });
+  const remove = useMutation({
+    mutationFn: () => deleteComment(comment.id),
+    onSuccess: shared.refresh,
+  });
 
-  if (comment.deleted) return <p className="text-sm italic text-text-subtle">Comment deleted</p>;
+  if (comment.deleted) return <p className="text-sm text-text-subtle italic">Comment deleted</p>;
   return (
     <div className="flex flex-col gap-1">
       <p className="text-xs text-text-subtle">
@@ -230,7 +259,13 @@ function CommentItem({ comment, ...shared }: { readonly comment: CommentView } &
       )}
       {comment.canEdit && !editing ? (
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={() => { setEditing(true); }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setEditing(true);
+            }}
+          >
             Edit
           </Button>
           <Button

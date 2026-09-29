@@ -44,9 +44,7 @@ export function subjectKey(s: Subject): string {
  * field's entity plus `isRestricted` (§7.10).
  */
 export type ResourceRef =
-  | { type: 'project'; id: string }
-  | { type: 'area'; id: string }
-  | { type: 'entity'; id: string };
+  { type: 'project'; id: string } | { type: 'area'; id: string } | { type: 'entity'; id: string };
 
 /** One row of the hot query (§7.5), already joined to its role. */
 export interface LiveGrant {
@@ -105,8 +103,6 @@ export interface ProjectPermissionMap {
 
 /** §7.15 — why `indexGrants` threw a row away. Each one means a delete path is missing. */
 export type DroppedGrantReason =
-  | 'grant_project_mismatch'
-  | 'grant_dangling_area'
-  | 'grant_dangling_entity';
+  'grant_project_mismatch' | 'grant_dangling_area' | 'grant_dangling_entity';
 
 export type { AtomSet, OrgRole, PermissionAtom, RestrictedFieldMode };

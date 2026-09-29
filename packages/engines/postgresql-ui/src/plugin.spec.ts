@@ -103,9 +103,7 @@ describe('panel sections', () => {
       (section) => section.id === 'pg.constraint.check',
     );
     expect(check?.available?.(postgresFacet.capabilities)).toBe(true);
-    expect(
-      check?.available?.({ ...postgresFacet.capabilities, constraintKinds: [] }),
-    ).toBe(false);
+    expect(check?.available?.({ ...postgresFacet.capabilities, constraintKinds: [] })).toBe(false);
   });
 
   it('orders engine sections after core’s (0, 100, 200…)', () => {

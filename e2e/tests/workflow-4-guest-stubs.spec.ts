@@ -68,7 +68,12 @@ test.describe('workflow 4 — hidden neighbours render as stubs, not as holes', 
     const owner = await signIn(SEED_EMAILS.owner);
     const created = await owner.api.post(`/api/projects/${SEED.projectId}/share-links`, {
       headers: write(owner),
-      data: { resourceType: 'area', resourceId: SEED.areas.billing, expiresAt: null, password: 'billing-only-1' },
+      data: {
+        resourceType: 'area',
+        resourceId: SEED.areas.billing,
+        expiresAt: null,
+        password: 'billing-only-1',
+      },
     });
     expect(created.status(), await created.text()).toBe(201);
     const { link, url } = (await created.json()) as { link: { id: string }; url: string };
@@ -82,17 +87,25 @@ test.describe('workflow 4 — hidden neighbours render as stubs, not as holes', 
       const inspect = await visitor.get(`/api/s/${token}`);
       expect(await inspect.json()).toEqual({ needsPassword: true });
 
-      const wrong = await visitor.post(`/api/s/${token}/unlock`, { data: { password: 'nope-nope' } });
+      const wrong = await visitor.post(`/api/s/${token}/unlock`, {
+        data: { password: 'nope-nope' },
+      });
       expect(wrong.status()).toBe(401);
-      const right = await visitor.post(`/api/s/${token}/unlock`, { data: { password: 'billing-only-1' } });
+      const right = await visitor.post(`/api/s/${token}/unlock`, {
+        data: { password: 'billing-only-1' },
+      });
       expect(right.status(), await right.text()).toBe(200);
-      expect(await right.json()).toMatchObject({ projectId: SEED.projectId, resourceId: SEED.areas.billing });
+      expect(await right.json()).toMatchObject({
+        projectId: SEED.projectId,
+        resourceId: SEED.areas.billing,
+      });
 
       // Same redaction as Dana's area grant: stub, not hole; hidden names absent as BYTES.
       const irResponse = await visitor.get(`/api/projects/${SEED.projectId}/ir`);
       expect(irResponse.status()).toBe(200);
       const bytes = await irResponse.text();
-      for (const name of HIDDEN_FROM_FREELANCER) expect(bytes.includes(name), `leaked "${name}"`).toBe(false);
+      for (const name of HIDDEN_FROM_FREELANCER)
+        expect(bytes.includes(name), `leaked "${name}"`).toBe(false);
       const ir = JSON.parse(bytes) as Ir;
       expect(ir.objects.entity[SEED.entities.products]?.restricted).toBe(true);
       expect(ir.objects.entity[SEED.entities.employees]).toBeUndefined();
@@ -120,7 +133,9 @@ test.describe('workflow 4 — hidden neighbours render as stubs, not as holes', 
       await context.close();
 
       // Revocation propagates on the very next request (§7.12): no window.
-      const revoked = await owner.api.delete(`/api/share-links/${link.id}`, { headers: write(owner) });
+      const revoked = await owner.api.delete(`/api/share-links/${link.id}`, {
+        headers: write(owner),
+      });
       expect(revoked.status()).toBe(204);
       expect((await visitor.get(`/api/projects/${SEED.projectId}/ir`)).status()).toBe(404);
       expect((await visitor.get(`/api/s/${token}`)).status()).toBe(404);

@@ -35,9 +35,7 @@ export function pinoOptions(level: string, pretty: boolean): Params {
       genReqId,
       redact: { paths: REDACT, censor: '[redacted]' },
       autoLogging: { ignore: (req) => req.url === '/healthz' || req.url === '/readyz' },
-      ...(pretty
-        ? { transport: { target: 'pino-pretty', options: { singleLine: true } } }
-        : {}),
+      ...(pretty ? { transport: { target: 'pino-pretty', options: { singleLine: true } } } : {}),
     },
   };
 }

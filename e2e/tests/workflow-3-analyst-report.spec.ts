@@ -59,10 +59,14 @@ test.describe('workflow 3 — the analyst asks for a report', () => {
     const dana = await signIn(SEED_EMAILS.freelancer);
     const response = await dana.api.post(`/api/projects/${SEED.projectId}/ai/threads`, {
       headers: write(dana),
-      data: { selection: { entityIds: [SEED.entities.orders], fieldIds: [], linkIds: [], areaIds: [] } },
+      data: {
+        selection: { entityIds: [SEED.entities.orders], fieldIds: [], linkIds: [], areaIds: [] },
+      },
     });
     expect(response.status()).toBe(403);
-    const body = (await response.json()) as { error: { code: string; details?: { atom?: string } } };
+    const body = (await response.json()) as {
+      error: { code: string; details?: { atom?: string } };
+    };
     expect(body.error.code).toBe('forbidden');
     expect(body.error.details?.atom).toBe('ai:use');
   });

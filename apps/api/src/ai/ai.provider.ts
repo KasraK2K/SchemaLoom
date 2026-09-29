@@ -53,7 +53,11 @@ export class AiProvider {
   }
 
   /** Streams text deltas to `onText` and resolves with the whole response. */
-  async stream(request: AiRequest, onText: (text: string) => void, signal?: AbortSignal): Promise<AiResult> {
+  async stream(
+    request: AiRequest,
+    onText: (text: string) => void,
+    signal?: AbortSignal,
+  ): Promise<AiResult> {
     const client = this.client;
     if (client === null) throw new ServiceUnavailableException({ code: 'ai_not_configured' });
     const stream = client.beta.messages.stream(
@@ -72,7 +76,8 @@ export class AiProvider {
       { signal },
     );
     for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') onText(event.delta.text);
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta')
+        onText(event.delta.text);
     }
     const message = await stream.finalMessage();
     const text = message.content.map((block) => (block.type === 'text' ? block.text : '')).join('');

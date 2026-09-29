@@ -75,8 +75,9 @@ test.describe('workflow 1 — from sign-up to a laid-out, grouped project', () =
       const { objects } = (await ir.json()) as {
         objects: { entity: Record<string, { position: { x: number; y: number } }> };
       };
-      return new Set(Object.values(objects.entity).map((e) => `${String(e.position.x)},${String(e.position.y)}`))
-        .size;
+      return new Set(
+        Object.values(objects.entity).map((e) => `${String(e.position.x)},${String(e.position.y)}`),
+      ).size;
     };
     await expect.poll(positions, { timeout: 30_000 }).toBe(2);
 
@@ -94,7 +95,8 @@ test.describe('workflow 1 — from sign-up to a laid-out, grouped project', () =
     expect(((await merged.json()) as { existing: string[] }).existing).toEqual(['customers']);
     const ir = await page.request.get(`${API_URL}/api/projects/${projectId}/ir`);
     const names = Object.values(
-      ((await ir.json()) as { objects: { entity: Record<string, { name: string }> } }).objects.entity,
+      ((await ir.json()) as { objects: { entity: Record<string, { name: string }> } }).objects
+        .entity,
     ).map((e) => e.name);
     expect(names.sort()).toEqual(['customers', 'invoices', 'orders']);
   });

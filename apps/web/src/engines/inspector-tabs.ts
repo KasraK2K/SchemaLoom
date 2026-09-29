@@ -31,7 +31,12 @@ export const INSPECTOR_TABS: readonly InspectorTab[] = [
     // the tab.
     available: (c) => c.constraintKinds.length > 0,
   },
-  { id: 'comments', messageId: 'tab.comments', subject: 'entity', available: (c) => c.features.comments },
+  {
+    id: 'comments',
+    messageId: 'tab.comments',
+    subject: 'entity',
+    available: (c) => c.features.comments,
+  },
 ];
 
 export const visibleTabs = (caps: EngineCapabilities): readonly InspectorTab[] =>

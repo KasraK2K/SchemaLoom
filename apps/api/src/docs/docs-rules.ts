@@ -10,7 +10,8 @@ import type { ResourceRef } from '../access';
 
 type Node = Record<string, unknown>;
 
-const isObject = (v: unknown): v is Node => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isObject = (v: unknown): v is Node =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /**
  * Visible to THIS reader, decided on their redacted model (doc 05 §8, L8): a project the
@@ -82,11 +83,18 @@ function attrsFor(type: string, raw: unknown): Node | undefined {
   const attrs = isObject(raw) ? raw : {};
   if (type === 'heading') {
     const level = attrs.level;
-    return { level: typeof level === 'number' && Number.isInteger(level) && level >= 1 && level <= 6 ? level : 1 };
+    return {
+      level:
+        typeof level === 'number' && Number.isInteger(level) && level >= 1 && level <= 6
+          ? level
+          : 1,
+    };
   }
   if (type === 'orderedList') {
     const start = attrs.start;
-    return { start: typeof start === 'number' && Number.isInteger(start) && start >= 0 ? start : 1 };
+    return {
+      start: typeof start === 'number' && Number.isInteger(start) && start >= 0 ? start : 1,
+    };
   }
   if (type === 'codeBlock') {
     const language = attrs.language;

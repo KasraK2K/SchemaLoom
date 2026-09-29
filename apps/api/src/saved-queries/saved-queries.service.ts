@@ -5,11 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type {
-  EngineRegistry,
-  QueryValidationResult,
-  QueryValidator,
-} from '@schemaloom/engine-sdk';
+import type { EngineRegistry, QueryValidationResult, QueryValidator } from '@schemaloom/engine-sdk';
 import {
   fieldVisibilityIndex,
   type FieldVisibilityIndex,
@@ -289,7 +285,11 @@ export class SavedQueriesService {
   private async resolve(
     view: CallerView,
     queryText: string,
-  ): Promise<{ identifiersResolved: boolean; touchedEntityIds: string[]; touchedFieldIds: string[] }> {
+  ): Promise<{
+    identifiersResolved: boolean;
+    touchedEntityIds: string[];
+    touchedFieldIds: string[];
+  }> {
     const validator = this.validatorFor(view.redacted);
     if (validator === undefined) {
       return { identifiersResolved: false, touchedEntityIds: [], touchedFieldIds: [] };

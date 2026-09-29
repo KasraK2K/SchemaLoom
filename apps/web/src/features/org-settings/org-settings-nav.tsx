@@ -17,7 +17,10 @@ export function OrgSettingsNav({
     ...(orgRole === 'owner' || orgRole === 'admin' ? [{ key: 'roles', label: 'Roles' }] : []),
   ] as const;
   return (
-    <nav aria-label="Organisation settings" className="mb-6 flex gap-4 border-b border-border text-sm">
+    <nav
+      aria-label="Organisation settings"
+      className="mb-6 flex gap-4 border-b border-border text-sm"
+    >
       {tabs.map((tab) => (
         <Link
           key={tab.key}

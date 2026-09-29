@@ -33,7 +33,10 @@ export interface FieldRowProps {
   readonly badges: FieldBadges | undefined;
   readonly resolved: ResolvedType | undefined;
   readonly highlighted: boolean;
-  readonly FieldHandle: ComponentType<{ readonly fieldId: string; readonly side: 'source' | 'target' }>;
+  readonly FieldHandle: ComponentType<{
+    readonly fieldId: string;
+    readonly side: 'source' | 'target';
+  }>;
   readonly onSelect: (fieldId: string) => void;
 }
 
@@ -51,7 +54,12 @@ export function FieldRow({
   onSelect,
 }: FieldRowProps) {
   return (
-    <li className={cn('relative flex items-center gap-2 px-2 py-1', highlighted && 'bg-accent-subtle')}>
+    <li
+      className={cn(
+        'relative flex items-center gap-2 px-2 py-1',
+        highlighted && 'bg-accent-subtle',
+      )}
+    >
       <FieldHandle fieldId={field.id} side="target" />
       <button
         type="button"

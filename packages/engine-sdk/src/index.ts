@@ -137,12 +137,7 @@ export {
 } from './props.js';
 
 // --- link rules (§7) ---
-export {
-  checkLink,
-  type LinkCheck,
-  type LinkCheckInput,
-  type LinkCheckReason,
-} from './links.js';
+export { checkLink, type LinkCheck, type LinkCheckInput, type LinkCheckReason } from './links.js';
 
 // --- importer (§9) ---
 export {

@@ -126,8 +126,7 @@ export function diffModels(
     all.push(...collect(before, after, type, options));
   }
 
-  const entries =
-    options.ignoreCosmetic === true ? all.filter((e) => !isCosmeticOnly(e)) : all;
+  const entries = options.ignoreCosmetic === true ? all.filter((e) => !isCosmeticOnly(e)) : all;
 
   // Plain string comparison, never `localeCompare`: a locale-sensitive collator would make
   // the output machine-dependent, which is exactly what `sortPath` exists to prevent.

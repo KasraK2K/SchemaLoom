@@ -10,7 +10,9 @@ const PROJECT = 'prj_1';
 const renamed = (model: SchemaModel, seq: number): PatchFrame => ({
   projectId: PROJECT,
   seq,
-  changed: { entity: { [ORDERS]: { ...model.objects.entity[ORDERS]!, name: 'purchases', version: 9 } } },
+  changed: {
+    entity: { [ORDERS]: { ...model.objects.entity[ORDERS]!, name: 'purchases', version: 9 } },
+  },
   removed: [{ type: 'entity', id: CUSTOMERS }],
 });
 

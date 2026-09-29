@@ -179,7 +179,11 @@ export class AuthController {
       dto.organizationId,
     );
     const policy = cookiePolicyFrom(this.config);
-    res.cookie(COOKIE_NAMES.access, accessToken, cookieOptionsFor(COOKIE_NAMES.access, policy, accessTtlSec));
+    res.cookie(
+      COOKIE_NAMES.access,
+      accessToken,
+      cookieOptionsFor(COOKIE_NAMES.access, policy, accessTtlSec),
+    );
     res.cookie(
       COOKIE_NAMES.org,
       dto.organizationId,
@@ -192,10 +196,7 @@ export class AuthController {
   @Public()
   @Post('logout')
   @HttpCode(204)
-  async logout(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<void> {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
     const token = cookie(req, COOKIE_NAMES.refresh);
     if (token) await this.tokens.revokeByRefreshToken(token);
     clearUserSessionCookies(res, cookiePolicyFrom(this.config));
@@ -311,7 +312,11 @@ export class AuthController {
     @Req() req: Request,
     @Body() dto: CodeDto,
   ): Promise<{ recoveryCodes: string[] }> {
-    const recoveryCodes = await this.twoFactor.confirm(userIdOf(req), dto.code, sessionContext(req));
+    const recoveryCodes = await this.twoFactor.confirm(
+      userIdOf(req),
+      dto.code,
+      sessionContext(req),
+    );
     return { recoveryCodes };
   }
 

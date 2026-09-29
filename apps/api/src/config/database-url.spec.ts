@@ -94,9 +94,7 @@ describe('envSchema wires the same derivation', () => {
 
   it('derives DATABASE_URL from the POSTGRES_* parts when unset', () => {
     const parsed = envSchema.parse({ ...base, POSTGRES_DB: 'loomdb', POSTGRES_PORT: '6543' });
-    expect(parsed.DATABASE_URL).toBe(
-      'postgresql://schemaloom:schemaloom@localhost:6543/loomdb',
-    );
+    expect(parsed.DATABASE_URL).toBe('postgresql://schemaloom:schemaloom@localhost:6543/loomdb');
   });
 
   it('passes an explicit DATABASE_URL through untouched', () => {

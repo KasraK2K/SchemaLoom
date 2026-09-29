@@ -7,7 +7,14 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
-import { docQueryOptions, docSchema, fieldFacts, writeDoc, type DocTarget, type DocView } from './docs-api';
+import {
+  docQueryOptions,
+  docSchema,
+  fieldFacts,
+  writeDoc,
+  type DocTarget,
+  type DocView,
+} from './docs-api';
 
 /** Quiet time after the last keystroke before a save; blur saves at once. */
 const SAVE_DELAY_MS = 1500;
@@ -107,7 +114,9 @@ export function DocEditor({
         setForbidden(true);
         setStatus('idle');
       } else if (caught instanceof ApiError && caught.code === 'stale_version') {
-        const current = docSchema.safeParse((caught.details as { current?: unknown } | undefined)?.current);
+        const current = docSchema.safeParse(
+          (caught.details as { current?: unknown } | undefined)?.current,
+        );
         setConflict(current.success ? current.data : null);
         dirty.current = true;
         setStatus('idle');
@@ -130,7 +139,8 @@ export function DocEditor({
 
   // A newer server copy: take it only when nothing local would be lost.
   useEffect(() => {
-    if (editor === null || doc.version <= version.current || dirty.current || editor.isFocused) return;
+    if (editor === null || doc.version <= version.current || dirty.current || editor.isFocused)
+      return;
     version.current = doc.version;
     editor.commands.setContent(doc.content, { emitUpdate: false });
     setFacts(fieldFacts(doc));
@@ -167,15 +177,32 @@ export function DocEditor({
   return (
     <div className="space-y-3">
       <EditorContent editor={editor} />
-      {withFacts ? <FactsForm facts={facts} readOnly={readOnly} onChange={editFacts} onBlur={flush} /> : null}
+      {withFacts ? (
+        <FactsForm facts={facts} readOnly={readOnly} onChange={editFacts} onBlur={flush} />
+      ) : null}
       {conflict === null ? null : (
-        <div role="alert" className="space-y-1 rounded bg-warning-subtle px-2 py-1.5 text-xs text-warning-text">
+        <div
+          role="alert"
+          className="space-y-1 rounded bg-warning-subtle px-2 py-1.5 text-xs text-warning-text"
+        >
           <p>Someone else changed this doc while you were editing.</p>
           <div className="flex gap-1">
-            <Button size="sm" variant="outline" onClick={() => { resolve(false); }}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                resolve(false);
+              }}
+            >
               Load theirs
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => { resolve(true); }}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                resolve(true);
+              }}
+            >
               Keep mine
             </Button>
           </div>
@@ -254,7 +281,10 @@ function FactsForm({
               aria-label="Remove value"
               className="rounded p-1 text-text-subtle hover:bg-surface-hover hover:text-danger-text"
               onClick={() => {
-                onChange({ ...facts, allowedValues: facts.allowedValues.filter((_, j) => j !== i) });
+                onChange({
+                  ...facts,
+                  allowedValues: facts.allowedValues.filter((_, j) => j !== i),
+                });
               }}
             >
               <X className="size-3.5" aria-hidden="true" />
@@ -266,7 +296,10 @@ function FactsForm({
             size="sm"
             variant="ghost"
             onClick={() => {
-              onChange({ ...facts, allowedValues: [...facts.allowedValues, { value: '', meaning: '' }] });
+              onChange({
+                ...facts,
+                allowedValues: [...facts.allowedValues, { value: '', meaning: '' }],
+              });
             }}
           >
             Add value

@@ -12,7 +12,10 @@ const content = z
   .loose()
   .refine((doc) => JSON.stringify(doc).length <= 50_000, { message: 'comment_too_large' });
 
-export const commentTargetQuerySchema = z.object({ targetType: commentTargetTypeSchema, targetId: id });
+export const commentTargetQuerySchema = z.object({
+  targetType: commentTargetTypeSchema,
+  targetId: id,
+});
 export class CommentTargetQueryDto extends createZodDto(commentTargetQuerySchema) {}
 
 export const createCommentSchema = z.object({

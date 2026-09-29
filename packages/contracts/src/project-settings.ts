@@ -29,7 +29,10 @@ export const projectSettingsPatchSchema = z
 export type ProjectSettingsPatch = z.infer<typeof projectSettingsPatchSchema>;
 
 /** A stored row with a patch applied, re-validated by the strict input schema. */
-export function applyProjectSettingsPatch(raw: unknown, patch: ProjectSettingsPatch): ProjectSettings {
+export function applyProjectSettingsPatch(
+  raw: unknown,
+  patch: ProjectSettingsPatch,
+): ProjectSettings {
   const parsed = projectSettingsStoredSchema.safeParse(raw ?? {});
   const current = parsed.success ? parsed.data : projectSettingsStoredSchema.parse({});
   return projectSettingsInputSchema.parse({ ...current, ai: { ...current.ai, ...patch.ai } });

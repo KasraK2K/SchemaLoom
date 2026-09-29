@@ -15,10 +15,7 @@ import { badgeConstraint } from './shapes.js';
  *   what keeps the PK badge rendering (∆21)
  * - otherwise full, subject to the R27 props rule
  */
-export function redactConstraints(
-  model: SchemaModel,
-  plan: RedactionPlan,
-): Record<Id, Constraint> {
+export function redactConstraints(model: SchemaModel, plan: RedactionPlan): Record<Id, Constraint> {
   const out: Record<Id, Constraint> = {};
   for (const constraint of Object.values(model.objects.constraint)) {
     if (!plan.visibleEntityIds.has(constraint.entityId)) continue;

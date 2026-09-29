@@ -25,7 +25,13 @@ interface Row {
   expiresAt: Date | null;
 }
 
-function harness(opts: { rows?: Row[]; atoms?: string[]; head?: { size: number; contentType: string } | null } = {}) {
+function harness(
+  opts: {
+    rows?: Row[];
+    atoms?: string[];
+    head?: { size: number; contentType: string } | null;
+  } = {},
+) {
   const rows = new Map((opts.rows ?? []).map((r) => [r.id, { ...r }]));
   let seq = 0;
   const prisma = {
@@ -97,26 +103,40 @@ describe('ExportsService.create', () => {
     const h = harness();
     const out = await h.service.create(ANA, 'prj', { format: 'pdf' });
     expect(out).toMatchObject({ format: 'pdf', status: 'queued' });
-    expect(h.enqueueExport).toHaveBeenCalledWith({ exportJobId: out.id, projectId: 'prj', subject: ANA, format: 'pdf' });
+    expect(h.enqueueExport).toHaveBeenCalledWith({
+      exportJobId: out.id,
+      projectId: 'prj',
+      subject: ANA,
+      format: 'pdf',
+    });
   });
 
   it('accepts an engine format the project engine declares, refuses anything else', async () => {
     const h = harness();
     await expect(h.service.create(ANA, 'prj', { format: 'postgresql-ddl' })).resolves.toBeDefined();
-    await expect(h.service.create(ANA, 'prj', { format: 'mysql-ddl' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(h.service.create(ANA, 'prj', { format: 'mysql-ddl' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('gives an image export a presigned PUT signed for its declared size, and no job', async () => {
     const h = harness();
     const out = await h.service.create(ANA, 'prj', { format: 'svg', sizeBytes: 1234 });
     expect(out).toMatchObject({ status: 'running', uploadUrl: 'https://s3/put' });
-    expect(h.storage.presignPut).toHaveBeenCalledWith(`exports/prj/${out.id}.svg`, 'image/svg+xml', 300, 1234);
+    expect(h.storage.presignPut).toHaveBeenCalledWith(
+      `exports/prj/${out.id}.svg`,
+      'image/svg+xml',
+      300,
+      1234,
+    );
     expect(h.enqueueExport).not.toHaveBeenCalled();
   });
 
   it('requires the size up front for an image', async () => {
     const h = harness();
-    await expect(h.service.create(ANA, 'prj', { format: 'png' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(h.service.create(ANA, 'prj', { format: 'png' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 });
 
@@ -153,7 +173,9 @@ describe('ExportsService.get', () => {
   });
 
   it('is 404 once the artifact has expired', async () => {
-    const h = harness({ rows: [uploadRow({ status: 'done', expiresAt: new Date(Date.now() - 1) })] });
+    const h = harness({
+      rows: [uploadRow({ status: 'done', expiresAt: new Date(Date.now() - 1) })],
+    });
     await expect(h.service.get(ANA, 'exj_img')).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -170,7 +192,11 @@ describe('ExportsService.get', () => {
   it('signs a ten-minute download named after the format', async () => {
     const h = harness({ rows: [uploadRow({ status: 'done' })] });
     await h.service.get(ANA, 'exj_img');
-    expect(h.storage.presignGet).toHaveBeenCalledWith('exports/prj/exj_img.png', EXPORT_DOWNLOAD_TTL_SEC, 'schema.png');
+    expect(h.storage.presignGet).toHaveBeenCalledWith(
+      'exports/prj/exj_img.png',
+      EXPORT_DOWNLOAD_TTL_SEC,
+      'schema.png',
+    );
     expect(EXPORT_DOWNLOAD_TTL_SEC).toBe(600);
   });
 });

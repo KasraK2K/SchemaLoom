@@ -9,7 +9,10 @@ import type { SchemaModel } from '@schemaloom/schema-model';
 export function docCoverage(model: SchemaModel): { documented: number; total: number } {
   let documented = 0;
   let total = 0;
-  for (const object of [...Object.values(model.objects.entity), ...Object.values(model.objects.field)]) {
+  for (const object of [
+    ...Object.values(model.objects.entity),
+    ...Object.values(model.objects.field),
+  ]) {
     if (object.restricted === true) continue;
     total += 1;
     if (object.doc !== null) documented += 1;

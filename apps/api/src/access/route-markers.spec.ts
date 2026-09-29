@@ -157,7 +157,9 @@ describe('locator extraction', () => {
 
   it('a missing or non-string id is a 400, never a silent undefined', () => {
     expect(() => extract(req, { entity: 'nope' })).toThrow(BadRequestException);
-    expect(() => extract(req, { entity: 'body.from.entityId.deeper' })).toThrow(BadRequestException);
+    expect(() => extract(req, { entity: 'body.from.entityId.deeper' })).toThrow(
+      BadRequestException,
+    );
     expect(() => readLocatorId(asRequest({ params: { id: '' } }), 'id')).toThrow(
       BadRequestException,
     );

@@ -168,9 +168,7 @@ describe('ENGINE_MANIFEST', () => {
     const announcedMinusRegistered = [...COMING_SOON]
       .filter((e) => e.id !== 'postgresql')
       .sort((a, b) => (a.displayName < b.displayName ? -1 : 1));
-    expect(catalog.comingSoon.map((e) => e.id)).toEqual(
-      announcedMinusRegistered.map((e) => e.id),
-    );
+    expect(catalog.comingSoon.map((e) => e.id)).toEqual(announcedMinusRegistered.map((e) => e.id));
   });
 });
 

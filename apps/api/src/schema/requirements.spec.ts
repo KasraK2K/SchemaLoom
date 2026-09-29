@@ -18,7 +18,14 @@ const base = { version: 3, engineProps: {} } as const;
 
 function live(): LiveModel {
   const objects = emptyCollections();
-  objects.area[SALES] = { ...base, id: SALES, name: 'Sales', color: 'indigo', ordinal: 0, doc: null };
+  objects.area[SALES] = {
+    ...base,
+    id: SALES,
+    name: 'Sales',
+    color: 'indigo',
+    ordinal: 0,
+    doc: null,
+  };
   objects.namespace.ns = { ...base, id: 'ns', name: 'public', isDefault: true };
   objects.entity[ORDERS] = {
     ...base,
@@ -122,9 +129,10 @@ describe('requirementsOf — creates', () => {
     expect(at({ op: 'create', type: 'entity', object: entityObject() })).toEqual([
       'schema:edit@project:prj_shop',
     ]);
-    expect(
-      at({ op: 'create', type: 'entity', object: entityObject({ areaId: EU }) }),
-    ).toEqual(['schema:edit@area:area_eu', 'schema:edit@project:prj_shop']);
+    expect(at({ op: 'create', type: 'entity', object: entityObject({ areaId: EU }) })).toEqual([
+      'schema:edit@area:area_eu',
+      'schema:edit@project:prj_shop',
+    ]);
   });
 
   it('a field needs edit on its entity, and field:viewRestricted when it is born restricted', () => {
@@ -229,9 +237,7 @@ describe('requirementsOf — updates', () => {
   });
 
   it('re-pointing a link endpoint needs edit on the old and the new entity of that side', () => {
-    expect(
-      at(update('link', 'lnk_a', { to: { entityId: 'ent_third', fieldIds: [] } })),
-    ).toEqual([
+    expect(at(update('link', 'lnk_a', { to: { entityId: 'ent_third', fieldIds: [] } }))).toEqual([
       'schema:edit@entity:ent_orders',
       'schema:edit@entity:ent_third',
       'schema:edit@entity:ent_users',

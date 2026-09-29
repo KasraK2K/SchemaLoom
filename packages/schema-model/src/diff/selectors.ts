@@ -29,8 +29,7 @@ export function entriesOfType<T extends IrObjectType>(
   diff: SchemaDiff,
   t: T,
 ): Extract<DiffEntry, { objectType: T }>[] {
-  const isType = (e: DiffEntry): e is Extract<DiffEntry, { objectType: T }> =>
-    e.objectType === t;
+  const isType = (e: DiffEntry): e is Extract<DiffEntry, { objectType: T }> => e.objectType === t;
   return diff.entries.filter(isType);
 }
 

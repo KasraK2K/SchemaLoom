@@ -8,8 +8,14 @@ describe('docCoverage (doc 05 L8)', () => {
     // 2 real entities + 4 fields; the stub `e_secret` is in neither count.
     expect(docCoverage(model)).toEqual({ documented: 0, total: 6 });
 
-    model.objects.entity[ORDERS] = { ...model.objects.entity[ORDERS]!, doc: { id: 'd1', excerpt: '' } };
-    model.objects.field[ORDER_ID] = { ...model.objects.field[ORDER_ID]!, doc: { id: 'd2', excerpt: 'pk' } };
+    model.objects.entity[ORDERS] = {
+      ...model.objects.entity[ORDERS]!,
+      doc: { id: 'd1', excerpt: '' },
+    };
+    model.objects.field[ORDER_ID] = {
+      ...model.objects.field[ORDER_ID]!,
+      doc: { id: 'd2', excerpt: 'pk' },
+    };
     // A masked slot never counts, even if a doc ref were somehow present.
     model.objects.field.f_masked = {
       ...model.objects.field[ORDER_ID],

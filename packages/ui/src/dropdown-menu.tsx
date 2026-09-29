@@ -40,10 +40,7 @@ export function DropdownMenuCheckboxItem({
   ...props
 }: ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
   return (
-    <DropdownMenuPrimitive.CheckboxItem
-      className={cn(menuItemBase, 'pl-7', className)}
-      {...props}
-    >
+    <DropdownMenuPrimitive.CheckboxItem className={cn(menuItemBase, 'pl-7', className)} {...props}>
       <span className="absolute left-2 flex size-3.5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
           <Check className="size-3.5" aria-hidden="true" />

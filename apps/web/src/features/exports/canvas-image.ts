@@ -47,7 +47,9 @@ function nodeBox(el: HTMLElement): FlowBounds {
 export async function renderCanvasImage(format: ImageFormat): Promise<Blob> {
   const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
   if (viewport === null) throw new Error('Open the canvas to export an image.');
-  const bounds = flowBounds([...viewport.querySelectorAll<HTMLElement>('.react-flow__node')].map(nodeBox));
+  const bounds = flowBounds(
+    [...viewport.querySelectorAll<HTMLElement>('.react-flow__node')].map(nodeBox),
+  );
   if (bounds === null) throw new Error('There is nothing on the canvas to export.');
 
   const width = Math.ceil(bounds.width + PADDING * 2);

@@ -15,11 +15,11 @@ L13, L25 and the `ai:use` / `docs:edit` rows. This document only adds what they 
 The docs panel from Phase 1 was never built; it lands first because AI drafting and the PDF
 export both read it.
 
-| Route | Marker | What |
-|---|---|---|
-| `GET /projects/:id/docs` | `@RequireProjectAccess` | docs mode: every **visible** doc row (project, areas, entities, fields), `content`, `plainText`, `structured`. Rows whose target is hidden or a masked field are dropped (L8). |
-| `GET /projects/:id/docs/:targetType/:targetId` | `@RequireProjectAccess` | one doc; invisible target → 404; no row → an empty doc |
-| `PUT /projects/:id/docs/:targetType/:targetId` | `@RequireProjectAccess` + service check | doc 04 §8.10: `docs:edit` at the target, `{ content, structured?, version? }`, derives `plainText`, bumps `version`, broadcasts `project:changed` |
+| Route                                          | Marker                                  | What                                                                                                                                                                           |
+| ---------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /projects/:id/docs`                       | `@RequireProjectAccess`                 | docs mode: every **visible** doc row (project, areas, entities, fields), `content`, `plainText`, `structured`. Rows whose target is hidden or a masked field are dropped (L8). |
+| `GET /projects/:id/docs/:targetType/:targetId` | `@RequireProjectAccess`                 | one doc; invisible target → 404; no row → an empty doc                                                                                                                         |
+| `PUT /projects/:id/docs/:targetType/:targetId` | `@RequireProjectAccess` + service check | doc 04 §8.10: `docs:edit` at the target, `{ content, structured?, version? }`, derives `plainText`, bumps `version`, broadcasts `project:changed`                              |
 
 - **Web:** the inspector's Docs tab gets a TipTap editor (StarterKit only) and, for a field, the
   structured facts (business meaning, allowed values, examples, unit). Read-only without
@@ -64,17 +64,17 @@ server-side `fallbacks: "default"`. The system prompt and the SCS context are th
 
 ### 4.2 Routes (doc 05 §2.2's `ai:use` row)
 
-| Route | Marker | What |
-|---|---|---|
-| `GET /projects/:id/ai/threads` | `@RequireProjectAccess` | the caller's own threads, L25-filtered |
-| `GET /ai/threads/:id` | `@Authenticated` | one thread; not own or failing L25 → 404 |
-| `POST /projects/:id/ai/threads` | `@RequireProjectAccess` + `ai:use` | `{ selection, title? }` |
-| `POST /ai/threads/:id/messages` | `@Authenticated` + `ai:use` | `{ content, mode: 'query' | 'explain' }` → **SSE**: `block-open/delta/close` events, then `done` with the stored message (query validated, touched ids written) |
-| `POST /projects/:id/ai/doc-drafts` | `@RequireProjectAccess` + `ai:use` | `{ entityIds }` → enqueues the `ai-doc-drafts` job; drafts land in `doc_drafts` |
-| `GET /projects/:id/ai/doc-drafts` | `@RequireProjectAccess` | pending drafts on visible targets |
-| `POST /ai/doc-drafts/:id/accept` · `…/reject` | `@Authenticated` + `docs:edit` at the target | accept writes through the docs service |
-| `POST /projects/:id/ai/draft-schema` | `@RequireProjectAccess` + `ai:use` | `{ description }` → `{ source, importFormat }`; the client opens the existing import preview with it |
-| `PATCH /projects/:id/settings` | `@RequirePermission('sharing:manage')` | `{ ai: { enabled, includeDocsInContext } }` (the kill switch) |
+| Route                                         | Marker                                       | What                                                                                                 |
+| --------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GET /projects/:id/ai/threads`                | `@RequireProjectAccess`                      | the caller's own threads, L25-filtered                                                               |
+| `GET /ai/threads/:id`                         | `@Authenticated`                             | one thread; not own or failing L25 → 404                                                             |
+| `POST /projects/:id/ai/threads`               | `@RequireProjectAccess` + `ai:use`           | `{ selection, title? }`                                                                              |
+| `POST /ai/threads/:id/messages`               | `@Authenticated` + `ai:use`                  | `{ content, mode: 'query'                                                                            | 'explain' }`→ **SSE**:`block-open/delta/close`events, then`done` with the stored message (query validated, touched ids written) |
+| `POST /projects/:id/ai/doc-drafts`            | `@RequireProjectAccess` + `ai:use`           | `{ entityIds }` → enqueues the `ai-doc-drafts` job; drafts land in `doc_drafts`                      |
+| `GET /projects/:id/ai/doc-drafts`             | `@RequireProjectAccess`                      | pending drafts on visible targets                                                                    |
+| `POST /ai/doc-drafts/:id/accept` · `…/reject` | `@Authenticated` + `docs:edit` at the target | accept writes through the docs service                                                               |
+| `POST /projects/:id/ai/draft-schema`          | `@RequireProjectAccess` + `ai:use`           | `{ description }` → `{ source, importFormat }`; the client opens the existing import preview with it |
+| `PATCH /projects/:id/settings`                | `@RequirePermission('sharing:manage')`       | `{ ai: { enabled, includeDocsInContext } }` (the kill switch)                                        |
 
 `ai:use` is checked at **every selected entity** (doc 05 worked example: one unauthorised
 entity → 403), and ANDed with `settings.ai.enabled`. Context is always
@@ -100,15 +100,15 @@ dialog calls draft-schema and fills the SQL box.
 
 From a gap audit of Phases 1–4 against docs 00, 04, 05 and phase4/DESIGN:
 
-| Gap | Design ref | Built as |
-|---|---|---|
-| Export API: `POST /projects/:id/exports`, `GET /exports/:id` (the processor, renderers and `export_jobs` already exist) | 00 step 20, 05 §2.2 `export:run` | routes + an **Export** menu in the project header: DDL, JSON, Markdown, PDF server-side; SVG/PNG rendered client-side from the canvas and uploaded with the presigned PUT |
-| Docs API + editor | 04 §8.10, 05 §2.2 `docs:edit` | §1 |
-| Search and coverage | 05 §2.2, R21 ("client-side over the payload it already holds"), 04 §2.3 | both computed in the browser over the redacted model it already holds, so no route and nothing new to leak: a search box in the canvas toolbar (names + doc excerpts) and a "documented 4/9" meter in docs mode |
-| `PATCH /projects/:id/restricted-field-mode` | 05 §2.2 | `sharing:manage` at project; a select on project settings |
-| Org members + groups: `GET /organizations/:slug/members`, group CRUD and membership | 05 §2.2, §12.1; REVIEW §5 (groups, Phase 3) | routes + `[org]/settings/members` and `[org]/settings/groups` pages |
-| History "Show on canvas" per diff group | phase4 §1.2 | link to `?select=<entityId>` |
-| e2e `test.fixme`s (workflow 2 access dialog, workflow 3 AI) | — | implemented |
+| Gap                                                                                                                     | Design ref                                                              | Built as                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Export API: `POST /projects/:id/exports`, `GET /exports/:id` (the processor, renderers and `export_jobs` already exist) | 00 step 20, 05 §2.2 `export:run`                                        | routes + an **Export** menu in the project header: DDL, JSON, Markdown, PDF server-side; SVG/PNG rendered client-side from the canvas and uploaded with the presigned PUT                                       |
+| Docs API + editor                                                                                                       | 04 §8.10, 05 §2.2 `docs:edit`                                           | §1                                                                                                                                                                                                              |
+| Search and coverage                                                                                                     | 05 §2.2, R21 ("client-side over the payload it already holds"), 04 §2.3 | both computed in the browser over the redacted model it already holds, so no route and nothing new to leak: a search box in the canvas toolbar (names + doc excerpts) and a "documented 4/9" meter in docs mode |
+| `PATCH /projects/:id/restricted-field-mode`                                                                             | 05 §2.2                                                                 | `sharing:manage` at project; a select on project settings                                                                                                                                                       |
+| Org members + groups: `GET /organizations/:slug/members`, group CRUD and membership                                     | 05 §2.2, §12.1; REVIEW §5 (groups, Phase 3)                             | routes + `[org]/settings/members` and `[org]/settings/groups` pages                                                                                                                                             |
+| History "Show on canvas" per diff group                                                                                 | phase4 §1.2                                                             | link to `?select=<entityId>`                                                                                                                                                                                    |
+| e2e `test.fixme`s (workflow 2 access dialog, workflow 3 AI)                                                             | —                                                                       | implemented                                                                                                                                                                                                     |
 
 Not built, on purpose: `GET /entities/:id` and `GET /links/:id` (superseded by `GET /projects/:id/ir`),
 server `POST …/autolayout` (layout is client-side and saved through geometry), the activity-log
@@ -116,16 +116,16 @@ screen (dropped in phase4 §0), area-scoped export (Q29, still deferred).
 
 ## 6. Questions (defaults taken)
 
-| # | Question | Default |
-|---|---|---|
-| Q1 | Who may generate a migration? | `history:view` + the full view. A migration from a partial view is a script that silently omits objects. |
-| Q2 | AI model | `claude-opus-5` via `AI_MODEL`; adaptive thinking; `fallbacks: "default"`. |
-| Q3 | AI rate limits | 30/user/h, 300/org/h, fail closed. |
-| Q4 | New dependencies | `@anthropic-ai/sdk` and `pdfkit` in the api. TipTap is already in the web. |
-| Q5 | Doc drafting | a BullMQ job (doc 02 `doc_drafts.jobId`), one draft per target, a re-run replaces the pending one. |
+| #   | Question                      | Default                                                                                                  |
+| --- | ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Q1  | Who may generate a migration? | `history:view` + the full view. A migration from a partial view is a script that silently omits objects. |
+| Q2  | AI model                      | `claude-opus-5` via `AI_MODEL`; adaptive thinking; `fallbacks: "default"`.                               |
+| Q3  | AI rate limits                | 30/user/h, 300/org/h, fail closed.                                                                       |
+| Q4  | New dependencies              | `@anthropic-ai/sdk` and `pdfkit` in the api. TipTap is already in the web.                               |
+| Q5  | Doc drafting                  | a BullMQ job (doc 02 `doc_drafts.jobId`), one draft per target, a re-run replaces the pending one.       |
 
 ## 7. Later decisions (made by the user)
 
-| Date | Decision |
-|---|---|
+| Date       | Decision                                                                                                                                                                                                                                                                           |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-09-29 | **Org admins see only the projects they are granted.** R13's all-access short-circuit is owner-only (doc 05 R13, amended). Admins keep org administration (members, groups, workspaces, roles). The permission cache version went 3 → 4 so no admin keeps a cached all-access map. |

@@ -30,8 +30,7 @@ function sweep(): SweptRoute[] {
         .replace(/\/+/g, '/')
         .replace(/\/$/, ''),
       markers: markerKeysOn(
-        (key) =>
-          Reflect.getMetadata(key, handler) ?? Reflect.getMetadata(key, SchemaController),
+        (key) => Reflect.getMetadata(key, handler) ?? Reflect.getMetadata(key, SchemaController),
       ),
       source: `SchemaController.${name}`,
     });

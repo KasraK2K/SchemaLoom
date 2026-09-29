@@ -80,7 +80,11 @@ export class JobsService {
    * window, which is as long as a client polls. `null` for a job that is not this
    * project's — or not this user's — so a guessed id reads as absent.
    */
-  async importStatus(projectId: string, userId: string, id: string): Promise<ImportJobStatus | null> {
+  async importStatus(
+    projectId: string,
+    userId: string,
+    id: string,
+  ): Promise<ImportJobStatus | null> {
     const job = await this.queues.import.getJob(id);
     const owner = job?.data.subject;
     if (job?.data.projectId !== projectId || owner?.kind !== 'user' || owner.userId !== userId) {

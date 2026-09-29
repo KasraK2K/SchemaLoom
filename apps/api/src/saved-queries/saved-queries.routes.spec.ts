@@ -54,7 +54,9 @@ describe('SavedQueriesController route markers', () => {
 
   it('gates project-scoped routes on project access and id-addressed ones on identity', () => {
     for (const route of routes) {
-      const expected = route.path.startsWith('/api/projects/') ? PROJECT_ACCESS_META : AUTHENTICATED_META;
+      const expected = route.path.startsWith('/api/projects/')
+        ? PROJECT_ACCESS_META
+        : AUTHENTICATED_META;
       expect(route.markers, route.source).toEqual([expected]);
     }
   });

@@ -1,4 +1,10 @@
-import { IR_OBJECT_TYPES, type Id, type IrObjectRef, type IrObjectType, type TypeRef } from './ir.js';
+import {
+  IR_OBJECT_TYPES,
+  type Id,
+  type IrObjectRef,
+  type IrObjectType,
+  type TypeRef,
+} from './ir.js';
 import { formatMessage, type TerminologyBundle } from './terminology.js';
 
 /** lowercase slug: 'postgresql', 'mongodb', 'neo4j' */

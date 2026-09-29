@@ -95,8 +95,12 @@ export function renameCandidates(
   const namesOf = (fields: readonly Field[]) => new Set(fields.map((f) => norm(f.name)));
 
   // ---- entities -------------------------------------------------------------------------
-  const absent = Object.values(before.objects.entity).filter((e) => !(e.id in after.objects.entity));
-  const created = Object.values(after.objects.entity).filter((e) => !(e.id in before.objects.entity));
+  const absent = Object.values(before.objects.entity).filter(
+    (e) => !(e.id in after.objects.entity),
+  );
+  const created = Object.values(after.objects.entity).filter(
+    (e) => !(e.id in before.objects.entity),
+  );
 
   const scored: (EntityRenameCandidate & { similarity: number })[] = [];
   for (const old of absent) {

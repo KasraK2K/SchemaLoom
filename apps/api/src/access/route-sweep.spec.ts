@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IS_PUBLIC_KEY } from '../auth/public.decorator';
-import {
-  AUTHENTICATED_META,
-  ORG_ROLE_META,
-  PERM_META,
-  PROJECT_ACCESS_META,
-} from './route-markers';
+import { AUTHENTICATED_META, ORG_ROLE_META, PERM_META, PROJECT_ACCESS_META } from './route-markers';
 import { assertRouteTable, type SweptRoute } from './route-sweep';
 import { isShareLinkRoute, routeKey } from './share-link-allowlist';
 
@@ -23,11 +18,9 @@ const route = (over: Partial<SweptRoute> = {}): SweptRoute => ({
   ...over,
 });
 
-const sweep =
-  (routes: readonly SweptRoute[]) =>
-  (): void => {
-    assertRouteTable(routes);
-  };
+const sweep = (routes: readonly SweptRoute[]) => (): void => {
+  assertRouteTable(routes);
+};
 
 describe('assertRouteTable', () => {
   it('passes a table where every /api route carries exactly one marker', () => {

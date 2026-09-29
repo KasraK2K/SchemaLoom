@@ -161,7 +161,9 @@ async function main(): Promise<void> {
   // demo users, and both cascade. Upserting a 40-row graph would be more code and would
   // leave anything renamed since the last run behind.
   await prisma.organization.deleteMany({ where: { id: SEED.orgId } });
-  await prisma.user.deleteMany({ where: { id: { in: Object.values(SEED.users).map((u) => u.id) } } });
+  await prisma.user.deleteMany({
+    where: { id: { in: Object.values(SEED.users).map((u) => u.id) } },
+  });
 
   const passwordHash = await hashPassword(DEMO_PASSWORD);
   const now = new Date();
@@ -219,8 +221,20 @@ async function main(): Promise<void> {
 
   await prisma.area.createMany({
     data: [
-      { id: SEED.areas.billing, projectId: SEED.projectId, name: 'Billing', color: 'indigo', position: 0 },
-      { id: SEED.areas.catalog, projectId: SEED.projectId, name: 'Catalog', color: 'grass', position: 1 },
+      {
+        id: SEED.areas.billing,
+        projectId: SEED.projectId,
+        name: 'Billing',
+        color: 'indigo',
+        position: 0,
+      },
+      {
+        id: SEED.areas.catalog,
+        projectId: SEED.projectId,
+        name: 'Catalog',
+        color: 'grass',
+        position: 1,
+      },
     ],
   });
 
@@ -315,7 +329,9 @@ async function main(): Promise<void> {
     ],
   });
 
-  console.info(`seeded org ${SEED.orgId}, project ${SEED.projectId}, ${String(TABLES.length)} tables`);
+  console.info(
+    `seeded org ${SEED.orgId}, project ${SEED.projectId}, ${String(TABLES.length)} tables`,
+  );
 }
 
 main()

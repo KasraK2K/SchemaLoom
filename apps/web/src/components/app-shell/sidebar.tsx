@@ -21,7 +21,7 @@ export function Sidebar({ items, orgLabel }: { items: readonly NavItem[]; orgLab
     <SidebarFrame>
       <ScrollArea className="h-full">
         {orgLabel !== undefined && (
-          <p className="truncate border-b border-border px-3 py-2 text-xs group-data-[collapsed=true]/sidebar:hidden font-medium tracking-wide text-text-subtle uppercase">
+          <p className="truncate border-b border-border px-3 py-2 text-xs font-medium tracking-wide text-text-subtle uppercase group-data-[collapsed=true]/sidebar:hidden">
             {orgLabel}
           </p>
         )}
@@ -31,10 +31,12 @@ export function Sidebar({ items, orgLabel }: { items: readonly NavItem[]; orgLab
               <Link
                 href={item.href}
                 title={item.label}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm group-data-[collapsed=true]/sidebar:justify-center text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-muted transition-colors group-data-[collapsed=true]/sidebar:justify-center hover:bg-surface-hover hover:text-text"
               >
                 <item.icon className="size-4 shrink-0" aria-hidden="true" />
-                <span className="truncate group-data-[collapsed=true]/sidebar:sr-only">{item.label}</span>
+                <span className="truncate group-data-[collapsed=true]/sidebar:sr-only">
+                  {item.label}
+                </span>
               </Link>
             </li>
           ))}

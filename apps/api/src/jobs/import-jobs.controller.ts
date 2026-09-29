@@ -49,7 +49,10 @@ export class ImportJobsController {
     const renames = parseRenames(renamesParam);
     const bytes = Buffer.from(body, 'utf8');
     if (bytes.byteLength > QUEUED_IMPORT_MAX_BYTES) {
-      throw new PayloadTooLargeException({ code: 'import_too_large', max: QUEUED_IMPORT_MAX_BYTES });
+      throw new PayloadTooLargeException({
+        code: 'import_too_large',
+        max: QUEUED_IMPORT_MAX_BYTES,
+      });
     }
     const storageKey = importObjectKey(projectId, randomUUID());
     await this.storage.put(storageKey, bytes, 'text/plain; charset=utf-8');

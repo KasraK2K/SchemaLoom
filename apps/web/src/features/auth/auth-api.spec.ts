@@ -38,6 +38,8 @@ describe('safeNextPath', () => {
 describe('afterFirstFactor', () => {
   it('sends a 2FA login to the code prompt, carrying a SAFE next', () => {
     expect(afterFirstFactor({ mfaRequired: true }, '/acme')).toBe('/two-factor?next=%2Facme');
-    expect(afterFirstFactor({ mfaRequired: true }, 'https://evil.test')).toBe('/two-factor?next=%2F');
+    expect(afterFirstFactor({ mfaRequired: true }, 'https://evil.test')).toBe(
+      '/two-factor?next=%2F',
+    );
   });
 });

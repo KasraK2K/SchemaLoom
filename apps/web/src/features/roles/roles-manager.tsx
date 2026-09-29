@@ -73,7 +73,10 @@ export function RolesManager({
   return (
     <div className="flex flex-col gap-6">
       {error !== null && (
-        <p role="alert" className="rounded-md border border-danger px-3 py-2 text-sm text-danger-text">
+        <p
+          role="alert"
+          className="rounded-md border border-danger px-3 py-2 text-sm text-danger-text"
+        >
           {error}
         </p>
       )}
@@ -82,14 +85,21 @@ export function RolesManager({
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-text">Custom roles</h2>
           {editing === null && (
-            <Button size="sm" onClick={() => { setEditing('new'); }}>
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditing('new');
+              }}
+            >
               New role
             </Button>
           )}
         </div>
         {editing === 'new' && (
           <RoleForm
-            onCancel={() => { setEditing(null); }}
+            onCancel={() => {
+              setEditing(null);
+            }}
             onSave={async (body) => {
               if (await run(() => apiFetch(base, { method: 'POST', body }))) setEditing(null);
             }}
@@ -104,9 +114,12 @@ export function RolesManager({
               <li key={role.id} className="p-3">
                 <RoleForm
                   initial={role}
-                  onCancel={() => { setEditing(null); }}
+                  onCancel={() => {
+                    setEditing(null);
+                  }}
                   onSave={async (body) => {
-                    if (await run(() => apiFetch(`${base}/${role.id}`, { method: 'PATCH', body }))) setEditing(null);
+                    if (await run(() => apiFetch(`${base}/${role.id}`, { method: 'PATCH', body })))
+                      setEditing(null);
                   }}
                 />
               </li>
@@ -121,20 +134,33 @@ export function RolesManager({
                       </span>
                     )}
                   </p>
-                  {role.description !== null && <p className="text-xs text-text-muted">{role.description}</p>}
+                  {role.description !== null && (
+                    <p className="text-xs text-text-muted">{role.description}</p>
+                  )}
                   <p className="mt-1 text-xs text-text-subtle">
                     {role.atoms.map(labelOf).join(', ')}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => { setEditing(role); }}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditing(role);
+                    }}
+                  >
                     Edit
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      void run(() => apiFetch(`${base}/${role.id}`, { method: 'PATCH', body: { archived: !role.archived } }));
+                      void run(() =>
+                        apiFetch(`${base}/${role.id}`, {
+                          method: 'PATCH',
+                          body: { archived: !role.archived },
+                        }),
+                      );
                     }}
                   >
                     {role.archived ? 'Unarchive' : 'Archive'}
@@ -163,9 +189,7 @@ export function RolesManager({
           {builtIns.map((role) => (
             <li key={role.id} className="p-3">
               <p className="text-sm text-text">{role.name}</p>
-              <p className="mt-1 text-xs text-text-subtle">
-                {role.atoms.map(labelOf).join(', ')}
-              </p>
+              <p className="mt-1 text-xs text-text-subtle">{role.atoms.map(labelOf).join(', ')}</p>
             </li>
           ))}
         </ul>
@@ -191,19 +215,30 @@ function RoleForm({
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
-  const [picked, setPicked] = useState<Set<PermissionAtom>>(new Set(initial?.atoms as PermissionAtom[] | undefined));
+  const [picked, setPicked] = useState<Set<PermissionAtom>>(
+    new Set(initial?.atoms as PermissionAtom[] | undefined),
+  );
   const [pending, setPending] = useState(false);
   const closed = closeAtoms(picked);
 
   const submit = async (event: SyntheticEvent) => {
     event.preventDefault();
     setPending(true);
-    await onSave({ name: name.trim(), description: description.trim() === '' ? null : description.trim(), atoms: [...closed] });
+    await onSave({
+      name: name.trim(),
+      description: description.trim() === '' ? null : description.trim(),
+      atoms: [...closed],
+    });
     setPending(false);
   };
 
   return (
-    <form className="flex flex-col gap-3 rounded-md border border-border p-3" onSubmit={(event) => { void submit(event); }}>
+    <form
+      className="flex flex-col gap-3 rounded-md border border-border p-3"
+      onSubmit={(event) => {
+        void submit(event);
+      }}
+    >
       <label className="flex flex-col gap-1 text-xs text-text-muted">
         Name
         <input
@@ -211,7 +246,9 @@ function RoleForm({
           maxLength={80}
           className="h-8 rounded-md border border-border bg-surface px-2 text-sm text-text"
           value={name}
-          onChange={(event) => { setName(event.target.value); }}
+          onChange={(event) => {
+            setName(event.target.value);
+          }}
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-text-muted">
@@ -220,14 +257,17 @@ function RoleForm({
           maxLength={500}
           className="h-8 rounded-md border border-border bg-surface px-2 text-sm text-text"
           value={description}
-          onChange={(event) => { setDescription(event.target.value); }}
+          onChange={(event) => {
+            setDescription(event.target.value);
+          }}
         />
       </label>
       <fieldset className="flex flex-col gap-1">
         <legend className="mb-1 text-xs text-text-muted">Permissions</legend>
         {PERMISSION_ATOMS.map((atom) => {
           // R1: any permission implies viewing the schema, so that box locks on.
-          const implied = atom === 'schema:view' && closed.has(atom) && [...picked].some((a) => a !== atom);
+          const implied =
+            atom === 'schema:view' && closed.has(atom) && [...picked].some((a) => a !== atom);
           return (
             <label key={atom} className="flex items-center gap-2 text-sm text-text">
               <input
@@ -252,7 +292,11 @@ function RoleForm({
         <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" disabled={pending || name.trim() === '' || closed.size === 0}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={pending || name.trim() === '' || closed.size === 0}
+        >
           {initial === undefined ? 'Create role' : 'Save'}
         </Button>
       </div>

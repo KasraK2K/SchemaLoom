@@ -38,10 +38,7 @@ describe('ancestorChain', () => {
       { ...PROJECT, parentId: BILLING.id },
       { ...BILLING, parentId: PROJECT.id },
     ];
-    expect(ancestorChain(looped, BILLING).map((node) => node.id)).toEqual([
-      BILLING.id,
-      PROJECT.id,
-    ]);
+    expect(ancestorChain(looped, BILLING).map((node) => node.id)).toEqual([BILLING.id, PROJECT.id]);
   });
 });
 
@@ -90,9 +87,7 @@ describe('effectiveAtomsAt', () => {
   it('drops schema:edit at an area where a nearer Viewer grant wins — the footgun', () => {
     const ana = entry(ANA, [grant(ANA, PROJECT, 'editor'), grant(ANA, BILLING, 'viewer')]);
     expect(effectiveAtomsAt(ana, ancestorChain(RESOURCES, PROJECT)).has('schema:edit')).toBe(true);
-    expect(effectiveAtomsAt(ana, ancestorChain(RESOURCES, BILLING)).has('schema:edit')).toBe(
-      false,
-    );
+    expect(effectiveAtomsAt(ana, ancestorChain(RESOURCES, BILLING)).has('schema:edit')).toBe(false);
     // and it propagates to everything inside the area
     expect(effectiveAtomsAt(ana, ancestorChain(RESOURCES, INVOICES)).has('schema:edit')).toBe(
       false,
@@ -100,10 +95,7 @@ describe('effectiveAtomsAt', () => {
   });
 
   it('does NOT narrow a second principal: the group grant survives (E3)', () => {
-    const ana = entry(ANA, [
-      grant(ANALYSTS, PROJECT, 'editor'),
-      grant(ANA, BILLING, 'viewer'),
-    ]);
+    const ana = entry(ANA, [grant(ANALYSTS, PROJECT, 'editor'), grant(ANA, BILLING, 'viewer')]);
     expect(effectiveAtomsAt(ana, ancestorChain(RESOURCES, BILLING)).has('schema:edit')).toBe(true);
   });
 
@@ -114,17 +106,18 @@ describe('effectiveAtomsAt', () => {
 
   it('gives an org admin only what their grants say — R13 is owner-only', () => {
     const admin = entry(ANA, [grant(ANA, BILLING, 'viewer')], { orgRole: 'admin' });
-    expect(effectiveAtomsAt(admin, ancestorChain(RESOURCES, BILLING))).not.toEqual(new Set(ALL_ATOMS));
-    expect(effectiveAtomsAt(admin, ancestorChain(RESOURCES, BILLING)).has('schema:view')).toBe(true);
+    expect(effectiveAtomsAt(admin, ancestorChain(RESOURCES, BILLING))).not.toEqual(
+      new Set(ALL_ATOMS),
+    );
+    expect(effectiveAtomsAt(admin, ancestorChain(RESOURCES, BILLING)).has('schema:view')).toBe(
+      true,
+    );
   });
 });
 
 describe('decidingOwnGrant', () => {
   it('returns the principal’s own nearest grant, not a group’s', () => {
-    const ana = entry(ANA, [
-      grant(ANALYSTS, BILLING, 'manager'),
-      grant(ANA, PROJECT, 'editor'),
-    ]);
+    const ana = entry(ANA, [grant(ANALYSTS, BILLING, 'manager'), grant(ANA, PROJECT, 'editor')]);
     expect(decidingOwnGrant(ana, ancestorChain(RESOURCES, BILLING))?.roleKey).toBe('editor');
   });
 });

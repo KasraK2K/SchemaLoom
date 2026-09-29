@@ -23,10 +23,7 @@ import {
  * This parses the SQL and asserts the agreement, so the next edit to either side
  * fails here instead of in production.
  */
-const MIGRATION = resolve(
-  __dirname,
-  '../../prisma/migrations/0003_builtin_roles/migration.sql',
-);
+const MIGRATION = resolve(__dirname, '../../prisma/migrations/0003_builtin_roles/migration.sql');
 
 interface SeededRole {
   id: string;

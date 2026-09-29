@@ -161,7 +161,11 @@ export class AiService {
 
   // --- threads ------------------------------------------------------------------------------
 
-  async listThreads(subject: Subject, projectId: string, map: ProjectPermissionMap): Promise<AiThreadView[]> {
+  async listThreads(
+    subject: Subject,
+    projectId: string,
+    map: ProjectPermissionMap,
+  ): Promise<AiThreadView[]> {
     const view = await this.view(subject, projectId, map);
     this.provider.assertConfigured();
     const threads = await this.prisma.aiThread.findMany({
@@ -175,7 +179,10 @@ export class AiService {
     return out;
   }
 
-  async getThread(subject: Subject, id: string): Promise<AiThreadView & { messages: AiMessageView[] }> {
+  async getThread(
+    subject: Subject,
+    id: string,
+  ): Promise<AiThreadView & { messages: AiMessageView[] }> {
     const { thread, view, messages } = await this.visibleThread(subject, id);
     this.provider.assertConfigured();
     const profile = this.registry.tryGet(view.redacted.engineId)?.aiProfile;
@@ -224,12 +231,27 @@ export class AiService {
     this.provider.assertConfigured();
     await this.throttle(view);
     const userContent =
-      body.mode === 'explain' ? `Explain this query:\n<query>\n${body.content}\n</query>` : body.content;
+      body.mode === 'explain'
+        ? `Explain this query:\n<query>\n${body.content}\n</query>`
+        : body.content;
     const explainQuery = body.mode === 'explain' ? body.content : null;
-    return { view, thread, history: messages, mode: body.mode, userContent, explainQuery, contextEntityIds, profile };
+    return {
+      view,
+      thread,
+      history: messages,
+      mode: body.mode,
+      userContent,
+      explainQuery,
+      contextEntityIds,
+      profile,
+    };
   }
 
-  async runTurn(turn: PreparedTurn, emit: AiStreamEmit, signal?: AbortSignal): Promise<AiMessageView> {
+  async runTurn(
+    turn: PreparedTurn,
+    emit: AiStreamEmit,
+    signal?: AbortSignal,
+  ): Promise<AiMessageView> {
     const { view, thread, profile } = turn;
     const context = profile.serializeContext(view.redacted, {
       ...CONTEXT_OPTIONS,
@@ -265,7 +287,10 @@ export class AiService {
         messages: [
           ...turn.history
             .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim() !== '')
-            .map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.content })),
+            .map((m) => ({
+              role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+              content: m.content,
+            })),
           { role: 'user' as const, content: turn.userContent },
         ],
       },
@@ -276,8 +301,10 @@ export class AiService {
 
     const refused = result.stopReason === 'refusal';
     const parsed = profile.parseOutput(result.text, turn.mode);
-    const query = !refused && (parsed.mode === 'query' || parsed.mode === 'explain') ? parsed.query : null;
-    const assumptions = parsed.mode === 'query' || parsed.mode === 'explain' ? parsed.assumptions : [];
+    const query =
+      !refused && (parsed.mode === 'query' || parsed.mode === 'explain') ? parsed.query : null;
+    const assumptions =
+      parsed.mode === 'query' || parsed.mode === 'explain' ? parsed.assumptions : [];
     const checked = query === null ? null : await this.check(view, query);
     const used = checked?.touchedEntityIds ?? [];
     const selected = new Set(turn.contextEntityIds);
@@ -288,10 +315,15 @@ export class AiService {
           ? null
           : { ok: checked.ok, unknownIdentifiers: checked.unknownIdentifiers.slice(0, 100) },
       usedEntityIds: used.slice(0, 200),
-      suggestedEntityIds: this.suggestions(view, turn.contextEntityIds, used).filter((id) => !selected.has(id)).slice(0, 50),
+      suggestedEntityIds: this.suggestions(view, turn.contextEntityIds, used)
+        .filter((id) => !selected.has(id))
+        .slice(0, 50),
       finishReason: result.stopReason?.slice(0, 50) ?? null,
     });
-    const content = refused && result.text.trim() === '' ? 'The assistant declined to answer this request.' : result.text;
+    const content =
+      refused && result.text.trim() === ''
+        ? 'The assistant declined to answer this request.'
+        : result.text;
 
     const [stored] = await this.prisma.$transaction(async (tx) => [
       await tx.aiMessage.create({
@@ -345,7 +377,11 @@ export class AiService {
     if (parsed.mode !== 'draft-schema' || parsed.source === '') {
       throw new BadRequestException({ code: 'ai_no_schema', warnings: parsed.parseWarnings });
     }
-    return { source: parsed.source, importFormat: parsed.importFormat, warnings: parsed.parseWarnings };
+    return {
+      source: parsed.source,
+      importFormat: parsed.importFormat,
+      warnings: parsed.parseWarnings,
+    };
   }
 
   // --- doc drafts (DESIGN §4.2, Q5) ---------------------------------------------------------
@@ -362,11 +398,15 @@ export class AiService {
     this.assertAiUse(view, ids);
     this.provider.assertConfigured();
     await this.throttle(view);
-    const job = await this.drafts.add('ai.doc-drafts', { projectId, subject: view.subject, entityIds: ids }, {
-      attempts: 1,
-      removeOnComplete: { age: 3_600, count: 1_000 },
-      removeOnFail: { age: 24 * 3_600, count: 1_000 },
-    });
+    const job = await this.drafts.add(
+      'ai.doc-drafts',
+      { projectId, subject: view.subject, entityIds: ids },
+      {
+        attempts: 1,
+        removeOnComplete: { age: 3_600, count: 1_000 },
+        removeOnFail: { age: 24 * 3_600, count: 1_000 },
+      },
+    );
     return { jobId: job.id ?? '' };
   }
 
@@ -389,7 +429,8 @@ export class AiService {
         lines.push(`entity ${id} ${entity.name}`);
       }
       for (const field of Object.values(objects.field)) {
-        if (field.entityId !== id || field.doc !== null || view.fieldVis.get(field.id) !== 'full') continue;
+        if (field.entityId !== id || field.doc !== null || view.fieldVis.get(field.id) !== 'full')
+          continue;
         targets.set(field.id, 'field');
         lines.push(`field ${field.id} ${entity.name}.${field.name}`);
       }
@@ -424,7 +465,9 @@ export class AiService {
       if (type === undefined || type !== suggestion.target.type) continue;
       targets.delete(suggestion.target.id);
       await this.prisma.$transaction(async (tx) => {
-        await tx.docDraft.deleteMany({ where: { targetType: type, targetId: suggestion.target.id, status: 'pending' } });
+        await tx.docDraft.deleteMany({
+          where: { targetType: type, targetId: suggestion.target.id, status: 'pending' },
+        });
         await tx.docDraft.create({
           data: {
             projectId: view.projectId,
@@ -442,7 +485,11 @@ export class AiService {
     return { drafted };
   }
 
-  async listDocDrafts(subject: Subject, projectId: string, map: ProjectPermissionMap): Promise<DocDraftView[]> {
+  async listDocDrafts(
+    subject: Subject,
+    projectId: string,
+    map: ProjectPermissionMap,
+  ): Promise<DocDraftView[]> {
     const view = await this.view(subject, projectId, map);
     this.provider.assertConfigured();
     const rows = await this.prisma.docDraft.findMany({
@@ -457,7 +504,9 @@ export class AiService {
     this.provider.assertConfigured();
     const updated = await this.prisma.$transaction(async (tx) => {
       // `(targetType, targetId, status)` is unique: an older rejected draft makes room.
-      await tx.docDraft.deleteMany({ where: { targetType: row.targetType, targetId: row.targetId, status: 'rejected' } });
+      await tx.docDraft.deleteMany({
+        where: { targetType: row.targetType, targetId: row.targetId, status: 'rejected' },
+      });
       return tx.docDraft.update({
         where: { id },
         data: { status: 'rejected', reviewedById: view.subject.userId, reviewedAt: new Date() },
@@ -477,7 +526,9 @@ export class AiService {
     });
     const updated = await this.prisma.$transaction(async (tx) => {
       // `(targetType, targetId, status)` is unique: an older accepted draft makes room.
-      await tx.docDraft.deleteMany({ where: { targetType: row.targetType, targetId: row.targetId, status: 'accepted' } });
+      await tx.docDraft.deleteMany({
+        where: { targetType: row.targetType, targetId: row.targetId, status: 'accepted' },
+      });
       return tx.docDraft.update({
         where: { id },
         data: { status: 'accepted', reviewedById: view.subject.userId, reviewedAt: new Date() },
@@ -488,16 +539,28 @@ export class AiService {
 
   // --- internals ----------------------------------------------------------------------------
 
-  private async view(subject: Subject, projectId: string, known?: ProjectPermissionMap): Promise<CallerView> {
+  private async view(
+    subject: Subject,
+    projectId: string,
+    known?: ProjectPermissionMap,
+  ): Promise<CallerView> {
     // A share-link subject has no AI surface at all (R21): not 403, it does not exist.
     if (subject.kind !== 'user') throw notFound('project', projectId);
     const map = known ?? (await this.resolver.resolveProject(subject, projectId));
     if (!this.resolver.canOpenProject(map)) throw notFound('project', projectId);
-    const project = await this.prisma.project.findFirst({ where: { id: projectId, deletedAt: null } });
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, deletedAt: null },
+    });
     if (project === null) throw notFound('project', projectId);
     const skel = await this.resolver.skeleton(projectId);
     const ctx = this.filter.contextFrom(subject, projectId, map, skel);
-    const redacted = this.filter.redactWith(await this.loader.load(projectId), subject, projectId, map, skel);
+    const redacted = this.filter.redactWith(
+      await this.loader.load(projectId),
+      subject,
+      projectId,
+      map,
+      skel,
+    );
     const ai = aiSettings(project.settings);
     return {
       subject,
@@ -562,9 +625,14 @@ export class AiService {
    * selection) answers 404 for any id that is missing or invisible — the two are the same to
    * the caller; not strict (a thread's stored, best-effort selection) drops them.
    */
-  private contextEntities(view: CallerView, requested: readonly string[], opts: { strict: boolean }): string[] {
+  private contextEntities(
+    view: CallerView,
+    requested: readonly string[],
+    opts: { strict: boolean },
+  ): string[] {
     const entities = view.redacted.objects.entity;
-    const visible = (id: string): boolean => entities[id] !== undefined && entities[id].restricted !== true;
+    const visible = (id: string): boolean =>
+      entities[id] !== undefined && entities[id].restricted !== true;
     if (requested.length === 0) return Object.keys(entities).filter(visible).sort();
     const unique = [...new Set(requested)];
     if (opts.strict) {
@@ -574,7 +642,11 @@ export class AiService {
     return unique.filter(visible);
   }
 
-  private has(view: CallerView, atom: PermissionAtom, ref: { type: 'project' | 'entity'; id: string }): boolean {
+  private has(
+    view: CallerView,
+    atom: PermissionAtom,
+    ref: { type: 'project' | 'entity'; id: string },
+  ): boolean {
     return this.resolver.atomsAt(view.map, view.skel, ref).has(atom);
   }
 
@@ -585,7 +657,8 @@ export class AiService {
       return;
     }
     const denied = entityIds.find((id) => !this.has(view, 'ai:use', { type: 'entity', id }));
-    if (denied !== undefined) throw new ForbiddenException({ code: 'forbidden', atom: 'ai:use', entityId: denied });
+    if (denied !== undefined)
+      throw new ForbiddenException({ code: 'forbidden', atom: 'ai:use', entityId: denied });
     if (!view.aiEnabled) throw new ForbiddenException({ code: 'ai_disabled' });
   }
 
@@ -619,7 +692,12 @@ export class AiService {
   private async check(
     view: CallerView,
     query: string,
-  ): Promise<{ ok: boolean; unknownIdentifiers: string[]; touchedEntityIds: string[]; touchedFieldIds: string[] } | null> {
+  ): Promise<{
+    ok: boolean;
+    unknownIdentifiers: string[];
+    touchedEntityIds: string[];
+    touchedFieldIds: string[];
+  } | null> {
     const validator = this.registry.tryGet(view.redacted.engineId)?.queryValidator;
     if (validator === undefined) return null;
     const result: QueryValidationResult = await validator.validate({
@@ -630,16 +708,29 @@ export class AiService {
     const entities = view.redacted.objects.entity;
     return {
       ok: identifiersResolved(result),
-      unknownIdentifiers: [...new Set(result.identifiers.filter((i) => i.status === 'unknown').map((i) => i.text))],
-      touchedEntityIds: [...new Set(result.touchedEntityIds)].filter((id) => entities[id]?.restricted !== true && id in entities),
+      unknownIdentifiers: [
+        ...new Set(result.identifiers.filter((i) => i.status === 'unknown').map((i) => i.text)),
+      ],
+      touchedEntityIds: [...new Set(result.touchedEntityIds)].filter(
+        (id) => entities[id]?.restricted !== true && id in entities,
+      ),
       touchedFieldIds: [...new Set(result.touchedFieldIds)],
     };
   }
 
   /** Visible entities the query used or a join path needs, beyond the selection. */
-  private suggestions(view: CallerView, selected: readonly string[], used: readonly string[]): string[] {
+  private suggestions(
+    view: CallerView,
+    selected: readonly string[],
+    used: readonly string[],
+  ): string[] {
     const profile = this.registry.tryGet(view.redacted.engineId)?.aiProfile;
-    const input = { model: view.redacted, selectedEntityIds: [...new Set([...selected, ...used])], maxHops: 3, maxSuggestions: 5 };
+    const input = {
+      model: view.redacted,
+      selectedEntityIds: [...new Set([...selected, ...used])],
+      maxHops: 3,
+      maxSuggestions: 5,
+    };
     const paths = profile?.suggestJoinPaths?.(input) ?? defaultJoinPaths(input);
     return [...new Set([...used, ...paths.flatMap((p) => p.addedEntityIds)])];
   }
@@ -654,14 +745,20 @@ export class AiService {
   }
 
   /** Visible (else 404), `docs:edit` at the target (else 403), still pending (else 409). */
-  private async editableDraft(subject: Subject, id: string): Promise<{ row: DocDraft; view: CallerView }> {
+  private async editableDraft(
+    subject: Subject,
+    id: string,
+  ): Promise<{ row: DocDraft; view: CallerView }> {
     const row = await this.prisma.docDraft.findFirst({ where: { id } });
     if (row === null) throw notFound('doc_draft', id);
     const view = await this.view(subject, row.projectId).catch((error: unknown) => {
       throw error instanceof NotFoundException ? notFound('doc_draft', id) : error;
     });
     if (!this.targetVisible(view, row)) throw notFound('doc_draft', id);
-    const entityId = row.targetType === 'entity' ? row.targetId : view.redacted.objects.field[row.targetId]?.entityId;
+    const entityId =
+      row.targetType === 'entity'
+        ? row.targetId
+        : view.redacted.objects.field[row.targetId]?.entityId;
     if (entityId === undefined || !this.has(view, 'docs:edit', { type: 'entity', id: entityId })) {
       throw new ForbiddenException({ code: 'forbidden', atom: 'docs:edit' });
     }
@@ -675,7 +772,8 @@ export class AiService {
 /** `projects.settings.ai`, defaults true (doc 02 `projectSettingsShape`). Read here; the
  *  PATCH that writes it is `ProjectsController`'s. Anything malformed reads as the default. */
 export function aiSettings(settings: unknown): { enabled: boolean; includeDocsInContext: boolean } {
-  const ai = (settings as { ai?: { enabled?: unknown; includeDocsInContext?: unknown } } | null)?.ai;
+  const ai = (settings as { ai?: { enabled?: unknown; includeDocsInContext?: unknown } } | null)
+    ?.ai;
   return {
     enabled: ai?.enabled !== false,
     includeDocsInContext: ai?.includeDocsInContext !== false,
@@ -684,8 +782,14 @@ export function aiSettings(settings: unknown): { enabled: boolean; includeDocsIn
 
 function selectionOf(thread: AiThread): Selection {
   const raw = (thread.selection ?? {}) as Partial<Selection>;
-  const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-  return { entityIds: list(raw.entityIds), fieldIds: list(raw.fieldIds), linkIds: list(raw.linkIds), areaIds: list(raw.areaIds) };
+  const list = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  return {
+    entityIds: list(raw.entityIds),
+    fieldIds: list(raw.fieldIds),
+    linkIds: list(raw.linkIds),
+    areaIds: list(raw.areaIds),
+  };
 }
 
 function threadView(thread: AiThread): AiThreadView {
@@ -701,14 +805,20 @@ function threadView(thread: AiThread): AiThreadView {
 
 function messageView(message: AiMessage, profile: AiProfile | undefined): AiMessageView {
   const meta = aiMessageMetaSchema.safeParse(message.metadata ?? {});
-  const parsed = message.role === 'assistant' && profile !== undefined ? profile.parseOutput(message.content, 'query') : null;
+  const parsed =
+    message.role === 'assistant' && profile !== undefined
+      ? profile.parseOutput(message.content, 'query')
+      : null;
   return {
     id: message.id,
     role: message.role === 'assistant' ? 'assistant' : 'user',
     ordinal: message.ordinal,
     content: message.content,
     queryText: message.queryText,
-    explanation: parsed !== null && (parsed.mode === 'query' || parsed.mode === 'explain') ? parsed.explanation : '',
+    explanation:
+      parsed !== null && (parsed.mode === 'query' || parsed.mode === 'explain')
+        ? parsed.explanation
+        : '',
     metadata: meta.success ? meta.data : aiMessageMetaSchema.parse({}),
     createdAt: message.createdAt,
   };
@@ -724,7 +834,9 @@ export function plainTextOf(content: unknown): string {
   if (node === null || typeof node !== 'object') return '';
   if (typeof node.text === 'string') return node.text;
   const type = (node as { type?: unknown }).type;
-  return Array.isArray(node.content) ? node.content.map(plainTextOf).join(type === 'doc' ? '\n' : '') : '';
+  return Array.isArray(node.content)
+    ? node.content.map(plainTextOf).join(type === 'doc' ? '\n' : '')
+    : '';
 }
 
 function draftView(row: DocDraft): DocDraftView {
@@ -738,10 +850,17 @@ function draftView(row: DocDraft): DocDraftView {
 }
 
 /** SSE out of `createTaggedBlockStream`. Kept tiny so the event order is testable. */
-function createTaggedEmitter(emit: AiStreamEmit): { push: (text: string) => void; end: () => void } {
+function createTaggedEmitter(emit: AiStreamEmit): {
+  push: (text: string) => void;
+  end: () => void;
+} {
   const stream = createTaggedBlockStream();
   const send = (events: ReturnType<typeof stream.push>): void => {
-    for (const event of events) emit(event.type, event.type === 'block-delta' ? { tag: event.tag, text: event.text } : { tag: event.tag });
+    for (const event of events)
+      emit(
+        event.type,
+        event.type === 'block-delta' ? { tag: event.tag, text: event.text } : { tag: event.tag },
+      );
   };
   return {
     push: (text) => {
@@ -752,4 +871,3 @@ function createTaggedEmitter(emit: AiStreamEmit): { push: (text: string) => void
     },
   };
 }
-

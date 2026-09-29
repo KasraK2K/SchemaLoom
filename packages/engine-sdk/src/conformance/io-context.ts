@@ -126,7 +126,9 @@ export function reorderModel(model: RedactedModel): RedactedModel {
 /** Every IR object, whatever its type. The per-type bag is widened to `Record<Id, IrObject>`
  *  exactly as `seatRefs` does it, because `Object.values` over the eight-way union of bags
  *  produces `any` and takes the type checking with it. */
-export function allObjects(model: SchemaModel): readonly { type: IrObjectType; object: IrObject }[] {
+export function allObjects(
+  model: SchemaModel,
+): readonly { type: IrObjectType; object: IrObject }[] {
   const out: { type: IrObjectType; object: IrObject }[] = [];
   for (const type of IR_OBJECT_TYPES) {
     const bag: Record<Id, IrObject> = model.objects[type];
@@ -187,7 +189,10 @@ export function structuralDigest(model: SchemaModel): Readonly<Record<string, re
           `${entity(i.entityId)}:${i.name}:${i.kind}:unique=${String(i.isUnique)}:` +
           `[${[...i.columns]
             .sort((a, b) => a.ordinal - b.ordinal)
-            .map((c) => `${c.role}:${c.fieldId === null ? (c.expression ?? '') : fieldName(c.fieldId)}`)
+            .map(
+              (c) =>
+                `${c.role}:${c.fieldId === null ? (c.expression ?? '') : fieldName(c.fieldId)}`,
+            )
             .join(',')}]`,
       ),
     ),

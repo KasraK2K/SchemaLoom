@@ -130,7 +130,11 @@ export class NotificationsService {
   async list(
     userId: string,
     cursor: string | undefined,
-  ): Promise<{ notifications: NotificationView[]; unreadCount: number; nextCursor: string | null }> {
+  ): Promise<{
+    notifications: NotificationView[];
+    unreadCount: number;
+    nextCursor: string | null;
+  }> {
     const [rows, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({
         where: { userId },
@@ -163,7 +167,8 @@ export class NotificationsService {
       where: { id, userId },
       data: { readAt: new Date() },
     });
-    if (count === 0) throw new NotFoundException({ code: 'not_found', resourceType: 'notification', id });
+    if (count === 0)
+      throw new NotFoundException({ code: 'not_found', resourceType: 'notification', id });
   }
 
   async markAllRead(userId: string): Promise<void> {

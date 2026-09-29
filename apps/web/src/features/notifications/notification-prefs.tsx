@@ -2,7 +2,11 @@
 
 import type { NotificationPrefs, NotificationPrefsPatch } from '@schemaloom/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { notificationPrefsKey, notificationPrefsQueryOptions, updateNotificationPrefs } from './notifications-api';
+import {
+  notificationPrefsKey,
+  notificationPrefsQueryOptions,
+  updateNotificationPrefs,
+} from './notifications-api';
 
 const EMAIL_PREFS: readonly { key: keyof NotificationPrefsPatch; label: string }[] = [
   { key: 'emailMentions', label: 'Someone mentions me in a comment' },
@@ -27,7 +31,9 @@ export function NotificationPrefsSection() {
       <h2 className="text-base font-semibold text-text">Email notifications</h2>
       <p className="text-sm text-text-muted">Send me an email when:</p>
       {prefs.data === undefined ? (
-        <p className="text-sm text-text-subtle">{prefs.isError ? 'Could not load your preferences.' : 'Loading…'}</p>
+        <p className="text-sm text-text-subtle">
+          {prefs.isError ? 'Could not load your preferences.' : 'Loading…'}
+        </p>
       ) : (
         <ul className="flex flex-col gap-2">
           {EMAIL_PREFS.map(({ key, label }) => (

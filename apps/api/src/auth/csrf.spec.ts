@@ -61,11 +61,7 @@ describe('csrf middleware', () => {
 
   it('rejects an authenticated write with a tampered header', () => {
     const token = issueCsrfToken(SECRET);
-    const { next, res } = call(
-      'DELETE',
-      `sl_access=a; ${COOKIE_NAMES.csrf}=${token}`,
-      `${token}x`,
-    );
+    const { next, res } = call('DELETE', `sl_access=a; ${COOKIE_NAMES.csrf}=${token}`, `${token}x`);
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(403);
   });

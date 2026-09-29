@@ -32,7 +32,11 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
       .locator('form')
       .filter({ has: page.getByLabel('Add people, groups, or an email address') });
     const saved = () =>
-      page.waitForResponse((r) => r.url().endsWith(`/api/projects/${SEED.projectId}/grants`) && r.request().method() === 'POST');
+      page.waitForResponse(
+        (r) =>
+          r.url().endsWith(`/api/projects/${SEED.projectId}/grants`) &&
+          r.request().method() === 'POST',
+      );
 
     // Billing only, as Editor, for the freelancer.
     await dialog.getByLabel('Resource to share').selectOption(SEED.areas.billing);
@@ -55,10 +59,17 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
 
     // The outcome, read back from the API rather than from the dialog's own rendering.
     const olivia = await signIn(SEED_EMAILS.owner);
-    const access = (await (await olivia.api.get(`/api/projects/${SEED.projectId}/access`)).json()) as {
+    const access = (await (
+      await olivia.api.get(`/api/projects/${SEED.projectId}/access`)
+    ).json()) as {
       entries: {
         principal: { kind: string; id: string };
-        grants: { principal: { id: string }; resourceId: string; roleKey: string; canUseAi: boolean }[];
+        grants: {
+          principal: { id: string };
+          resourceId: string;
+          roleKey: string;
+          canUseAi: boolean;
+        }[];
       }[];
     };
     const own = (userId: string) =>
@@ -133,7 +144,15 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
       data: {
         batchId: `bat_e2e_dana_denied_${String(Date.now())}`,
         projectId: SEED.projectId,
-        ops: [{ op: 'update', type: 'entity', id: entityId, expectedVersion: 0, patch: { color: 'amber' } }],
+        ops: [
+          {
+            op: 'update',
+            type: 'entity',
+            id: entityId,
+            expectedVersion: 0,
+            patch: { color: 'amber' },
+          },
+        ],
       },
     });
   };

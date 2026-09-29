@@ -34,7 +34,11 @@ export const ProjectSummarySchema = z.object({
 });
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 
-export const WorkspaceSummarySchema = z.object({ id: z.string(), name: z.string(), slug: z.string() });
+export const WorkspaceSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+});
 export type WorkspaceSummary = z.infer<typeof WorkspaceSummarySchema>;
 
 /** `[]` for a guest or a non-member, exactly like the project list. */

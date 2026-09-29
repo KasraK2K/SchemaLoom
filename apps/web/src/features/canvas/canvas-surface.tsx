@@ -333,15 +333,20 @@ export function CanvasSurface({
   const shownNodes = useMemo(
     () =>
       nodes.map((node) =>
-        Boolean(node.selected) === selection.has(node.id) ? node : { ...node, selected: selection.has(node.id) },
+        Boolean(node.selected) === selection.has(node.id)
+          ? node
+          : { ...node, selected: selection.has(node.id) },
       ),
     [nodes, selection],
   );
   const handleNodesChange = useCallback(
     (changes: NodeChange<EntityNodeType>[]) => {
       const picks = changes.filter((change) => change.type === 'select');
-      if (picks.length > 0) select([...applySelectChanges(useCanvasStore.getState().selection, picks)]);
-      onNodesChange(picks.length === changes.length ? [] : changes.filter((change) => change.type !== 'select'));
+      if (picks.length > 0)
+        select([...applySelectChanges(useCanvasStore.getState().selection, picks)]);
+      onNodesChange(
+        picks.length === changes.length ? [] : changes.filter((change) => change.type !== 'select'),
+      );
     },
     [onNodesChange, select],
   );

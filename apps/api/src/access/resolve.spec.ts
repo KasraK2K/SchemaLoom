@@ -564,9 +564,7 @@ describe('indexGrants — §7.15 integrity', () => {
   });
 
   it('drops a dangling area grant and a dangling entity grant', () => {
-    expect(drops([grant('user:ana', area('ar_gone'), 'manager')])).toEqual([
-      'grant_dangling_area',
-    ]);
+    expect(drops([grant('user:ana', area('ar_gone'), 'manager')])).toEqual(['grant_dangling_area']);
     expect(drops([grant('user:ana', entity('ent_gone'), 'manager')])).toEqual([
       'grant_dangling_entity',
     ]);
@@ -694,7 +692,11 @@ describe('R7 — modifier booleans are additive only', () => {
     const atoms: PermissionAtom[] = ['schema:view', 'ai:use', 'field:viewRestricted'];
     const map = resolve({
       grants: [
-        grant('user:ana', project(), 'viewer', { atoms, canUseAi: false, canViewRestricted: false }),
+        grant('user:ana', project(), 'viewer', {
+          atoms,
+          canUseAi: false,
+          canViewRestricted: false,
+        }),
       ],
     });
     expect(map.projectAtoms.has('ai:use')).toBe(true);

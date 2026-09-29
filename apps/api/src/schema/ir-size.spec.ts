@@ -54,15 +54,45 @@ const cuid = (): string =>
   'c' + Array.from({ length: 24 }, () => Math.floor(rand() * 36).toString(36)).join('');
 
 const WORDS = [
-  'customer', 'order', 'invoice', 'shipment', 'payment', 'account', 'product', 'address',
-  'status', 'created', 'updated', 'amount', 'currency', 'region', 'warehouse', 'supplier',
-  'the', 'of', 'which', 'is', 'stored', 'when', 'a', 'record', 'changes', 'per', 'tenant',
+  'customer',
+  'order',
+  'invoice',
+  'shipment',
+  'payment',
+  'account',
+  'product',
+  'address',
+  'status',
+  'created',
+  'updated',
+  'amount',
+  'currency',
+  'region',
+  'warehouse',
+  'supplier',
+  'the',
+  'of',
+  'which',
+  'is',
+  'stored',
+  'when',
+  'a',
+  'record',
+  'changes',
+  'per',
+  'tenant',
 ];
 const words = (n: number): string => Array.from({ length: n }, () => pick(WORDS)).join(' ');
 const ident = (): string => `${pick(WORDS)}_${pick(WORDS)}_${String(Math.floor(rand() * 100))}`;
 const TYPES: readonly [string, unknown[]][] = [
-  ['bigint', []], ['text', []], ['varchar', [255]], ['numeric', [12, 2]],
-  ['timestamptz', []], ['boolean', []], ['uuid', []], ['jsonb', []],
+  ['bigint', []],
+  ['text', []],
+  ['varchar', [255]],
+  ['numeric', [12, 2]],
+  ['timestamptz', []],
+  ['boolean', []],
+  ['uuid', []],
+  ['jsonb', []],
 ];
 
 function worstCase(): { store: Record<string, Row[]>; entityIds: string[] } {
@@ -130,8 +160,15 @@ function worstCase(): { store: Record<string, Row[]>; entityIds: string[] } {
 
   return {
     store: baseStore({
-      entity, field, constraint, constraintColumn, schemaIndex, schemaIndexColumn,
-      link, linkEndpoint, doc,
+      entity,
+      field,
+      constraint,
+      constraintColumn,
+      schemaIndex,
+      schemaIndexColumn,
+      link,
+      linkEndpoint,
+      doc,
     }) as Record<string, Row[]>,
     entityIds: entity.map((e) => String(e.id)),
   };

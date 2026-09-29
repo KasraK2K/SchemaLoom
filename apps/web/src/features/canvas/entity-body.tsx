@@ -49,7 +49,9 @@ export function EntityBody({
   if (entity.restricted === true) return <RestrictedNode selected={selected} />;
 
   const Renderer: ComponentType<EngineNodeProps> | undefined =
-    ui.nodeRenderers[entity.kind] ?? ui.defaultNodeRenderer ?? FALLBACK_ENGINE_UI.defaultNodeRenderer;
+    ui.nodeRenderers[entity.kind] ??
+    ui.defaultNodeRenderer ??
+    FALLBACK_ENGINE_UI.defaultNodeRenderer;
   // A plugin with neither a renderer for this kind nor a default is a broken plugin, and
   // the shipped fallback always has one. Nothing to invent here.
   if (Renderer === undefined) return null;
@@ -79,7 +81,10 @@ export function EntityBody({
  * level down — a PostgreSQL view has `canBeLinkEndpoint: false`, and a handle on a row
  * that can never be an endpoint is an affordance that always ends in a rejected drag.
  */
-function handleFor(facet: EngineStaticFacet, entityKind: string): ComponentType<{
+function handleFor(
+  facet: EngineStaticFacet,
+  entityKind: string,
+): ComponentType<{
   readonly fieldId: Id;
   readonly side: 'source' | 'target';
 }> {

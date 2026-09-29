@@ -72,8 +72,8 @@ export function ShareLinksPanel({
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-medium text-text">Links</h3>
       <p className="text-xs text-text-muted">
-        Anyone with the link can view {resourceOptionLabel(noun, scope)}. Links are always
-        view-only — they cannot comment, edit, or see who else has access.
+        Anyone with the link can view {resourceOptionLabel(noun, scope)}. Links are always view-only
+        — they cannot comment, edit, or see who else has access.
       </p>
 
       {canManage && <CreateLinkForm onCreate={create.mutate} pending={create.isPending} />}

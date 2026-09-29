@@ -47,7 +47,9 @@ export class SavedQueriesController {
     @Param('projectId') projectId: string,
     @Query('tag') tag: string | undefined,
   ): Promise<{ queries: SavedQueryView[] }> {
-    return { queries: await this.queries.list(subjectOf(req), projectId, mapFor(req, projectId), tag) };
+    return {
+      queries: await this.queries.list(subjectOf(req), projectId, mapFor(req, projectId), tag),
+    };
   }
 
   @ApiOperation({ summary: 'Save a query; its identifiers are resolved against the caller’s view' })
@@ -109,6 +111,7 @@ function subjectOf(req: Request): Subject {
 
 function mapFor(req: Request, projectId: string): ProjectPermissionMap {
   const context = getAccessContext(req);
-  if (context?.projectId !== projectId) throw new ForbiddenException({ code: 'route_not_classified' });
+  if (context?.projectId !== projectId)
+    throw new ForbiddenException({ code: 'route_not_classified' });
   return context.map;
 }

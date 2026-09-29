@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { unstack } from './layout';
 
-const node = (id: string, x: number, y: number) => ({ id, width: 200, height: 100, position: { x, y } });
+const node = (id: string, x: number, y: number) => ({
+  id,
+  width: 200,
+  height: 100,
+  position: { x, y },
+});
 
 describe('unstack', () => {
   it('asks for a full layout when every table is piled at the origin', () => {

@@ -16,14 +16,14 @@ mention is stale), the activity-log screen, canvas comment-count badges, digest 
 What exists: `POST/GET /projects/:id/snapshots`, `GET …/snapshots/:id`, `GET …/:fromId/diff/:toId`,
 `POST …/:id/restore`, all gated as doc 05 §2.2 says (`history:view` to read, `schema:edit` +
 R21′ to restore). Diffs are computed between two **redacted** models (L18). What is missing is
-any screen, and a way to compare against *now*.
+any screen, and a way to compare against _now_.
 
 ### 1.1 API additions
 
-| Route | Marker | What |
-|---|---|---|
+| Route                                               | Marker                               | What                                                                                       |
+| --------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------ |
 | `GET /projects/:id/snapshots/:snapshotId/diff/live` | `@RequirePermission('history:view')` | diff snapshot → current live IR, both redacted with the caller's **current** context (L18) |
-| `DELETE /projects/:id/snapshots/:snapshotId` | `@RequirePermission('schema:edit')` | §7.8 already allows it; `kind = manual` only (auto ones age out, §1.3) |
+| `DELETE /projects/:id/snapshots/:snapshotId`        | `@RequirePermission('schema:edit')`  | §7.8 already allows it; `kind = manual` only (auto ones age out, §1.3)                     |
 
 Every diff response is the existing `SchemaDiff`, plus the counts the header needs computed
 post-redaction (L8): `{ added, removed, changed, structural, governance }`.
@@ -35,7 +35,7 @@ the caller holds `history:view`.
 
 - **Left: the snapshot list**, newest first — name, kind badge (`manual`, `import`, `restore`,
   `auto`), author, relative time. "Take snapshot" (name + optional note) for `schema:edit`.
-- **Right: the diff.** Default comparison is *selected snapshot → current*. Picking a second
+- **Right: the diff.** Default comparison is _selected snapshot → current_. Picking a second
   snapshot switches to snapshot → snapshot.
   - Grouped by entity (`entriesByEntity`), each group collapsible; inside it one row per
     `DiffEntry`: added / removed / changed, and for `changed` the property list
@@ -45,7 +45,7 @@ the caller holds `history:view`.
     warning tint.
   - "Show on canvas" on a group selects that entity on the canvas (the existing selection store
     the Queries tab already uses).
-- **Restore** on a snapshot: a confirm dialog that shows the diff *current → snapshot* summary
+- **Restore** on a snapshot: a confirm dialog that shows the diff _current → snapshot_ summary
   ("3 tables removed, 12 changed") before the button. Disabled with a one-line reason when the
   caller does not have the full view (R21′); R28 already stops restore from rewriting
   access-control attributes.
@@ -66,18 +66,18 @@ Today only `manual` snapshots are written. Phase 4 adds (Q4):
 
 **Why only here.** Inside a project, diffs match by id, so an in-app rename is already one
 `changed` entry with a `name` change; nothing to confirm. The loss happens on **SQL re-import**:
-`customer` renamed to `customers` in the pasted DDL arrives as a *new* table. Additive merge
+`customer` renamed to `customers` in the pasted DDL arrives as a _new_ table. Additive merge
 keeps both, and the old table's docs, comments, grants and saved-query links stay on the stale
-copy. There is still **no inferred rename** (doc 04 §7.3): the generator only *proposes*; a
+copy. There is still **no inferred rename** (doc 04 §7.3): the generator only _proposes_; a
 human confirms every pair, and only confirmed pairs are applied.
 
 ### 2.1 Flow
 
 1. `POST /projects/:id/import/preview { source }` (`schema:edit`, R21′ like import itself, L19)
    → `{ creates: [...], existing: [...], renameCandidates: [...] }`. Nothing is written.
-2. The import dialog shows "Looks like a rename?" cards: *`customer` → `customers` (5 of 6
-   columns match)* with **Rename** / **Keep both**. Field candidates appear inside a matched or
-   renamed table: *`email` → `email_address` (same type, same position)*.
+2. The import dialog shows "Looks like a rename?" cards: _`customer` → `customers` (5 of 6
+   columns match)_ with **Rename** / **Keep both**. Field candidates appear inside a matched or
+   renamed table: _`email` → `email_address` (same type, same position)_.
 3. `POST /projects/:id/import { source, renames: [{ type, fromId, toName }] }`. Confirmed pairs
    are applied **first** as ordinary `update … { name }` ops through `SchemaWriter` (same
    batch, so the rename keeps the object id — docs, comments, grants and saved-query links
@@ -98,7 +98,7 @@ namespace only (cross-namespace stays manual, doc 04 OQ10).
   absent from the SQL × a new field, **same type required**, and (same ordinal **or** name
   similarity ≥ 0.6).
 - Output carries the reason shown on the card (`5 of 6 columns match`, `same type, same
-  position`), never a percentage.
+position`), never a percentage.
 
 Only visible objects enter the pools (import already requires the full view, L19).
 
@@ -114,14 +114,14 @@ they cannot see), R21 (never reachable for share-link visitors).
 
 ### 3.1 API
 
-| Route | Marker | Notes |
-|---|---|---|
-| `GET /projects/:id/comments?targetType&targetId` | `@RequireProjectAccess` | threads on one target; invisible target → 404 |
-| `GET /projects/:id/comments/counts` | `@RequireProjectAccess` | `{ [entityId]: openThreads }` over visible targets only (L8); for the inspector list |
-| `POST /projects/:id/comments` | `@RequireProjectAccess` + service check | `{ targetType, targetId, parentId?, content }`; `comment:create` at the target entity |
-| `PATCH /comments/:id` · `DELETE /comments/:id` | `@Authenticated` | own only; invisible → 404, visible-not-own → 403 |
-| `POST /comments/:id/resolve` · `…/reopen` | `@Authenticated` | own thread, or `docs:edit` at the target |
-| `GET /projects/:id/comments/mention-candidates?targetType&targetId` | `@RequireProjectAccess` | users who can **see the target** (`resolveResource` inverse, doc 05 §7.7 item 4) — the same rule for members and guests; name + avatar only |
+| Route                                                               | Marker                                  | Notes                                                                                                                                       |
+| ------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /projects/:id/comments?targetType&targetId`                    | `@RequireProjectAccess`                 | threads on one target; invisible target → 404                                                                                               |
+| `GET /projects/:id/comments/counts`                                 | `@RequireProjectAccess`                 | `{ [entityId]: openThreads }` over visible targets only (L8); for the inspector list                                                        |
+| `POST /projects/:id/comments`                                       | `@RequireProjectAccess` + service check | `{ targetType, targetId, parentId?, content }`; `comment:create` at the target entity                                                       |
+| `PATCH /comments/:id` · `DELETE /comments/:id`                      | `@Authenticated`                        | own only; invisible → 404, visible-not-own → 403                                                                                            |
+| `POST /comments/:id/resolve` · `…/reopen`                           | `@Authenticated`                        | own thread, or `docs:edit` at the target                                                                                                    |
+| `GET /projects/:id/comments/mention-candidates?targetType&targetId` | `@RequireProjectAccess`                 | users who can **see the target** (`resolveResource` inverse, doc 05 §7.7 item 4) — the same rule for members and guests; name + avatar only |
 
 Deleting a comment that has replies leaves a tombstone ("Comment deleted") so the thread
 survives; a leaf is hard-deleted (Q2). Realtime sends `comments:changed { targetType, targetId }`
@@ -132,8 +132,8 @@ to sockets that can see the target; clients refetch that thread.
 A **Comments** tab in the inspector for the selected table or column: open threads first,
 then resolved (collapsed). The composer is TipTap (already a dependency) with the official
 `@tiptap/extension-mention` (Q5), fed by `mention-candidates`. If the author mentions someone
-who cannot see the target, the composer says *"Bob cannot see this table — they will not be
-notified"* (L17) — the candidate list already excludes them, so this only triggers on pasted
+who cannot see the target, the composer says _"Bob cannot see this table — they will not be
+notified"_ (L17) — the candidate list already excludes them, so this only triggers on pasted
 mentions.
 
 ---
@@ -168,10 +168,10 @@ the route specs the boot sweep needs; one e2e per area.
 
 ## 6. Questions
 
-| # | Question | Recommendation |
-|---|---|---|
-| Q1 | A **confirmed** rename on import updates the existing object's name. That bends "import is additive; existing objects win". | **Allow it, for confirmed renames only.** Nothing is inferred or deleted, and without it re-imports strand docs and grants on stale copies. |
-| Q2 | Deleting a comment with replies. | **Tombstone** the root, hard-delete leaves. |
-| Q3 | Notification email timing. | **Immediate**, per-type opt-out via the existing prefs; no digest yet. |
-| Q4 | Automatic snapshots before import and restore. | **Yes**, same transaction, pruned after 90 days beyond the newest 50. |
-| Q5 | New dependency `@tiptap/extension-mention`. | **Yes** — official, small, and hand-rolling mentions in ProseMirror is the larger diff. |
+| #   | Question                                                                                                                    | Recommendation                                                                                                                              |
+| --- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | A **confirmed** rename on import updates the existing object's name. That bends "import is additive; existing objects win". | **Allow it, for confirmed renames only.** Nothing is inferred or deleted, and without it re-imports strand docs and grants on stale copies. |
+| Q2  | Deleting a comment with replies.                                                                                            | **Tombstone** the root, hard-delete leaves.                                                                                                 |
+| Q3  | Notification email timing.                                                                                                  | **Immediate**, per-type opt-out via the existing prefs; no digest yet.                                                                      |
+| Q4  | Automatic snapshots before import and restore.                                                                              | **Yes**, same transaction, pruned after 90 days beyond the newest 50.                                                                       |
+| Q5  | New dependency `@tiptap/extension-mention`.                                                                                 | **Yes** — official, small, and hand-rolling mentions in ProseMirror is the larger diff.                                                     |

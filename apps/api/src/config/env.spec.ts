@@ -80,17 +80,15 @@ describe('envSchema — §11.4 cross-field rules', () => {
   });
 
   it('accepts RESEND_API_KEY alone', () => {
-    expect(
-      envSchema.safeParse(env({ SMTP_URL: undefined, RESEND_API_KEY: 're_x' })).success,
-    ).toBe(true);
+    expect(envSchema.safeParse(env({ SMTP_URL: undefined, RESEND_API_KEY: 're_x' })).success).toBe(
+      true,
+    );
   });
 
   for (const provider of ['GOOGLE', 'GITHUB'] as const) {
     it(`treats ${provider} id and secret as both-or-neither`, () => {
       expect(envSchema.safeParse(env({ [`${provider}_CLIENT_ID`]: 'id' })).success).toBe(false);
-      expect(envSchema.safeParse(env({ [`${provider}_CLIENT_SECRET`]: 's' })).success).toBe(
-        false,
-      );
+      expect(envSchema.safeParse(env({ [`${provider}_CLIENT_SECRET`]: 's' })).success).toBe(false);
       expect(
         envSchema.safeParse(
           env({ [`${provider}_CLIENT_ID`]: 'id', [`${provider}_CLIENT_SECRET`]: 's' }),
@@ -113,9 +111,7 @@ describe('envSchema — §11.4 cross-field rules', () => {
 
   it('rejects a refresh secret equal to the access secret', () => {
     const same = 'z'.repeat(48);
-    const result = envSchema.safeParse(
-      env({ JWT_ACCESS_SECRET: same, JWT_REFRESH_SECRET: same }),
-    );
+    const result = envSchema.safeParse(env({ JWT_ACCESS_SECRET: same, JWT_REFRESH_SECRET: same }));
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.path).toEqual(['JWT_REFRESH_SECRET']);
   });

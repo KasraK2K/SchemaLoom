@@ -2,12 +2,7 @@ import { pushTo } from './collect.js';
 import { MAX_FIELD_DEPTH } from './constants.js';
 import type { Id } from './ids.js';
 import { createIndex, indexOf, type ModelIndex } from './model-index.js';
-import {
-  IR_OBJECT_TYPES,
-  type IrObject,
-  type IrObjectType,
-  type SchemaModel,
-} from './model.js';
+import { IR_OBJECT_TYPES, type IrObject, type IrObjectType, type SchemaModel } from './model.js';
 import type { NormalizeName } from './normalize-name.js';
 
 /**

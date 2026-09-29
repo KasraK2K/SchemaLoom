@@ -1,7 +1,12 @@
 import { Body, Controller, ForbiddenException, Get, Param, Put, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { RequireProjectAccess, getAccessContext, type ProjectPermissionMap, type Subject } from '../access';
+import {
+  RequireProjectAccess,
+  getAccessContext,
+  type ProjectPermissionMap,
+  type Subject,
+} from '../access';
 import { getSubject } from '../auth';
 import { WriteDocDto } from './docs.dto';
 import { DocsService, type DocView } from './docs.service';
@@ -62,6 +67,7 @@ function subjectOf(req: Request): Subject {
 
 function mapFor(req: Request, projectId: string): ProjectPermissionMap {
   const context = getAccessContext(req);
-  if (context?.projectId !== projectId) throw new ForbiddenException({ code: 'route_not_classified' });
+  if (context?.projectId !== projectId)
+    throw new ForbiddenException({ code: 'route_not_classified' });
   return context.map;
 }

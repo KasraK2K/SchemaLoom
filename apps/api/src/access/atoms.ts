@@ -28,8 +28,7 @@ export const without = (s: AtomSet, a: PermissionAtom): AtomSet =>
 export const intersect = (s: AtomSet, t: AtomSet): AtomSet =>
   new Set([...s].filter((a) => t.has(a)));
 
-export const unionAll = (sets: readonly AtomSet[]): AtomSet =>
-  new Set(sets.flatMap((s) => [...s]));
+export const unionAll = (sets: readonly AtomSet[]): AtomSet => new Set(sets.flatMap((s) => [...s]));
 
 export const sameSet = (s: AtomSet, t: AtomSet): boolean =>
   s.size === t.size && [...s].every((a) => t.has(a));

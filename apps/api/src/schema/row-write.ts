@@ -274,8 +274,14 @@ export async function updateRow(
   return count === 1;
 }
 
-interface VersionedWhere { id: Id; projectId: Id; version: number }
-interface Bump { version: { increment: number } }
+interface VersionedWhere {
+  id: Id;
+  projectId: Id;
+  version: number;
+}
+interface Bump {
+  version: { increment: number };
+}
 
 async function scalarUpdate(
   db: SchemaDb,

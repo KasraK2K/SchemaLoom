@@ -13,7 +13,12 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { OrgRole } from '@schemaloom/contracts';
 import type { Request } from 'express';
-import { RequireOrgRole, RequirePermission, RequireProjectAccess, getAccessContext } from '../access';
+import {
+  RequireOrgRole,
+  RequirePermission,
+  RequireProjectAccess,
+  getAccessContext,
+} from '../access';
 import { getSubject } from '../auth';
 import { userSubject } from '../sharing/access-write';
 import type { ProjectDetail } from './project-views';
@@ -54,10 +59,7 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Project shell: name, engine badge and the caller’s access' })
   @RequireProjectAccess('projectId')
   @Get(':projectId')
-  async detail(
-    @Req() req: Request,
-    @Param('projectId') projectId: string,
-  ): Promise<ProjectDetail> {
+  async detail(@Req() req: Request, @Param('projectId') projectId: string): Promise<ProjectDetail> {
     const context = getAccessContext(req);
     if (context?.projectId !== projectId) {
       throw new ForbiddenException({ code: 'route_not_classified' });

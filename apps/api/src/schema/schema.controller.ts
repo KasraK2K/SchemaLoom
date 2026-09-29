@@ -146,6 +146,11 @@ export class SchemaController {
     const raw = await this.loader.load(projectId);
     // `redactWith`, not `redactModel`: the map and skeleton are already in hand, and
     // resolving a second time per request is exactly the N+1 §10.4 forbids.
-    return { redacted: this.filter.redactWith(raw, subject, projectId, map, skel), map, skel, actorUserId };
+    return {
+      redacted: this.filter.redactWith(raw, subject, projectId, map, skel),
+      map,
+      skel,
+      actorUserId,
+    };
   }
 }

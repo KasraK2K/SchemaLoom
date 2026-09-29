@@ -100,12 +100,15 @@ class Diagnostics {
 
 function checkIdentifiers(model: SchemaModel, diagnostics: Diagnostics): void {
   const named: { type: IrObjectType; object: IrBase }[] = [];
-  for (const o of Object.values(model.objects.namespace)) named.push({ type: 'namespace', object: o });
-  for (const o of Object.values(model.objects.customType)) named.push({ type: 'customType', object: o });
+  for (const o of Object.values(model.objects.namespace))
+    named.push({ type: 'namespace', object: o });
+  for (const o of Object.values(model.objects.customType))
+    named.push({ type: 'customType', object: o });
   for (const o of Object.values(model.objects.entity)) named.push({ type: 'entity', object: o });
   for (const o of Object.values(model.objects.field)) named.push({ type: 'field', object: o });
   for (const o of Object.values(model.objects.index)) named.push({ type: 'index', object: o });
-  for (const o of Object.values(model.objects.constraint)) named.push({ type: 'constraint', object: o });
+  for (const o of Object.values(model.objects.constraint))
+    named.push({ type: 'constraint', object: o });
 
   for (const { type, object } of named) {
     const { name } = object;
@@ -155,7 +158,11 @@ function checkDuplicateNames(model: SchemaModel, diagnostics: Diagnostics): void
   const typeNames = new Map<Id, string>();
   for (const customType of Object.values(model.objects.customType)) {
     if (customType.name.length === 0) continue;
-    pushId(typeKeys, `${customType.namespaceId}\u0000${normalizeName(customType.name)}`, customType.id);
+    pushId(
+      typeKeys,
+      `${customType.namespaceId}\u0000${normalizeName(customType.name)}`,
+      customType.id,
+    );
     typeNames.set(customType.id, customType.name);
   }
   groups.push({ type: 'customType', keys: typeKeys, names: typeNames });
@@ -177,7 +184,8 @@ function checkFields(model: SchemaModel, diagnostics: Diagnostics): void {
     const cached = contexts.get(entityId);
     if (cached !== undefined) return cached;
     const entity = model.objects.entity[entityId];
-    const namespace = entity === undefined ? undefined : model.objects.namespace[entity.namespaceId];
+    const namespace =
+      entity === undefined ? undefined : model.objects.namespace[entity.namespaceId];
     const context: TypeResolutionContext = { customTypes, namespaceName: namespace?.name ?? null };
     contexts.set(entityId, context);
     return context;
@@ -245,7 +253,10 @@ function checkFields(model: SchemaModel, diagnostics: Diagnostics): void {
 function checkConstraints(model: SchemaModel, diagnostics: Diagnostics): void {
   for (const constraint of Object.values(model.objects.constraint)) {
     const descriptor = CAPABILITIES.constraintKinds.find((k) => k.id === constraint.kind);
-    if (descriptor?.hasExpression === true && text(constraint.engineProps, 'expression') === undefined) {
+    if (
+      descriptor?.hasExpression === true &&
+      text(constraint.engineProps, 'expression') === undefined
+    ) {
       diagnostics.add(
         'error',
         CODE.constraintMissingExpression,
@@ -337,7 +348,9 @@ function checkStaleReferences(model: SchemaModel, diagnostics: Diagnostics): voi
         if (model.objects.field[fieldId] === undefined) missing += 1;
       }
       if (missing > 0) {
-        diagnostics.add('error', CODE.expressionReferenceStale, type, object.id, { count: missing });
+        diagnostics.add('error', CODE.expressionReferenceStale, type, object.id, {
+          count: missing,
+        });
       }
     }
   };

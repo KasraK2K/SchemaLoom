@@ -195,12 +195,17 @@ describe('R16 — monotonicity: the invariant the permission cache rests on', ()
         ({ world, own, theirs }) => {
           const skel = skeletonOf(world);
           const before = resolveWith(world, [PRINCIPALS.self], own);
-          const after = resolveWith(world, [PRINCIPALS.self, PRINCIPALS.groupA], [...own, ...theirs]);
+          const after = resolveWith(
+            world,
+            [PRINCIPALS.self, PRINCIPALS.groupA],
+            [...own, ...theirs],
+          );
           for (const ref of allRefs(world)) {
             for (const atom of atomsAt(before, skel, ref)) {
-              expect(atomsAt(after, skel, ref).has(atom), `${ref.type}:${ref.id} lost ${atom}`).toBe(
-                true,
-              );
+              expect(
+                atomsAt(after, skel, ref).has(atom),
+                `${ref.type}:${ref.id} lost ${atom}`,
+              ).toBe(true);
             }
           }
         },
@@ -238,9 +243,10 @@ describe('R16 — monotonicity: the invariant the permission cache rests on', ()
           const after = resolveWith(world, [PRINCIPALS.self], widened);
           for (const ref of allRefs(world)) {
             for (const atom of atomsAt(before, skel, ref)) {
-              expect(atomsAt(after, skel, ref).has(atom), `${ref.type}:${ref.id} lost ${atom}`).toBe(
-                true,
-              );
+              expect(
+                atomsAt(after, skel, ref).has(atom),
+                `${ref.type}:${ref.id} lost ${atom}`,
+              ).toBe(true);
             }
           }
         },

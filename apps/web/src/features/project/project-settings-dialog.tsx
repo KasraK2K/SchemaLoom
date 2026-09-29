@@ -1,7 +1,14 @@
 'use client';
 
 import { restrictedFieldModeSchema, type RestrictedFieldMode } from '@schemaloom/contracts';
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger, Settings } from '@schemaloom/ui';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+  Settings,
+} from '@schemaloom/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { z } from 'zod';
@@ -35,16 +42,28 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
     queryKey: settingsKey(projectId),
     enabled: open,
     retry: false,
-    queryFn: async () => settingsSchema.parse(await apiFetch<unknown>(`/projects/${projectId}/settings`)),
+    queryFn: async () =>
+      settingsSchema.parse(await apiFetch<unknown>(`/projects/${projectId}/settings`)),
   });
   const save = useMutation({
     mutationFn: async (write: { path: string; body: unknown }) =>
-      settingsSchema.parse(await apiFetch<unknown>(`/projects/${projectId}/${write.path}`, { method: 'PATCH', body: write.body })),
-    onSuccess: (next) => { client.setQueryData(settingsKey(projectId), next); },
+      settingsSchema.parse(
+        await apiFetch<unknown>(`/projects/${projectId}/${write.path}`, {
+          method: 'PATCH',
+          body: write.body,
+        }),
+      ),
+    onSuccess: (next) => {
+      client.setQueryData(settingsKey(projectId), next);
+    },
   });
 
-  const setMode = (mode: RestrictedFieldMode) => { save.mutate({ path: 'restricted-field-mode', body: { mode } }); };
-  const setAi = (ai: Partial<ProjectSettings['ai']>) => { save.mutate({ path: 'settings', body: { ai } }); };
+  const setMode = (mode: RestrictedFieldMode) => {
+    save.mutate({ path: 'restricted-field-mode', body: { mode } });
+  };
+  const setAi = (ai: Partial<ProjectSettings['ai']>) => {
+    save.mutate({ path: 'settings', body: { ai } });
+  };
   const error = query.error ?? save.error;
   const settings = query.data;
 
@@ -64,7 +83,10 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
         <DialogTitle>Project settings</DialogTitle>
         <DialogDescription>Apply to everyone who opens this project.</DialogDescription>
         {error !== null && (
-          <p role="alert" className="rounded-md border border-danger px-3 py-2 text-sm text-danger-text">
+          <p
+            role="alert"
+            className="rounded-md border border-danger px-3 py-2 text-sm text-danger-text"
+          >
             {messageOf(error)}
           </p>
         )}
@@ -77,7 +99,9 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
                 className="h-8 rounded-md border border-border bg-surface px-2 text-sm text-text"
                 value={settings.restrictedFieldMode}
                 disabled={save.isPending}
-                onChange={(event) => { setMode(event.target.value as RestrictedFieldMode); }}
+                onChange={(event) => {
+                  setMode(event.target.value as RestrictedFieldMode);
+                }}
               >
                 <option value="mask">Masked: shown as a hidden column</option>
                 <option value="hide">Hidden: left out entirely</option>
@@ -91,7 +115,9 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
                   className="size-3.5 accent-accent"
                   checked={settings.ai.enabled}
                   disabled={save.isPending}
-                  onChange={(event) => { setAi({ enabled: event.target.checked }); }}
+                  onChange={(event) => {
+                    setAi({ enabled: event.target.checked });
+                  }}
                 />
                 Allow the AI assistant in this project
               </label>
@@ -101,7 +127,9 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
                   className="size-3.5 accent-accent"
                   checked={settings.ai.includeDocsInContext}
                   disabled={save.isPending || !settings.ai.enabled}
-                  onChange={(event) => { setAi({ includeDocsInContext: event.target.checked }); }}
+                  onChange={(event) => {
+                    setAi({ includeDocsInContext: event.target.checked });
+                  }}
                 />
                 Include documentation in what the AI sees
               </label>

@@ -52,11 +52,7 @@ function setArg(
   return out;
 }
 
-function nextRef(
-  option: TypePickerOption,
-  args: (string | number)[],
-  dimensions: number,
-): TypeRef {
+function nextRef(option: TypePickerOption, args: (string | number)[], dimensions: number): TypeRef {
   // `option.value` is already canonical (the catalog's `buildRef` made it); only the parts the
   // picker owns are overlaid, so no ref is ever assembled by string concatenation.
   const ref: TypeRef = { ...option.value };

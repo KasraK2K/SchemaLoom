@@ -136,7 +136,13 @@ function FieldDetails({ field }: { readonly field: Field }) {
     <dl className="space-y-1 p-2">
       <Row label="Name" value={field.name} />
       <dt className="text-xs text-text-subtle">Type</dt>
-      <dd>{TypeBadge === undefined ? resolved.display : <TypeBadge resolved={resolved} compact={false} />}</dd>
+      <dd>
+        {TypeBadge === undefined ? (
+          resolved.display
+        ) : (
+          <TypeBadge resolved={resolved} compact={false} />
+        )}
+      </dd>
       <Row label="Nullable" value={field.isNullable ? 'yes' : 'no'} />
     </dl>
   );

@@ -83,8 +83,7 @@ export function isInertGrant(entry: AccessEntry): boolean {
 function withProposal(entry: AccessEntry, proposal: ProposedGrant): AccessEntry {
   const key = principalKeyOf(entry.principal);
   const kept = entry.grants.filter(
-    (grant) =>
-      principalKeyOf(grant.principal) !== key || grant.resourceId !== proposal.target.id,
+    (grant) => principalKeyOf(grant.principal) !== key || grant.resourceId !== proposal.target.id,
   );
   const replacement: ContributingGrant = {
     id: '',
@@ -181,9 +180,7 @@ function defeated(
     (grant) => principalKeyOf(grant.principal) !== ownKey,
   );
   const via = others.map((grant) =>
-    grant.principal.kind === 'group'
-      ? `the group ${grant.principal.label}`
-      : grant.principal.label,
+    grant.principal.kind === 'group' ? `the group ${grant.principal.label}` : grant.principal.label,
   );
   const where = resourcePhrase(proposal.target);
   const widest = others[0];

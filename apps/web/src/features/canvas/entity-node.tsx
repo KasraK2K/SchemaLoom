@@ -76,7 +76,7 @@ function PeerSelection({ entityId }: { readonly entityId: Id }) {
           <span
             key={peer.peerId}
             title={`${peer.name ?? 'Someone'} has this selected`}
-            className="rounded-full px-1.5 text-[10px] font-semibold leading-4 text-white"
+            className="rounded-full px-1.5 text-[10px] leading-4 font-semibold text-white"
             style={{ backgroundColor: peerColor(peer.peerId) }}
           >
             {initials(peer.name ?? '')}

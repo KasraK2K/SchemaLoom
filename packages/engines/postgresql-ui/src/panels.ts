@@ -129,9 +129,7 @@ export const INDEX_SECTIONS: readonly PropertyPanelSection<Index>[] = [
     title: 'Partial index',
     order: 100,
     available: (caps) => caps.features.expressionIndexes,
-    controls: [
-      { kind: 'text', name: 'where', label: 'WHERE', placeholder: 'deleted_at is null' },
-    ],
+    controls: [{ kind: 'text', name: 'where', label: 'WHERE', placeholder: 'deleted_at is null' }],
   }),
   propsSection<Index>({
     id: 'pg.index.options',
@@ -155,7 +153,13 @@ export const CONSTRAINT_SECTIONS: readonly PropertyPanelSection<Constraint>[] = 
     available: (caps) => hasConstraintKind(caps, 'check'),
     visibleFor: (constraint) => constraint.kind === 'check',
     controls: [
-      { kind: 'text', name: 'expression', label: 'CHECK', multiline: true, placeholder: 'total >= 0' },
+      {
+        kind: 'text',
+        name: 'expression',
+        label: 'CHECK',
+        multiline: true,
+        placeholder: 'total >= 0',
+      },
       { kind: 'boolean', name: 'noInherit', label: 'No inherit' },
     ],
   }),

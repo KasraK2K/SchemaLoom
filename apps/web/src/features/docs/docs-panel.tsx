@@ -24,7 +24,9 @@ export function DocsPanel({ projectId }: { readonly projectId: Id }) {
   const entity = only === undefined ? undefined : model.objects.entity[only];
   const field = selectedFieldId === null ? undefined : model.objects.field[selectedFieldId];
   if (selection.size > 1) {
-    return <p className="p-2 text-sm text-text-muted">{t.msg('inspector.noSelection', 'entity')}</p>;
+    return (
+      <p className="p-2 text-sm text-text-muted">{t.msg('inspector.noSelection', 'entity')}</p>
+    );
   }
   if (entity?.restricted === true || field?.restricted === true) {
     return <p className="p-2 text-sm text-text-subtle">restricted</p>;

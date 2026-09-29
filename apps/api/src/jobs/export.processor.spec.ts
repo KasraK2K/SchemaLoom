@@ -46,7 +46,9 @@ beforeAll(async () => {
 interface Harness {
   readonly processor: ExportProcessor;
   readonly updates: { where: { id: string }; data: Record<string, unknown> }[];
-  readonly put: ReturnType<typeof vi.fn<(key: string, body: Buffer, type: string) => Promise<void>>>;
+  readonly put: ReturnType<
+    typeof vi.fn<(key: string, body: Buffer, type: string) => Promise<void>>
+  >;
   readonly redactModel: ReturnType<typeof vi.fn>;
   readonly send: ReturnType<typeof vi.fn>;
 }
@@ -85,7 +87,9 @@ function harness(over: { put?: () => Promise<void>; atoms?: string[] } = {}): Ha
       }),
     skeleton: () => Promise.resolve({}),
   } as unknown as PermissionResolver;
-  const loader = { load: () => Promise.resolve(new RawSchemaModel(model)) } as unknown as SchemaLoader;
+  const loader = {
+    load: () => Promise.resolve(new RawSchemaModel(model)),
+  } as unknown as SchemaLoader;
 
   const engine = {
     id: 'postgresql',
@@ -103,7 +107,15 @@ function harness(over: { put?: () => Promise<void>; atoms?: string[] } = {}): Ha
   } as unknown as NotificationsService;
 
   return {
-    processor: new ExportProcessor(prisma, loader, visibility, resolver, registry, storage, notifications),
+    processor: new ExportProcessor(
+      prisma,
+      loader,
+      visibility,
+      resolver,
+      registry,
+      storage,
+      notifications,
+    ),
     updates,
     put,
     redactModel,

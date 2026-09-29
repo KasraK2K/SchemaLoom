@@ -64,7 +64,12 @@ describe('mid-drag link validation', () => {
   it('treats a handle with no field id as an endpoint with no columns', () => {
     const check = checkConnection(
       { engine: facet, model },
-      { source: ORDERS, target: CUSTOMERS, sourceHandle: 'node:source', targetHandle: 'node:target' },
+      {
+        source: ORDERS,
+        target: CUSTOMERS,
+        sourceHandle: 'node:source',
+        targetHandle: 'node:target',
+      },
     );
     // Incomplete, not illegal: §7 says the validator reports incompleteness, not the
     // drag checker, and a user may draw the edge before picking columns.
