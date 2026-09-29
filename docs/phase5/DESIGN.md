@@ -123,3 +123,9 @@ screen (dropped in phase4 §0), area-scoped export (Q29, still deferred).
 | Q3 | AI rate limits | 30/user/h, 300/org/h, fail closed. |
 | Q4 | New dependencies | `@anthropic-ai/sdk` and `pdfkit` in the api. TipTap is already in the web. |
 | Q5 | Doc drafting | a BullMQ job (doc 02 `doc_drafts.jobId`), one draft per target, a re-run replaces the pending one. |
+
+## 7. Later decisions (made by the user)
+
+| Date | Decision |
+|---|---|
+| 2026-09-29 | **Org admins see only the projects they are granted.** R13's all-access short-circuit is owner-only (doc 05 R13, amended). Admins keep org administration (members, groups, workspaces, roles). The permission cache version went 3 → 4 so no admin keeps a cached all-access map. |

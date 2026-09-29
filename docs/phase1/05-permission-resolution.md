@@ -767,6 +767,11 @@ not apply), with a before-image in the audit log.
 These are the rules the spec's one sentence — *"grants inherit downward; more specific grants
 override broader ones"* — does not fully determine. Each is followed by a worked example in §7.6.
 
+> **Amended 2026-09-29 (product decision): R13 applies to org OWNERS only.** An org admin
+> still manages members, groups, workspaces and custom roles, but sees only the projects,
+> areas and entities they are granted, like a member. Access-request fallbacks notify owners.
+> The original text below is kept for history; read "owner/admin" as "owner".
+>
 > **R13 — Org owner/admin short-circuit, and it cannot be escaped.**
 > If the subject is a user whose `OrgMember.role` is `owner` or `admin`, every resource in that
 > org resolves to all nine atoms, and grants are not read at all. A narrowing grant on an admin
@@ -1113,7 +1118,7 @@ docs    ent_inv ✓, ent_emp ✓, fld_inv_emp ✓, fld_emp_name ✓, fld_sal ✓
 | **E5b** | same but the entity `viewer` grant is on `user:ana` herself | atoms on `ent_emp` | `viewer` **plus `sharing:manage`** | R15 replaces (same principal), then R5/step 4b unions `sharing:manage` down from the project level. This is exactly what makes E12 work. |
 | **E6** | user:ana grant `project=editor`, `expiresAt = yesterday` | anything | nothing (`canOpenProject = false`) | R12.1 — expiry evaluated in SQL at resolve time |
 | **E7** | user:ana grant `project=manager`; ana removed from `org_acme` | anything | `EMPTY_MAP` | R12.2 — principal liveness; removal from the org is the deactivation mechanism |
-| **E8** | user:bob is org `admin`; grant `entity ent_emp=viewer` on bob | atoms on `ent_emp` | **all nine atoms** | R13 — short-circuit before grants are read; the grant is inert and the UI says so |
+| **E8** | user:bob is org `owner` (was `admin` before the 2026-09-29 amendment; an admin now gets exactly the grant, viewer); grant `entity ent_emp=viewer` on bob | atoms on `ent_emp` | **all nine atoms** | R13 — short-circuit before grants are read; the grant is inert and the UI says so |
 | **E9** | user:dana is org `guest`; grant `area ar_bill=manager` | atoms in Billing | manager **minus** `sharing:manage` | R9/R17 — and the grant write would have been rejected in the first place |
 | **E10** | an `AccessGrant` whose principal is a share link somehow carries `manager, canUseAi = true` (a bad migration, or a future feature) | atoms anywhere | `{ schema:view }` | R17 — the ceiling is applied last and is not data-driven. §7.12 additionally guarantees link creation only ever writes the built-in `viewer`, so the ceiling is defence in depth, not the primary control. |
 | **E11** | user:ana grant `area ar_bill=editor`; `ent_aud` is in no area | atoms on `ent_aud` | nothing | §7.11 — an entity in no area inherits directly from the project, which has no grant |

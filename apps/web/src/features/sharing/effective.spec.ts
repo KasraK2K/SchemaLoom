@@ -107,9 +107,15 @@ describe('effectiveAtomsAt', () => {
     expect(effectiveAtomsAt(ana, ancestorChain(RESOURCES, BILLING)).has('schema:edit')).toBe(true);
   });
 
-  it('gives an org admin every atom whatever their grants say (R13)', () => {
-    const boss = entry(ANA, [grant(ANA, BILLING, 'viewer')], { orgRole: 'admin' });
+  it('gives an org owner every atom whatever their grants say (R13)', () => {
+    const boss = entry(ANA, [grant(ANA, BILLING, 'viewer')], { orgRole: 'owner' });
     expect(effectiveAtomsAt(boss, ancestorChain(RESOURCES, BILLING))).toEqual(new Set(ALL_ATOMS));
+  });
+
+  it('gives an org admin only what their grants say — R13 is owner-only', () => {
+    const admin = entry(ANA, [grant(ANA, BILLING, 'viewer')], { orgRole: 'admin' });
+    expect(effectiveAtomsAt(admin, ancestorChain(RESOURCES, BILLING))).not.toEqual(new Set(ALL_ATOMS));
+    expect(effectiveAtomsAt(admin, ancestorChain(RESOURCES, BILLING)).has('schema:view')).toBe(true);
   });
 });
 

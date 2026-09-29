@@ -203,7 +203,7 @@ export function nextExpiryOf(grants: readonly LiveGrant[]): number | null {
 // The three map shapes.
 // ---------------------------------------------------------------------------------------
 
-/** R13 — the org owner/admin short-circuit. Grants are not read at all. */
+/** R13 — the org owner short-circuit. Grants are not read at all. Admins go through grants. */
 export function allAccessMap(
   projectId: string,
   skel: ProjectSkeleton,
@@ -245,7 +245,7 @@ export function emptyMap(projectId: string, subject: Subject): ProjectPermission
 export interface ComputeInput {
   readonly projectId: string;
   readonly subject: Subject;
-  /** null for a share-link subject. Never `owner` or `admin`: R13 short-circuits earlier. */
+  /** null for a share-link subject. Never `owner`: R13 short-circuits earlier. */
   readonly orgRole: OrgRole | null;
   readonly principals: readonly PrincipalKey[];
   readonly grants: readonly LiveGrant[];

@@ -26,7 +26,7 @@ import {
  * with the person's name and the two role names in it, and let them save anyway.
  */
 
-export const INERT_ORG_ADMIN_LABEL = 'no effect — org admin';
+export const INERT_ORG_ADMIN_LABEL = 'no effect — org owner';
 
 export interface ProposedGrant {
   readonly target: ResourceNode;
@@ -142,7 +142,7 @@ export function previewGrant(
     return [
       {
         code: 'org_admin_inert',
-        message: `${entry.principal.label} is an org ${entry.orgRole ?? 'admin'} and already has full access to every project. This grant will have no effect.`,
+        message: `${entry.principal.label} is an org owner and already has full access to every project. This grant will have no effect.`,
       },
     ];
   }

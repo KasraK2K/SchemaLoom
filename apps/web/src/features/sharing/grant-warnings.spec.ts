@@ -115,14 +115,14 @@ describe('previewGrant — the narrowing warning (§7.7)', () => {
 });
 
 describe('inert grants — R13', () => {
-  it('flags an org owner and an org admin', () => {
+  it('flags an org owner, not an org admin (admins see only granted projects)', () => {
     expect(isInertGrant(entry(ANA, [], { orgRole: 'owner' }))).toBe(true);
-    expect(isInertGrant(entry(ANA, [], { orgRole: 'admin' }))).toBe(true);
+    expect(isInertGrant(entry(ANA, [], { orgRole: 'admin' }))).toBe(false);
     expect(isInertGrant(entry(ANA, [], { orgRole: 'member' }))).toBe(false);
   });
 
   it('short-circuits the preview with a plain "no effect"', () => {
-    const warnings = previewGrant(entry(ANA, [], { orgRole: 'admin' }), RESOURCES, {
+    const warnings = previewGrant(entry(ANA, [], { orgRole: 'owner' }), RESOURCES, {
       target: BILLING,
       role: role('viewer'),
       canUseAi: false,

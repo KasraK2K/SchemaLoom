@@ -15,13 +15,14 @@ import type { ProjectPermissionMap, ProjectSkeleton, SkeletonEntity } from './ty
  * **The keys here are UNPREFIXED on purpose.** `REDIS_KEY_PREFIX` and the `cache:`
  * client namespace are applied by ioredis' own `keyPrefix` on the `REDIS_CACHE` client
  * (`redis.factory.ts`), so the key that actually lands in Redis is
- * `${REDIS_KEY_PREFIX}cache:perm:3:…`. Writing the prefix here too would double it.
+ * `${REDIS_KEY_PREFIX}cache:perm:4:…`. Writing the prefix here too would double it.
  *
  * The `3` is a schema version for the cached SHAPE. Bumping it invalidates every entry on
  * deploy, which is exactly what you want when the map changes — and this revision earned
- * it once already, when `entityOverrides` replaced `entityAtoms`.
+ * it once already, when `entityOverrides` replaced `entityAtoms`, and again (→ 4) when R13
+ * became owner-only, so no admin keeps a cached all-access map after the deploy.
  */
-export const PERM_CACHE_VERSION = 3;
+export const PERM_CACHE_VERSION = 4;
 
 /** §9.1 — the three generation counters, read from Postgres on every resolve (§9.2). */
 export interface Generations {

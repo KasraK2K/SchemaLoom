@@ -35,17 +35,17 @@ const MAP: ProjectPermissionMap = {
 };
 
 describe('§9.1 key shapes', () => {
-  it('spells the permission map key `perm:3:{project}:{subject}:{og}.{pg}.{sg}`', () => {
-    expect(permMapKey('prj_shop', 'u:ana', GEN)).toBe('perm:3:prj_shop:u:ana:4.11.2');
-    expect(permMapKey('prj_shop', 'sl:link1', GEN)).toBe('perm:3:prj_shop:sl:link1:4.11.2');
+  it('spells the permission map key `perm:4:{project}:{subject}:{og}.{pg}.{sg}`', () => {
+    expect(permMapKey('prj_shop', 'u:ana', GEN)).toBe('perm:4:prj_shop:u:ana:4.11.2');
+    expect(permMapKey('prj_shop', 'sl:link1', GEN)).toBe('perm:4:prj_shop:sl:link1:4.11.2');
   });
 
   it('keys the skeleton by the PROJECT generation alone — it is subject-independent', () => {
-    expect(skeletonKey('prj_shop', 11)).toBe('skel:3:prj_shop:11');
+    expect(skeletonKey('prj_shop', 11)).toBe('skel:4:prj_shop:11');
   });
 
   it('keys org membership by `{og}.{sg}`, with no project in it', () => {
-    expect(orgMemberKey('org_acme', 'ana', GEN)).toBe('orgmem:3:org_acme:ana:4.2');
+    expect(orgMemberKey('org_acme', 'ana', GEN)).toBe('orgmem:4:org_acme:ana:4.2');
   });
 
   it('carries NO REDIS_KEY_PREFIX: ioredis prepends `${prefix}cache:` itself', () => {

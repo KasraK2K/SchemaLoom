@@ -26,6 +26,7 @@ import {
   orgMemberKey,
   parseMap,
   parseSkeleton,
+  PERM_CACHE_VERSION,
   permMapKey,
   serializeMap,
   serializeSkeleton,
@@ -289,11 +290,12 @@ export class PermissionResolver {
   async invalidate(scope: AccessScope, opts: { notify?: boolean } = {}): Promise<void> {
     this.inFlight.clear();
     const patterns: string[] = [];
+    const v = String(PERM_CACHE_VERSION);
     if (scope.project !== undefined) {
-      patterns.push(`perm:3:${scope.project}:*`, `skel:3:${scope.project}:*`);
+      patterns.push(`perm:${v}:${scope.project}:*`, `skel:${v}:${scope.project}:*`);
     }
-    if (scope.org !== undefined) patterns.push(`orgmem:3:${scope.org}:*`);
-    if (scope.user !== undefined) patterns.push(`orgmem:3:*:${scope.user}:*`);
+    if (scope.org !== undefined) patterns.push(`orgmem:${v}:${scope.org}:*`);
+    if (scope.user !== undefined) patterns.push(`orgmem:${v}:*:${scope.user}:*`);
     for (const pattern of patterns) await this.scanDelete(pattern);
     if (opts.notify !== false) this.accessChanged.next(scope);
   }
@@ -334,10 +336,11 @@ export class PermissionResolver {
       const member = await this.orgMembership(subject.userId, row, opts.useCache);
       if (!member) return emptyMap(row.projectId, subject); // R12.2
       orgRole = member.role;
-      if (orgRole === 'owner' || orgRole === 'admin') {
+      if (orgRole === 'owner') {
         // Grants are not read AT ALL — the short-circuit is inescapable by construction,
-        // not by a later subtraction someone could forget. A narrowing grant on an admin
-        // is inert (E8).
+        // not by a later subtraction someone could forget. A narrowing grant on an owner
+        // is inert (E8). OWNER ONLY (product decision 2026-09-29): an org admin manages
+        // members, groups and roles, but sees only the projects they are granted.
         const map = allAccessMap(
           row.projectId,
           skel,
@@ -513,7 +516,7 @@ export class PermissionResolver {
   /**
    * §7.7 query 2 — expand groups to users, fold in the org roles, then apply the ceilings
    * LAST (R17): share links are intersected with `{schema:view}`, guests lose
-   * `sharing:manage` (R9), and org owners/admins are overwritten with all nine (R13).
+   * `sharing:manage` (R9), and org owners are overwritten with all nine (R13; admins are not).
    */
   private async expandPrincipals(
     organizationId: string,
@@ -545,7 +548,7 @@ export class PermissionResolver {
     const orgMembers = await this.prisma.orgMember.findMany({
       where: {
         organizationId,
-        OR: [{ role: { in: ['owner', 'admin'] } }, { userId: { in: [...new Set(userIds)] } }],
+        OR: [{ role: 'owner' }, { userId: { in: [...new Set(userIds)] } }],
       },
       select: { userId: true, role: true },
     });
@@ -570,7 +573,7 @@ export class PermissionResolver {
 
     for (const [userId, role] of roleByUser) {
       const key = principalKey('user', userId);
-      if (role === 'owner' || role === 'admin') {
+      if (role === 'owner') {
         out.set(key, ALL_ATOMS); // R13 — inescapable, and it overwrites rather than unions
       } else if (role === 'guest') {
         const atoms = out.get(key);

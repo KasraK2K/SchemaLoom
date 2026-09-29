@@ -13,7 +13,7 @@ import {
  *
  * Doc 05 §3.1 makes the five built-ins a strict chain, so "the highest role whose atoms
  * the caller holds" is well defined and reading downwards finds it in one pass. An org
- * owner or admin holds all nine atoms (R13) and therefore reads as `manager`.
+ * owner holds all nine atoms (R13) and therefore reads as `manager`.
  *
  * `null` is a real answer, not a gap: the freelancer of §7.9 has no project-level grant
  * at all — every atom they hold is area- or entity-scoped — so they can open the project

@@ -19,10 +19,10 @@ import {
 
 export const ALL_ATOMS: ReadonlySet<PermissionAtom> = new Set(PERMISSION_ATOMS);
 
-/** R13 — org owners and admins are unioned in with every atom, so nothing granted to
- *  them can change what they can do. */
+/** R13 — org OWNERS hold every atom, so nothing granted to them can change what they can
+ *  do. Admins do not: they see only the projects they are granted. */
 export function hasBlanketOrgAccess(entry: AccessEntry): boolean {
-  return entry.orgRole === 'owner' || entry.orgRole === 'admin';
+  return entry.orgRole === 'owner';
 }
 
 /**

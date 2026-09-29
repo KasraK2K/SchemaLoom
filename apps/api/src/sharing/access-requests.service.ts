@@ -249,11 +249,13 @@ export class AccessRequestsService {
       .filter((p) => p.kind === 'user')
       .map((p) => p.id);
     if (users.length === 0) {
-      const admins = await this.prisma.orgMember.findMany({
-        where: { organizationId, role: { in: ['owner', 'admin'] } },
+      // Owners only: an admin may not be able to see this project (R13 is owner-only), and
+      // telling them it exists would be the disclosure the resolver just prevented.
+      const owners = await this.prisma.orgMember.findMany({
+        where: { organizationId, role: 'owner' },
         select: { userId: true },
       });
-      users = admins.map((a) => a.userId);
+      users = owners.map((a) => a.userId);
     }
     return users.filter((id) => id !== requesterId).slice(0, MAX_RECIPIENTS);
   }

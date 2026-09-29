@@ -43,15 +43,15 @@ const rowProps = {
 };
 
 describe('<GrantRow>', () => {
-  it('renders an org-admin grant struck through and inert', () => {
+  it('renders an org-owner grant struck through and inert', () => {
     const html = renderToStaticMarkup(
       <GrantRow
         {...rowProps}
-        entry={entry(ANA, [grant(ANA, BILLING, 'viewer')], { orgRole: 'admin' })}
+        entry={entry(ANA, [grant(ANA, BILLING, 'viewer')], { orgRole: 'owner' })}
       />,
     );
     expect(html).toContain('line-through');
-    expect(html).toContain('no effect — org admin');
+    expect(html).toContain('no effect — org owner');
     expect(html).toContain('data-inert="true"');
     // and the role cannot be changed, because changing it would change nothing
     expect(html).toContain('disabled');

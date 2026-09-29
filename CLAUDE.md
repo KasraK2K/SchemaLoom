@@ -48,6 +48,9 @@ DEV database.
   `@RequireOrgRole`, `@Authenticated`, `@Public`). The boot sweep refuses to start
   otherwise, and each controller has a `*.routes.spec.ts` listing its routes.
 - **Invisible is 404, not 403.** Don't make a route an existence oracle.
+- **Only org owners see every project (R13, amended 2026-09-29).** Org admins manage the org
+  but see only projects they are granted, like members. Don't reintroduce `'admin'` into a
+  project-visibility check.
 - **All schema data leaves through `VisibilityFilter`**. `LiveIr` (unredacted) never
   leaves `src/snapshots`. All schema writes go through `SchemaWriter`; there is no second
   mutation path.

@@ -183,8 +183,8 @@ describe('§9.1 — the project row and all three generations in ONE round trip'
 });
 
 describe('R13 — the short-circuit is inescapable, and grants are not even read', () => {
-  it.each(['owner', 'admin'] as const)('%s gets all nine without one grants query', async (role) => {
-    const w = makeWorld({ orgRole: role, grants: [] });
+  it('owner gets all nine without one grants query', async () => {
+    const w = makeWorld({ orgRole: 'owner', grants: [] });
     const map = await w.resolver.resolveProject(ANA, PROJECT);
 
     expect(w.prisma.accessGrant.findMany).not.toHaveBeenCalled();
@@ -196,9 +196,9 @@ describe('R13 — the short-circuit is inescapable, and grants are not even read
     expect(map.areaAtoms.get('ar_bill')?.size).toBe(9);
   });
 
-  it('a narrowing grant on an admin never reaches the resolver at all', async () => {
+  it('a narrowing grant on an owner never reaches the resolver at all', async () => {
     const w = makeWorld({
-      orgRole: 'admin',
+      orgRole: 'owner',
       grants: [
         grantRow({
           id: 'g1',
@@ -214,6 +214,36 @@ describe('R13 — the short-circuit is inescapable, and grants are not even read
     const skel = await w.resolver.skeleton(PROJECT);
     expect(w.resolver.atomsAt(map, skel, { type: 'entity', id: 'ent_emp' }).size).toBe(9);
     expect(w.prisma.accessGrant.findMany).not.toHaveBeenCalled();
+  });
+
+  // Product decision 2026-09-29: R13 is OWNER-only. An admin manages the org but sees only
+  // the projects, areas and entities they are granted, exactly like a member.
+  it('an admin with no grant cannot open the project', async () => {
+    const w = makeWorld({ orgRole: 'admin', grants: [] });
+    const map = await w.resolver.resolveProject(ANA, PROJECT);
+    expect(w.resolver.canOpenProject(map)).toBe(false);
+  });
+
+  it("an admin's grant is resolved like anyone else's, narrowing included", async () => {
+    const w = makeWorld({
+      orgRole: 'admin',
+      grants: [
+        grantRow({
+          id: 'g1',
+          resourceType: 'entity',
+          resourceId: 'ent_emp',
+          principalType: 'user',
+          principalId: 'ana',
+          atoms: [...BUILT_IN_ROLES.viewer],
+        }),
+      ],
+    });
+    const map = await w.resolver.resolveProject(ANA, PROJECT);
+    const skel = await w.resolver.skeleton(PROJECT);
+    expect([...w.resolver.atomsAt(map, skel, { type: 'entity', id: 'ent_emp' })].sort()).toEqual(
+      [...BUILT_IN_ROLES.viewer].sort(),
+    );
+    expect(map.projectAtoms.size).toBe(0);
   });
 
   it('E7/R12.2: a user who is not an OrgMember gets EMPTY_MAP, grants unread', async () => {
@@ -479,21 +509,24 @@ describe('R23 / §7.7 — resolveResource, the inverse direction', () => {
     w.prisma.orgMember.findMany.mockResolvedValue([
       { userId: 'ana', role: 'member' },
       { userId: 'bob', role: 'guest' },
-      { userId: 'zoe', role: 'admin' },
+      { userId: 'zoe', role: 'owner' },
+      { userId: 'adam', role: 'admin' },
     ]);
     w.prisma.shareLink.findMany.mockResolvedValue([{ id: 'sl_1', expiresAt: null }]);
     return w;
   }
 
-  it('lists PEOPLE: groups expanded, org admins folded in, ceilings applied', async () => {
+  it('lists PEOPLE: groups expanded, org owners folded in, ceilings applied', async () => {
     const w = inverseWorld();
     const who = await w.resolver.resolveResource(PROJECT, ENT);
 
     // R15: ana's nearest level is the project, so she is a manager here.
     expect([...(who.get('user:ana') ?? [])].sort()).toEqual([...BUILT_IN_ROLES.manager].sort());
-    // A guest reached through a group keeps viewer; R13 makes the admin all nine.
+    // A guest reached through a group keeps viewer; R13 makes the OWNER all nine. An admin
+    // with no grant here is not in the list at all.
     expect([...(who.get('user:bob') ?? [])].sort()).toEqual([...BUILT_IN_ROLES.viewer].sort());
     expect(who.get('user:zoe')?.size).toBe(9);
+    expect(who.has('user:adam')).toBe(false);
     // R17: the link's grant says manager; the ceiling says otherwise.
     expect([...(who.get('share_link:sl_1') ?? [])]).toEqual(['schema:view']);
     // R12.2: a group member who is not an OrgMember of this org is not live.
@@ -531,7 +564,7 @@ describe('§9.3 — invalidate', () => {
     await w.resolver.invalidate({ project: PROJECT });
 
     expect(w.redis.scan).toHaveBeenCalled();
-    expect(w.redis.scan.mock.calls[0]?.[2]).toBe(`sl:cache:perm:3:${PROJECT}:*`);
+    expect(w.redis.scan.mock.calls[0]?.[2]).toBe(`sl:cache:perm:4:${PROJECT}:*`);
     for (const key of w.unlinked) expect(key.startsWith('sl:cache:')).toBe(false);
   });
 
@@ -539,8 +572,8 @@ describe('§9.3 — invalidate', () => {
     const w = makeWorld({ orgRole: 'member' });
     await w.resolver.invalidate({ org: ORG, user: 'ana' });
     const patterns = w.redis.scan.mock.calls.map((c) => c[2]);
-    expect(patterns).toContain(`sl:cache:orgmem:3:${ORG}:*`);
-    expect(patterns).toContain('sl:cache:orgmem:3:*:ana:*');
+    expect(patterns).toContain(`sl:cache:orgmem:4:${ORG}:*`);
+    expect(patterns).toContain('sl:cache:orgmem:4:*:ana:*');
   });
 
   it('survives a Redis failure: eviction is memory, not correctness', async () => {
