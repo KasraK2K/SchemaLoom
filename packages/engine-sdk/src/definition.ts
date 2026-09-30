@@ -3,6 +3,7 @@ import type { EngineCapabilities } from './capabilities.js';
 import type { DiagnosticMessages, EngineId } from './diagnostics.js';
 import type { Exporter } from './exporter.js';
 import type { Importer } from './importer.js';
+import type { Introspector } from './introspector.js';
 import type { AnnotatedDiff, MigrationGenerator } from './migration.js';
 import type { QueryValidator } from './query.js';
 import type { IrObject, IrObjectRef, SchemaDiff, SchemaModel } from './ir.js';
@@ -68,6 +69,9 @@ export interface EngineDefinition extends EngineStaticFacet {
   readonly validator?: unknown;
   /** step 21 — `Importer` (§9). Narrowed from `unknown` when the contract landed. */
   readonly importer?: Importer;
+  /** Phase 6 §1 — reads a live database into import source. Presence must equal
+   *  `canIntrospect(capabilities)` (non-empty `connectionFields`). */
+  readonly introspector?: Introspector;
   /** step 20 — `Exporter` (§10). Narrowed from `unknown` when the contract landed. */
   readonly exporter?: Exporter;
   /** §11.1 — adds risk semantics to a core-produced diff (doc 04 §7.7). Pure and synchronous.

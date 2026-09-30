@@ -171,12 +171,30 @@ export interface EngineCapabilities {
   readonly queryLanguage: QueryLanguageDescriptor;
   readonly importFormats: readonly ImportFormatDescriptor[];
   readonly exportFormats: readonly ExportFormatDescriptor[];
+  /** Phase 6 §1 — the form for reading a live database. Empty when the engine has no
+   *  `introspector`; `capabilities/services-match-features` checks the two agree. Here and not
+   *  on the introspector because the browser only ever sees capabilities. */
+  readonly connectionFields: readonly ConnectionField[];
+}
+
+/** Phase 6 §1 — one input of the "From a database" form. `secret` renders as a password
+ *  input and is never echoed back by the api. */
+export interface ConnectionField {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: 'text' | 'number' | 'secret' | 'select' | 'list';
+  readonly required: boolean;
+  /** for `select` */
+  readonly options?: readonly string[];
+  readonly default?: string | number;
 }
 
 export interface CapabilitiesInput extends Omit<
   EngineCapabilities,
-  'features' | 'typeCatalogSupportsArrays'
+  'features' | 'typeCatalogSupportsArrays' | 'connectionFields'
 > {
+  /** defaults to none: an engine without an introspector declares nothing */
+  readonly connectionFields?: readonly ConnectionField[];
   /** DEVIATION from doc 03 §4.1, which omits it: `CapabilitiesContradictionError` is specified
    *  to carry `engineId`, and `defineCapabilities` sees only this object. */
   readonly engineId: string;
@@ -211,3 +229,4 @@ export const anySchemalessEntity = (c: EngineCapabilities): boolean =>
   c.entityKinds.some((k) => !k.fieldsAreAuthoritative);
 export const canImport = (c: EngineCapabilities): boolean => c.importFormats.length > 0;
 export const canExport = (c: EngineCapabilities): boolean => c.exportFormats.length > 0;
+export const canIntrospect = (c: EngineCapabilities): boolean => c.connectionFields.length > 0;

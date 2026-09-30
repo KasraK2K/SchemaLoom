@@ -30,7 +30,7 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
   // Destructured, not spread wholesale: `engineId` and `typeDescriptors` are constructor
   // arguments, not capabilities, and `typeDescriptors` would put the whole type catalog into
   // every GET /engines payload.
-  const { engineId, typeDescriptors, features: declared, ...rest } = input;
+  const { engineId, typeDescriptors, features: declared, connectionFields = [], ...rest } = input;
 
   const features = Object.fromEntries(
     ENGINE_FEATURES.map((f) => [f, declared[f] ?? false]),
@@ -39,6 +39,7 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
   const caps: EngineCapabilities = {
     ...rest,
     features,
+    connectionFields,
     typeCatalogSupportsArrays: typeDescriptors.some((d) => d.supportsArray),
   };
 

@@ -90,11 +90,13 @@ export {
   anyTypeSupportsArray,
   canExport,
   canImport,
+  canIntrospect,
   hasConstraintKind,
   hasCustomTypeKind,
   hasEntityKind,
   supportsNamespaces,
   type CapabilitiesInput,
+  type ConnectionField,
   type ConstraintKindDescriptor,
   type CustomTypeKindDescriptor,
   type EngineCapabilities,
@@ -150,6 +152,16 @@ export {
   type ImportStatementStatus,
   type Importer,
 } from './importer.js';
+
+// --- introspector (Phase 6 §1) ---
+export {
+  IntrospectError,
+  type ConnectionValues,
+  type IntrospectErrorCode,
+  type IntrospectRequest,
+  type IntrospectResult,
+  type Introspector,
+} from './introspector.js';
 
 // --- exporter (§10) ---
 export {

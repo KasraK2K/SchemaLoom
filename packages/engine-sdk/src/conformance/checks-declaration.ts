@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { ENGINE_FEATURES } from '../capabilities.js';
+import { ENGINE_FEATURES, canIntrospect } from '../capabilities.js';
 import { defineCapabilities } from '../define-capabilities.js';
 import { FALLBACK_TERMINOLOGY, resolveTerm, type TermSubject } from '../terminology.js';
 import type { ConformanceCheck } from './check.js';
@@ -67,6 +67,7 @@ export const DECLARATION_CHECKS: readonly ConformanceCheck[] = [
         queryLanguage: caps.queryLanguage,
         importFormats: caps.importFormats,
         exportFormats: caps.exportFormats,
+        connectionFields: caps.connectionFields,
       });
       expect(rebuilt).toEqual(caps);
     },
@@ -80,6 +81,9 @@ export const DECLARATION_CHECKS: readonly ConformanceCheck[] = [
       expect(engine.capabilities.features.queryValidation).toBe(
         engine.queryValidator !== undefined,
       );
+      expect(canIntrospect(engine.capabilities)).toBe(engine.introspector !== undefined);
+      const ids = engine.capabilities.connectionFields.map((f) => f.id);
+      expect(new Set(ids).size).toBe(ids.length);
       // `aiProfile` deliberately has NO feature atom — its absence just hides the AI panel —
       // so there is nothing to agree with and nothing is asserted about it here.
     },
