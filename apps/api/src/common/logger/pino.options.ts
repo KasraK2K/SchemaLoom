@@ -17,6 +17,8 @@ const REDACT = [
   'req.body.token',
   'req.body.refreshToken',
   'req.body.totp',
+  // Phase 6 §3.1 — database credentials for introspection
+  'req.body.connection',
 ];
 
 /** Honour an upstream request id when there is one; echo whatever we settle on. */

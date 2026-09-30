@@ -555,6 +555,41 @@ describe('SnapshotsService.migration (Phase 5 §3)', () => {
   });
 });
 
+describe('SnapshotsService.drift (Phase 6 §6)', () => {
+  const OPTIONS = { allowDestructive: false, transactional: false };
+
+  it('matches the same table by logical key and plans the database toward the design', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a')] }), { realEngine: true });
+
+    const { diff, migration } = await h.service.drift(
+      CTX,
+      'CREATE TABLE public.ent_a (); CREATE TABLE public.legacy (id integer);',
+      1_000_000,
+      OPTIONS,
+    );
+
+    // ent_a is on both sides, so only the database's extra table differs.
+    expect(diff.entries.map((e) => [e.change, e.objectType])).toEqual([
+      ['removed', 'entity'],
+      ['removed', 'field'],
+    ]);
+    expect(migration.steps).toMatchObject([
+      { text: 'DROP TABLE public.legacy', destructive: true, commentedOut: true },
+    ]);
+    expect(h.writeCalls()).toEqual([]);
+  });
+
+  it('refuses a partial view (R21′)', async () => {
+    const h = harness(storeOf({ entity: [entityRow('ent_a')] }), {
+      realEngine: true,
+      context: { totalEntityCount: 2 },
+    });
+    await expect(h.service.drift(CTX, 'CREATE TABLE t ();', 1_000_000, OPTIONS)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+});
+
 describe('SnapshotsService.remove', () => {
   it('deletes a manual snapshot', async () => {
     const h = harness(storeOf());

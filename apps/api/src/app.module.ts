@@ -8,6 +8,7 @@ import { AuthModule, JwtAuthGuard } from './auth';
 import { CommentsModule } from './comments';
 import { DocsModule } from './docs';
 import { EnginesModule } from './engines';
+import { IntrospectModule } from './introspect';
 import { JobsModule } from './jobs';
 import { NotificationsModule } from './notifications';
 import { OrganizationsModule } from './organizations';
@@ -76,6 +77,7 @@ import { RedisModule } from './redis/redis.module';
     DocsModule,
     RealtimeModule,
     JobsModule,
+    IntrospectModule,
     HealthModule,
   ],
   providers: [

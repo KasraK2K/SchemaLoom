@@ -32,6 +32,17 @@ WORKDIR /repo/apps/api
 CMD ["pnpm", "run", "db:deploy"]
 
 FROM base AS runtime
+# Phase 6 §2 — pg_dump for "read a database". From PGDG, not Debian: pg_dump refuses a server
+# newer than itself and bookworm ships 15. Bump PG_CLIENT_MAJOR when PostgreSQL releases.
+ARG PG_CLIENT_MAJOR=18
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+  && install -d /usr/share/postgresql-common/pgdg \
+  && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+  && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+    > /etc/apt/sources.list.d/pgdg.list \
+  && apt-get update && apt-get install -y --no-install-recommends postgresql-client-${PG_CLIENT_MAJOR} \
+  && apt-get purge -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./

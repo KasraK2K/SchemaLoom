@@ -178,7 +178,7 @@ export class SnapshotsController {
  * (§10.4: N locators cost one `resolveProject` and one `skeleton`), so this is a read of
  * work already done, never a second resolve.
  */
-function snapshotContext(req: Request, projectId: string): SnapshotContext {
+export function snapshotContext(req: Request, projectId: string): SnapshotContext {
   const access = getAccessContext(req);
   const subject = getSubject(req);
   if (

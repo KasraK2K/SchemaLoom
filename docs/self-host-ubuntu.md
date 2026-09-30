@@ -109,6 +109,9 @@ Then edit it:
   `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` for Google sign-in (callback
   `https://app.example.com/api/auth/google/callback`).
 - **`COOKIE_DOMAIN`:** leave it unset. With one host, every cookie stays host-only.
+- **Reading databases on your own network:** "Read a database" refuses private addresses
+  (`10.x`, `192.168.x`, `localhost`, …) by default. If the databases you want to import live on
+  your network, set `INTROSPECT_ALLOW_PRIVATE_HOSTS=true`. Every read is written to the audit log.
 
 ## 4. Start the database, Redis and MinIO
 
@@ -335,6 +338,8 @@ Restore into a freshly created database (step 5):
 | Every visitor hits the share-link rate limit together | `TRUST_PROXY=1` is missing                                                                 |
 | Export downloads fail                                 | `S3_PUBLIC_URL` must be `https://files.example.com`, and the Caddy block for it must exist |
 | AI panel says it's not configured                     | `ANTHROPIC_API_KEY` is unset; that's expected without it                                   |
+| "Read a database" says the host is private            | `INTROSPECT_ALLOW_PRIVATE_HOSTS=true` for a database on your own network                   |
+| "Read a database" says the server is newer            | rebuild the api image with a higher `--build-arg PG_CLIENT_MAJOR=`                         |
 | Web logs "API unreachable"                            | `API_INTERNAL_URL` and `docker compose ps api`                                             |
 
 Audit-log rows older than 24 months are deleted nightly (doc 00 Q10). If a customer needs

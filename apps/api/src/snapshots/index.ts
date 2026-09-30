@@ -6,7 +6,7 @@
  * from a partial view rests on nothing outside this folder being able to name it.
  */
 export { SnapshotsModule } from './snapshots.module';
-export { SnapshotsController } from './snapshots.controller';
+export { SnapshotsController, snapshotContext } from './snapshots.controller';
 export {
   SnapshotsService,
   SYNC_IMPORT_MAX_BYTES,
@@ -14,6 +14,8 @@ export {
   type HistoryDiff,
   type ImportPreview,
   type LiveHistoryDiff,
+  type MigrationRequest,
+  type MigrationView,
   type ImportOutcome,
   type SnapshotContext,
   type SnapshotSummary,

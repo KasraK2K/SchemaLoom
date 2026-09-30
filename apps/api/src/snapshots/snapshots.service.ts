@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   renderDiagnostic,
+  type AnnotatedDiff,
   renderMigrationScript,
   type DiagnosticParam,
   type EngineDefinition,
@@ -404,8 +405,7 @@ export class SnapshotsService {
 
     const engine = this.registry.tryGet(project.engineId);
     const annotate = engine?.annotateDiff;
-    const generator = engine?.migrationGenerator;
-    if (engine === undefined || annotate === undefined || generator === undefined) {
+    if (engine === undefined || annotate === undefined || engine.migrationGenerator === undefined) {
       throw new UnprocessableEntityException({ code: 'engine.migrations_unavailable' });
     }
 
@@ -425,15 +425,83 @@ export class SnapshotsService {
       before,
       after,
     );
+    return this.plan(engine, ctx.projectId, project.live.engineVersion, diff, before, after, request);
+  }
+
+  /**
+   * Phase 6 §6 — drift: the design against a live database's schema (`source`, from the
+   * engine's introspector). The full view is required, as for migrations: a partial view would
+   * leak hidden tables through the diff. Nothing is written.
+   *
+   * The database side is the importer's model with every object matched by `logicalKey`
+   * carrying its design id (`mergeImport`), so the same table is one object on both sides.
+   * The migration takes the database to the design.
+   */
+  async drift(
+    ctx: SnapshotContext,
+    source: string,
+    maxBytes: number,
+    request: MigrationRequest,
+  ): Promise<{ readonly diff: HistoryDiff; readonly migration: MigrationView }> {
+    const { project, model, engine } = await this.parseSource(ctx, source, maxBytes);
+    const annotate = engine.annotateDiff;
+    if (annotate === undefined || engine.migrationGenerator === undefined) {
+      throw new UnprocessableEntityException({ code: 'engine.migrations_unavailable' });
+    }
+    const database = mergeImport(project.live, model).imported;
+    const design = this.filter.redactWith(
+      project.raw,
+      ctx.subject,
+      ctx.projectId,
+      ctx.map,
+      ctx.skel,
+    );
+    const diff = annotate(
+      diffModels(database, design, {
+        ignoreCosmetic: true,
+        from: { kind: 'import', label: 'Database' },
+        to: { kind: 'live' },
+      }),
+      database,
+      design,
+    );
+    return {
+      diff: withCounts(diff),
+      migration: await this.plan(
+        engine,
+        ctx.projectId,
+        project.live.engineVersion,
+        diff,
+        database,
+        design,
+        request,
+      ),
+    };
+  }
+
+  /** The engine's plan for `diff`, each reason rendered for the caller, plus the script. */
+  private async plan(
+    engine: EngineDefinition,
+    projectId: string,
+    serverVersion: string | null,
+    diff: AnnotatedDiff,
+    before: SchemaModel,
+    after: SchemaModel,
+    request: MigrationRequest,
+  ): Promise<MigrationView> {
+    const generator = engine.migrationGenerator;
+    if (generator === undefined) {
+      throw new UnprocessableEntityException({ code: 'engine.migrations_unavailable' });
+    }
     const plan = await generator.generate({
       diff,
       before,
       after,
       options: { ...request, engineOptions: {} },
-      context: { projectId: ctx.projectId, serverVersion: project.live.engineVersion },
+      context: { projectId, serverVersion },
     });
 
-    const render = reasonRenderer(engine, ctx.projectId, [after, before]);
+    const render = reasonRenderer(engine, projectId, [after, before]);
     const language = engine.capabilities.queryLanguage;
     return {
       steps: plan.steps.map((step) => ({
@@ -574,8 +642,19 @@ export class SnapshotsService {
   }
 
   /** Phase 4 §2.1 — the same parse and merge as an import, and nothing written. */
-  async preview(ctx: SnapshotContext, source: string): Promise<ImportPreview> {
-    const { project, model } = await this.parseSource(ctx, source, SYNC_IMPORT_MAX_BYTES);
+  /** R21′ on its own — Phase 6 checks it BEFORE connecting anywhere, so a caller with a
+   *  partial view can't use the api to reach a database at all. */
+  assertFullView(ctx: SnapshotContext): void {
+    assertFullProjectView(this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel));
+  }
+
+  /** `maxBytes` is larger for introspected source (Phase 6 §4), which never crossed HTTP. */
+  async preview(
+    ctx: SnapshotContext,
+    source: string,
+    maxBytes: number = SYNC_IMPORT_MAX_BYTES,
+  ): Promise<ImportPreview> {
+    const { project, model } = await this.parseSource(ctx, source, maxBytes);
     const merged = mergeImport(project.live, model);
     return {
       creates: Object.values(merged.imported.objects.entity)
@@ -592,7 +671,12 @@ export class SnapshotsService {
     ctx: SnapshotContext,
     source: string,
     maxBytes: number,
-  ): Promise<{ project: LiveProject; model: SchemaModel; report: ImportReport }> {
+  ): Promise<{
+    project: LiveProject;
+    model: SchemaModel;
+    report: ImportReport;
+    engine: EngineDefinition;
+  }> {
     const visibility = this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel);
     assertFullProjectView(visibility);
 
@@ -620,7 +704,7 @@ export class SnapshotsService {
       },
       { projectId: ctx.projectId, serverVersion: project.live.engineVersion, newId: randomUUID },
     );
-    return { project, model, report };
+    return { project, model, report, engine };
   }
 
   /** Q4 — the snapshot written inside the batch it precedes (see `auto-snapshot.ts`). */

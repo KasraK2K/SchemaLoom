@@ -93,6 +93,18 @@ export const envSchema = z
       (v) => (v === '' ? undefined : v),
       z.string().default('claude-sonnet-5-5'),
     ),
+
+    // Phase 6 §3: reading a live database. Private hosts are refused unless a self-hosted
+    // install opts in. PG_DUMP_PATH is read by the PostgreSQL engine (PATH when unset).
+    INTROSPECTION_ENABLED: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.stringbool().default(true),
+    ),
+    INTROSPECT_ALLOW_PRIVATE_HOSTS: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.stringbool().default(false),
+    ),
+    PG_DUMP_PATH: optionalStr,
   })
   .superRefine((env, ctx) => {
     // §11.4: a mail provider is required. Boot fails if neither Mailgun nor SMTP is set.
