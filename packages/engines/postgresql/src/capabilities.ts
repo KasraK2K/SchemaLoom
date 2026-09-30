@@ -194,4 +194,21 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
       supportsDrops: true,
     },
   ],
+  // Phase 6 §2 — the "From a database" form; `introspector.ts` reads these ids.
+  connectionFields: [
+    { id: 'host', label: 'Host', kind: 'text', required: true },
+    { id: 'port', label: 'Port', kind: 'number', required: true, default: 5432 },
+    { id: 'database', label: 'Database', kind: 'text', required: true },
+    { id: 'user', label: 'User', kind: 'text', required: true },
+    { id: 'password', label: 'Password', kind: 'secret', required: false },
+    {
+      id: 'sslmode',
+      label: 'SSL mode',
+      kind: 'select',
+      required: true,
+      options: ['require', 'verify-full', 'verify-ca', 'prefer', 'disable'],
+      default: 'require',
+    },
+    { id: 'schemas', label: 'Schemas (empty = all)', kind: 'list', required: false },
+  ],
 });
