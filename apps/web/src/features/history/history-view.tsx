@@ -12,7 +12,16 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useMemo, useState, type ReactNode } from 'react';
+import { useEngine } from '@/engines';
 import { irQueryOptions } from '@/features/canvas/ir-query';
+import { EngineGate } from '@/features/project/engine-gate';
+import {
+  ConnectionForm,
+  connectionPayload,
+  hasConnectionForm,
+  initialDraft,
+  type ConnectionDraft,
+} from '@/features/projects/connection-form';
 import { relativeTime } from '@/features/projects/relative-time';
 import { ApiError } from '@/lib/api-client';
 import {
@@ -30,7 +39,10 @@ import {
   type DiffEntry,
   type DiffProperty,
   type HistoryDiff,
+  checkDrift,
+  type DriftView,
   type MigrationStep,
+  type MigrationView,
   type Snapshot,
 } from './history-api';
 
@@ -80,6 +92,9 @@ export function HistoryView({
         className="flex w-80 shrink-0 flex-col gap-3 overflow-auto border-r border-border p-3"
       >
         <TakeSnapshot projectId={projectId} />
+        <EngineGate projectId={projectId} fallback={null}>
+          <DriftCheck projectId={projectId} />
+        </EngineGate>
         {list.isPending ? (
           <p className="text-xs text-text-subtle">Loading…</p>
         ) : snapshots.length === 0 ? (
@@ -132,6 +147,125 @@ export function HistoryView({
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * Phase 6 §6 — "Compare with a database": read a live database's schema on the server and
+ * show how it differs from the design, plus the SQL that brings the database in line.
+ * Nothing is written, to the project or to the database. Needs the full view, like
+ * migrations; the API says so otherwise.
+ */
+function DriftCheck({ projectId }: { readonly projectId: string }) {
+  const fields = useEngine().capabilities.connectionFields;
+  const ir = useQuery(irQueryOptions(projectId));
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<ConnectionDraft>(() => initialDraft(fields));
+  const [allowDestructive, setAllowDestructive] = useState(false);
+  const [result, setResult] = useState<DriftView | null>(null);
+  const compare = useMutation({
+    mutationFn: () => checkDrift(projectId, connectionPayload(fields, draft), allowDestructive),
+    onSuccess: setResult,
+  });
+
+  if (!hasConnectionForm(fields)) return null;
+  const entityName = (id: string): string | null => ir.data?.objects.entity[id]?.name ?? null;
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        Compare with a database
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (compare.isPending) return;
+          setOpen(next);
+          if (!next) {
+            setResult(null);
+            setDraft(initialDraft(fields));
+            compare.reset();
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-auto">
+          <DialogTitle>Compare with a database</DialogTitle>
+          <DialogDescription>
+            {result === null
+              ? 'Reads the database’s schema and shows how it differs from this design. Nothing is written.'
+              : `Database (server ${result.serverVersion}) → this design. The SQL below brings the database in line with the design.`}
+          </DialogDescription>
+          {result === null ? (
+            <form
+              className="mt-4 flex flex-col gap-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                compare.mutate();
+              }}
+            >
+              <ConnectionForm
+                fields={fields}
+                draft={draft}
+                onChange={setDraft}
+                disabled={compare.isPending}
+              />
+              <label className="flex items-center gap-1 text-xs text-text-muted">
+                <input
+                  type="checkbox"
+                  checked={allowDestructive}
+                  onChange={(e) => {
+                    setAllowDestructive(e.target.checked);
+                  }}
+                />
+                Include destructive steps in the SQL
+              </label>
+              {compare.error !== null && (
+                <p role="alert" className="text-xs text-danger-text">
+                  {errorText(compare.error)}
+                </p>
+              )}
+              <DialogFooter>
+                <Button type="submit" variant="primary" size="sm" disabled={compare.isPending}>
+                  {compare.isPending ? 'Reading…' : 'Compare'}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            <div className="mt-4 flex flex-col gap-4">
+              <DiffBody
+                diff={result.diff}
+                hideCosmetic
+                entityName={entityName}
+                canvasHref={() => null}
+              />
+              <h2 className="text-sm font-medium text-text">SQL for the database</h2>
+              <PlanBody
+                plan={result.migration}
+                fileName="drift"
+                allowDestructive={allowDestructive}
+              />
+              <DialogFooter>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setResult(null);
+                  }}
+                >
+                  Compare again
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -340,7 +474,6 @@ function MigrationPane({
   readonly to: string | null;
 }) {
   const [allowDestructive, setAllowDestructive] = useState(false);
-  const [copied, setCopied] = useState(false);
   const plan = useQuery(migrationQueryOptions(projectId, from.id, to, allowDestructive));
 
   if (plan.error !== null) {
@@ -356,12 +489,37 @@ function MigrationPane({
   if (plan.data === undefined)
     return <p className="text-xs text-text-subtle">Generating the migration…</p>;
 
-  const { steps, summary, unsupported, script, fileExtension } = plan.data;
+  return (
+    <PlanBody
+      plan={plan.data}
+      fileName={`migration-${from.name}`}
+      allowDestructive={allowDestructive}
+      onAllowDestructive={setAllowDestructive}
+    />
+  );
+}
+
+/** A migration plan: counts, copy/download, manual steps, then each step. Shared by the
+ *  snapshot migration and the drift check (Phase 6 §6). Without `onAllowDestructive` the
+ *  toggle is hidden: the drift check chooses before it reads the database. */
+function PlanBody({
+  plan,
+  fileName,
+  allowDestructive,
+  onAllowDestructive,
+}: {
+  readonly plan: MigrationView;
+  readonly fileName: string;
+  readonly allowDestructive: boolean;
+  readonly onAllowDestructive?: (on: boolean) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const { steps, summary, unsupported, script, fileExtension } = plan;
   const download = () => {
     const url = URL.createObjectURL(new Blob([script], { type: 'text/plain' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `migration-${from.name.replace(/[^\w.-]+/g, '_')}.${fileExtension}`;
+    a.download = `${fileName.replace(/[^\w.-]+/g, '_')}.${fileExtension}`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -373,16 +531,18 @@ function MigrationPane({
         <Chip warn={summary.destructive > 0}>{summary.destructive} destructive</Chip>
         <Chip warn={summary.lossy > 0}>{summary.lossy} lossy</Chip>
         <Chip>{summary.rewrites} locking</Chip>
-        <label className="ml-auto flex items-center gap-1 text-text-muted">
-          <input
-            type="checkbox"
-            checked={allowDestructive}
-            onChange={(e) => {
-              setAllowDestructive(e.target.checked);
-            }}
-          />
-          Include destructive steps
-        </label>
+        {onAllowDestructive !== undefined && (
+          <label className="ml-auto flex items-center gap-1 text-text-muted">
+            <input
+              type="checkbox"
+              checked={allowDestructive}
+              onChange={(e) => {
+                onAllowDestructive(e.target.checked);
+              }}
+            />
+            Include destructive steps
+          </label>
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -402,7 +562,7 @@ function MigrationPane({
       {!allowDestructive && summary.destructive > 0 && (
         <p className="text-xs text-text-muted">
           Destructive steps are commented out in the script. Tick “Include destructive steps” to run
-          them.
+          them{onAllowDestructive === undefined ? ' (then compare again)' : ''}.
         </p>
       )}
       {unsupported.length > 0 && (

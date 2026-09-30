@@ -1,9 +1,15 @@
 'use client';
 
-import { Button, FilePlus2, Upload } from '@schemaloom/ui';
+import { Button, Database, FilePlus2, Upload } from '@schemaloom/ui';
 import { useState } from 'react';
 import { z } from 'zod';
 import { ApiError, apiFetch } from '@/lib/api-client';
+import {
+  ConnectionForm,
+  connectionPayload,
+  initialDraft,
+  type ConnectionDraft,
+} from './connection-form';
 import type { EngineOption, ProjectSummary, WorkspaceSummary } from './projects-api';
 
 const CreatedSchema = z.object({ id: z.string() });
@@ -58,14 +64,57 @@ export async function importInto(
   const { id } = CreatedSchema.parse(
     await apiFetch<unknown>(`${base}/jobs${query}`, { method: 'POST', text: source }),
   );
+  return pollImportJob(projectId, id);
+}
+
+/** Polls the import job until BullMQ reports it done. */
+async function pollImportJob(projectId: string, id: string): Promise<Imported> {
+  const path = `/projects/${encodeURIComponent(projectId)}/import/jobs/${encodeURIComponent(id)}`;
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-    const job = JobSchema.parse(await apiFetch<unknown>(`${base}/jobs/${encodeURIComponent(id)}`));
+    const job = JobSchema.parse(await apiFetch<unknown>(path));
     if (job.state === 'completed') return ImportedSchema.parse(job.result);
     if (job.state === 'failed') {
       throw new ApiError(422, 'import_failed', job.error ?? 'The import failed.');
     }
   }
+}
+
+const IntrospectedSchema = z.object({
+  preview: z.lazy(() => PreviewSchema),
+  sourceId: z.string(),
+  serverVersion: z.string(),
+});
+export type Introspected = z.infer<typeof IntrospectedSchema>;
+
+/**
+ * Phase 6 §4 — read a live database and preview importing it. The dump stays on the server
+ * under `sourceId`; `importIntrospected` then queues the ordinary import job with it.
+ */
+export async function introspectPreview(
+  projectId: string,
+  connection: Record<string, unknown>,
+): Promise<Introspected> {
+  return IntrospectedSchema.parse(
+    await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/introspect/preview`, {
+      method: 'POST',
+      body: { connection },
+    }),
+  );
+}
+
+export async function importIntrospected(
+  projectId: string,
+  sourceId: string,
+  renames: readonly ConfirmedRename[] = [],
+): Promise<Imported> {
+  const { id } = CreatedSchema.parse(
+    await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/introspect/apply`, {
+      method: 'POST',
+      body: { sourceId, renames },
+    }),
+  );
+  return pollImportJob(projectId, id);
 }
 
 /** Phase 4 §2.1 — a rename the user confirmed in the import dialog. */
@@ -134,6 +183,13 @@ const STARTING_POINTS = [
     body: 'Paste a dump or a migration file and start from the schema you already run.',
     action: 'Import',
   },
+  {
+    mode: 'database',
+    icon: Database,
+    title: 'Read a database',
+    body: 'Connect to a running database and import its schema. Only the schema is read.',
+    action: 'Connect',
+  },
 ] as const;
 
 type Mode = (typeof STARTING_POINTS)[number]['mode'];
@@ -174,6 +230,7 @@ export function NoProjects({
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? '');
   const [workspaceName, setWorkspaceName] = useState('');
   const [source, setSource] = useState('');
+  const [draft, setDraft] = useState<ConnectionDraft>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -186,7 +243,13 @@ export function NoProjects({
   const engine = engines.find((candidate) => candidate.id === engineId);
   const importFormat = engine?.importFormats[0];
   const canImport = engines.some((candidate) => candidate.importFormats.length > 0);
-  const intoExisting = mode === 'import' && target !== NEW_PROJECT;
+  const canRead = engines.some((candidate) => candidate.connectionFields.length > 0);
+  const importing = mode === 'import' || mode === 'database';
+  const intoExisting = importing && target !== NEW_PROJECT;
+  /** Engines each mode can use: import needs a format, database needs a connection form. */
+  const usable = (candidate: EngineOption, m: Mode = mode ?? 'blank') =>
+    m === 'blank' ||
+    (m === 'import' ? candidate.importFormats.length > 0 : candidate.connectionFields.length > 0);
 
   if (skipped !== null) {
     return (
@@ -239,12 +302,19 @@ export function NoProjects({
               variant="outline"
               size="sm"
               className="mt-auto self-start"
-              disabled={engines.length === 0 || (point.mode === 'import' && !canImport)}
+              disabled={
+                engines.length === 0 ||
+                (point.mode === 'import' && !canImport) ||
+                (point.mode === 'database' && !canRead)
+              }
               onClick={() => {
                 setMode(point.mode);
-                if (point.mode === 'import' && importFormat === undefined) {
-                  setEngineId(engines.find((c) => c.importFormats.length > 0)?.id ?? engineId);
-                }
+                const next =
+                  engine !== undefined && usable(engine, point.mode)
+                    ? engine
+                    : engines.find((c) => usable(c, point.mode));
+                if (next !== undefined) setEngineId(next.id);
+                if (point.mode === 'database') setDraft(initialDraft(next?.connectionFields ?? []));
               }}
             >
               {point.action}
@@ -285,8 +355,19 @@ export function NoProjects({
       const id = intoExisting ? target : (createdId ?? (await createProject()));
       if (!intoExisting) setCreatedId(id);
       const href = `/${encodeURIComponent(orgSlug)}/p/${encodeURIComponent(id)}`;
-      if (mode === 'import') {
-        const { report, existing } = await importInto(id, source);
+      if (importing) {
+        const { report, existing } =
+          mode === 'database'
+            ? await importIntrospected(
+                id,
+                (
+                  await introspectPreview(
+                    id,
+                    connectionPayload(engine?.connectionFields ?? [], draft),
+                  )
+                ).sourceId,
+              )
+            : await importInto(id, source);
         const notApplied = report.statements.filter((s) => s.status !== 'applied');
         if (notApplied.length > 0 || existing.length > 0) {
           setSkipped({ href, statements: notApplied, existing });
@@ -309,9 +390,9 @@ export function NoProjects({
       }}
     >
       <h2 className="text-sm font-medium text-text">
-        {mode === 'blank' ? 'New project' : 'Import SQL'}
+        {mode === 'blank' ? 'New project' : mode === 'database' ? 'Read a database' : 'Import SQL'}
       </h2>
-      {mode === 'import' && importTargets.length > 0 && (
+      {importing && importTargets.length > 0 && (
         <label className="flex flex-col gap-1 text-sm text-text">
           Into
           <select
@@ -358,7 +439,7 @@ export function NoProjects({
                 className={inputClass}
               >
                 {engines
-                  .filter((candidate) => mode === 'blank' || candidate.importFormats.length > 0)
+                  .filter((candidate) => usable(candidate))
                   .map((candidate) => (
                     <option key={candidate.id} value={candidate.id}>
                       {candidate.displayName}
@@ -441,6 +522,14 @@ export function NoProjects({
             />
           </label>
         </>
+      )}
+      {mode === 'database' && engine !== undefined && (
+        <ConnectionForm
+          fields={engine.connectionFields}
+          draft={draft}
+          onChange={setDraft}
+          disabled={busy}
+        />
       )}
       {createdId !== null && (
         <p className="text-xs text-text-muted">

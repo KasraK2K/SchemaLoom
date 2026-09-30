@@ -1,6 +1,7 @@
 import { BUILT_IN_ROLE_ORDER, orgRoleSchema } from '@schemaloom/contracts';
 import { z } from 'zod';
 import { serverFetch } from '@/lib/server-api';
+import type { ConnectionField } from './connection-form';
 
 /**
  * The two navigation reads, server-side.
@@ -54,12 +55,26 @@ const EngineOptionSchema = z.object({
   displayName: z.string(),
   capabilities: z.object({
     importFormats: z.array(z.object({ id: z.string(), fileExtensions: z.array(z.string()) })),
+    connectionFields: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          kind: z.enum(['text', 'number', 'secret', 'select', 'list']),
+          required: z.boolean(),
+          options: z.array(z.string()).optional(),
+          default: z.union([z.string(), z.number()]).optional(),
+        }),
+      )
+      .default([]),
   }),
 });
 export interface EngineOption {
   id: string;
   displayName: string;
   importFormats: { id: string; fileExtensions: string[] }[];
+  /** Phase 6 — the engine's "read a database" form; empty when it has none. */
+  connectionFields: ConnectionField[];
 }
 
 export async function listEngines(): Promise<EngineOption[]> {
@@ -70,6 +85,7 @@ export async function listEngines(): Promise<EngineOption[]> {
     id: engine.id,
     displayName: engine.displayName,
     importFormats: engine.capabilities.importFormats,
+    connectionFields: engine.capabilities.connectionFields,
   }));
 }
 

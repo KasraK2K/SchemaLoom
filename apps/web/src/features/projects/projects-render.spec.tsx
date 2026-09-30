@@ -97,20 +97,44 @@ describe('<ProjectList>', () => {
 });
 
 describe('<NoProjects>', () => {
-  it('teaches the two ways in instead of saying "no projects"', () => {
+  it('teaches the ways in instead of saying "no projects"', () => {
     const html = renderToStaticMarkup(
       <NoProjects
         orgId="org_1"
         orgSlug="acme"
         engines={[
-          { id: 'pg', displayName: 'PG', importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }] },
+          {
+            id: 'pg',
+            displayName: 'PG',
+            importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }],
+            connectionFields: [{ id: 'host', label: 'Host', kind: 'text', required: true }],
+          },
         ]}
       />,
     );
     expect(html).toContain('Start blank');
     expect(html).toContain('Import SQL');
-    // Both starting points are live once an engine is available.
+    expect(html).toContain('Read a database');
+    // Every starting point is live once an engine supports it.
     expect(html).not.toContain('disabled=""');
+  });
+
+  it('disables "Read a database" when no engine has a connection form', () => {
+    const html = renderToStaticMarkup(
+      <NoProjects
+        orgId="org_1"
+        orgSlug="acme"
+        engines={[
+          {
+            id: 'pg',
+            displayName: 'PG',
+            importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }],
+            connectionFields: [],
+          },
+        ]}
+      />,
+    );
+    expect(html.match(/disabled=""/g)).toHaveLength(1);
   });
 });
 

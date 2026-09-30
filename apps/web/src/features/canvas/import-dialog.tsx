@@ -13,7 +13,16 @@ import { useState } from 'react';
 import { useEngine } from '@/engines';
 import { DescribeSchema } from '@/features/ai/describe-schema';
 import {
+  ConnectionForm,
+  connectionPayload,
+  hasConnectionForm,
+  initialDraft,
+  type ConnectionDraft,
+} from '@/features/projects/connection-form';
+import {
   importInto,
+  importIntrospected,
+  introspectPreview,
   previewImport,
   type ConfirmedRename,
   type Imported,
@@ -31,6 +40,9 @@ type FieldCandidate = Extract<RenameCandidate, { type: 'field' }>;
  * Phase 4 §2.1: the source is previewed first, and when it looks like a table or column
  * was renamed the dialog asks. Nothing is inferred — "Keep both" is the default, and only
  * the pairs the user marks "Rename" are sent.
+ *
+ * Phase 6 §5: "From a database" (when the engine declares a connection form) reads the schema
+ * on the server, then follows the same preview → renames → import steps.
  */
 export function ImportDialog({
   open,
@@ -45,6 +57,11 @@ export function ImportDialog({
 }) {
   const facet = useEngine();
   const format = facet.capabilities.importFormats[0];
+  const connectionFields = facet.capabilities.connectionFields;
+  const [from, setFrom] = useState<'sql' | 'database'>('sql');
+  const [draft, setDraft] = useState<ConnectionDraft>(() => initialDraft(connectionFields));
+  /** The introspected dump waiting on the server (Phase 6 §4). */
+  const [sourceId, setSourceId] = useState<string | null>(null);
   const [source, setSource] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +76,9 @@ export function ImportDialog({
     if (busy) return;
     onOpenChange(next);
     if (!next) {
+      setFrom('sql');
+      setDraft(initialDraft(connectionFields));
+      setSourceId(null);
       setSource('');
       setError(null);
       setResult(null);
@@ -72,8 +92,11 @@ export function ImportDialog({
     setError(caught instanceof ApiError ? caught.message : 'Something went wrong. Try again.');
   };
 
-  const run = async (renames: readonly ConfirmedRename[]) => {
-    const imported = await importInto(projectId, source, renames);
+  const run = async (renames: readonly ConfirmedRename[], introspected = sourceId) => {
+    const imported =
+      introspected === null
+        ? await importInto(projectId, source, renames)
+        : await importIntrospected(projectId, introspected, renames);
     await onImported();
     setResult(imported);
   };
@@ -83,6 +106,19 @@ export function ImportDialog({
     setError(null);
     void (async () => {
       try {
+        if (from === 'database') {
+          const read = await introspectPreview(
+            projectId,
+            connectionPayload(connectionFields, draft),
+          );
+          setSourceId(read.sourceId);
+          if (read.preview.renameCandidates.length > 0) {
+            setCandidates(read.preview.renameCandidates);
+            return;
+          }
+          await run([], read.sourceId);
+          return;
+        }
         const preview = await previewImport(projectId, source);
         if (preview !== null && preview.renameCandidates.length > 0) {
           setCandidates(preview.renameCandidates);
@@ -140,7 +176,7 @@ export function ImportDialog({
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-w-2xl">
-        <DialogTitle>Import SQL</DialogTitle>
+        <DialogTitle>{from === 'database' ? 'Import from a database' : 'Import SQL'}</DialogTitle>
         <DialogDescription>
           Adds what the project does not have yet. Existing objects are left unchanged, except for
           renames you confirm.
@@ -255,36 +291,76 @@ export function ImportDialog({
               submitSource();
             }}
           >
-            <DescribeSchema projectId={projectId} onDraft={setSource} />
-            <textarea
-              required
-              autoFocus
-              rows={12}
-              aria-label="SQL"
-              value={source}
-              onChange={(e) => {
-                setSource(e.target.value);
-              }}
-              className="rounded-md border border-border bg-surface px-3 py-2 font-mono text-xs text-text"
-            />
-            <label className="flex flex-col gap-1 text-xs text-text-muted">
-              …or choose a file
-              <input
-                type="file"
-                accept={format?.fileExtensions.join(',')}
-                onChange={(e) => {
-                  void e.target.files?.[0]?.text().then(setSource);
-                }}
+            {hasConnectionForm(connectionFields) && (
+              <div role="group" aria-label="Import from" className="flex gap-1">
+                {(
+                  [
+                    ['sql', 'SQL'],
+                    ['database', 'From a database'],
+                  ] as const
+                ).map(([value, text]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant={from === value ? 'primary' : 'outline'}
+                    aria-pressed={from === value}
+                    onClick={() => {
+                      setFrom(value);
+                      setError(null);
+                    }}
+                  >
+                    {text}
+                  </Button>
+                ))}
+              </div>
+            )}
+            {from === 'database' ? (
+              <ConnectionForm
+                fields={connectionFields}
+                draft={draft}
+                onChange={setDraft}
+                disabled={busy}
               />
-            </label>
+            ) : (
+              <>
+                <DescribeSchema projectId={projectId} onDraft={setSource} />
+                <textarea
+                  required
+                  autoFocus
+                  rows={12}
+                  aria-label="SQL"
+                  value={source}
+                  onChange={(e) => {
+                    setSource(e.target.value);
+                  }}
+                  className="rounded-md border border-border bg-surface px-3 py-2 font-mono text-xs text-text"
+                />
+                <label className="flex flex-col gap-1 text-xs text-text-muted">
+                  …or choose a file
+                  <input
+                    type="file"
+                    accept={format?.fileExtensions.join(',')}
+                    onChange={(e) => {
+                      void e.target.files?.[0]?.text().then(setSource);
+                    }}
+                  />
+                </label>
+              </>
+            )}
             {error !== null && (
               <p role="alert" className="text-xs text-danger-text">
                 {error}
               </p>
             )}
             <DialogFooter>
-              <Button type="submit" variant="primary" size="sm" disabled={busy || source === ''}>
-                {busy ? 'Importing…' : 'Import'}
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={busy || (from === 'sql' && source === '')}
+              >
+                {busy ? (from === 'database' ? 'Reading…' : 'Importing…') : 'Import'}
               </Button>
             </DialogFooter>
           </form>

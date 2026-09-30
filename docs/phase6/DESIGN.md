@@ -53,6 +53,14 @@ export interface Introspector {
 }
 ```
 
+- **As built (2026-09-30):** `connectionFields` lives on `capabilities`, not on the
+  introspector, because the browser only ever sees capabilities (the static facet and
+  `GET /engines`). `canIntrospect(capabilities)` is the helper, and
+  `capabilities/services-match-features` checks it equals `introspector !== undefined`. Two
+  field ids are conventions core reads: `host` (the SSRF guard) and `sslmode` (Q3). The
+  "result is importable" check is the PostgreSQL engine's live spec
+  (`introspector.spec.ts`, run with `INTROSPECT_TEST_URL`) rather than a conformance check,
+  because conformance runs without a database.
 - `EngineDefinition.introspector?: Introspector`. A derived helper `canIntrospect(engine)`
   replaces a feature atom, the same way Phase 1 replaced the other 23 atoms.
 - `GET /engines` includes `connectionFields`, so the web renders the form without knowing any

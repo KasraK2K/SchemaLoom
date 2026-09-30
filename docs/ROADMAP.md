@@ -40,8 +40,8 @@ a reason to come back every week, then reach more databases and teams.
 
 | #   | Feature                                             | Status     | Design                               | Why it matters                                                                                                 |
 | --- | --------------------------------------------------- | ---------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| 6a  | **Import a project from a live database**           | `approved` | `docs/phase6/DESIGN.md` §1–§5        | Most users already have a database. Redrawing it by hand is where they give up.                                |
-| 6b  | **Drift check: design vs. live database**           | `approved` | `docs/phase6/DESIGN.md` §6           | "Production has 4 changes your design doesn't," plus the SQL to reconcile. The reason to come back every week. |
+| 6a  | **Import a project from a live database**           | `building` | `docs/phase6/DESIGN.md` §1–§5        | Most users already have a database. Redrawing it by hand is where they give up.                                |
+| 6b  | **Drift check: design vs. live database**           | `building` | `docs/phase6/DESIGN.md` §6           | "Production has 4 changes your design doesn't," plus the SQL to reconcile. The reason to come back every week. |
 | 6c  | Saved connections + scheduled drift alerts          | `idea`     | `docs/phase6/DESIGN.md` §7 (outline) | Turns 6b from a button into a monitor. Needs encrypted credential storage, so it's split out.                  |
 | 7   | ORM round-trip: Prisma export first, then import    | `idea`     | —                                    | For many teams the ORM file is the source of truth. An exporter plugs into the existing exporter contract.     |
 | 8   | Drizzle / TypeORM / Django exporters                | `idea`     | —                                    | Same contract as 7. Build only the ones users ask for.                                                         |
@@ -52,6 +52,11 @@ a reason to come back every week, then reach more databases and teams.
 | 13  | SQLite engine                                       | `idea`     | —                                    | Cheap second or third engine, popular with indie developers.                                                   |
 | 14  | Enterprise: SAML/OIDC SSO, audit log viewer         | `parked`   | —                                    | Wait until a paying customer asks. The audit log data already exists.                                          |
 | 15  | Remaining Phase 3 login paths (magic link, TOTP…)   | `parked`   | `docs/phase1/00-OVERVIEW.md` Q28     | Cut on purpose in Q28. Additive when needed.                                                                   |
+
+**6a/6b status (2026-09-30):** code, unit tests and the e2e workflow (`workflow-10-introspect`)
+are in. Still to do before `built`: one run with a real `pg_dump` — the engine's live spec
+(`INTROSPECT_TEST_URL=… pnpm --filter @schemaloom/engine-postgresql test`) and workflow 10 —
+plus building the api image once to confirm the PGDG `postgresql-client` install.
 
 ## Known gaps in built features
 

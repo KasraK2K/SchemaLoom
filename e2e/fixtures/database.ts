@@ -208,3 +208,9 @@ export function resetDatabase(db: E2eDatabase): void {
   // AFTER the reseed: anything cached from the rows that were just replaced is stale.
   flushRedis();
 }
+
+/** Runs `sql` against the e2e database, for a spec that needs objects outside the app's own
+ *  tables (Phase 6 reads a live schema). */
+export function executeSql(db: E2eDatabase, sql: string): void {
+  prisma(db, `db execute --url "${db.url}" --stdin`, sql);
+}

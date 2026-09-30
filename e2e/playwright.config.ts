@@ -38,6 +38,8 @@ export default defineConfig({
         DATABASE_URL: process.env.DATABASE_URL_E2E ?? '',
         REDIS_KEY_PREFIX: 'sl-e2e:',
         NODE_ENV: 'production',
+        // Phase 6: workflow 10 reads the e2e database, which is on localhost.
+        INTROSPECT_ALLOW_PRIVATE_HOSTS: 'true',
       },
     },
     {

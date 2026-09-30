@@ -179,3 +179,24 @@ export function groupByEntity(entries: readonly DiffEntry[]): Map<string, DiffEn
   }
   return out;
 }
+
+/** Phase 6 §6 — `POST …/introspect/drift`: the database's schema against the design. */
+export const driftSchema = z.object({
+  diff: diffSchema,
+  migration: migrationSchema,
+  serverVersion: z.string(),
+});
+export type DriftView = z.infer<typeof driftSchema>;
+
+export async function checkDrift(
+  projectId: string,
+  connection: Record<string, unknown>,
+  allowDestructive: boolean,
+): Promise<DriftView> {
+  return driftSchema.parse(
+    await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/introspect/drift`, {
+      method: 'POST',
+      body: { connection, allowDestructive },
+    }),
+  );
+}
