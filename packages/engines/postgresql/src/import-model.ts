@@ -177,6 +177,14 @@ export class ImportModel {
     return created;
   }
 
+  /** A later statement refining a column (`ALTER COLUMN … SET DEFAULT`, a folded serial). */
+  updateField(field: Field, patch: Partial<Pick<Field, 'type' | 'engineProps'>>): Field {
+    const next: Field = { ...field, ...patch };
+    this.field[field.id] = next;
+    this.fieldsByEntity.get(field.entityId)?.set(normalizeName(field.name), next);
+    return next;
+  }
+
   findField(entity: Entity, name: string): Field | undefined {
     return this.fieldsByEntity.get(entity.id)?.get(normalizeName(name));
   }

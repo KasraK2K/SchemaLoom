@@ -27,6 +27,7 @@ export {
   PanelLeftClose,
   PanelLeftOpen,
   PanelRight,
+  RefreshCw,
   Search,
   Settings,
   Sparkles,

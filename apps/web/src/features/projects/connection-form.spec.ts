@@ -67,3 +67,33 @@ describe('connection form', () => {
     expect(connectionPayload(FIELDS, { password: ' pw ' })).toEqual({ password: ' pw ' });
   });
 });
+
+describe('connection form visibility (Phase 6 §10.1)', () => {
+  const fields: ConnectionField[] = [
+    { id: 'host', label: 'Host', kind: 'text', required: true },
+    {
+      id: 'ssh',
+      label: 'Through',
+      kind: 'select',
+      required: true,
+      options: ['none', 'ssh'],
+      default: 'none',
+    },
+    {
+      id: 'ssh_private_key',
+      label: 'Key',
+      kind: 'file',
+      required: true,
+      showWhen: { field: 'ssh', in: ['ssh'] },
+    },
+  ];
+
+  it('never sends a field the user can no longer see', () => {
+    const key = '-----BEGIN OPENSSH PRIVATE KEY-----';
+    const draft = { host: 'h', ssh: 'none', ssh_private_key: key };
+    expect(connectionPayload(fields, draft)).toEqual({ host: 'h', ssh: 'none' });
+    expect(connectionPayload(fields, { ...draft, ssh: 'ssh' })).toMatchObject({
+      ssh_private_key: key,
+    });
+  });
+});

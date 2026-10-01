@@ -25,6 +25,7 @@ import {
 import { CODE } from './messages.js';
 import { truncateToBytes, utf8ByteLength } from './normalize-name.js';
 import { loadSqlParser } from './parser.js';
+import { foldSerialColumns } from './import-serial.js';
 import { excerptOf, rangeOf, splitStatements, type SourceChunk } from './sql-scan.js';
 
 /**
@@ -63,6 +64,8 @@ interface StatementState {
   readonly produced: IrObjectRef[];
   readonly losses: string[];
   failure: string | null;
+  /** pass 3 folded this statement into a serial column (`import-serial.ts`) */
+  absorbed: boolean;
 }
 
 function parseErrorMessage(error: unknown): string {
@@ -85,6 +88,7 @@ function statusOf(state: StatementState): { status: ImportStatementStatus; reaso
   const { classification, parseError } = state.parsed;
   if (parseError !== null) return { status: 'failed', reason: parseError };
   if (state.failure !== null) return { status: 'failed', reason: state.failure };
+  if (state.absorbed) return { status: 'applied', reason: null };
   if (classification.phase === 'ignored') {
     return { status: 'ignored', reason: classification.reason ?? 'not part of the schema model' };
   }
@@ -161,6 +165,7 @@ async function importDdl(
     produced: [],
     losses: [],
     failure: null,
+    absorbed: false,
   }));
 
   const contextFor = (state: StatementState): StatementContext => ({
@@ -190,6 +195,18 @@ async function importDdl(
     if (phase === 'dependent' || phase === 'both') {
       dependentStatement(state.parsed.statement, contextFor(state));
     }
+  }
+
+  // --- pass 3: pg_dump's sequence + OWNED BY + nextval default → a serial column ---------
+  const folded = foldSerialColumns(
+    states.map((s) => (s.parsed.parseError === null ? s.parsed.statement : undefined)),
+    model,
+  );
+  for (const [index, ref] of folded) {
+    const state = states[index];
+    if (state === undefined) continue;
+    state.absorbed = true;
+    if (!state.produced.some((p) => p.id === ref.id)) state.produced.push(ref);
   }
 
   // --- report ----------------------------------------------------------------------------

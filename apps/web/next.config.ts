@@ -1,7 +1,14 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Phase 6 §11 — the web image (apps/web/Dockerfile) sets NEXT_OUTPUT=standalone to ship
+  // server.js plus only the files it traces. The root is the monorepo's, so workspace
+  // packages are traced too. `next start` and `pnpm dev` don't set it.
+  ...(process.env.NEXT_OUTPUT === 'standalone'
+    ? { output: 'standalone' as const, outputFileTracingRoot: path.resolve(process.cwd(), '../..') }
+    : {}),
   // @schemaloom/ui and the engine UI packages are published from source (their exports
   // point at src/*.ts), so Next has to compile them rather than treat them as prebuilt
   // dependencies. Everything else in the workspace ships a dist.

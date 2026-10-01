@@ -10,6 +10,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   IntrospectError,
+  type ConnectionValues,
   type EngineRegistry,
   type IntrospectResult,
 } from '@schemaloom/engine-sdk';
@@ -33,6 +34,8 @@ import {
 import { StorageService } from '../storage';
 import { assertIntrospectionEnabled, resolveCheckedAddress } from './address-guard';
 import { validateConnection } from './connection';
+import { SavedConnectionService } from './saved-connection.service';
+import { openTunnel, type Tunnel, type TunnelOptions } from './ssh-tunnel';
 
 /** Phase 6 §3.6 — fixed windows, failing closed like the AI limiter. */
 export const INTROSPECT_RATE_LIMITS = {
@@ -61,13 +64,23 @@ const STATUS: Record<IntrospectError['code'], HttpStatus> = {
   failed: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 
-export interface IntrospectPreview {
+/** What a read connects with: details typed now, or the project's saved connection (6c).
+ *  Saved means as saved, with no overrides: a changed host would carry the saved password
+ *  to a server of the caller's choosing. */
+export type ConnectionSource = { readonly connection: unknown } | { readonly saved: true };
+
+/** §10.3 — the bastion's key as seen on this read, so the form can offer to pin it. */
+interface SshSeen {
+  readonly sshHostKey?: string;
+}
+
+export interface IntrospectPreview extends SshSeen {
   readonly preview: ImportPreview;
   readonly sourceId: string;
   readonly serverVersion: string;
 }
 
-export interface DriftView {
+export interface DriftView extends SshSeen {
   readonly diff: HistoryDiff;
   readonly migration: MigrationView;
   readonly serverVersion: string;
@@ -95,14 +108,15 @@ export class IntrospectService {
     private readonly storage: StorageService,
     @Inject(REDIS_RATELIMIT) private readonly rateLimit: Redis,
     @Inject(REDIS_CACHE) private readonly cache: Redis,
+    private readonly savedConnections: SavedConnectionService,
   ) {
     this.enabled = config.get('INTROSPECTION_ENABLED', { infer: true });
     this.allowPrivate = config.get('INTROSPECT_ALLOW_PRIVATE_HOSTS', { infer: true });
   }
 
-  async preview(ctx: SnapshotContext, connection: unknown): Promise<IntrospectPreview> {
+  async preview(ctx: SnapshotContext, connection: ConnectionSource): Promise<IntrospectPreview> {
     const userId = requireUser(ctx);
-    const { source, serverVersion } = await this.read(ctx, userId, connection);
+    const { source, serverVersion, sshHostKey } = await this.read(ctx, userId, connection);
     const preview = await this.snapshots.preview(ctx, source, QUEUED_IMPORT_MAX_BYTES);
 
     const sourceId = randomUUID();
@@ -110,7 +124,7 @@ export class IntrospectService {
     await this.storage.put(storageKey, Buffer.from(source, 'utf8'), 'text/plain; charset=utf-8');
     const stored: StoredSource = { projectId: ctx.projectId, userId, storageKey };
     await this.cache.set(sourceKey(sourceId), JSON.stringify(stored), 'EX', SOURCE_TTL_SEC);
-    return { preview, sourceId, serverVersion };
+    return { preview, sourceId, serverVersion, ...seen(sshHostKey) };
   }
 
   /** Single use: the row is taken with GETDEL, so a replayed apply finds nothing. Another
@@ -139,21 +153,21 @@ export class IntrospectService {
 
   async drift(
     ctx: SnapshotContext,
-    connection: unknown,
+    connection: ConnectionSource,
     request: MigrationRequest,
   ): Promise<DriftView> {
     const userId = requireUser(ctx);
-    const { source, serverVersion } = await this.read(ctx, userId, connection);
+    const { source, serverVersion, sshHostKey } = await this.read(ctx, userId, connection);
     const result = await this.snapshots.drift(ctx, source, QUEUED_IMPORT_MAX_BYTES, request);
-    return { ...result, serverVersion };
+    return { ...result, serverVersion, ...seen(sshHostKey) };
   }
 
   /** Every check runs before the api opens a connection anywhere. */
   private async read(
     ctx: SnapshotContext,
     userId: string,
-    connection: unknown,
-  ): Promise<IntrospectResult> {
+    connection: ConnectionSource,
+  ): Promise<IntrospectResult & { readonly sshHostKey: string | null }> {
     assertIntrospectionEnabled(this.enabled);
     this.snapshots.assertFullView(ctx);
 
@@ -166,13 +180,23 @@ export class IntrospectService {
     if (engine === undefined || introspector === undefined) {
       throw new UnprocessableEntityException({ code: 'engine.introspection_unavailable' });
     }
+    const saved = 'saved' in connection;
     const values = validateConnection(
       engine.capabilities.connectionFields,
-      connection,
+      // Saved values are validated again: the engine's fields may have changed since.
+      saved
+        ? await this.savedConnections.load(ctx.projectId, project.engineId)
+        : connection.connection,
       this.allowPrivate,
     );
     await this.throttle(userId, project.organizationId);
-    const resolvedAddress = await resolveCheckedAddress(values.host, this.allowPrivate);
+    // §10.3.1 — through a tunnel the api connects to the bastion, so that's what the guard
+    // checks; the database host is the bastion's to resolve.
+    const ssh = sshOptions(values);
+    const resolvedAddress = await resolveCheckedAddress(
+      ssh?.host ?? values.host,
+      this.allowPrivate,
+    );
 
     const audit = (metadata: Record<string, string | number | boolean>) =>
       this.prisma.auditLog.create({
@@ -189,33 +213,50 @@ export class IntrospectService {
             host: values.host,
             address: resolvedAddress,
             database: typeof values.database === 'string' ? values.database : '',
+            ...(ssh === null ? {} : { sshHost: ssh.host }),
             ...metadata,
           },
         },
       });
 
+    let tunnel: Tunnel | null = null;
     let result: IntrospectResult;
     try {
+      if (ssh !== null) tunnel = await openTunnel({ ...ssh.tunnel, address: resolvedAddress });
       result = await introspector.introspect({
-        connection: values,
-        resolvedAddress,
+        // Through a tunnel the engine reaches the database at the tunnel's local end; `host`
+        // stays as typed so TLS still verifies the database's name.
+        connection: tunnel === null ? values : { ...values, port: tunnel.port },
+        resolvedAddress: tunnel === null ? resolvedAddress : '127.0.0.1',
         signal: AbortSignal.timeout(130_000),
         maxBytes: QUEUED_IMPORT_MAX_BYTES,
       });
     } catch (error) {
+      if (error instanceof HttpException) {
+        // openTunnel's `introspect.ssh_*`, already shaped for the response.
+        const { code } = error.getResponse() as { code: string };
+        await audit({ ok: false, error: code.replace(/^introspect\./, '') });
+        throw error;
+      }
       if (!(error instanceof IntrospectError)) throw error;
-      await audit({ ok: false, error: error.code });
+      await audit({ ok: false, error: error.code, ...seen(tunnel?.hostKey) });
       throw new HttpException(
-        { code: `introspect.${error.code}`, message: error.message },
+        { code: `introspect.${error.code}`, message: error.message, ...seen(tunnel?.hostKey) },
         STATUS[error.code],
       );
+    } finally {
+      tunnel?.close();
     }
+    const sshHostKey = tunnel?.hostKey ?? null;
     await audit({
       ok: true,
       serverVersion: result.serverVersion,
       bytes: Buffer.byteLength(result.source, 'utf8'),
+      ...seen(sshHostKey),
+      ...(saved ? { saved: true } : {}),
     });
-    return result;
+    if (saved) await this.savedConnections.touch(ctx.projectId);
+    return { ...result, sshHostKey };
   }
 
   private async throttle(userId: string, organizationId: string): Promise<void> {
@@ -235,6 +276,44 @@ export class IntrospectService {
       }
     }
   }
+}
+
+const seen = (sshHostKey: string | null | undefined): SshSeen => (sshHostKey ? { sshHostKey } : {});
+
+const str = (values: ConnectionValues, id: string): string | undefined => {
+  const value = values[id];
+  return typeof value === 'string' && value !== '' ? value : undefined;
+};
+
+/**
+ * §10.3 — the `SSH_TUNNEL_FIELDS` ids (already validated, so present when required) as tunnel
+ * options. The far end is the engine's conventional `host` and `port`.
+ */
+function sshOptions(
+  values: ConnectionValues & { readonly host: string },
+): { readonly host: string; readonly tunnel: Omit<TunnelOptions, 'address'> } | null {
+  if (values.ssh !== 'ssh') return null;
+  const host = str(values, 'ssh_host')?.trim();
+  if (host === undefined || typeof values.port !== 'number') {
+    throw new UnprocessableEntityException({
+      code: 'introspect.invalid_connection',
+      field: 'ssh_host',
+      message: 'An SSH tunnel needs the SSH host and the database port.',
+    });
+  }
+  return {
+    host,
+    tunnel: {
+      port: typeof values.ssh_port === 'number' ? values.ssh_port : 22,
+      username: str(values, 'ssh_user') ?? '',
+      privateKey: str(values, 'ssh_private_key'),
+      passphrase: str(values, 'ssh_passphrase'),
+      password: str(values, 'ssh_password'),
+      pinnedHostKey: str(values, 'ssh_host_key'),
+      dstHost: values.host,
+      dstPort: values.port,
+    },
+  };
 }
 
 /** A share-link subject is 404'd by the guard first; narrowing gives the job an owner. */

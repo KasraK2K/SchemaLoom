@@ -12,6 +12,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { z } from 'zod';
+import { SavedConnectionSettings } from '@/features/projects/saved-connection';
 import { ApiError, apiFetch } from '@/lib/api-client';
 
 /** `GET /projects/:id/settings` — `ProjectSettingsView` in `apps/api/src/projects`. */
@@ -134,6 +135,7 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
                 Include documentation in what the AI sees
               </label>
             </fieldset>
+            <SavedConnectionSettings projectId={projectId} />
           </div>
         )}
       </DialogContent>

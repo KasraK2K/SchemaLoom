@@ -85,6 +85,27 @@ Node >= 22.12 is required (`.nvmrc` pins 22; 24 works).
 
 ---
 
+## Run it with Docker only
+
+To use SchemaLoom without installing Node, pnpm or PostgreSQL tools, you only need Docker:
+
+```bash
+cp .env.example .env
+```
+
+Fill in the four secrets as described below. Without Node, use
+`docker run --rm node:22-alpine node -e "…"` in place of `node -e "…"`. Then:
+
+```bash
+docker compose up -d
+```
+
+The first run builds the images, which takes a few minutes. After pulling a newer version, run
+`docker compose up -d --build`. Open <http://localhost:8080>. Sign-up emails land in Mailpit at <http://localhost:8025>. The
+api image includes `pg_dump`, so **Read a database** (with SSH tunnels and certificate files)
+works as is. To read a database running on your own machine, use `host.docker.internal` as
+the host.
+
 ## Getting started
 
 ```bash

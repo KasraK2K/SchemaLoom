@@ -4,7 +4,18 @@ import type { Request } from 'express';
 import { RequirePermission } from '../access';
 import { snapshotContext } from '../snapshots';
 import { IntrospectApplyDto, IntrospectDriftDto, IntrospectPreviewDto } from './introspect.dto';
-import { IntrospectService, type DriftView, type IntrospectPreview } from './introspect.service';
+import {
+  IntrospectService,
+  type ConnectionSource,
+  type DriftView,
+  type IntrospectPreview,
+} from './introspect.service';
+
+/** The DTO's refine guarantees exactly one of the two. */
+const sourceOf = (body: {
+  connection?: Record<string, unknown>;
+  saved?: true;
+}): ConnectionSource => (body.saved === true ? { saved: true } : { connection: body.connection });
 
 /**
  * Phase 6 §4 and §6. All three read a live database, so all three carry the import's atom
@@ -24,7 +35,7 @@ export class IntrospectController {
     @Param('projectId') projectId: string,
     @Body() body: IntrospectPreviewDto,
   ): Promise<IntrospectPreview> {
-    return this.introspect.preview(snapshotContext(req, projectId), body.connection);
+    return this.introspect.preview(snapshotContext(req, projectId), sourceOf(body));
   }
 
   @ApiOperation({ summary: 'Import a previewed database schema (queues the import job)' })
@@ -47,7 +58,7 @@ export class IntrospectController {
     @Param('projectId') projectId: string,
     @Body() body: IntrospectDriftDto,
   ): Promise<DriftView> {
-    return this.introspect.drift(snapshotContext(req, projectId), body.connection, {
+    return this.introspect.drift(snapshotContext(req, projectId), sourceOf(body), {
       allowDestructive: body.allowDestructive,
       transactional: body.transactional,
     });

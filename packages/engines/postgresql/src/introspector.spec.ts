@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { lookup } from 'node:dns/promises';
 import { describe, expect, it } from 'vitest';
 import { IMPORTER, defaultImportOptions } from './importer.js';
 import {
@@ -45,6 +46,18 @@ describe('pgDumpInvocation', () => {
     ]);
   });
 
+  it('uses the system trust store for verify-full without a CA, and nothing else', () => {
+    expect(env.PGSSLROOTCERT).toBe('system');
+    const withCa = { ...connection, sslrootcert: '-----BEGIN CERTIFICATE-----' };
+    expect(
+      pgDumpInvocation({ connection: withCa, resolvedAddress: 'x' }).env.PGSSLROOTCERT,
+    ).toBeUndefined();
+    const verifyCa = { ...connection, sslmode: 'verify-ca' };
+    expect(
+      pgDumpInvocation({ connection: verifyCa, resolvedAddress: 'x' }).env.PGSSLROOTCERT,
+    ).toBeUndefined();
+  });
+
   it('does not inherit the api’s own database settings', () => {
     process.env.DATABASE_URL = 'postgres://app:pw@localhost/app';
     const fresh = pgDumpInvocation({ connection, resolvedAddress: '203.0.113.7' }).env;
@@ -73,8 +86,14 @@ describe('classifyPgDumpError', () => {
       'pg_dump: error: connection to server at "x" failed: FATAL:  password authentication failed for user "reader"',
       'auth_failed',
     ],
-    ['pg_dump: error: connection to server failed: SSL error: certificate verify failed', 'tls_failed'],
-    ['pg_dump: error: connection to server at "x", port 5432 failed: Connection refused', 'unreachable'],
+    [
+      'pg_dump: error: connection to server failed: SSL error: certificate verify failed',
+      'tls_failed',
+    ],
+    [
+      'pg_dump: error: connection to server at "x", port 5432 failed: Connection refused',
+      'unreachable',
+    ],
     ['pg_dump: error: query failed: ERROR:  permission denied for schema secret', 'failed'],
   ];
   it.each(cases)('%s → %s', (stderr, code) => {
@@ -115,8 +134,7 @@ it('reports a missing pg_dump as not_available', async () => {
  * Postgres) and have pg_dump on PATH or at PG_DUMP_PATH; otherwise skipped.
  */
 const testUrl = process.env.INTROSPECT_TEST_URL;
-const hasPgDump =
-  spawnSync(process.env.PG_DUMP_PATH ?? 'pg_dump', ['--version']).status === 0;
+const hasPgDump = spawnSync(process.env.PG_DUMP_PATH ?? 'pg_dump', ['--version']).status === 0;
 
 describe.skipIf(testUrl === undefined || !hasPgDump)('against a live server', () => {
   it('produces DDL the importer applies without failures', async () => {
@@ -130,7 +148,8 @@ describe.skipIf(testUrl === undefined || !hasPgDump)('against a live server', ()
         password: decodeURIComponent(url.password),
         sslmode: 'disable',
       },
-      resolvedAddress: url.hostname,
+      // The api hands over an IP (pg_dump's hostaddr), never a name.
+      resolvedAddress: (await lookup(url.hostname)).address,
       signal: new AbortController().signal,
       maxBytes: 50_000_000,
     });

@@ -15,14 +15,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useEngine } from '@/engines';
 import { irQueryOptions } from '@/features/canvas/ir-query';
 import { EngineGate } from '@/features/project/engine-gate';
-import {
-  ConnectionForm,
-  connectionPayload,
-  hasConnectionForm,
-  initialDraft,
-  type ConnectionDraft,
-} from '@/features/projects/connection-form';
+import { SshHostKeyNote, hasConnectionForm } from '@/features/projects/connection-form';
 import { relativeTime } from '@/features/projects/relative-time';
+import { ConnectionSection, useConnectionChoice } from '@/features/projects/saved-connection';
 import { ApiError } from '@/lib/api-client';
 import {
   createSnapshot,
@@ -160,11 +155,12 @@ function DriftCheck({ projectId }: { readonly projectId: string }) {
   const fields = useEngine().capabilities.connectionFields;
   const ir = useQuery(irQueryOptions(projectId));
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<ConnectionDraft>(() => initialDraft(fields));
+  const choice = useConnectionChoice(projectId, fields);
   const [allowDestructive, setAllowDestructive] = useState(false);
   const [result, setResult] = useState<DriftView | null>(null);
   const compare = useMutation({
-    mutationFn: () => checkDrift(projectId, connectionPayload(fields, draft), allowDestructive),
+    mutationFn: async () =>
+      checkDrift(projectId, (await choice.resolve()).source, allowDestructive),
     onSuccess: setResult,
   });
 
@@ -189,7 +185,7 @@ function DriftCheck({ projectId }: { readonly projectId: string }) {
           setOpen(next);
           if (!next) {
             setResult(null);
-            setDraft(initialDraft(fields));
+            choice.reset();
             compare.reset();
           }
         }}
@@ -209,12 +205,7 @@ function DriftCheck({ projectId }: { readonly projectId: string }) {
                 compare.mutate();
               }}
             >
-              <ConnectionForm
-                fields={fields}
-                draft={draft}
-                onChange={setDraft}
-                disabled={compare.isPending}
-              />
+              <ConnectionSection choice={choice} fields={fields} disabled={compare.isPending} />
               <label className="flex items-center gap-1 text-xs text-text-muted">
                 <input
                   type="checkbox"
@@ -231,13 +222,19 @@ function DriftCheck({ projectId }: { readonly projectId: string }) {
                 </p>
               )}
               <DialogFooter>
-                <Button type="submit" variant="primary" size="sm" disabled={compare.isPending}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={compare.isPending || choice.saved === undefined}
+                >
                   {compare.isPending ? 'Reading…' : 'Compare'}
                 </Button>
               </DialogFooter>
             </form>
           ) : (
             <div className="mt-4 flex flex-col gap-4">
+              <SshHostKeyNote hostKey={result.sshHostKey} />
               <DiffBody
                 diff={result.diff}
                 hideCosmetic

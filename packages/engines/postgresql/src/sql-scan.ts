@@ -58,6 +58,17 @@ export function skipNonCode(source: string, i: number): number | null {
     return end === -1 ? source.length : end;
   }
 
+  // A psql meta-command (`\restrict <key>` from pg_dump 17.6+) runs to end of line. Only at
+  // the start of a line: `\` is not SQL, but E'…' escapes sit inside strings, handled above.
+  if (char === '\\') {
+    let j = i;
+    while (j > 0 && (source[j - 1] === ' ' || source[j - 1] === '\t')) j -= 1;
+    if (j === 0 || source[j - 1] === '\n') {
+      const end = source.indexOf('\n', i);
+      return end === -1 ? source.length : end;
+    }
+  }
+
   if (char === '/' && source[i + 1] === '*') {
     // PostgreSQL block comments nest.
     let depth = 1;
@@ -147,9 +158,12 @@ function trimToCode(
       start += 1;
       continue;
     }
-    // Only comments are skipped here; a string or a dollar-quote is real statement text.
+    // Only comments (and psql meta-commands) are skipped here; a string or a dollar-quote is
+    // real statement text.
     const isComment =
-      (char === '-' && source[start + 1] === '-') || (char === '/' && source[start + 1] === '*');
+      (char === '-' && source[start + 1] === '-') ||
+      (char === '/' && source[start + 1] === '*') ||
+      char === '\\';
     if (!isComment) break;
     const skip = skipNonCode(source, start);
     if (skip === null || skip <= start) break;

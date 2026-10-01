@@ -34,11 +34,8 @@ services:
       timeout: 3s
       retries: 20
 
-  # Object storage for avatars and generated export files. NOT needed until
-  # build-order step 20 (exporter), so it sits behind a profile and does not
-  # block `docker compose up -d`.
-  #
-  #   docker compose --profile storage up -d
+  # Object storage for avatars and generated export files. The api creates its bucket at
+  # boot, so it can't start without this.
   #
   # MinIO stopped publishing to Docker Hub (`minio/minio` now 404s there) and
   # their quay.io registry is not reachable from every network. This uses the
@@ -48,7 +45,6 @@ services:
   #   command: ['server', '/data', '--console-address', ':9001']
   #   volumes: [minio-data:/data]
   minio:
-    profiles: ['storage']
     image: bitnamilegacy/minio:2025.7.23-debian-12-r5
     restart: unless-stopped
     environment:
@@ -76,6 +72,93 @@ services:
     ports:
       - '${MAILPIT_SMTP_PORT:-1025}:1025'
       - '${MAILPIT_UI_PORT:-8025}:8025'
+
+  # ─── Phase 6 §11: the whole app in Docker ────────────────────────────────────
+  #
+  #   cp .env.example .env            # once; then set the secrets it lists
+  #   docker compose up -d            # the first run builds the images; add --build to update
+  #
+  # Open http://localhost:8080. pg_dump ships in the api image, so "Read a database" works
+  # with nothing installed on the host. Only the proxy publishes a port; `pnpm dev` (api
+  # :3001, web :3000) runs alongside without clashing, and `pnpm infra:up` starts only the
+  # services above. A database on this machine is `host.docker.internal`, not `localhost`,
+  # from inside the api container.
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile, target: migrate, network: host }
+    env_file: .env
+    environment: &app-env
+      NODE_ENV: production
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: '5432'
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      # Presigned download/upload URLs are opened by the browser, on the published port.
+      S3_PUBLIC_URL: http://localhost:${MINIO_PORT:-9000}
+      SMTP_URL: smtp://mailpit:1025
+      # One hostname for both, as every deploy requires (docs/deploy.md).
+      API_PUBLIC_URL: http://localhost:8080
+      WEB_PUBLIC_URL: http://localhost:8080
+      TRUST_PROXY: '1'
+      # A local install reads databases on this machine and network (Phase 6 Q3: self-host
+      # opts in). Set false in .env to refuse private addresses.
+      INTROSPECT_ALLOW_PRIVATE_HOSTS: ${INTROSPECT_ALLOW_PRIVATE_HOSTS:-true}
+      # Cookies stay Secure (the api insists in production); browsers accept them on
+      # http://localhost because localhost counts as a secure origin.
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile, network: host }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      <<: *app-env
+      PORT: '3001'
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      network: host
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+        NEXT_PUBLIC_APP_URL: http://localhost:8080
+    restart: unless-stopped
+    environment:
+      # Server components reach the api directly on the compose network.
+      API_INTERNAL_URL: http://api:3001
+    depends_on:
+      api: { condition: service_healthy }
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    command: ['caddy', 'run', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile']
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    ports:
+      # Fixed: the public URLs above and the web build args name this port.
+      - '8080:8080'
+    depends_on:
+      - web
+      - api
+
+configs:
+  caddyfile:
+    content: |
+      :8080 {
+        @api path /api/* /socket.io/*
+        reverse_proxy @api api:3001
+        reverse_proxy web:3000
+      }
 
 volumes:
   postgres-data:

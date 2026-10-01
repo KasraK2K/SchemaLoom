@@ -1,4 +1,5 @@
 import {
+  SSH_TUNNEL_FIELDS,
   defineCapabilities,
   type ConstraintKindDescriptor,
   type CustomTypeKindDescriptor,
@@ -209,6 +210,29 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
       options: ['require', 'verify-full', 'verify-ca', 'prefer', 'disable'],
       default: 'require',
     },
+    // §10.2 — PEM text; the introspector writes each to a 0600 temp file for libpq.
+    {
+      id: 'sslrootcert',
+      label: 'CA certificate (optional for verify-full)',
+      kind: 'file',
+      required: false,
+      section: 'TLS',
+      showWhen: { field: 'sslmode', in: ['verify-ca', 'verify-full'] },
+    },
+    ...(
+      [
+        { id: 'sslcert', label: 'Client certificate (optional)' },
+        // 6c — a private key: saved encrypted and never sent back to a browser.
+        { id: 'sslkey', label: 'Client key (optional)', secret: true },
+      ] as const
+    ).map((f) => ({
+      ...f,
+      kind: 'file' as const,
+      required: false,
+      section: 'TLS',
+      showWhen: { field: 'sslmode', in: ['require', 'verify-full', 'verify-ca', 'prefer'] },
+    })),
     { id: 'schemas', label: 'Schemas (empty = all)', kind: 'list', required: false },
+    ...SSH_TUNNEL_FIELDS,
   ],
 });

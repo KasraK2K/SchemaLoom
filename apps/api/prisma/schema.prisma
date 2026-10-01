@@ -213,6 +213,7 @@ model User {
   accessRequestsDecided AccessRequest[]     @relation("AccessRequestDecidedBy")
   activityEvents        ActivityLog[]
   auditEvents           AuditLog[]
+  savedConnections      ProjectConnection[]
   notifications         Notification[]      @relation("NotificationRecipient")
   notificationsCaused   Notification[]      @relation("NotificationActor")
   invitationsSent       Invitation[]        @relation("InvitationInvitedBy")
@@ -335,21 +336,21 @@ model RecoveryCode {
 // ===========================================================================
 
 model Organization {
-  id        String    @id @default(cuid())
-  name      String
+  id             String    @id @default(cuid())
+  name           String
   /// URL slug. Uniqueness is a partial unique index on lower(slug) that ignores
   /// soft-deleted rows — see the companion SQL migration.
-  slug      String
-  avatarUrl String?   @map("avatar_url")
+  slug           String
+  avatarUrl      String?   @map("avatar_url")
   /// orgSettings{Input,Stored}Schema — see section 7
-  settings  Json      @default("{}")
+  settings       Json      @default("{}")
   /// Permission-cache generation for everything in this org (doc 05 R19). Bumped by
   /// custom-role edits, group creation/deletion, bulk membership changes and org
   /// soft-delete. See section 3.2 — three counters is what removes the fan-out.
-  permGeneration Int  @default(0) @map("perm_generation")
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  permGeneration Int       @default(0) @map("perm_generation")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   members       OrgMember[]
   groups        UserGroup[]
@@ -433,34 +434,34 @@ model Workspace {
 }
 
 model Project {
-  id             String    @id @default(cuid())
-  organizationId String    @map("organization_id")
-  workspaceId    String    @map("workspace_id")
-  name           String
-  slug           String
-  description    String?
+  id                  String              @id @default(cuid())
+  organizationId      String              @map("organization_id")
+  workspaceId         String              @map("workspace_id")
+  name                String
+  slug                String
+  description         String?
   /// EngineRegistry key, e.g. "postgresql". Never an enum: adding an engine must
   /// not require a migration.
-  engineId       String    @map("engine_id")
+  engineId            String              @map("engine_id")
   /// The TARGET DATABASE version ("16"), not the plugin version. Doc 03 §15, doc 04 §1.3.
-  engineVersion  String    @map("engine_version")
+  engineVersion       String              @map("engine_version")
   /// The ENGINE PLUGIN contract version the stored `engine_props` were written under
   /// (doc 03 §15, semver of `EngineDefinition.version`). A real column, not a settings key:
   /// `settings` is core-owned and validated by core's zod schema, and "find every project that
   /// needs attention after this deploy" must be an indexed query. `compareEngineVersion` reads
   /// it on open and on every write; a newer-than-engine or older-major value opens the project
   /// read-only.
-  enginePluginVersion String @map("engine_plugin_version")
+  enginePluginVersion String              @map("engine_plugin_version")
   /// Monotonic revision of the project's SCHEMA CONTENT, incremented once per transaction that
   /// writes or deletes any schema object (doc 03 §8.1). It is the engine-diagnostics cache key.
   /// It cannot be `max(object.version)`: a maximum does not move when a non-maximal object is
   /// edited and FALLS when the holder of the maximum is deleted, so a stale entry is served and
   /// then collides with an older one.
-  schemaRevision BigInt    @default(0) @map("schema_revision")
+  schemaRevision      BigInt              @default(0) @map("schema_revision")
   /// projectSettings{Input,Stored}Schema — see section 7. AI toggles only, now that
   /// restrictedFieldMode is a real column and canvas preferences moved to the
   /// browser.
-  settings       Json      @default("{}")
+  settings            Json                @default("{}")
   /// Spec section 5: "masked or not at all (project setting)". A real column
   /// because VisibilityFilter reads it on every single request; a settings-JSON key
   /// would put a zod parse of the whole settings object on the hot path and on the
@@ -469,14 +470,14 @@ model Project {
   /// Permission-cache generation for this project (doc 05 R19). Bumped by every
   /// grant write, share-link create/revoke, area create/delete, entity area move,
   /// isRestricted toggle, restrictedFieldMode change and soft-delete. Section 3.2.
-  permGeneration Int      @default(0) @map("perm_generation")
-  createdById    String?   @map("created_by_id")
-  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+  permGeneration      Int                 @default(0) @map("perm_generation")
+  createdById         String?             @map("created_by_id")
+  deletedAt           DateTime?           @map("deleted_at") @db.Timestamptz(6)
   /// C7 for the project object itself (name, settings, engine version). Canvas
   /// geometry does NOT bump it — section 10.4.
-  version        Int       @default(0)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version             Int                 @default(0)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   /// NoAction, made DEFERRABLE INITIALLY DEFERRED in 0002 — see section 8.6. The
@@ -511,11 +512,31 @@ model Project {
   activityLogs       ActivityLog[]
   auditLogs          AuditLog[]
   notifications      Notification[]
+  connection         ProjectConnection?
 
   @@index([organizationId, deletedAt])
   @@index([workspaceId, deletedAt])
   @@index([engineId])
   @@map("projects")
+}
+
+/// Phase 6c (docs/phase6/SAVED-CONNECTIONS.md) — one saved "read a database" connection per
+/// project, so Sync and Compare don't need the details typed again.
+model ProjectConnection {
+  projectId  String    @id @map("project_id")
+  /// The engine whose `connectionFields` the values were validated against.
+  engineId   String    @map("engine_id")
+  /// AES-256-GCM under SECRETS_ENCRYPTION_KEY of the whole validated connection as JSON
+  /// (`iv.tag.ciphertext`). Host and user are encrypted too: they are reconnaissance.
+  encrypted  String
+  savedById  String?   @map("saved_by_id")
+  savedAt    DateTime  @default(now()) @map("saved_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  savedBy User?   @relation(fields: [savedById], references: [id], onDelete: SetNull)
+
+  @@map("project_connections")
 }
 
 // ===========================================================================
@@ -563,20 +584,20 @@ model Namespace {
 /// Creating, deleting an Area or moving an entity into one is a SHARING event,
 /// not a cosmetic one — see section 4.6.
 model Area {
-  id          String   @id @default(cuid())
-  projectId   String   @map("project_id")
-  name        String
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  name      String
   /// Radix Colors scale name, e.g. "indigo", "grass".
-  color       String   @default("indigo")
+  color     String   @default("indigo")
   /// There is deliberately no `collapsed` column (doc 04 delta D3, adopted): collapse is
   /// per-viewer canvas state and lives in the browser, by exactly the argument that moved
   /// snap-to-grid there. Nor is there a `description` — the `Doc` row covers it, and
   /// `TargetType` already admits `area`.
   /// C11 — sidebar / legend ordering. Surfaces as `Area.ordinal` in the IR.
-  position    Int      @default(0)
-  version     Int      @default(0)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  position  Int      @default(0)
+  version   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   entities Entity[]
@@ -612,12 +633,12 @@ model Entity {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   /// NoAction + DEFERRABLE INITIALLY DEFERRED in 0002 (section 8.6). "You cannot
   /// drop a schema that still has tables" is a service-layer rule, not a
   /// referential action — expressed as RESTRICT it breaks every project purge.
-  namespace   Namespace? @relation(fields: [namespaceId], references: [id], onDelete: NoAction)
-  area        Area?      @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  namespace Namespace? @relation(fields: [namespaceId], references: [id], onDelete: NoAction)
+  area      Area?      @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
   fields             Field[]
   indexes            SchemaIndex[]
@@ -635,12 +656,12 @@ model Entity {
 
 /// Column, document field, property. Nests through parentFieldId (section 9).
 model Field {
-  id            String   @id @default(cuid())
-  projectId     String   @map("project_id")
-  entityId      String   @map("entity_id")
+  id             String   @id @default(cuid())
+  projectId      String   @map("project_id")
+  entityId       String   @map("entity_id")
   /// Self-relation for nested/document fields. Null = top-level.
-  parentFieldId String?  @map("parent_field_id")
-  name          String
+  parentFieldId  String?  @map("parent_field_id")
+  name           String
   /// Engine type name as the engine's typeCatalog spells it ("varchar",
   /// "timestamptz", "jsonb"). For a user-defined type this is the CustomType's
   /// name and `customTypeId` points at the row.
@@ -652,30 +673,30 @@ model Field {
   /// exporter emits DDL naming a type that no longer exists, and the round-trip test
   /// cannot catch it because import and export both read the same stale string.
   /// See section 8.3 and the invariant test in section 11.
-  dataType      String   @map("data_type")
-  customTypeId  String?  @map("custom_type_id")
+  dataType       String   @map("data_type")
+  customTypeId   String?  @map("custom_type_id")
   /// Doc 04 delta D1: `TypeRef.args` and `TypeRef.dimensions` are CORE, not
   /// engineProps. `varchar(255)` -> `varchar(64)` must surface as ONE structural
   /// change in the diff; with the length in engineProps it surfaces twice and the
   /// migration generator sees two unrelated edits. Array dimensions likewise.
   /// e.g. numeric(10,2) -> typeArgs = [10, 2]; text[][] -> typeDimensions = 2.
-  typeArgs      Json     @default("[]") @map("type_args")
-  typeDimensions Int     @default(0) @map("type_dimensions")
+  typeArgs       Json     @default("[]") @map("type_args")
+  typeDimensions Int      @default(0) @map("type_dimensions")
   /// C11 — order within (entityId, parentFieldId).
-  position      Int      @default(0)
-  isNullable    Boolean  @default(true) @map("is_nullable")
+  position       Int      @default(0)
+  isNullable     Boolean  @default(true) @map("is_nullable")
   /// C4 exception: the permission layer filters on this on every read.
-  isRestricted  Boolean  @default(false) @map("is_restricted")
-  isPii         Boolean  @default(false) @map("is_pii")
-  isDeprecated  Boolean  @default(false) @map("is_deprecated")
-  engineProps   Json     @default("{}") @map("engine_props")
+  isRestricted   Boolean  @default(false) @map("is_restricted")
+  isPii          Boolean  @default(false) @map("is_pii")
+  isDeprecated   Boolean  @default(false) @map("is_deprecated")
+  engineProps    Json     @default("{}") @map("engine_props")
   /// D4 — see `namespaces.refs`. This is the row that carries the leak: `engineProps.default`
   /// (`DEFAULT nextval('employee_salary_seq')`) and `engineProps.generatedExpression`
   /// (`GENERATED ALWAYS AS (base + bonus)`) name restricted columns in plain text.
-  refs          Json     @default("{\"entityIds\":[],\"fieldIds\":[]}")
-  version       Int      @default(0)
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  refs           Json     @default("{\"entityIds\":[],\"fieldIds\":[]}")
+  version        Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   entity     Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
@@ -998,16 +1019,16 @@ model Comment {
 }
 
 model SavedQuery {
-  id          String   @id @default(cuid())
-  projectId   String   @map("project_id")
-  createdById String?  @map("created_by_id")
-  aiThreadId  String?  @map("ai_thread_id")
-  name        String
-  description String?
-  queryText   String   @map("query_text")
+  id                  String   @id @default(cuid())
+  projectId           String   @map("project_id")
+  createdById         String?  @map("created_by_id")
+  aiThreadId          String?  @map("ai_thread_id")
+  name                String
+  description         String?
+  queryText           String   @map("query_text")
   /// Engine queryLanguage id: "sql", "mongo-aggregation", "cypher".
-  language    String   @default("sql")
-  tags        String[] @default([])
+  language            String   @default("sql")
+  tags                String[] @default([])
   /// FAIL-CLOSED flag for the visibility filter. True only when the engine's
   /// `queryValidator` resolved EVERY identifier in `queryText` and the
   /// `saved_query_entities` rows below were written from that resolution, in the
@@ -1020,7 +1041,7 @@ model SavedQuery {
   /// holding `schema:view` at PROJECT scope. Reset to false for every saved query
   /// in the project whenever an entity or field is renamed or deleted (one UPDATE
   /// by `project_id`); the next validation run sets it back.
-  identifiersResolved Boolean @default(false) @map("identifiers_resolved")
+  identifiersResolved Boolean  @default(false) @map("identifiers_resolved")
   /// Doc 05 L25. Written in the same transaction as `identifiersResolved = true`, from the
   /// engine `queryValidator`'s `touchedEntityIds` / `touchedFieldIds` (doc 03 §12). These are
   /// REAL COLUMNS rather than a re-parse or a join, because the library listing filters a page
@@ -1036,11 +1057,11 @@ model SavedQuery {
   ///     totalEntityCount && entitiesWithRestrictedFields ⊆ restrictedOkEntityIds`.
   /// A failing row is omitted entirely and 404s on read; it is never stubbed, because the query
   /// text IS the payload and SQL cannot be partially redacted.
-  touchedEntityIds String[] @default([]) @map("touched_entity_ids")
-  touchedFieldIds  String[] @default([]) @map("touched_field_ids")
-  version     Int      @default(0)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  touchedEntityIds    String[] @default([]) @map("touched_entity_ids")
+  touchedFieldIds     String[] @default([]) @map("touched_field_ids")
+  version             Int      @default(0)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -1107,34 +1128,34 @@ model AiThread {
 }
 
 model AiMessage {
-  id        String        @id @default(cuid())
+  id               String        @id @default(cuid())
   /// C6: denormalised so per-project AI usage and rate-limit reporting never
   /// joins through ai_threads.
-  projectId String        @map("project_id")
-  threadId  String        @map("thread_id")
-  role      AiMessageRole
+  projectId        String        @map("project_id")
+  threadId         String        @map("thread_id")
+  role             AiMessageRole
   /// C11 — turn order within the thread.
-  ordinal   Int
-  content   String
+  ordinal          Int
+  content          String
   /// The extracted query, if the assistant produced one.
-  queryText String?       @map("query_text")
-  model     String?
-  tokensIn  Int?          @map("tokens_in")
-  tokensOut Int?          @map("tokens_out")
+  queryText        String?       @map("query_text")
+  model            String?
+  tokensIn         Int?          @map("tokens_in")
+  tokensOut        Int?          @map("tokens_out")
   /// Doc 05 L25, same shape and same read rule as `saved_queries`. Real columns, not a key in
   /// `metadata`: a thread is replayed to the AI provider on every follow-up, so turn 1's SQL is
   /// re-sent under the subject's CURRENT permissions, and the filter must be a cheap set test on
   /// the row rather than a parse of `content`. A thread with any failing message is omitted
   /// whole and 404s — a transcript with holes replays nonsense.
-  touchedEntityIds String[]  @default([]) @map("touched_entity_ids")
-  touchedFieldIds  String[]  @default([]) @map("touched_field_ids")
+  touchedEntityIds String[]      @default([]) @map("touched_entity_ids")
+  touchedFieldIds  String[]      @default([]) @map("touched_field_ids")
   /// Assumptions, queryValidator result, suggested join-path additions.
   /// aiMessageMetaSchema. The id arrays inside it are best-effort and unswept, like
   /// `ai_threads.selection` (Open question 5); the two columns above are not — they are the
   /// visibility filter's input and are written from the validator result.
-  metadata  Json          @default("{}")
-  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  metadata         Json          @default("{}")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   thread  AiThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
@@ -1164,24 +1185,24 @@ model AiMessage {
 /// of retrying, and the editor shows "this project was restored from a snapshot"
 /// rather than a conflict dialog it cannot resolve.
 model Snapshot {
-  id              String       @id @default(cuid())
-  projectId       String       @map("project_id")
-  createdById     String?      @map("created_by_id")
-  name            String
-  description     String?
-  kind            SnapshotKind @default(manual)
+  id                  String       @id @default(cuid())
+  projectId           String       @map("project_id")
+  createdById         String?      @map("created_by_id")
+  name                String
+  description         String?
+  kind                SnapshotKind @default(manual)
   /// The full IR blob produced by packages/schema-model.
-  ir              Json
+  ir                  Json
   /// IR format version, so an old snapshot can be up-converted on read.
-  irSchemaVersion Int          @default(1) @map("ir_schema_version")
+  irSchemaVersion     Int          @default(1) @map("ir_schema_version")
   /// The engine PLUGIN version the blob's `engineProps` were written under (doc 03 §15.2).
   /// Restore, diff-against-live and migration generation compare it with the registered engine
   /// and REFUSE across a major difference. Without it, restoring a March snapshot after a June
   /// major bump writes rows that no subsequent edit can save, because every write re-parses
   /// `engineProps` through a `.strict()` schema that no longer models those keys.
-  enginePluginVersion String   @map("engine_plugin_version")
-  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  enginePluginVersion String       @map("engine_plugin_version")
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -1201,9 +1222,9 @@ model Role {
   /// production — see migration 0003. `access_grants.role_id` is a real FK to
   /// them, so environment-varying ids would make seed data, fixtures and any
   /// exported grant set non-portable.
-  id             String           @id @default(cuid())
+  id             String   @id @default(cuid())
   /// Null = built-in, visible to every org.
-  organizationId String?          @map("organization_id")
+  organizationId String?  @map("organization_id")
   /// Stable machine key. Built-ins: manager | editor | documenter | commenter |
   /// viewer. Custom roles get a slug generated from the name.
   key            String
@@ -1215,8 +1236,8 @@ model Role {
   /// transaction that added the value, so adding an atom and seeding it into a role
   /// would need two deploys. One source of truth, in contracts, where the API
   /// payload type already lives.
-  atoms          String[]         @default([])
-  isBuiltIn      Boolean          @default(false) @map("is_built_in")
+  atoms          String[] @default([])
+  isBuiltIn      Boolean  @default(false) @map("is_built_in")
   /// Retirement, not revocation. An archived role is **hidden from every role picker** and
   /// cannot be attached to a new or updated grant; grants that already use it keep working
   /// unchanged. It is deliberately NOT a liveness predicate (doc 05 R12 does not read it):
@@ -1226,9 +1247,9 @@ model Role {
   /// the grants — which is also what the delete path forces, since `access_grants.role_id` is
   /// `NO ACTION DEFERRABLE` (§8.6) and the role service refuses to delete a role while grants
   /// reference it, offering Archive instead.
-  isArchived     Boolean          @default(false) @map("is_archived")
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  isArchived     Boolean  @default(false) @map("is_archived")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   grants         AccessGrant[]
@@ -1241,18 +1262,18 @@ model Role {
 /// The single sharing primitive. No real FKs on resourceId / principalId —
 /// see section 4 for exactly what integrity that costs and how it is bought back.
 model AccessGrant {
-  id            String            @id @default(cuid())
+  id                String        @id @default(cuid())
   /// C6 — denormalised tenancy so a resolve never needs a join, and so the
   /// offboarding delete in section 4.3 is one indexed statement.
-  organizationId String           @map("organization_id")
+  organizationId    String        @map("organization_id")
   /// C6. For resourceType = project this equals resourceId (CHECK enforced).
-  projectId     String            @map("project_id")
-  resourceType  ResourceType      @map("resource_type")
-  resourceId    String            @map("resource_id")
-  principalType PrincipalType     @map("principal_type")
+  projectId         String        @map("project_id")
+  resourceType      ResourceType  @map("resource_type")
+  resourceId        String        @map("resource_id")
+  principalType     PrincipalType @map("principal_type")
   /// users.id | user_groups.id | lowercased email | share_links.id
-  principalId   String            @map("principal_id")
-  roleId        String            @map("role_id")
+  principalId       String        @map("principal_id")
+  roleId            String        @map("role_id")
   /// Grant modifiers. Doc 05 R7: ADDITIVE ONLY. The effective atom set of a grant
   /// is `role.atoms ∪ { 'ai:use' if canUseAi } ∪ { 'field:viewRestricted' if
   /// canViewRestricted }`. A toggle can add an atom, never remove one — so a custom
@@ -1269,27 +1290,27 @@ model AccessGrant {
   /// a custom role to unhide one salary column fails spec section 8's own workflow 2.
   canViewRestricted Boolean       @default(false) @map("can_view_restricted")
   /// Free text shown in the "Who has access" dialog ("contractor until Q3").
-  note          String?
-  createdById   String?           @map("created_by_id")
+  note              String?
+  createdById       String?       @map("created_by_id")
   /// Enforced in SQL on every resolve (`expires_at IS NULL OR expires_at > now()`),
   /// NOT by the sweep job — see section 3.2.1.
-  expiresAt     DateTime?         @map("expires_at") @db.Timestamptz(6)
-  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  expiresAt         DateTime?     @map("expires_at") @db.Timestamptz(6)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   /// NoAction + DEFERRABLE INITIALLY DEFERRED in 0002 (§8.6), for the same reason as
   /// the other four: deleting an organization cascades `roles` AND (through
   /// `projects`) `access_grants`, and `roles` is created first, so a plain Restrict
   /// here fires mid-cascade. "A custom role in use cannot be deleted" is enforced in
   /// the role service — which is also where `isArchived` lives, and archiving is what
   /// the UI should offer instead of deleting.
-  role       Role         @relation(fields: [roleId], references: [id], onDelete: NoAction)
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: NoAction)
   /// Doc 05 calls this principal "the grantor" and it is the `granted_by` of the audit row.
   /// One name, this one.
-  createdBy  User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  invitation Invitation?
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  invitation   Invitation?
 
   @@unique([resourceType, resourceId, principalType, principalId])
   /// THE permission hot path: every grant that can apply inside one project.
@@ -1323,24 +1344,24 @@ model AccessGrant {
 /// 404s. **Expiry** needs no sweep for the same reason — it is a SQL predicate, and it
 /// caps the cached permission map's `validUntil`.
 model ShareLink {
-  id           String    @id @default(cuid())
-  projectId    String    @map("project_id")
+  id             String    @id @default(cuid())
+  projectId      String    @map("project_id")
   /// Human label shown in the "Who has access" dialog.
-  label        String?
+  label          String?
   /// sha256 of the URL token.
-  tokenHash    String    @unique @map("token_hash")
+  tokenHash      String    @unique @map("token_hash")
   /// argon2id hash of the optional password.
-  passwordHash String?   @map("password_hash")
-  createdById  String?   @map("created_by_id")
-  expiresAt    DateTime? @map("expires_at") @db.Timestamptz(6)
-  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+  passwordHash   String?   @map("password_hash")
+  createdById    String?   @map("created_by_id")
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
   /// Written fire-and-forget AFTER the response, never inside the request's
   /// transaction (doc 05 section 7.12 step 3). A share link is a single hot row; an
   /// in-transaction counter bump would serialise every visitor behind one row lock.
   lastAccessedAt DateTime? @map("last_accessed_at") @db.Timestamptz(6)
   accessCount    Int       @default(0) @map("access_count")
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -1450,22 +1471,22 @@ model ActivityLog {
 /// separate job deletes `audit_log WHERE organization_id IS NULL AND created_at <
 /// now() - :retention`, and that job is reviewable.
 model AuditLog {
-  id             String   @id @default(cuid())
-  organizationId String?  @map("organization_id")
+  id               String   @id @default(cuid())
+  organizationId   String?  @map("organization_id")
   /// Preserved after the org row is gone, the way actorEmail is after the user.
-  organizationName String? @map("organization_name")
-  projectId      String?  @map("project_id")
-  actorUserId    String?  @map("actor_user_id")
+  organizationName String?  @map("organization_name")
+  projectId        String?  @map("project_id")
+  actorUserId      String?  @map("actor_user_id")
   /// Preserved even after the user row is gone.
-  actorEmail     String?  @map("actor_email")
-  action         String
-  resourceType   String?  @map("resource_type")
-  resourceId     String?  @map("resource_id")
-  ip             String?
-  userAgent      String?  @map("user_agent")
-  metadata       Json     @default("{}")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  actorEmail       String?  @map("actor_email")
+  action           String
+  resourceType     String?  @map("resource_type")
+  resourceId       String?  @map("resource_id")
+  ip               String?
+  userAgent        String?  @map("user_agent")
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   project      Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -1478,11 +1499,11 @@ model AuditLog {
 }
 
 model Notification {
-  id             String           @id @default(cuid())
-  userId         String           @map("user_id")
-  actorUserId    String?          @map("actor_user_id")
-  organizationId String?          @map("organization_id")
-  projectId      String?          @map("project_id")
+  id             String    @id @default(cuid())
+  userId         String    @map("user_id")
+  actorUserId    String?   @map("actor_user_id")
+  organizationId String?   @map("organization_id")
+  projectId      String?   @map("project_id")
   /// Dotted verb, open set, exactly like `activity_log.action`: "org.invited",
   /// "resource.shared", "comment.mentioned", "comment.replied",
   /// "access.requested", "access.decided", "ai.job_finished", "export.ready".
@@ -1494,10 +1515,10 @@ model Notification {
   body           String?
   /// Relative in-app URL to open.
   url            String?
-  data           Json             @default("{}")
-  readAt         DateTime?        @map("read_at") @db.Timestamptz(6)
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  data           Json      @default("{}")
+  readAt         DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user         User          @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   actor        User?         @relation("NotificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
@@ -1540,10 +1561,10 @@ model DocDraft {
   createdBy  User?   @relation("DocDraftCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   reviewedBy User?   @relation("DocDraftReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
 
-  /// The review queue: "pending drafts in this project".
-  @@index([projectId, status])
   /// One draft per target at a time, so a re-run replaces rather than piles up.
   @@unique([targetType, targetId, status])
+  /// The review queue: "pending drafts in this project".
+  @@index([projectId, status])
   @@map("doc_drafts")
 }
 

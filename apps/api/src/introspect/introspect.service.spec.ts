@@ -4,6 +4,7 @@ import { ENGINE_MANIFEST } from '../engines/engines.manifest';
 import type { SnapshotContext } from '../snapshots';
 import { validateConnection } from './connection';
 import { IntrospectService } from './introspect.service';
+import { openTunnel } from './ssh-tunnel';
 
 const postgresEngine = ENGINE_MANIFEST[0]!;
 const FIELDS = postgresEngine.capabilities.connectionFields;
@@ -46,6 +47,35 @@ describe('validateConnection', () => {
     expect(() => validateConnection(FIELDS, plain, false)).toThrow();
     expect(validateConnection(FIELDS, plain, true).sslmode).toBe('disable');
   });
+
+  // §10.1 / §10.3
+  const tunnel = { ...ok, ssh: 'ssh', ssh_host: 'bastion.example.com', ssh_user: 'jump' };
+
+  it('drops hidden fields and requires visible ones', () => {
+    const off = validateConnection(FIELDS, { ...ok, ssh_host: 'x', sslrootcert: 'y' }, false);
+    expect(off).not.toHaveProperty('ssh_host');
+    expect(off).not.toHaveProperty('sslrootcert');
+    expect(refusedField(() => validateConnection(FIELDS, tunnel, false))).toBe('ssh_private_key');
+    expect(
+      validateConnection(FIELDS, { ...tunnel, ssh_auth: 'password', ssh_password: 'p' }, false),
+    ).toMatchObject({ ssh_port: 22, ssh_password: 'p' });
+  });
+
+  it('takes certificate fields only as PEM text', () => {
+    const pem = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----';
+    const verify = { ...ok, sslmode: 'verify-ca' };
+    expect(validateConnection(FIELDS, { ...verify, sslrootcert: pem }, false).sslrootcert).toBe(
+      pem,
+    );
+    expect(
+      refusedField(() => validateConnection(FIELDS, { ...verify, sslrootcert: 'nope' }, false)),
+    ).toBe('sslrootcert');
+  });
+
+  it('allows sslmode=disable through a tunnel without the flag', () => {
+    const plain = { ...tunnel, ssh_auth: 'password', ssh_password: 'p', sslmode: 'disable' };
+    expect(validateConnection(FIELDS, plain, false).sslmode).toBe('disable');
+  });
 });
 
 const ctx: SnapshotContext = {
@@ -60,6 +90,8 @@ function build(opts: {
   engine?: Partial<EngineDefinition>;
   fullView?: boolean;
   allowPrivate?: boolean;
+  /** what the saved-connection store hands back for `{ saved: true }` */
+  saved?: Record<string, unknown>;
 }) {
   const introspect = vi.fn().mockResolvedValue({
     source: 'CREATE TABLE t (id int);',
@@ -102,6 +134,10 @@ function build(opts: {
         return Promise.resolve(v);
       }),
     },
+    savedConnections: {
+      load: vi.fn().mockResolvedValue({ ...opts.saved }),
+      touch: vi.fn().mockResolvedValue(undefined),
+    },
   };
   const service = new IntrospectService(
     deps.config as never,
@@ -112,6 +148,7 @@ function build(opts: {
     deps.storage as never,
     deps.rateLimit as never,
     deps.cache as never,
+    deps.savedConnections as never,
   );
   return { service, deps, introspect };
 }
@@ -121,7 +158,7 @@ const connection = { host: '127.0.0.1', database: 'shop', user: 'reader', passwo
 describe('IntrospectService', () => {
   it('previews, stores the source, and keeps credentials out of storage, Redis and audit', async () => {
     const { service, deps, introspect } = build({});
-    const result = await service.preview(ctx, connection);
+    const result = await service.preview(ctx, { connection });
     expect(result.preview.creates).toEqual(['t']);
     expect(introspect).toHaveBeenCalledWith(
       expect.objectContaining({ resolvedAddress: '127.0.0.1' }),
@@ -137,22 +174,22 @@ describe('IntrospectService', () => {
 
   it('checks the full view before connecting anywhere', async () => {
     const { service, introspect } = build({ fullView: false });
-    await expect(service.preview(ctx, connection)).rejects.toThrow('partial view');
+    await expect(service.preview(ctx, { connection })).rejects.toThrow('partial view');
     expect(introspect).not.toHaveBeenCalled();
   });
 
   it('refuses a private host without the flag, before connecting', async () => {
     const { service, introspect } = build({ allowPrivate: false });
-    await expect(service.preview(ctx, { ...connection, sslmode: 'require' })).rejects.toMatchObject(
-      { response: { code: 'introspect.private_host' } },
-    );
+    await expect(
+      service.preview(ctx, { connection: { ...connection, sslmode: 'require' } }),
+    ).rejects.toMatchObject({ response: { code: 'introspect.private_host' } });
     expect(introspect).not.toHaveBeenCalled();
   });
 
   it('maps an engine error to its HTTP status and audits the failure', async () => {
     const { service, deps, introspect } = build({});
     introspect.mockRejectedValueOnce(new IntrospectError('auth_failed', 'Refused.'));
-    await expect(service.preview(ctx, connection)).rejects.toMatchObject({
+    await expect(service.preview(ctx, { connection })).rejects.toMatchObject({
       status: 422,
       response: { code: 'introspect.auth_failed' },
     });
@@ -167,11 +204,11 @@ describe('IntrospectService', () => {
 
   it('applies a source once, for its own user and project only', async () => {
     const { service, deps } = build({});
-    const { sourceId } = await service.preview(ctx, connection);
+    const { sourceId } = await service.preview(ctx, { connection });
     const other = { ...ctx, subject: { kind: 'user', userId: 'u2' } } as SnapshotContext;
     await expect(service.apply(other, sourceId, [])).rejects.toMatchObject({ status: 404 });
 
-    const again = await service.preview(ctx, connection);
+    const again = await service.preview(ctx, { connection });
     await expect(service.apply(ctx, again.sourceId, [])).resolves.toEqual({ id: 'job1' });
     expect(deps.jobs.enqueueImport).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -184,8 +221,76 @@ describe('IntrospectService', () => {
 
   it('refuses an engine without an introspector', async () => {
     const { service } = build({ engine: { introspector: undefined } });
-    await expect(service.preview(ctx, connection)).rejects.toMatchObject({
+    await expect(service.preview(ctx, { connection })).rejects.toMatchObject({
       response: { code: 'engine.introspection_unavailable' },
     });
+  });
+});
+
+vi.mock('./ssh-tunnel', () => ({
+  openTunnel: vi.fn(() =>
+    Promise.resolve({ port: 40_123, hostKey: 'SHA256:bastion', close: tunnelClosed }),
+  ),
+}));
+const tunnelClosed = vi.hoisted(() => vi.fn());
+
+describe('IntrospectService through an SSH tunnel (§10.3)', () => {
+  const viaSsh = {
+    // Only the bastion can resolve this name; the guard must not try.
+    host: 'db.internal.invalid',
+    database: 'shop',
+    user: 'reader',
+    ssh: 'ssh',
+    ssh_host: '127.0.0.1',
+    ssh_user: 'jump',
+    ssh_private_key: '-----BEGIN OPENSSH PRIVATE KEY-----\nsecret-key-body\n-----END',
+  };
+
+  it('guards the bastion, reads through the local end, and returns the host key', async () => {
+    const { service, deps, introspect } = build({ allowPrivate: true });
+    const result = await service.preview(ctx, { connection: viaSsh });
+
+    expect(openTunnel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '127.0.0.1',
+        dstHost: 'db.internal.invalid',
+        dstPort: 5432,
+      }),
+    );
+    expect(introspect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resolvedAddress: '127.0.0.1',
+        connection: expect.objectContaining({ host: 'db.internal.invalid', port: 40_123 }),
+      }),
+    );
+    expect(result.sshHostKey).toBe('SHA256:bastion');
+    expect(tunnelClosed).toHaveBeenCalled();
+    const audited = JSON.stringify(deps.prisma.auditLog.create.mock.calls);
+    expect(audited).toContain('SHA256:bastion');
+    expect(audited).not.toContain('secret-key-body');
+  });
+});
+
+describe('IntrospectService with the saved connection (6c)', () => {
+  it('reads with the saved values, validated again, and records the use', async () => {
+    const saved = { host: '127.0.0.1', database: 'shop', user: 'reader', password: 'pw' };
+    const { service, deps, introspect } = build({ saved });
+    await service.preview(ctx, { saved: true });
+    expect(deps.savedConnections.load).toHaveBeenCalledWith('p1', 'postgresql');
+    expect(introspect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connection: expect.objectContaining({ password: 'pw', port: 5432 }),
+      }),
+    );
+    expect(deps.savedConnections.touch).toHaveBeenCalledWith('p1');
+    expect(JSON.stringify(deps.prisma.auditLog.create.mock.calls)).toContain('"saved":true');
+  });
+
+  it('still refuses saved values the engine no longer accepts', async () => {
+    const { service, introspect } = build({ saved: { host: '127.0.0.1', removed: 'x' } });
+    await expect(service.preview(ctx, { saved: true })).rejects.toMatchObject({
+      response: { code: 'introspect.invalid_connection' },
+    });
+    expect(introspect).not.toHaveBeenCalled();
   });
 });

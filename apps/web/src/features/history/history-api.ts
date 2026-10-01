@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
+import type { ConnectionSource } from '@/features/projects/saved-connection';
 import { apiFetch } from '@/lib/api-client';
 
 /**
@@ -185,18 +186,19 @@ export const driftSchema = z.object({
   diff: diffSchema,
   migration: migrationSchema,
   serverVersion: z.string(),
+  sshHostKey: z.string().optional(),
 });
 export type DriftView = z.infer<typeof driftSchema>;
 
 export async function checkDrift(
   projectId: string,
-  connection: Record<string, unknown>,
+  source: ConnectionSource,
   allowDestructive: boolean,
 ): Promise<DriftView> {
   return driftSchema.parse(
     await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/introspect/drift`, {
       method: 'POST',
-      body: { connection, allowDestructive },
+      body: { ...source, allowDestructive },
     }),
   );
 }

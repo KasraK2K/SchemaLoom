@@ -50,7 +50,7 @@ export async function listWorkspaces(orgSlug: string): Promise<WorkspaceSummary[
 }
 
 /** The subset of `GET /engines` the create form reads. `comingSoon` engines are not offered. */
-const EngineOptionSchema = z.object({
+export const EngineOptionSchema = z.object({
   id: z.string(),
   displayName: z.string(),
   capabilities: z.object({
@@ -60,11 +60,15 @@ const EngineOptionSchema = z.object({
         z.object({
           id: z.string(),
           label: z.string(),
-          kind: z.enum(['text', 'number', 'secret', 'select', 'list']),
+          kind: z.enum(['text', 'number', 'secret', 'select', 'list', 'file']),
           required: z.boolean(),
           options: z.array(z.string()).optional(),
           default: z.union([z.string(), z.number()]).optional(),
-        }),
+          // Phase 6 §10.1 — without these the form shows every field and sends hidden ones.
+          section: z.string().optional(),
+          showWhen: z.object({ field: z.string(), in: z.array(z.string()) }).optional(),
+          secret: z.boolean().optional(),
+        }) satisfies z.ZodType<ConnectionField>,
       )
       .default([]),
   }),

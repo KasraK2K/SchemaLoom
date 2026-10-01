@@ -738,6 +738,14 @@ function alterTable(node: AstNode, ctx: StatementContext): void {
     const command = unwrap(wrapper, 'AlterTableCmd');
     if (command === undefined) continue;
     const subtype = str(command, 'subtype');
+    if (subtype === 'AT_ColumnDefault') {
+      setColumnDefault(command, entity, ctx);
+      continue;
+    }
+    if (subtype === 'AT_AddIdentity') {
+      addIdentity(command, entity, ctx);
+      continue;
+    }
     if (subtype !== 'AT_AddConstraint') {
       ctx.loss(`${subtype ?? 'an ALTER TABLE action'} is not part of the schema model`);
       continue;
@@ -749,6 +757,43 @@ function alterTable(node: AstNode, ctx: StatementContext): void {
     }
     applyConstraint(constraint, entity, ctx, [], null);
   }
+}
+
+/** `ALTER COLUMN … SET DEFAULT expr` — what pg_dump writes for every serial column, after the
+ *  table. `import-serial.ts` later folds the `nextval` ones back into `serial`. */
+function setColumnDefault(command: AstNode, entity: Entity, ctx: StatementContext): void {
+  const name = str(command, 'name');
+  const field = name === undefined ? undefined : ctx.model.findField(entity, name);
+  if (field === undefined) {
+    ctx.loss(`the column "${name ?? ''}" is not in this import`);
+    return;
+  }
+  if (command.def === undefined) {
+    ctx.loss(`DROP DEFAULT on "${field.name}" is not applied: an import only adds`);
+    return;
+  }
+  const text = expressionAtOf(ctx.text, command.def);
+  if (text === undefined) {
+    ctx.loss(`the DEFAULT on "${field.name}" could not be read back as SQL`);
+    return;
+  }
+  ctx.model.updateField(field, { engineProps: { ...field.engineProps, default: text } });
+  ctx.produced({ type: 'field', id: field.id });
+}
+
+/** `ALTER COLUMN … ADD GENERATED … AS IDENTITY (SEQUENCE NAME …)` — how pg_dump writes an
+ *  identity column. The sequence options are pg_dump's bookkeeping, not the design. */
+function addIdentity(command: AstNode, entity: Entity, ctx: StatementContext): void {
+  const name = str(command, 'name');
+  const field = name === undefined ? undefined : ctx.model.findField(entity, name);
+  const constraint = unwrap(command.def, 'Constraint');
+  if (field === undefined || constraint === undefined) {
+    ctx.loss(`the identity on "${name ?? ''}" could not be read`);
+    return;
+  }
+  const identity = str(constraint, 'generated_when') === 'd' ? 'byDefault' : 'always';
+  ctx.model.updateField(field, { engineProps: { ...field.engineProps, identity } });
+  ctx.produced({ type: 'field', id: field.id });
 }
 
 // --- expression text ----------------------------------------------------------------------

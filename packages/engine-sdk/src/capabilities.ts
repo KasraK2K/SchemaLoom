@@ -178,16 +178,103 @@ export interface EngineCapabilities {
 }
 
 /** Phase 6 §1 — one input of the "From a database" form. `secret` renders as a password
- *  input and is never echoed back by the api. */
+ *  input and is never echoed back by the api. `file` is PEM text (§10.1). */
 export interface ConnectionField {
   readonly id: string;
   readonly label: string;
-  readonly kind: 'text' | 'number' | 'secret' | 'select' | 'list';
+  readonly kind: 'text' | 'number' | 'secret' | 'select' | 'list' | 'file';
   readonly required: boolean;
   /** for `select` */
   readonly options?: readonly string[];
   readonly default?: string | number;
+  /** heading the web groups fields under */
+  readonly section?: string;
+  /** shown, validated and sent only while `field` is visible and its value is in `in` */
+  readonly showWhen?: { readonly field: string; readonly in: readonly string[] };
+  /** Phase 6c — a `file` holding a private key. With `kind: 'secret'` it is what a saved
+   *  connection keeps encrypted and never returns to a browser. */
+  readonly secret?: boolean;
 }
+
+/** Phase 6c — the fields a saved connection never returns. */
+export const isSecretField = (field: ConnectionField): boolean =>
+  field.kind === 'secret' || field.secret === true;
+
+/**
+ * Phase 6 §10.1 — the one visibility rule, shared by the web form and the api's validation.
+ * Transitive: a field whose controller is hidden is hidden too. `values` are raw inputs; an
+ * empty controller reads as its default.
+ */
+export function visibleFields(
+  fields: readonly ConnectionField[],
+  values: Readonly<Record<string, unknown>>,
+): readonly ConnectionField[] {
+  const byId = new Map(fields.map((f) => [f.id, f]));
+  const visible = (field: ConnectionField, depth: number): boolean => {
+    if (field.showWhen === undefined) return true;
+    const controller = byId.get(field.showWhen.field);
+    // A cycle or a dangling reference hides the field rather than looping or guessing.
+    if (controller === undefined || depth > fields.length || !visible(controller, depth + 1)) {
+      return false;
+    }
+    const raw = values[controller.id];
+    const value = raw === undefined || raw === '' ? controller.default : raw;
+    return (
+      (typeof value === 'string' || typeof value === 'number') &&
+      field.showWhen.in.includes(String(value))
+    );
+  };
+  return fields.filter((f) => visible(f, 0));
+}
+
+/** Phase 6 §10.3 — the SSH part of the form. Core opens the tunnel, so these ids are
+ *  conventions core reads; an engine that talks TCP spreads this into `connectionFields`. */
+export const SSH_TUNNEL_FIELDS: readonly ConnectionField[] = [
+  {
+    id: 'ssh',
+    label: 'Connect through',
+    kind: 'select',
+    required: true,
+    options: ['none', 'ssh'],
+    default: 'none',
+    section: 'SSH tunnel',
+  },
+  ...(
+    [
+      { id: 'ssh_host', label: 'SSH host', kind: 'text', required: true },
+      { id: 'ssh_port', label: 'SSH port', kind: 'number', required: true, default: 22 },
+      { id: 'ssh_user', label: 'SSH user', kind: 'text', required: true },
+      {
+        id: 'ssh_auth',
+        label: 'SSH login',
+        kind: 'select',
+        required: true,
+        options: ['key', 'password'],
+        default: 'key',
+      },
+      {
+        id: 'ssh_host_key',
+        label: 'Host key fingerprint (SHA256:…, optional)',
+        kind: 'text',
+        required: false,
+      },
+    ] as const
+  ).map((f) => ({ ...f, section: 'SSH tunnel', showWhen: { field: 'ssh', in: ['ssh'] } })),
+  ...(
+    [
+      { id: 'ssh_private_key', label: 'Private key', kind: 'file', required: true, secret: true },
+      { id: 'ssh_passphrase', label: 'Key passphrase', kind: 'secret', required: false },
+    ] as const
+  ).map((f) => ({ ...f, section: 'SSH tunnel', showWhen: { field: 'ssh_auth', in: ['key'] } })),
+  {
+    id: 'ssh_password',
+    label: 'SSH password',
+    kind: 'secret',
+    required: true,
+    section: 'SSH tunnel',
+    showWhen: { field: 'ssh_auth', in: ['password'] },
+  },
+];
 
 export interface CapabilitiesInput extends Omit<
   EngineCapabilities,

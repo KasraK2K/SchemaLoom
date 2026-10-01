@@ -11,6 +11,7 @@ import {
   type ConnectionDraft,
 } from './connection-form';
 import type { EngineOption, ProjectSummary, WorkspaceSummary } from './projects-api';
+import { saveConnection, type ConnectionSource } from './saved-connection';
 
 const CreatedSchema = z.object({ id: z.string() });
 
@@ -84,6 +85,7 @@ const IntrospectedSchema = z.object({
   preview: z.lazy(() => PreviewSchema),
   sourceId: z.string(),
   serverVersion: z.string(),
+  sshHostKey: z.string().optional(),
 });
 export type Introspected = z.infer<typeof IntrospectedSchema>;
 
@@ -93,12 +95,12 @@ export type Introspected = z.infer<typeof IntrospectedSchema>;
  */
 export async function introspectPreview(
   projectId: string,
-  connection: Record<string, unknown>,
+  source: ConnectionSource,
 ): Promise<Introspected> {
   return IntrospectedSchema.parse(
     await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/introspect/preview`, {
       method: 'POST',
-      body: { connection },
+      body: source,
     }),
   );
 }
@@ -231,6 +233,8 @@ export function NoProjects({
   const [workspaceName, setWorkspaceName] = useState('');
   const [source, setSource] = useState('');
   const [draft, setDraft] = useState<ConnectionDraft>({});
+  /** 6c — save the connection on the project, so it can Sync later */
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -347,6 +351,20 @@ export function NoProjects({
     ).id;
   };
 
+  /** Saves the connection on the project first when asked; a manager-only save that is
+   *  refused (importing into someone else's project) falls back to the typed details. */
+  const databaseSource = async (id: string): Promise<ConnectionSource> => {
+    const connection = connectionPayload(engine?.connectionFields ?? [], draft);
+    if (!remember) return { connection };
+    try {
+      await saveConnection(id, connection);
+      return { saved: true };
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 403) return { connection };
+      throw caught;
+    }
+  };
+
   const submit = async () => {
     setBusy(true);
     setError(null);
@@ -360,15 +378,13 @@ export function NoProjects({
           mode === 'database'
             ? await importIntrospected(
                 id,
-                (
-                  await introspectPreview(
-                    id,
-                    connectionPayload(engine?.connectionFields ?? [], draft),
-                  )
-                ).sourceId,
+                (await introspectPreview(id, await databaseSource(id))).sourceId,
               )
             : await importInto(id, source);
-        const notApplied = report.statements.filter((s) => s.status !== 'applied');
+        // `ignored` is SET, COMMENT, GRANT…: nothing the schema lost, so it isn't a loss.
+        const notApplied = report.statements.filter(
+          (s) => s.status !== 'applied' && s.status !== 'ignored',
+        );
         if (notApplied.length > 0 || existing.length > 0) {
           setSkipped({ href, statements: notApplied, existing });
           return;
@@ -524,12 +540,26 @@ export function NoProjects({
         </>
       )}
       {mode === 'database' && engine !== undefined && (
-        <ConnectionForm
-          fields={engine.connectionFields}
-          draft={draft}
-          onChange={setDraft}
-          disabled={busy}
-        />
+        <>
+          <ConnectionForm
+            fields={engine.connectionFields}
+            draft={draft}
+            onChange={setDraft}
+            disabled={busy}
+          />
+          <label className="flex items-center gap-2 text-xs text-text-muted">
+            <input
+              type="checkbox"
+              checked={remember}
+              disabled={busy}
+              onChange={(e) => {
+                setRemember(e.target.checked);
+              }}
+            />
+            Remember this connection for the project, to Sync later (passwords and keys are stored
+            encrypted)
+          </label>
+        </>
       )}
       {createdId !== null && (
         <p className="text-xs text-text-muted">

@@ -1,7 +1,7 @@
 # Phase 6: live database import and drift check
 
-Status: **approved 2026-09-29 with every default in §8** (user decision). Ready to build in
-the §9 order.
+Status: **approved 2026-09-29 with every default in §8** (user decision); §10–§11 approved
+2026-09-30. Ready to build in the §9 order.
 
 Roadmap rows 6a, 6b and 6c (`docs/ROADMAP.md`).
 
@@ -197,3 +197,87 @@ drift appears. Nothing in 6a or 6b may depend on it.
    in the drift diff.
 
 Update `docs/ROADMAP.md` rows 6a and 6b as each lands.
+
+---
+
+## 10. SSH tunnel and certificate files (added 2026-09-30)
+
+Status: **approved 2026-09-30** (user decision: an optional host-key pin, key or password login,
+CA plus client certificate and key). Many databases are reachable only through a bastion, and
+`verify-ca` / `verify-full` are useless without a way to hand over the CA.
+
+### 10.1 Contract
+
+`ConnectionField` gains three optional members. The form and the api's validation are still
+generated from `connectionFields` alone, so no engine id appears in core or the web.
+
+```ts
+readonly kind: 'text' | 'number' | 'secret' | 'select' | 'list' | 'file';
+/** heading the web groups fields under ("SSH tunnel", "TLS") */
+readonly section?: string;
+/** shown, validated and sent only while `field` is visible and its value is in `in` */
+readonly showWhen?: { readonly field: string; readonly in: readonly string[] };
+```
+
+- `file` is PEM text. The browser offers a file picker and a paste box, and sends the text.
+  The api accepts up to 256 KB and requires `-----BEGIN`.
+- `visibleFields(fields, values)` in the SDK is the one visibility rule, used by both the web
+  and the api. It's transitive: a field is hidden when the field it depends on is hidden.
+  Required-ness applies only to visible fields, and hidden values are dropped.
+- `SSH_TUNNEL_FIELDS` in the SDK is the SSH part of the form. An engine that talks TCP spreads
+  it into its `connectionFields`. The ids are conventions core reads (like `host` and
+  `sslmode`): `ssh` (`none` | `ssh`), `ssh_host`, `ssh_port`, `ssh_user`, `ssh_auth`
+  (`key` | `password`), `ssh_private_key` (`file`), `ssh_passphrase`, `ssh_password`,
+  `ssh_host_key`.
+
+### 10.2 TLS files (PostgreSQL engine)
+
+`sslrootcert` (CA certificate, shown for `verify-ca` and `verify-full`), plus `sslcert` and
+`sslkey` (client certificate and key, shown for every mode except `disable`). The introspector
+writes them into a fresh `mkdtemp` directory with mode `0600`, points `PGSSLROOTCERT`,
+`PGSSLCERT` and `PGSSLKEY` at them, and removes the directory when `pg_dump` exits, however it
+exits. An empty CA under `verify-full` means `PGSSLROOTCERT=system`, the OS trust store. libpq only
+allows `system` with `verify-full`, so `verify-ca` needs the CA.
+
+### 10.3 SSH tunnel (core, `apps/api/src/introspect/ssh-tunnel.ts`)
+
+Engine-agnostic, so it lives in core. It uses the `ssh2` package, a new api dependency, because
+SSH can't be done in a few lines, and spawning `ssh -L` would need key files and a
+`known_hosts` on disk.
+
+1. **The SSRF guard checks `ssh_host`**, because that's what the api connects to. The database
+   `host` is resolved by the bastion, and reaching a private database behind it is the point.
+2. **Host key:** every connection computes the bastion key's `SHA256:` fingerprint. If
+   `ssh_host_key` is set and doesn't match, the connection is refused before authentication
+   (`introspect.ssh_host_key_mismatch`). If it's empty, the connection goes ahead and the
+   fingerprint comes back in the response (`sshHostKey`). The result screen shows it, with a
+   note to check it and paste it into the field next time (connection details aren't kept, so
+   there's nothing to pin it to yet; saved connections in §7 will).
+3. The tunnel listens on `127.0.0.1:0` for one read. The engine gets `resolvedAddress:
+127.0.0.1` and the tunnel's port in place of `port` (a third conventional id), while `host`
+   stays as typed, so `verify-full` still checks the database's name. The tunnel closes in `finally`, and a 20 s handshake timeout applies.
+4. `sslmode=disable` is allowed through a tunnel even without the private-hosts flag: the leg
+   the api can see is SSH-encrypted.
+5. Errors: `introspect.ssh_unreachable`, `introspect.ssh_auth_failed` and
+   `introspect.ssh_host_key_mismatch` (all 422). None echoes a key, passphrase or password.
+6. The audit row gains `sshHost` and `sshHostKey`. Credentials stay where §3.1 says, and pino's
+   `connection.*` redaction already covers the new ids.
+
+## 11. Everything in Docker (added 2026-09-30)
+
+Status: **approved 2026-09-30** (user decision: one command). People shouldn't have to install
+`pg_dump`, or anything else, to use SchemaLoom.
+
+- `apps/web/Dockerfile`: a Next.js standalone build. `NEXT_PUBLIC_API_URL` is a build argument,
+  because Next bakes it into the browser bundle.
+- `docker-compose.yml` gains, with no profile, `migrate` (one-shot; the api waits for it),
+  `api` (the image with `pg_dump`), `web`, and `proxy` (Caddy on `http://localhost:8080`).
+  Caddy sends `/api/*` and `/socket.io/*` to the api and everything else to the web app,
+  keeping one hostname (CLAUDE.md rule). Only the proxy publishes a port.
+- `cp .env.example .env && docker compose up -d` is the whole setup. The app
+  services take secrets from `.env` and override the URLs to service names. The first `up`
+  builds the images; `--build` picks up a newer checkout. `pnpm infra:up` names only the four
+  infra services, so development never builds the app images. `pnpm dev` is
+  unchanged.
+- To read a database on the same machine, use `host.docker.internal` as the host.
+  `localhost` inside the api container is the container.

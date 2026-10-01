@@ -12,13 +12,7 @@ import {
 import { useState } from 'react';
 import { useEngine } from '@/engines';
 import { DescribeSchema } from '@/features/ai/describe-schema';
-import {
-  ConnectionForm,
-  connectionPayload,
-  hasConnectionForm,
-  initialDraft,
-  type ConnectionDraft,
-} from '@/features/projects/connection-form';
+import { SshHostKeyNote, hasConnectionForm } from '@/features/projects/connection-form';
 import {
   importInto,
   importIntrospected,
@@ -28,6 +22,7 @@ import {
   type Imported,
   type RenameCandidate,
 } from '@/features/projects/create-project';
+import { ConnectionSection, useConnectionChoice } from '@/features/projects/saved-connection';
 import { ApiError } from '@/lib/api-client';
 
 type EntityCandidate = Extract<RenameCandidate, { type: 'entity' }>;
@@ -42,26 +37,33 @@ type FieldCandidate = Extract<RenameCandidate, { type: 'field' }>;
  * the pairs the user marks "Rename" are sent.
  *
  * Phase 6 §5: "From a database" (when the engine declares a connection form) reads the schema
- * on the server, then follows the same preview → renames → import steps.
+ * on the server, then follows the same preview → renames → import steps. 6c: with a saved
+ * connection that tab is "Sync now", and the toolbar's Sync opens the dialog on it.
  */
 export function ImportDialog({
   open,
   onOpenChange,
   projectId,
   onImported,
+  initialFrom = 'sql',
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly projectId: string;
   readonly onImported: () => Promise<void>;
+  /** 'database' for the toolbar's Sync */
+  readonly initialFrom?: 'sql' | 'database';
 }) {
   const facet = useEngine();
   const format = facet.capabilities.importFormats[0];
   const connectionFields = facet.capabilities.connectionFields;
-  const [from, setFrom] = useState<'sql' | 'database'>('sql');
-  const [draft, setDraft] = useState<ConnectionDraft>(() => initialDraft(connectionFields));
+  const [from, setFrom] = useState<'sql' | 'database'>(initialFrom);
+  const choice = useConnectionChoice(projectId, connectionFields);
+  /** "Not saved: only managers can…" after a read that fell back to the typed details */
+  const [note, setNote] = useState<string | null>(null);
   /** The introspected dump waiting on the server (Phase 6 §4). */
   const [sourceId, setSourceId] = useState<string | null>(null);
+  const [sshHostKey, setSshHostKey] = useState<string | undefined>(undefined);
   const [source, setSource] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,9 +78,11 @@ export function ImportDialog({
     if (busy) return;
     onOpenChange(next);
     if (!next) {
-      setFrom('sql');
-      setDraft(initialDraft(connectionFields));
+      setFrom(initialFrom);
+      choice.reset();
+      setNote(null);
       setSourceId(null);
+      setSshHostKey(undefined);
       setSource('');
       setError(null);
       setResult(null);
@@ -107,11 +111,11 @@ export function ImportDialog({
     void (async () => {
       try {
         if (from === 'database') {
-          const read = await introspectPreview(
-            projectId,
-            connectionPayload(connectionFields, draft),
-          );
+          const resolved = await choice.resolve();
+          setNote(resolved.note ?? null);
+          const read = await introspectPreview(projectId, resolved.source);
           setSourceId(read.sourceId);
+          setSshHostKey(read.sshHostKey);
           if (read.preview.renameCandidates.length > 0) {
             setCandidates(read.preview.renameCandidates);
             return;
@@ -166,7 +170,10 @@ export function ImportDialog({
     setConfirmed(next);
   };
 
-  const notApplied = result?.report.statements.filter((s) => s.status !== 'applied') ?? [];
+  // `ignored` is SET, COMMENT, GRANT…: nothing the schema lost, so it isn't listed as a loss.
+  const notApplied =
+    result?.report.statements.filter((s) => s.status !== 'applied' && s.status !== 'ignored') ?? [];
+  const ignored = result?.report.statements.filter((s) => s.status === 'ignored').length ?? 0;
   const renamedTo = new Set(
     entities.filter((c) => confirmed.has(`entity:${c.fromId}`)).map((c) => c.toName),
   );
@@ -184,9 +191,17 @@ export function ImportDialog({
         {result !== null ? (
           <div className="mt-4 flex flex-col gap-2 text-xs">
             <p className="text-sm text-text">
-              {result.report.statementCount - notApplied.length} of {result.report.statementCount}{' '}
-              statements applied.
+              {result.report.statementCount - notApplied.length - ignored} of{' '}
+              {result.report.statementCount - ignored} schema statements applied.
             </p>
+            {ignored > 0 && (
+              <p className="text-text-muted">
+                Skipped {ignored} statement{ignored === 1 ? '' : 's'} that don’t describe the schema
+                (session settings, comments, grants).
+              </p>
+            )}
+            <SshHostKeyNote hostKey={sshHostKey} />
+            {note !== null && <p className="text-text-muted">{note}</p>}
             {renamed.length > 0 && <p className="text-text-muted">Renamed: {renamed.join(', ')}</p>}
             {unchanged.length > 0 && (
               <p className="text-text-muted">
@@ -316,12 +331,7 @@ export function ImportDialog({
               </div>
             )}
             {from === 'database' ? (
-              <ConnectionForm
-                fields={connectionFields}
-                draft={draft}
-                onChange={setDraft}
-                disabled={busy}
-              />
+              <ConnectionSection choice={choice} fields={connectionFields} disabled={busy} />
             ) : (
               <>
                 <DescribeSchema projectId={projectId} onDraft={setSource} />
@@ -358,9 +368,19 @@ export function ImportDialog({
                 type="submit"
                 variant="primary"
                 size="sm"
-                disabled={busy || (from === 'sql' && source === '')}
+                disabled={
+                  busy ||
+                  (from === 'sql' && source === '') ||
+                  (from === 'database' && choice.saved === undefined)
+                }
               >
-                {busy ? (from === 'database' ? 'Reading…' : 'Importing…') : 'Import'}
+                {busy
+                  ? from === 'database'
+                    ? 'Reading…'
+                    : 'Importing…'
+                  : from === 'database' && choice.saved && !choice.editing
+                    ? 'Sync now'
+                    : 'Import'}
               </Button>
             </DialogFooter>
           </form>

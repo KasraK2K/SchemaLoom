@@ -3,8 +3,8 @@
 import '@xyflow/react/dist/style.css';
 
 import { createIndex, type Id, type Point, type SchemaModel } from '@schemaloom/schema-model';
-import { Button, FilePlus2, LayoutGrid, Upload } from '@schemaloom/ui';
-import { useQueryClient } from '@tanstack/react-query';
+import { Button, FilePlus2, LayoutGrid, RefreshCw, Upload } from '@schemaloom/ui';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Background,
   BackgroundVariant,
@@ -35,6 +35,7 @@ import { CrowFootDefs } from './crow-foot';
 import { CanvasEmptyState } from './empty-state';
 import { EntityNode } from './entity-node';
 import { createGeometryAutosave, postGeometry } from './geometry';
+import { getSavedConnection, savedConnectionKey } from '@/features/projects/saved-connection';
 import { ImportDialog } from './import-dialog';
 import {
   ENTITY_NODE_TYPE,
@@ -118,6 +119,8 @@ export function CanvasSurface({
   /** Where a new entity lands: the pointer for "add here", the viewport centre otherwise. */
   const [newEntityAt, setNewEntityAt] = useState<Point | null>(null);
   const [importing, setImporting] = useState(false);
+  /** 6c — Sync opens the import dialog on its database tab */
+  const [importFrom, setImportFrom] = useState<'sql' | 'database'>('sql');
 
   useEffect(() => {
     setNodes(builtNodes);
@@ -469,6 +472,7 @@ export function CanvasSurface({
                       id: 'import',
                       label: 'Import SQL',
                       onSelect: () => {
+                        setImportFrom('sql');
                         setImporting(true);
                       },
                     },
@@ -509,6 +513,12 @@ export function CanvasSurface({
   ]);
 
   const canImport = facet.capabilities.importFormats.length > 0;
+  // 6c — the saved connection, if any. Its GET needs schema:edit, so read-only users skip it.
+  const savedConnection = useQuery({
+    queryKey: savedConnectionKey(projectId),
+    queryFn: () => getSavedConnection(projectId),
+    enabled: canImport && !readOnly && facet.capabilities.connectionFields.length > 0,
+  });
   const dialogs = readOnly ? null : (
     <>
       <NameDialog
@@ -521,6 +531,8 @@ export function CanvasSurface({
         onSubmit={(name) => createEntity(name, newEntityAt ?? { x: 0, y: 0 })}
       />
       <ImportDialog
+        key={importFrom}
+        initialFrom={importFrom}
         open={importing}
         onOpenChange={setImporting}
         projectId={projectId}
@@ -627,11 +639,26 @@ export function CanvasSurface({
                 variant="outline"
                 size="sm"
                 onClick={() => {
+                  setImportFrom('sql');
                   setImporting(true);
                 }}
               >
                 <Upload className="size-3.5" aria-hidden="true" />
                 Import SQL
+              </Button>
+            ) : null}
+            {canImport && savedConnection.data ? (
+              <Button
+                variant="outline"
+                size="sm"
+                title="Read the saved database connection and import what's new"
+                onClick={() => {
+                  setImportFrom('database');
+                  setImporting(true);
+                }}
+              >
+                <RefreshCw className="size-3.5" aria-hidden="true" />
+                Sync
               </Button>
             ) : null}
             <Button variant="outline" size="sm" onClick={runLayout}>
