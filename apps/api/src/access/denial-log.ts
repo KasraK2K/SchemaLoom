@@ -24,6 +24,8 @@ export type DenialOutcome =
   | 'no_org'
   | 'share_link_route'
   | 'share_link_project'
+  | 'api_token_route'
+  | 'api_token_project'
   | 'not_visible'
   | 'missing_atom'
   | 'org_role';

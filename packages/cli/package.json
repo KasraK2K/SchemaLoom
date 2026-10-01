@@ -1,0 +1,30 @@
+{
+  "name": "@schemaloom/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SchemaLoom from the terminal and CI: pull the design, check drift.",
+  "type": "module",
+  "bin": {
+    "schemaloom": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@schemaloom/config": "workspace:*",
+    "@types/node": "^22.15.0",
+    "eslint": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

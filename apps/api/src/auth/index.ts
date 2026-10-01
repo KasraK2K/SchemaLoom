@@ -22,8 +22,15 @@ export {
   getSubject,
   subjectKey,
   toSubject,
+  type ApiTokenClaims,
   type AuthPrincipal,
   type Subject,
 } from './subject';
 export { TokensService, type ShareSessionClaims } from './tokens.service';
 export { AuthService } from './auth.service';
+export {
+  API_TOKEN_PREFIX,
+  ApiTokenAuthService,
+  bearerToken,
+  hashApiToken,
+} from './api-token-auth.service';

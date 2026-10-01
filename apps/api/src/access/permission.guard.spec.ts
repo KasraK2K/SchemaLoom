@@ -461,3 +461,72 @@ describe('PermissionGuard — a signed-in visitor who also holds a share link (�
     );
   });
 });
+
+describe('PermissionGuard — API tokens (Phase 11 §4)', () => {
+  const TOKEN: AuthPrincipal = {
+    kind: 'user',
+    userId: 'ana',
+    orgId: ORG,
+    token: { tokenId: 't1', projectId: PROJECT, scopes: ['read'] },
+  };
+  const irRequest = (auth: AuthPrincipal, projectId = PROJECT): Request =>
+    request({ auth, path: '/api/projects/:projectId/ir', params: { projectId } });
+
+  it("reaches an allow-listed route on its own project with the owner's access", async () => {
+    const { guard, resolver } = makeGuard(mapOf(['schema:view']), skeletonOf([]));
+    await expect(
+      guard.canActivate(contextFor(irRequest(TOKEN), Routes.prototype.getIr)),
+    ).resolves.toBe(true);
+    expect(resolver.resolveProject).toHaveBeenCalledWith(
+      { kind: 'user', userId: 'ana', orgId: ORG },
+      PROJECT,
+    );
+  });
+
+  it('404s a route that is not on the allow-list, before any resolve', async () => {
+    const { guard, resolver } = makeGuard(
+      mapOf(['schema:view', 'schema:edit']),
+      skeletonOf(['ent_1']),
+    );
+    const req = request({ auth: TOKEN, method: 'PATCH', params: { id: 'ent_1' } });
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.updateEntity))).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(resolver.resolveProject).not.toHaveBeenCalled();
+  });
+
+  it('404s an @Authenticated() route that is not on the list (a token cannot mint tokens)', async () => {
+    const { guard } = makeGuard(mapOf([]), skeletonOf([]));
+    const req = request({ auth: TOKEN, path: '/api/me/api-tokens' });
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.me))).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('404s another project, even one the owner can see', async () => {
+    const { guard } = makeGuard(mapOf(['schema:view']), skeletonOf([]));
+    await expect(
+      guard.canActivate(contextFor(irRequest(TOKEN, OTHER_PROJECT), Routes.prototype.getIr)),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('404s a route whose scope the token lacks', async () => {
+    const { guard } = makeGuard(mapOf(['schema:view', 'schema:edit']), skeletonOf([]));
+    const req = request({
+      auth: TOKEN,
+      method: 'POST',
+      path: '/api/projects/:projectId/introspect/drift',
+      params: { projectId: PROJECT },
+    });
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.getIr))).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('404s once the owner has lost access to the project', async () => {
+    const { guard } = makeGuard(mapOf([]), skeletonOf([]));
+    await expect(
+      guard.canActivate(contextFor(irRequest(TOKEN), Routes.prototype.getIr)),
+    ).rejects.toThrow(NotFoundException);
+  });
+});

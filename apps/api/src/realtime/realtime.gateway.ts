@@ -160,6 +160,7 @@ export class RealtimeGateway
     const allowed = this.config.get('CORS_ORIGINS', { infer: true });
     if (origin === undefined || !allowed.includes(origin)) throw new Error('forbidden_origin');
 
+    // Cookies only: an API token (Phase 11 §4 step 5) never opens a socket.
     const proven = await this.auth.principalsFromCookies(socket.handshake.headers.cookie);
     const principal = proven.user ?? proven.link;
     if (principal === undefined) throw new Error('unauthorized');

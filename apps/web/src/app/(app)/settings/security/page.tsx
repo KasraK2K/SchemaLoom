@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AppShell } from '@/components/app-shell/app-shell';
+import { AccountApiTokens } from '@/features/api-tokens/api-tokens';
 import { SecuritySettings } from '@/features/auth/security-settings';
 import { NotificationPrefsSection } from '@/features/notifications/notification-prefs';
 
@@ -17,6 +18,7 @@ export default function SecuritySettingsPage() {
         <div className="flex flex-col gap-10">
           <SecuritySettings />
           <NotificationPrefsSection />
+          <AccountApiTokens />
         </div>
       </div>
     </AppShell>

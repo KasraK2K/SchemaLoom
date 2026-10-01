@@ -6,6 +6,7 @@ import type { Request } from 'express';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AppEnv } from '../config/env';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { ApiTokenAuthService } from './api-token-auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { getSubject } from './subject';
 import { TokensService } from './tokens.service';
@@ -33,9 +34,16 @@ function context(request: Request): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-function request(cookie?: string): Request {
-  return { headers: cookie === undefined ? {} : { cookie } } as unknown as Request;
+function request(cookie?: string, authorization?: string): Request {
+  const headers: Record<string, string> = {};
+  if (cookie !== undefined) headers.cookie = cookie;
+  if (authorization !== undefined) headers.authorization = authorization;
+  return { headers } as unknown as Request;
 }
+
+const noApiTokens = {
+  principalFor: () => Promise.reject(new Error('no bearer expected')),
+} as unknown as ApiTokenAuthService;
 
 const reflector = (isPublic: boolean) =>
   ({ getAllAndOverride: () => (isPublic ? true : undefined) }) as unknown as Reflector;
@@ -50,7 +58,7 @@ describe('JwtAuthGuard', () => {
   it('resolves a user subject in the shape doc 05 §7.1 specifies', async () => {
     const access = await tokens.issueAccessToken({ userId: 'u1', orgId: 'org1' });
     const req = request(`sl_access=${access}`);
-    await new JwtAuthGuard(reflector(false), tokens).canActivate(context(req));
+    await new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(context(req));
 
     expect(req.auth).toEqual({ kind: 'user', userId: 'u1', orgId: 'org1' });
     expect(getSubject(req)).toEqual({ kind: 'user', userId: 'u1', orgId: 'org1' });
@@ -62,7 +70,7 @@ describe('JwtAuthGuard', () => {
       null,
     );
     const req = request(`sl_session=${token}`);
-    await new JwtAuthGuard(reflector(false), tokens).canActivate(context(req));
+    await new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(context(req));
 
     expect(req.auth).toEqual({
       kind: 'share_link',
@@ -76,7 +84,7 @@ describe('JwtAuthGuard', () => {
   it('authenticates an org-less user but hands the resolver no subject', async () => {
     const access = await tokens.issueAccessToken({ userId: 'u1', orgId: null });
     const req = request(`sl_access=${access}`);
-    await new JwtAuthGuard(reflector(false), tokens).canActivate(context(req));
+    await new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(context(req));
 
     expect(req.auth).toEqual({ kind: 'user', userId: 'u1', orgId: null });
     expect(getSubject(req)).toBeNull();
@@ -84,12 +92,12 @@ describe('JwtAuthGuard', () => {
 
   it('rejects an unauthenticated request on a guarded route', async () => {
     await expect(
-      new JwtAuthGuard(reflector(false), tokens).canActivate(context(request())),
+      new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(context(request())),
     ).rejects.toThrow();
   });
 
   it('lets a @Public() route through, and still names the caller when it can', async () => {
-    const guard = new JwtAuthGuard(reflector(true), tokens);
+    const guard = new JwtAuthGuard(reflector(true), tokens, noApiTokens);
     const anonymous = request();
     await expect(guard.canActivate(context(anonymous))).resolves.toBe(true);
     expect(anonymous.auth).toBeUndefined();
@@ -107,9 +115,29 @@ describe('JwtAuthGuard', () => {
       { subject: 'u9', secret: 'a-different-secret-that-is-long-enough!!', audience: 'sl_access' },
     );
     await expect(
-      new JwtAuthGuard(reflector(false), tokens).canActivate(
+      new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(
         context(request(`sl_access=${token}`)),
       ),
     ).rejects.toThrow();
+  });
+
+  it('a bearer token wins outright: the cookies are ignored (Phase 11 §4)', async () => {
+    const access = await tokens.issueAccessToken({ userId: 'u1', orgId: 'org1' });
+    const viaToken = {
+      kind: 'user',
+      userId: 'u2',
+      orgId: 'org2',
+      token: { tokenId: 't1', projectId: 'p1', scopes: ['read'] },
+    } as const;
+    const apiTokens = {
+      principalFor: (secret: string) =>
+        secret === 'slt_abc' ? Promise.resolve(viaToken) : Promise.reject(new Error('bad')),
+    } as unknown as ApiTokenAuthService;
+    const req = request(`sl_access=${access}`, 'Bearer slt_abc');
+    await new JwtAuthGuard(reflector(false), tokens, apiTokens).canActivate(context(req));
+
+    expect(req.auth).toEqual(viaToken);
+    expect(req.shareAuth).toBeUndefined();
+    expect(getSubject(req)).toEqual({ kind: 'user', userId: 'u2', orgId: 'org2' });
   });
 });

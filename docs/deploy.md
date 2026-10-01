@@ -119,3 +119,18 @@ cd apps/web && NODE_ENV=production API_INTERNAL_URL=http://127.0.0.1:3001   node
 | `API_INTERNAL_URL`    | optional: a private address server components use to reach the api directly |
 
 Nothing else needs to be set: the api's `CORS_ORIGINS` defaults to `WEB_PUBLIC_URL`.
+
+## 4. The CLI and CI (API tokens)
+
+`schemaloom` (`packages/cli`) talks to the same hostname as the browser, through the proxy's
+`/api` route, with `Authorization: Bearer slt_…`. Nothing extra needs to be deployed or
+configured: a bearer request carries no cookies, so CSRF and CORS don't apply to it.
+
+- Each token is limited to 120 requests a minute, in Redis like the share-link limits.
+- `schemaloom diff` runs `pg_dump` on the api against the project's saved connection, so it
+  needs the same `INTROSPECTION_ENABLED` and `pg_dump` setup as **Compare now**.
+- Tokens are hashed at rest (sha256). Rotating `JWT_ACCESS_SECRET` or
+  `SECRETS_ENCRYPTION_KEY` does not affect them. Revoke them under Account → API tokens or
+  in the project's Settings.
+
+Copy-paste CI jobs are in `docs/ci.md`.

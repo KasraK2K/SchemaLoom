@@ -8,7 +8,14 @@ import {
 } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { ApplicationConfig, DiscoveryService, MetadataScanner } from '@nestjs/core';
-import { MARKER_NAMES, PERM_META, PROJECT_ACCESS_META, markerKeysOn } from './route-markers';
+import { isApiTokenRoute } from './api-token-allowlist';
+import {
+  AUTHENTICATED_META,
+  MARKER_NAMES,
+  PERM_META,
+  PROJECT_ACCESS_META,
+  markerKeysOn,
+} from './route-markers';
 import { isShareLinkRoute } from './share-link-allowlist';
 
 /**
@@ -41,6 +48,9 @@ export interface SweptRoute {
 
 /** A share-link subject is capped at `schema:view` (R17) and belongs to no organisation. */
 const VIEW_GATED: ReadonlySet<string> = new Set([PERM_META, PROJECT_ACCESS_META]);
+
+/** Phase 11 §4: an API token is fenced to one project, and `GET /token` names none. */
+const TOKEN_GATED: ReadonlySet<string> = new Set([...VIEW_GATED, AUTHENTICATED_META]);
 
 const isUnderApi = (path: string): boolean => path === '/api' || path.startsWith('/api/');
 
@@ -83,6 +93,12 @@ export function assertRouteTable(routes: readonly SweptRoute[]): void {
         `${label(route)} is in SHARE_LINK_ROUTES but is marked ${nameOf(marker)}. ` +
           `A share-link subject is capped at schema:view (R17) and has no organisation, ` +
           `so an allow-listed surface must be @RequireProjectAccess() or @RequirePermission().`,
+      );
+    }
+    if (isApiTokenRoute(route.method, route.path) && !TOKEN_GATED.has(marker)) {
+      problems.push(
+        `${label(route)} is in API_TOKEN_ROUTES but is marked ${nameOf(marker)}. ` +
+          `A token route must name its project or be @Authenticated().`,
       );
     }
   }

@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { MailModule } from '../mail/mail.module';
 import { AuthController } from './auth.controller';
+import { ApiTokenAuthService } from './api-token-auth.service';
 import { AuthService } from './auth.service';
 import { GitHubAuthGuard } from './github-auth.guard';
 import { githubStrategyProvider } from './github.strategy';
@@ -38,6 +39,7 @@ import { VerificationService } from './verification.service';
     TokensService,
     VerificationService,
     JwtAuthGuard,
+    ApiTokenAuthService,
     TwoFactorService,
     GoogleAuthGuard,
     googleStrategyProvider,

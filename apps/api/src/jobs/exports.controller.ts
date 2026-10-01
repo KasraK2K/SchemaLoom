@@ -74,7 +74,8 @@ export class ExportsController {
   @Authenticated()
   @Get('exports/:id')
   get(@Req() req: Request, @Param('id') id: string): Promise<ExportJobView> {
-    return this.exports.get(user(req), id);
+    const token = req.auth?.kind === 'user' ? req.auth.token : undefined;
+    return this.exports.get(user(req), id, token?.projectId);
   }
 
   @ApiOperation({ summary: 'Mark a browser-rendered image export as uploaded' })

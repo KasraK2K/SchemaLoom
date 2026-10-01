@@ -26,6 +26,7 @@ import {
   type OrgRoleRequirement,
   type PermissionRequirement,
 } from './route-markers';
+import { apiTokenRouteScope } from './api-token-allowlist';
 import { isShareLinkRoute } from './share-link-allowlist';
 import type { Subject } from './types';
 
@@ -125,6 +126,21 @@ export class PermissionGuard implements CanActivate {
       });
     }
 
+    // Phase 11 §4 — the same fence for an API token: its allow-list, a scope it holds, and
+    // (below, once the route names one) its own project. Everything else is `404`.
+    if (principal.kind === 'user' && principal.token !== undefined) {
+      const scope = apiTokenRouteScope(req.method, routePathOf(req));
+      if (scope === undefined || (scope !== 'any' && !principal.token.scopes.includes(scope))) {
+        throw this.deny(req, notFound(), {
+          subjectKey,
+          projectId: principal.token.projectId,
+          refs: [],
+          atom: null,
+          outcome: 'api_token_route',
+        });
+      }
+    }
+
     if (marker === AUTHENTICATED_META) return true;
 
     // An authenticated user who belongs to no organisation yet is a real state (the
@@ -147,10 +163,10 @@ export class PermissionGuard implements CanActivate {
     }
     if (marker === PROJECT_ACCESS_META) {
       const param = read(PROJECT_ACCESS_META) as string;
-      return this.checkProjectAccess(req, subject, subjectKey, param);
+      return this.checkProjectAccess(req, principal, subject, subjectKey, param);
     }
     const requirement = read(PERM_META) as PermissionRequirement;
-    return this.checkPermission(req, subject, subjectKey, requirement);
+    return this.checkPermission(req, principal, subject, subjectKey, requirement);
   }
 
   /** §10.2 — org-scoped administration. Never a project resource, so no map is built. */
@@ -192,6 +208,7 @@ export class PermissionGuard implements CanActivate {
    */
   private async checkProjectAccess(
     req: Request,
+    principal: AuthPrincipal,
     subject: Subject,
     subjectKey: string,
     param: string,
@@ -204,7 +221,7 @@ export class PermissionGuard implements CanActivate {
       atom: null,
       outcome: 'not_visible',
     };
-    this.assertShareLinkProject(req, subject, projectId, context);
+    this.assertOwnProject(req, principal, projectId, context);
 
     const map = await this.resolver.resolveProject(subject, projectId);
     if (!this.resolver.canOpenProject(map)) throw this.deny(req, notFound(), context);
@@ -219,6 +236,7 @@ export class PermissionGuard implements CanActivate {
    */
   private async checkPermission(
     req: Request,
+    principal: AuthPrincipal,
     subject: Subject,
     subjectKey: string,
     requirement: PermissionRequirement,
@@ -232,7 +250,7 @@ export class PermissionGuard implements CanActivate {
       atom: requirement.atom,
       outcome: 'not_visible',
     };
-    this.assertShareLinkProject(req, subject, projectId, context);
+    this.assertOwnProject(req, principal, projectId, context);
 
     const [map, skel] = await Promise.all([
       this.resolver.resolveProject(subject, projectId),
@@ -252,16 +270,20 @@ export class PermissionGuard implements CanActivate {
 
   /**
    * §7.12 step 4 — a share-link session can never address a second project, even if the
-   * id is guessed. `404`, because for this subject that project does not exist.
+   * id is guessed. `404`, because for this subject that project does not exist. Phase 11
+   * §4 holds an API token to its project the same way.
    */
-  private assertShareLinkProject(
+  private assertOwnProject(
     req: Request,
-    subject: Subject,
+    principal: AuthPrincipal,
     projectId: string,
     context: DenialContext,
   ): void {
-    if (subject.kind === 'share_link' && subject.projectId !== projectId) {
+    if (principal.kind === 'share_link' && principal.projectId !== projectId) {
       throw this.deny(req, notFound(), { ...context, outcome: 'share_link_project' });
+    }
+    if (principal.kind === 'user' && principal.token && principal.token.projectId !== projectId) {
+      throw this.deny(req, notFound(), { ...context, outcome: 'api_token_project' });
     }
   }
 
@@ -281,8 +303,12 @@ const attach = (req: Request, context: AccessContext): void => {
   req.access = context;
 };
 
-const logKeyOf = (principal: AuthPrincipal): string =>
-  principal.kind === 'user' ? `u:${principal.userId}` : `sl:${principal.shareLinkId}`;
+const logKeyOf = (principal: AuthPrincipal): string => {
+  if (principal.kind === 'share_link') return `sl:${principal.shareLinkId}`;
+  return principal.token
+    ? `u:${principal.userId}/t:${principal.token.tokenId}`
+    : `u:${principal.userId}`;
+};
 
 /**
  * The route as registered, not as requested: `/api/projects/:id/ir`, never

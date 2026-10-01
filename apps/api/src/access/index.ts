@@ -35,6 +35,13 @@ export {
   type ResourceLocator,
 } from './route-markers';
 export { SHARE_LINK_ROUTES, isShareLinkRoute, routeKey } from './share-link-allowlist';
+export {
+  API_TOKEN_ROUTES,
+  API_TOKEN_SCOPES,
+  apiTokenRouteScope,
+  isApiTokenRoute,
+  type ApiTokenScope,
+} from './api-token-allowlist';
 export { RouteSweep, assertRouteTable, type SweptRoute } from './route-sweep';
 export { denialLine, logDenial, type DenialEvent, type DenialOutcome } from './denial-log';
 export { assertAll, assertMayDeleteGrant, assertMayGrant } from './assertions';

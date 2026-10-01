@@ -110,8 +110,9 @@ export class ExportsService {
     return view(row);
   }
 
-  async get(subject: User, id: string): Promise<ExportJobView> {
-    const row = await this.ownRow(subject, id);
+  /** `projectId` fences an API token to its own project (Phase 11 §4). */
+  async get(subject: User, id: string, projectId?: string): Promise<ExportJobView> {
+    const row = await this.ownRow(subject, id, projectId);
     if (row.status !== 'done' || row.storageKey === null) return view(row);
     return {
       ...view(row),
@@ -210,9 +211,13 @@ export class ExportsService {
   }
 
   /** Not the caller's, gone, or expired: the same 404. */
-  private async ownRow(subject: User, id: string): Promise<ExportJob> {
+  private async ownRow(subject: User, id: string, projectId?: string): Promise<ExportJob> {
     const row = await this.prisma.exportJob.findFirst({
-      where: { id, requestedById: subject.userId },
+      where: {
+        id,
+        requestedById: subject.userId,
+        ...(projectId === undefined ? {} : { projectId }),
+      },
     });
     if (row === null || (row.expiresAt !== null && row.expiresAt.getTime() <= Date.now())) {
       throw notFound(id);

@@ -1,6 +1,22 @@
 # Phase 11: CLI and CI (API tokens, `schemaloom pull`, `schemaloom diff`)
 
-Status: **proposed 2026-10-01**, waiting for approval. Roadmap row 11.
+Status: **built 2026-10-01** (approved the same day with every §8 default). Roadmap row 11.
+
+Built as designed, with three adjustments found while building:
+
+- **Tokens are created from the project's Settings → API tokens**, not from the account page.
+  The project is a token's whole scope, so creating it where the project already is avoids a
+  project picker. Anyone who can open the project sees that section; sharing managers see
+  everyone's tokens there. The account page lists and revokes your own tokens on every
+  project.
+- **Every token has `read`.** `drift` is added on top (the DTO refuses a token without
+  `read`), because `diff` needs `GET /token` and the project shell anyway.
+- **`GET /exports/:id` is fenced in the service** as well as by the guard: it names no
+  project, so with a token the export row must be on the token's project.
+
+`API_TOKEN_ROUTES` lives in `apps/api/src/access/api-token-allowlist.ts`. The boot sweep
+refuses an entry that is `@Public()` or org-gated, and `src/api-tokens/allowlist.spec.ts`
+pins the list and checks that every entry names a real route.
 
 The goal: a deploy pipeline can ask SchemaLoom "does the database still match the design?"
 and fail the build when it doesn't, and a developer can pull the design as DDL or Prisma

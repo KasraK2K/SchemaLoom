@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { parseCookieHeader } from '../common/cookies.middleware';
+import { ApiTokenAuthService, bearerToken } from './api-token-auth.service';
 import { COOKIE_NAMES } from './cookies';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import type { AuthPrincipal } from './subject';
@@ -30,17 +31,27 @@ import { TokensService } from './tokens.service';
  * comes from the `AccessGrant` its id resolves to, and revoking the link deletes that
  * grant (§7.12). This guard deliberately does not check liveness — that is R12's job
  * and it is a database read, not an auth concern.
+ *
+ * Phase 11 §4: an `Authorization: Bearer slt_…` header wins outright and the cookies are
+ * ignored, so a browser session can never be mixed with a token.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly tokens: TokensService,
+    private readonly apiTokens: ApiTokenAuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (context.getType() !== 'http') return true;
     const request = context.switchToHttp().getRequest<Request>();
+    const bearer = bearerToken(request.headers.authorization);
+    if (bearer !== undefined) {
+      request.auth = await this.apiTokens.principalFor(bearer);
+      request.shareAuth = undefined;
+      return true;
+    }
     const { user, link } = await this.principalsFromCookies(request.headers.cookie);
     request.auth = user ?? link;
     // A signed-in visitor who unlocked a share link holds both; the user is who they are,

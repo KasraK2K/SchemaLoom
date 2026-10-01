@@ -4,6 +4,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AccessModule } from './access/access.module';
 import { AiModule } from './ai';
+import { ApiTokensModule } from './api-tokens';
 import { AuthModule, JwtAuthGuard } from './auth';
 import { CommentsModule } from './comments';
 import { DocsModule } from './docs';
@@ -78,6 +79,7 @@ import { RedisModule } from './redis/redis.module';
     RealtimeModule,
     JobsModule,
     IntrospectModule,
+    ApiTokensModule,
     HealthModule,
   ],
   providers: [

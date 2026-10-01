@@ -25,10 +25,21 @@ export function subjectKey(s: Subject): string {
  *   `GET /auth/me` must answer for them. They have no `Subject`, so `PermissionGuard`
  *   denies every resource — which is correct, not a gap.
  * - a share-link principal carries `resourceId`, the landing route's target (§7.12).
+ *
+ * A user principal that came from an API token (Phase 11 §4) carries `token`: the
+ * resolver still sees the owner, and `PermissionGuard` fences the routes and project.
  */
 export type AuthPrincipal =
-  | { kind: 'user'; userId: string; orgId: string | null }
+  | { kind: 'user'; userId: string; orgId: string | null; token?: ApiTokenClaims }
   | { kind: 'share_link'; shareLinkId: string; projectId: string; resourceId: string };
+
+/** Phase 11 §4 — what a bearer `slt_…` token adds to its owner's principal. */
+export interface ApiTokenClaims {
+  readonly tokenId: string;
+  readonly projectId: string;
+  /** 'read' | 'drift' (`API_TOKEN_SCOPES` in src/access). */
+  readonly scopes: readonly string[];
+}
 
 export function toSubject(principal: AuthPrincipal): Subject | null {
   if (principal.kind === 'share_link') {

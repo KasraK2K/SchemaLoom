@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Param, Post, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, HttpCode, Param, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { RequirePermission } from '../access';
@@ -58,6 +58,10 @@ export class IntrospectController {
     @Param('projectId') projectId: string,
     @Body() body: IntrospectDriftDto,
   ): Promise<DriftView> {
+    // Phase 11 Q4: a token never makes the server connect somewhere new.
+    if (req.auth?.kind === 'user' && req.auth.token !== undefined && body.saved !== true) {
+      throw new BadRequestException({ code: 'saved_connection_required' });
+    }
     return this.introspect.drift(snapshotContext(req, projectId), sourceOf(body), {
       allowDestructive: body.allowDestructive,
       transactional: body.transactional,

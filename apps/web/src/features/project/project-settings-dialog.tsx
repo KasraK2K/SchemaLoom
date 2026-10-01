@@ -12,6 +12,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { z } from 'zod';
+import { ProjectApiTokens } from '@/features/api-tokens/api-tokens';
 import { SavedConnectionSettings } from '@/features/projects/saved-connection';
 import { ApiError, apiFetch } from '@/lib/api-client';
 
@@ -80,7 +81,7 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
           Settings
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
         <DialogTitle>Project settings</DialogTitle>
         <DialogDescription>Apply to everyone who opens this project.</DialogDescription>
         {error !== null && (
@@ -138,6 +139,8 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
             <SavedConnectionSettings projectId={projectId} />
           </div>
         )}
+        {/* Not a manager-only setting: anyone who can open the project may hold a token. */}
+        {open && <ProjectApiTokens projectId={projectId} />}
       </DialogContent>
     </Dialog>
   );

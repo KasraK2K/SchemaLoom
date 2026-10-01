@@ -216,7 +216,8 @@ model User {
   activityEvents        ActivityLog[]
   auditEvents           AuditLog[]
   savedConnections      ProjectConnection[]
-  notifications         Notification[]        @relation("NotificationRecipient")
+  apiTokens             ApiToken[]
+  notifications        Notification[]        @relation("NotificationRecipient")
   notificationsCaused   Notification[]        @relation("NotificationActor")
   invitationsSent       Invitation[]          @relation("InvitationInvitedBy")
   invitationsAccepted   Invitation[]          @relation("InvitationAcceptedBy")
@@ -520,7 +521,8 @@ model Project {
   auditLogs          AuditLog[]
   notifications      Notification[]
   connection         ProjectConnection?
-  changeRequests     ChangeRequest[]     @relation("ChangeRequestProject")
+  apiTokens          ApiToken[]
+  changeRequests    ChangeRequest[]     @relation("ChangeRequestProject")
   draftOfRequest     ChangeRequest?      @relation("ChangeRequestDraft")
 
   @@index([organizationId, deletedAt])
@@ -556,6 +558,33 @@ model ProjectConnection {
   savedBy User?   @relation(fields: [savedById], references: [id], onDelete: SetNull)
 
   @@map("project_connections")
+}
+
+/// Phase 11 (docs/phase11/DESIGN.md §3): a personal token for the CLI. It acts as its
+/// owner, on one project, through `API_TOKEN_ROUTES` only.
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  projectId  String    @map("project_id")
+  name       String
+  /// sha256 hex of the secret, like `ShareLink.tokenHash`. The secret is never stored.
+  tokenHash  String    @unique @map("token_hash")
+  /// The first 8 characters after `slt_`, shown in lists so people can tell tokens apart.
+  prefix     String
+  /// 'read' | 'drift'
+  scopes     String[]
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  /// Written fire-and-forget, at most once a minute per token.
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+  @@map("api_tokens")
 }
 
 // ===========================================================================
