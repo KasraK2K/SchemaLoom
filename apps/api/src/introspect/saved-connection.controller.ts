@@ -1,9 +1,9 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Put, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Put, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { RequirePermission } from '../access';
 import { snapshotContext } from '../snapshots';
-import { SaveConnectionDto } from './introspect.dto';
+import { DriftScheduleDto, SaveConnectionDto } from './introspect.dto';
 import { SavedConnectionService, type SavedConnectionView } from './saved-connection.service';
 
 /**
@@ -32,6 +32,17 @@ export class SavedConnectionController {
     @Body() body: SaveConnectionDto,
   ): Promise<SavedConnectionView> {
     return this.connections.save(projectId, userOf(req, projectId), body.connection);
+  }
+
+  @ApiOperation({ summary: 'How often the saved connection is checked for drift (6d)' })
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @Patch()
+  schedule(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: DriftScheduleDto,
+  ): Promise<SavedConnectionView> {
+    return this.connections.setSchedule(projectId, userOf(req, projectId), body.driftSchedule);
   }
 
   @ApiOperation({ summary: 'Forget the saved connection' })

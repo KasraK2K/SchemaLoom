@@ -32,6 +32,13 @@ export interface SavedConnectionView {
   readonly savedAt: string;
   readonly savedBy: { readonly id: string; readonly name: string } | null;
   readonly lastUsedAt: string | null;
+  /** 6d — off | daily | weekly, and the last scheduled check (counts or the error only) */
+  readonly driftSchedule: string;
+  readonly lastCheck: {
+    readonly at: string;
+    readonly status: string;
+    readonly summary: unknown;
+  } | null;
 }
 
 /**
@@ -123,7 +130,42 @@ export class SavedConnectionService {
       savedAt: row.savedAt.toISOString(),
       savedBy: row.savedBy === null ? null : { id: row.savedBy.id, name: row.savedBy.name },
       lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+      driftSchedule: row.driftSchedule,
+      lastCheck:
+        row.lastCheckAt === null || row.lastCheckStatus === null
+          ? null
+          : {
+              at: row.lastCheckAt.toISOString(),
+              status: row.lastCheckStatus,
+              summary: row.lastCheckSummary,
+            },
     };
+  }
+
+  /** 6d — Off, Daily or Weekly. Turning it off keeps the last result; Forget removes both. */
+  async setSchedule(
+    projectId: string,
+    userId: string,
+    driftSchedule: 'off' | 'daily' | 'weekly',
+  ): Promise<SavedConnectionView> {
+    const { organizationId } = await this.engineOf(projectId);
+    const updated = await this.prisma.projectConnection.updateMany({
+      where: { projectId },
+      data: { driftSchedule },
+    });
+    if (updated.count === 0) throw notFound();
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        projectId,
+        actorUserId: userId,
+        action: 'connection.drift_scheduled',
+        resourceType: 'project',
+        resourceId: projectId,
+        metadata: { driftSchedule },
+      },
+    });
+    return this.view(projectId);
   }
 
   async save(projectId: string, userId: string, input: unknown): Promise<SavedConnectionView> {

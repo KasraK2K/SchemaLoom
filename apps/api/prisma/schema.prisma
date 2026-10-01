@@ -523,15 +523,24 @@ model Project {
 /// Phase 6c (docs/phase6/SAVED-CONNECTIONS.md) — one saved "read a database" connection per
 /// project, so Sync and Compare don't need the details typed again.
 model ProjectConnection {
-  projectId  String    @id @map("project_id")
+  projectId        String    @id @map("project_id")
   /// The engine whose `connectionFields` the values were validated against.
-  engineId   String    @map("engine_id")
+  engineId         String    @map("engine_id")
   /// AES-256-GCM under SECRETS_ENCRYPTION_KEY of the whole validated connection as JSON
   /// (`iv.tag.ciphertext`). Host and user are encrypted too: they are reconnaissance.
-  encrypted  String
-  savedById  String?   @map("saved_by_id")
-  savedAt    DateTime  @default(now()) @map("saved_at") @db.Timestamptz(6)
-  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  encrypted        String
+  savedById        String?   @map("saved_by_id")
+  savedAt          DateTime  @default(now()) @map("saved_at") @db.Timestamptz(6)
+  lastUsedAt       DateTime? @map("last_used_at") @db.Timestamptz(6)
+  /// Phase 6d (docs/phase6/SCHEDULED-DRIFT.md): off | daily | weekly.
+  driftSchedule    String    @default("off") @map("drift_schedule")
+  lastCheckAt      DateTime? @map("last_check_at") @db.Timestamptz(6)
+  /// in_sync | drift | failed
+  lastCheckStatus  String?   @map("last_check_status")
+  /// Counts only ({ added, removed, changed }) or { error }: never object names.
+  lastCheckSummary Json?     @map("last_check_summary")
+  /// sha256 of the sorted diff entries; a new value is new drift (D4).
+  driftFingerprint String?   @map("drift_fingerprint")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   savedBy User?   @relation(fields: [savedById], references: [id], onDelete: SetNull)

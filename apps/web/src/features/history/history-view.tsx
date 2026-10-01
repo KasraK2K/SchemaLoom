@@ -11,7 +11,8 @@ import {
 } from '@schemaloom/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useEngine } from '@/engines';
 import { irQueryOptions } from '@/features/canvas/ir-query';
 import { EngineGate } from '@/features/project/engine-gate';
@@ -163,6 +164,16 @@ function DriftCheck({ projectId }: { readonly projectId: string }) {
       checkDrift(projectId, (await choice.resolve()).source, allowDestructive),
     onSuccess: setResult,
   });
+  // 6d — a drift notification links to `?compare=saved`: open Compare and run it once.
+  const searchParams = useSearchParams();
+  const autoRun = useRef(searchParams.get('compare') === 'saved');
+  useEffect(() => {
+    if (!autoRun.current) return;
+    setOpen(true);
+    if (choice.saved === undefined) return;
+    autoRun.current = false;
+    if (choice.saved !== null) compare.mutate();
+  }, [choice.saved, compare]);
 
   if (!hasConnectionForm(fields)) return null;
   const entityName = (id: string): string | null => ir.data?.objects.entity[id]?.name ?? null;

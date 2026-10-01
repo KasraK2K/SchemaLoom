@@ -54,6 +54,9 @@ const EMAIL_PREF: Partial<Record<NotificationType, keyof NotificationPrefs>> = {
   'access.requested': 'emailAccessRequests',
   'access.decided': 'emailAccessRequests',
   'resource.shared': 'emailInvites',
+  'drift.detected': 'emailDrift',
+  'drift.check_failed': 'emailDrift',
+  'drift.check_recovered': 'emailDrift',
 };
 
 const PAGE_SIZE = 20;

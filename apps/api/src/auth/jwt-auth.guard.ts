@@ -41,7 +41,11 @@ export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (context.getType() !== 'http') return true;
     const request = context.switchToHttp().getRequest<Request>();
-    request.auth = await this.principalFromCookies(request.headers.cookie);
+    const { user, link } = await this.principalsFromCookies(request.headers.cookie);
+    request.auth = user ?? link;
+    // A signed-in visitor who unlocked a share link holds both; the user is who they are,
+    // the link is what `PermissionGuard` falls back to on the link's own project.
+    request.shareAuth = user === undefined ? undefined : link;
 
     const isPublic = this.reflector.getAllAndOverride<boolean | undefined>(IS_PUBLIC_KEY, [
       context.getHandler(),
@@ -57,21 +61,32 @@ export class JwtAuthGuard implements CanActivate {
    * same cookies) resolves subjects exactly as HTTP does, with no second copy.
    */
   async principalFromCookies(header: string | undefined): Promise<AuthPrincipal | undefined> {
+    const { user, link } = await this.principalsFromCookies(header);
+    return user ?? link;
+  }
+
+  /** Both identities a request's cookies prove, each checked against its own signature. A
+   *  user cookie that fails to verify falls through to the link, a weaker identity. */
+  async principalsFromCookies(header: string | undefined): Promise<{
+    user?: Extract<AuthPrincipal, { kind: 'user' }>;
+    link?: Extract<AuthPrincipal, { kind: 'share_link' }>;
+  }> {
     const cookies = parseCookieHeader(header);
+    const out: {
+      user?: Extract<AuthPrincipal, { kind: 'user' }>;
+      link?: Extract<AuthPrincipal, { kind: 'share_link' }>;
+    } = {};
 
     const access = cookies[COOKIE_NAMES.access];
     if (access) {
       const claims = await this.tokens.verifyAccessToken(access);
-      if (claims) return { kind: 'user', userId: claims.userId, orgId: claims.orgId };
+      if (claims) out.user = { kind: 'user', userId: claims.userId, orgId: claims.orgId };
     }
-
-    // A user cookie that failed to verify does not fall through to the share-link
-    // cookie as a *stronger* identity — it falls through to a weaker one, which is safe.
     const session = cookies[COOKIE_NAMES.session];
     if (session) {
       const claims = await this.tokens.verifyShareSession(session);
       if (claims) {
-        return {
+        out.link = {
           kind: 'share_link',
           shareLinkId: claims.shareLinkId,
           projectId: claims.projectId,
@@ -79,6 +94,6 @@ export class JwtAuthGuard implements CanActivate {
         };
       }
     }
-    return undefined;
+    return out;
   }
 }

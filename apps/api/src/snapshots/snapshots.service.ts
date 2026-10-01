@@ -29,7 +29,7 @@ import {
   type SchemaModel,
   type SnapshotRef,
 } from '@schemaloom/schema-model';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   PermissionResolver,
   VisibilityFilter,
@@ -201,6 +201,36 @@ export function withCounts(diff: SchemaDiff): HistoryDiff {
       governance: diff.entries.filter(has('governance')).length,
     },
   };
+}
+
+/** Phase 6d — a scheduled check's whole answer: numbers, never object names. */
+export interface DriftSummary {
+  readonly counts: { readonly added: number; readonly removed: number; readonly changed: number };
+  /** null when in sync */
+  readonly fingerprint: string | null;
+}
+
+/**
+ * Phase 6d D4 — stable over entry order, different whenever an entry or a changed value is:
+ * the same unresolved drift hashes the same; any new or removed difference doesn't.
+ */
+export function driftFingerprint(diff: SchemaDiff): string | null {
+  if (diff.entries.length === 0) return null;
+  const lines = diff.entries
+    .map((e) =>
+      JSON.stringify([
+        e.change,
+        e.objectType,
+        e.logicalKey,
+        e.change === 'changed'
+          ? e.properties
+              .map((c) => [c.path.join('.'), c.after])
+              .sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1))
+          : [],
+      ]),
+    )
+    .sort();
+  return createHash('sha256').update(lines.join('\n')).digest('hex');
 }
 
 /**
@@ -425,7 +455,15 @@ export class SnapshotsService {
       before,
       after,
     );
-    return this.plan(engine, ctx.projectId, project.live.engineVersion, diff, before, after, request);
+    return this.plan(
+      engine,
+      ctx.projectId,
+      project.live.engineVersion,
+      diff,
+      before,
+      after,
+      request,
+    );
   }
 
   /**
@@ -667,6 +705,29 @@ export class SnapshotsService {
   }
 
   /** R21′, the byte cap and the engine's importer — shared by import and preview. */
+  /**
+   * Phase 6d — the scheduled drift check, which has no viewer: the database against the
+   * UNREDACTED design, reduced to counts and a fingerprint here, inside the snapshots module.
+   * Nothing about the objects leaves (CLAUDE.md: schema data leaves through VisibilityFilter,
+   * and there is no one to filter for), so the notification can only say how many.
+   */
+  async driftSummary(projectId: string, source: string, maxBytes: number): Promise<DriftSummary> {
+    const { project, model } = await this.importAgainstLive(projectId, source, maxBytes);
+    const diff = diffModels(mergeImport(project.live, model).imported, project.live, {
+      ignoreCosmetic: true,
+      from: { kind: 'import', label: 'Database' },
+      to: { kind: 'live' },
+    });
+    return {
+      counts: {
+        added: diff.summary.added,
+        removed: diff.summary.removed,
+        changed: diff.summary.changed,
+      },
+      fingerprint: driftFingerprint(diff),
+    };
+  }
+
   private async parseSource(
     ctx: SnapshotContext,
     source: string,
@@ -679,12 +740,26 @@ export class SnapshotsService {
   }> {
     const visibility = this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel);
     assertFullProjectView(visibility);
+    return this.importAgainstLive(ctx.projectId, source, maxBytes);
+  }
 
+  /** The source through the engine's importer, against the live project. No access check:
+   *  callers do it (`parseSource`) or have no viewer and return no objects (`driftSummary`). */
+  private async importAgainstLive(
+    projectId: string,
+    source: string,
+    maxBytes: number,
+  ): Promise<{
+    project: LiveProject;
+    model: SchemaModel;
+    report: ImportReport;
+    engine: EngineDefinition;
+  }> {
     if (Buffer.byteLength(source, 'utf8') > maxBytes) {
       throw new PayloadTooLargeException({ code: 'import_too_large', max: maxBytes });
     }
 
-    const project = await loadLiveProject(this.prisma, ctx.projectId);
+    const project = await loadLiveProject(this.prisma, projectId);
     const engine = this.registry.tryGet(project.engineId);
     const format = engine?.capabilities.importFormats[0];
     if (engine?.importer === undefined || format === undefined) {
@@ -702,7 +777,7 @@ export class SnapshotsService {
             : engine.capabilities.identifiers.foldsTo,
         engineOptions: {},
       },
-      { projectId: ctx.projectId, serverVersion: project.live.engineVersion, newId: randomUUID },
+      { projectId, serverVersion: project.live.engineVersion, newId: randomUUID },
     );
     return { project, model, report, engine };
   }

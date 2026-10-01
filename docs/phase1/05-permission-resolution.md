@@ -1432,6 +1432,13 @@ Flow:
    a share-link session can never address a second project even if ids are guessed.
 5. `resolveProject` runs normally. The ceiling (R17) reduces the link's atoms to `{ schema:view }`.
 
+**A signed-in visitor who also holds a link session (addendum, 2026-10-01).** Both cookies
+arrive. `JwtAuthGuard` keeps the user as `req.auth` and the link as `req.shareAuth`.
+`PermissionGuard` decides as the user, and only when that answer is `404` (the account can't see
+the project at all) does it decide again as the link, which still has to pass R21 and step 4. So
+a member testing their own link keeps their own access, and an outsider with a link sees the
+link's view instead of a 404. The realtime gateway does the same at `project:subscribe`.
+
 **R21 — the share-link surface allow-list.** Beyond the atom ceiling, a share-link subject may
 reach **only** these surfaces, and every other route returns `404`:
 

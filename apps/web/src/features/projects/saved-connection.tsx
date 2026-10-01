@@ -25,7 +25,25 @@ const SavedSchema = z.object({
   savedAt: z.string(),
   savedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
   lastUsedAt: z.string().nullable(),
+  // 6d — scheduled drift checks
+  driftSchedule: z.enum(['off', 'daily', 'weekly']).default('off'),
+  lastCheck: z
+    .object({
+      at: z.string(),
+      status: z.enum(['in_sync', 'drift', 'failed']),
+      summary: z
+        .object({
+          added: z.number().optional(),
+          removed: z.number().optional(),
+          changed: z.number().optional(),
+          error: z.string().optional(),
+        })
+        .nullable(),
+    })
+    .nullable()
+    .default(null),
 });
+export type DriftSchedule = SavedConnection['driftSchedule'];
 export type SavedConnection = z.infer<typeof SavedSchema>;
 
 /** What a read sends: the typed details, or the saved connection as saved. */
@@ -53,6 +71,25 @@ export async function saveConnection(
   return SavedSchema.parse(
     await apiFetch<unknown>(path(projectId), { method: 'PUT', body: { connection } }),
   );
+}
+
+/** 6d — managers only (403 otherwise). */
+export async function setDriftSchedule(
+  projectId: string,
+  driftSchedule: DriftSchedule,
+): Promise<SavedConnection> {
+  return SavedSchema.parse(
+    await apiFetch<unknown>(path(projectId), { method: 'PATCH', body: { driftSchedule } }),
+  );
+}
+
+/** "In sync", "3 differences" or "Failed: <reason>", for the last scheduled check. */
+export function describeLastCheck(check: NonNullable<SavedConnection['lastCheck']>): string {
+  if (check.status === 'failed') return `Failed: ${check.summary?.error ?? 'unknown error'}`;
+  if (check.status === 'in_sync') return 'In sync';
+  const total =
+    (check.summary?.added ?? 0) + (check.summary?.removed ?? 0) + (check.summary?.changed ?? 0);
+  return `${String(total)} difference${total === 1 ? '' : 's'}`;
 }
 
 export async function forgetConnection(projectId: string): Promise<void> {
@@ -272,6 +309,42 @@ export function SavedConnectionSettings({ projectId }: { readonly projectId: str
       <p className="text-xs text-text-muted">
         <code className="font-mono break-all">{describeConnection(query.data)}</code>. Used by Sync
         on the canvas and Compare in History; change it there with “Edit connection”.
+      </p>
+      <label className="flex items-center gap-2 text-sm text-text">
+        Check for drift
+        <select
+          className="h-8 rounded-md border border-border bg-surface px-2 text-sm text-text"
+          value={query.data.driftSchedule}
+          disabled={busy}
+          onChange={(event) => {
+            const next = event.target.value as DriftSchedule;
+            setBusy(true);
+            setError(null);
+            setDriftSchedule(projectId, next)
+              .then((view) => {
+                queryClient.setQueryData(savedConnectionKey(projectId), view);
+              })
+              .catch((caught: unknown) => {
+                setError(
+                  caught instanceof ApiError && caught.status === 403
+                    ? 'Only project managers can change the schedule.'
+                    : 'Something went wrong. Try again.',
+                );
+              })
+              .finally(() => {
+                setBusy(false);
+              });
+          }}
+        >
+          <option value="off">Off</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </label>
+      <p className="text-xs text-text-muted">
+        {query.data.lastCheck === null
+          ? 'Not checked yet. Managers are notified when new differences appear.'
+          : `Last check ${new Date(query.data.lastCheck.at).toLocaleString()}: ${describeLastCheck(query.data.lastCheck)}.`}
       </p>
       {error !== null && <p className="text-xs text-danger-text">{error}</p>}
       <div className="flex gap-2">

@@ -13,6 +13,7 @@ const EMAIL_PREFS: readonly { key: keyof NotificationPrefsPatch; label: string }
   { key: 'emailCommentReplies', label: 'Someone replies in a thread I am part of' },
   { key: 'emailAccessRequests', label: 'Access requests and their decisions' },
   { key: 'emailInvites', label: 'Something is shared with me' },
+  { key: 'emailDrift', label: 'A project’s database drifts from its design (managers)' },
 ];
 
 /** Phase 4 Q3 — immediate email per type; the bell always gets every notification. */

@@ -13,6 +13,7 @@ import {
   type ConnectionValues,
   type EngineRegistry,
   type IntrospectResult,
+  type Introspector,
 } from '@schemaloom/engine-sdk';
 import type { Redis } from 'ioredis';
 import { randomUUID } from 'node:crypto';
@@ -41,6 +42,8 @@ import { openTunnel, type Tunnel, type TunnelOptions } from './ssh-tunnel';
 export const INTROSPECT_RATE_LIMITS = {
   user: { limit: 10, windowSec: 3_600 },
   org: { limit: 100, windowSec: 3_600 },
+  /** 6d — scheduled checks have no user; this stops a runaway sweep. */
+  scheduledOrg: { limit: 200, windowSec: 86_400 },
 } as const;
 
 /** Phase 6 §4 — preview → apply. The dump waits in S3; this Redis row says whose it is. */
@@ -190,6 +193,71 @@ export class IntrospectService {
       this.allowPrivate,
     );
     await this.throttle(userId, project.organizationId);
+    return this.readWith({
+      projectId: ctx.projectId,
+      organizationId: project.organizationId,
+      engineId: engine.id,
+      introspector,
+      values,
+      actorUserId: userId,
+      saved,
+    });
+  }
+
+  /**
+   * Phase 6d — the scheduled check's read: the saved connection with every guard a typed read
+   * has (re-validation, SSRF guard, tunnel and pin), no user (the audit row's actor is null)
+   * and a per-org daily budget in place of the per-user limit.
+   */
+  async readScheduled(projectId: string): Promise<IntrospectResult> {
+    assertIntrospectionEnabled(this.enabled);
+    const project = await this.prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { engineId: true, organizationId: true },
+    });
+    const engine = this.registry.tryGet(project.engineId);
+    const introspector = engine?.introspector;
+    if (engine === undefined || introspector === undefined) {
+      throw new UnprocessableEntityException({ code: 'engine.introspection_unavailable' });
+    }
+    const values = validateConnection(
+      engine.capabilities.connectionFields,
+      await this.savedConnections.load(projectId, project.engineId),
+      this.allowPrivate,
+    );
+    await this.throttleWindow(
+      `introspect:scheduled:org:${project.organizationId}`,
+      INTROSPECT_RATE_LIMITS.scheduledOrg,
+    );
+    return this.readWith({
+      projectId,
+      organizationId: project.organizationId,
+      engineId: engine.id,
+      introspector,
+      values,
+      actorUserId: null,
+      saved: true,
+    });
+  }
+
+  /** The guarded read both paths share. Every check above ran before this connects. */
+  private async readWith({
+    projectId,
+    organizationId,
+    engineId,
+    introspector,
+    values,
+    actorUserId,
+    saved,
+  }: {
+    readonly projectId: string;
+    readonly organizationId: string;
+    readonly engineId: string;
+    readonly introspector: Introspector;
+    readonly values: ConnectionValues & { readonly host: string };
+    readonly actorUserId: string | null;
+    readonly saved: boolean;
+  }): Promise<IntrospectResult & { readonly sshHostKey: string | null }> {
     // §10.3.1 — through a tunnel the api connects to the bastion, so that's what the guard
     // checks; the database host is the bastion's to resolve.
     const ssh = sshOptions(values);
@@ -201,15 +269,15 @@ export class IntrospectService {
     const audit = (metadata: Record<string, string | number | boolean>) =>
       this.prisma.auditLog.create({
         data: {
-          organizationId: project.organizationId,
-          projectId: ctx.projectId,
-          actorUserId: userId,
+          organizationId,
+          projectId,
+          actorUserId,
           action: 'import.introspected',
           resourceType: 'project',
-          resourceId: ctx.projectId,
+          resourceId: projectId,
           // Host and database name only: never the user, password or connection string.
           metadata: {
-            engineId: engine.id,
+            engineId,
             host: values.host,
             address: resolvedAddress,
             database: typeof values.database === 'string' ? values.database : '',
@@ -235,11 +303,20 @@ export class IntrospectService {
       if (error instanceof HttpException) {
         // openTunnel's `introspect.ssh_*`, already shaped for the response.
         const { code } = error.getResponse() as { code: string };
-        await audit({ ok: false, error: code.replace(/^introspect\./, '') });
+        await audit({
+          ok: false,
+          error: code.replace(/^introspect\./, ''),
+          ...(actorUserId === null ? { scheduled: true } : {}),
+        });
         throw error;
       }
       if (!(error instanceof IntrospectError)) throw error;
-      await audit({ ok: false, error: error.code, ...seen(tunnel?.hostKey) });
+      await audit({
+        ok: false,
+        error: error.code,
+        ...seen(tunnel?.hostKey),
+        ...(actorUserId === null ? { scheduled: true } : {}),
+      });
       throw new HttpException(
         { code: `introspect.${error.code}`, message: error.message, ...seen(tunnel?.hostKey) },
         STATUS[error.code],
@@ -254,26 +331,31 @@ export class IntrospectService {
       bytes: Buffer.byteLength(result.source, 'utf8'),
       ...seen(sshHostKey),
       ...(saved ? { saved: true } : {}),
+      ...(actorUserId === null ? { scheduled: true } : {}),
     });
-    if (saved) await this.savedConnections.touch(ctx.projectId);
+    // "Last used" means by a person; a nightly check would make it meaningless.
+    if (saved && actorUserId !== null) await this.savedConnections.touch(projectId);
     return { ...result, sshHostKey };
   }
 
   private async throttle(userId: string, organizationId: string): Promise<void> {
-    const windows = [
-      { key: `introspect:user:${userId}`, rule: INTROSPECT_RATE_LIMITS.user },
-      { key: `introspect:org:${organizationId}`, rule: INTROSPECT_RATE_LIMITS.org },
-    ];
-    for (const { key, rule } of windows) {
-      const count = await this.rateLimit.incr(key);
-      if (count === 1) await this.rateLimit.expire(key, rule.windowSec);
-      if (count > rule.limit) {
-        const ttl = await this.rateLimit.ttl(key);
-        throw new HttpException(
-          { code: 'introspect.rate_limited', retryAfter: ttl > 0 ? ttl : rule.windowSec },
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
+    await this.throttleWindow(`introspect:user:${userId}`, INTROSPECT_RATE_LIMITS.user);
+    await this.throttleWindow(`introspect:org:${organizationId}`, INTROSPECT_RATE_LIMITS.org);
+  }
+
+  /** One fixed window, failing closed like the AI limiter. */
+  private async throttleWindow(
+    key: string,
+    rule: { readonly limit: number; readonly windowSec: number },
+  ): Promise<void> {
+    const count = await this.rateLimit.incr(key);
+    if (count === 1) await this.rateLimit.expire(key, rule.windowSec);
+    if (count > rule.limit) {
+      const ttl = await this.rateLimit.ttl(key);
+      throw new HttpException(
+        { code: 'introspect.rate_limited', retryAfter: ttl > 0 ? ttl : rule.windowSec },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
   }
 }

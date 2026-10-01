@@ -4,7 +4,7 @@ import {
   PermissionResolver,
   atomsAt,
   materialise,
-  splitPrincipalKey,
+  projectManagers,
   type ProjectPermissionMap,
   type ResourceRef,
   type Subject,
@@ -286,21 +286,7 @@ export class AccessRequestsService {
     ref: ResourceRef,
     requesterId: string,
   ): Promise<string[]> {
-    const byPrincipal = await this.resolver.resolveResource(projectId, ref);
-    let users = [...byPrincipal]
-      .filter(([, atoms]) => atoms.has('sharing:manage'))
-      .map(([key]) => splitPrincipalKey(key))
-      .filter((p) => p.kind === 'user')
-      .map((p) => p.id);
-    if (users.length === 0) {
-      // Owners only: an admin may not be able to see this project (R13 is owner-only), and
-      // telling them it exists would be the disclosure the resolver just prevented.
-      const owners = await this.prisma.orgMember.findMany({
-        where: { organizationId, role: 'owner' },
-        select: { userId: true },
-      });
-      users = owners.map((a) => a.userId);
-    }
+    const users = await projectManagers(this.resolver, this.prisma, projectId, organizationId, ref);
     return users.filter((id) => id !== requesterId).slice(0, MAX_RECIPIENTS);
   }
 

@@ -424,3 +424,40 @@ describe('PermissionGuard — §10.5 denial logging', () => {
     });
   });
 });
+
+describe('PermissionGuard — a signed-in visitor who also holds a share link (§7.12 addendum)', () => {
+  const ir = { path: '/api/projects/:projectId/ir', params: { projectId: PROJECT } };
+  /** The user sees `userAtoms`; the link always sees `{ schema:view }`. */
+  function guardFor(userAtoms: readonly PermissionAtom[]) {
+    const made = makeGuard(mapOf([]), skeletonOf(['ent_1']));
+    made.resolver.resolveProject.mockImplementation((subject: { kind: string }) =>
+      Promise.resolve(subject.kind === 'user' ? mapOf(userAtoms) : mapOf(['schema:view'])),
+    );
+    return made;
+  }
+  const withLink = (link: AuthPrincipal = LINK) =>
+    Object.assign(request({ auth: ANA, ...ir }), { shareAuth: link });
+
+  it('falls back to the link when the account cannot see the project', async () => {
+    const { guard } = guardFor([]);
+    const req = withLink();
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.getIr))).resolves.toBe(true);
+    expect(req.auth).toEqual(LINK);
+  });
+
+  it('keeps the account when it can see the project itself', async () => {
+    const { guard, resolver } = guardFor(['schema:view', 'schema:edit']);
+    const req = withLink();
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.getIr))).resolves.toBe(true);
+    expect(req.auth).toEqual(ANA);
+    expect(resolver.resolveProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('never lets a link reach another project', async () => {
+    const { guard } = guardFor([]);
+    const req = withLink({ ...LINK, projectId: OTHER_PROJECT });
+    await expect(guard.canActivate(contextFor(req, Routes.prototype.getIr))).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+});

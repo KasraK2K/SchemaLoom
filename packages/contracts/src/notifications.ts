@@ -16,6 +16,10 @@ export const NOTIFICATION_TYPES = [
   'access.decided',
   'ai.job_finished',
   'export.ready',
+  // Phase 6d — scheduled drift checks
+  'drift.detected',
+  'drift.check_failed',
+  'drift.check_recovered',
 ] as const;
 
 export const notificationTypeSchema = z.enum(NOTIFICATION_TYPES);
@@ -31,6 +35,7 @@ const notificationPrefsShape = {
   emailInvites: z.boolean().default(true),
   emailAccessRequests: z.boolean().default(true),
   emailCommentReplies: z.boolean().default(true),
+  emailDrift: z.boolean().default(true),
   inAppDigest: z.enum(['off', 'daily', 'weekly']).default('off'),
 };
 export const notificationPrefsInputSchema = z.object(notificationPrefsShape).strict();
@@ -44,6 +49,7 @@ export const notificationPrefsPatchSchema = z
     emailInvites: z.boolean(),
     emailAccessRequests: z.boolean(),
     emailCommentReplies: z.boolean(),
+    emailDrift: z.boolean(),
   })
   .partial()
   .strict();

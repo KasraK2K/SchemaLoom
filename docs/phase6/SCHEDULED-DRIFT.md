@@ -1,8 +1,21 @@
 # Phase 6d: scheduled drift checks
 
-Status: **proposed 2026-10-01**. The four decisions are the owner's (answered 2026-10-01); the
-rest is the recommendation, waiting for approval. Roadmap row 6d. It builds on saved
-connections (`SAVED-CONNECTIONS.md`) and the drift check (`DESIGN.md` §6).
+Status: **approved 2026-10-01** with every default in §6 (owner: "go ahead"). Roadmap row 6d.
+It builds on saved connections (`SAVED-CONNECTIONS.md`) and the drift check (`DESIGN.md` §6).
+
+**As built (2026-10-01):**
+
+- **The sweep has its own `drift` queue and worker** (`introspect/drift-sweep.runtime.ts`), not
+  the maintenance queue. That queue's worker runs every job on it as the audit-retention sweep,
+  and `JobsModule` can't import the introspect module (the import goes the other way).
+- **Read-only (423) projects are checked too.** A check writes nothing, and drift on a project
+  waiting for an engine upgrade is still worth knowing.
+- **Q2 is half done:** drift emails have their own preference, "A project's database drifts
+  from its design" (`emailDrift`, on by default). The bell always shows them.
+- **A scheduled read doesn't update "last used"**, which stays a person's last Sync or Compare.
+- **The read is `IntrospectService.readScheduled`**, sharing `readWith` (guard, tunnel, pin,
+  audit) with the request path. The diff is `SnapshotsService.driftSummary`, against the live
+  design inside `src/snapshots`, returning counts and a fingerprint only.
 
 ## 0. The decisions
 
@@ -52,7 +65,7 @@ driftFingerprint  String?   @map("drift_fingerprint")               // sha256 of
   `SnapshotsService.drift` against the live design. No import is written.
 - **No user is acting**, so: the per-user rate limit doesn't apply. A separate budget of 200
   scheduled checks per org per day stops a runaway sweep. The audit row has `actorUserId: null`
-  and `scheduled: true`. An engine-gated (423) project is skipped.
+  and `scheduled: true`.
 - **The notification carries counts only, never object names.** All schema data leaves
   through `VisibilityFilter` (CLAUDE.md), and a job has no viewer to filter for. The link opens
   Compare, which runs with the manager's own permissions and full-view check.

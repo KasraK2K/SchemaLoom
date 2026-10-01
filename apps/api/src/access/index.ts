@@ -69,6 +69,7 @@ export {
   skeletonKey,
   type Generations,
 } from './cache-keys';
+export { projectManagers } from './project-managers';
 export {
   principalKey,
   splitPrincipalKey,

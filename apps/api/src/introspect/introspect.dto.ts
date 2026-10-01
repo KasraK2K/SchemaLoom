@@ -35,4 +35,8 @@ export const IntrospectDriftSchema = z
 /** 6c — `PUT …/connection`. A blank secret keeps the saved one (`mergeSecrets`). */
 export const SaveConnectionSchema = z.object({ connection: ConnectionSchema });
 export class SaveConnectionDto extends createZodDto(SaveConnectionSchema) {}
+
+/** 6d — `PATCH …/connection`. */
+export const DriftScheduleSchema = z.object({ driftSchedule: z.enum(['off', 'daily', 'weekly']) });
+export class DriftScheduleDto extends createZodDto(DriftScheduleSchema) {}
 export class IntrospectDriftDto extends createZodDto(IntrospectDriftSchema) {}

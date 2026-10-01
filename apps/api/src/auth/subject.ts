@@ -49,6 +49,9 @@ declare global {
     interface Request {
       /** Set by `JwtAuthGuard`. Absent on `@Public()` routes reached without cookies. */
       auth?: AuthPrincipal;
+      /** A share-link session held BESIDE a signed-in user (`auth` is the user). Used only
+       *  by `PermissionGuard`, only when the user can't see the project themselves. */
+      shareAuth?: Extract<AuthPrincipal, { kind: 'share_link' }>;
     }
   }
 }

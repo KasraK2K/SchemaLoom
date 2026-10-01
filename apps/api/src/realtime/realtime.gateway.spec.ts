@@ -64,6 +64,8 @@ const context = (visible: string[], over: Partial<VisibilityContext> = {}): Visi
 const PRINCIPALS: Record<string, AuthPrincipal> = {
   ana: { kind: 'user', userId: 'ana', orgId: 'org' },
   bob: { kind: 'user', userId: 'bob', orgId: 'org' },
+  /** a signed-in user with no context: the project is invisible to her account */
+  cara: { kind: 'user', userId: 'cara', orgId: 'org' },
   link: { kind: 'share_link', shareLinkId: 'shl', projectId: PROJECT, resourceId: PROJECT },
 };
 
@@ -79,8 +81,16 @@ function harness() {
 
   const gateway = new RealtimeGateway(
     {
-      principalFromCookies: (cookie?: string) =>
-        Promise.resolve(cookie ? PRINCIPALS[cookie] : undefined),
+      // `cookie` names one principal, or `a+b` for a user holding a link session too.
+      principalsFromCookies: (cookie?: string) => {
+        const found = (cookie ?? '')
+          .split('+')
+          .flatMap((c) => (PRINCIPALS[c] ? [PRINCIPALS[c]] : []));
+        return Promise.resolve({
+          user: found.find((p) => p.kind === 'user'),
+          link: found.find((p) => p.kind === 'share_link'),
+        });
+      },
     } as unknown as JwtAuthGuard,
     {
       computeContext: (subject: { kind: string }, projectId: string) =>
@@ -217,6 +227,26 @@ describe('project:subscribe', () => {
     await expect(h.gateway.subscribe(link, { projectId: PROJECT })).resolves.toMatchObject({
       ok: true,
     });
+  });
+});
+
+describe('project:subscribe — a signed-in visitor who also holds a share link', () => {
+  it('subscribes through the link when the account cannot see the project', async () => {
+    const alone = await h.connect('cara');
+    await expect(h.gateway.subscribe(alone, { projectId: PROJECT })).resolves.toMatchObject({
+      ok: false,
+    });
+    const both = await h.connect('cara+link');
+    await expect(h.gateway.subscribe(both, { projectId: PROJECT })).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(both.data.principal.kind).toBe('share_link');
+  });
+
+  it('keeps the account when it can see the project', async () => {
+    const both = await h.connect('ana+link');
+    await h.gateway.subscribe(both, { projectId: PROJECT });
+    expect(both.data.principal.kind).toBe('user');
   });
 });
 

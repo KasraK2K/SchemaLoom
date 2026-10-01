@@ -89,6 +89,28 @@ export class PermissionGuard implements CanActivate {
         outcome: 'no_subject',
       });
     }
+    try {
+      return await this.authorize(req, principal, marker, read);
+    } catch (error) {
+      // §7.12 addendum (2026-10-01): a signed-in visitor who also holds a share-link session
+      // sees the link's view of the link's project when their own account can't see it at
+      // all. Only on 404: a user who CAN see the project keeps their own (usually larger)
+      // access, and a 403 is "visible, but short of the atom", which the link (viewer) can't
+      // improve. The link still passes R21's allow-list and its own-project check.
+      const link = req.shareAuth;
+      if (!(error instanceof NotFoundException) || link === undefined) throw error;
+      req.auth = link;
+      req.shareAuth = undefined;
+      return this.authorize(req, link, marker, read);
+    }
+  }
+
+  private async authorize(
+    req: Request,
+    principal: AuthPrincipal,
+    marker: string,
+    read: (key: string) => unknown,
+  ): Promise<boolean> {
     const subjectKey = logKeyOf(principal);
 
     // Step 5, first half / R21 — a share-link subject may reach only the allow-listed

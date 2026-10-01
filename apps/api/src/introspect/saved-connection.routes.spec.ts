@@ -40,10 +40,11 @@ function sweep(): (SweptRoute & { requirement: PermissionRequirement | undefined
 describe('SavedConnectionController route markers', () => {
   const routes = sweep();
 
-  it('registers view, save and forget', () => {
+  it('registers view, save, schedule and forget', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       'DELETE /api/projects/:projectId/connection/',
       'GET /api/projects/:projectId/connection/',
+      'PATCH /api/projects/:projectId/connection/',
       'PUT /api/projects/:projectId/connection/',
     ]);
   });
@@ -53,6 +54,7 @@ describe('SavedConnectionController route markers', () => {
     expect(atomOf('GET')).toBe('schema:edit');
     expect(atomOf('PUT')).toBe('sharing:manage');
     expect(atomOf('DELETE')).toBe('sharing:manage');
+    expect(atomOf('PATCH')).toBe('sharing:manage');
     for (const route of routes)
       expect(route.requirement?.wheres).toEqual([{ project: 'projectId' }]);
   });

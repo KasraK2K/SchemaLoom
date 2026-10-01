@@ -67,8 +67,12 @@ const PresenceSchema = z.object({
 type Cursor = { x: number; y: number } | null;
 
 interface SocketState {
-  readonly principal: AuthPrincipal;
-  readonly subject: Subject | null;
+  /** Switched to `shareLink` by `project:subscribe` when the account can't see that project
+   *  but the link session it also holds can (§7.12 addendum, as in `PermissionGuard`). */
+  principal: AuthPrincipal;
+  subject: Subject | null;
+  /** A share-link session held beside a signed-in user, else null. */
+  readonly shareLink: Extract<AuthPrincipal, { kind: 'share_link' }> | null;
   readonly userId: string | null;
   readonly name: string | null;
   projectId: string | null;
@@ -156,7 +160,8 @@ export class RealtimeGateway
     const allowed = this.config.get('CORS_ORIGINS', { infer: true });
     if (origin === undefined || !allowed.includes(origin)) throw new Error('forbidden_origin');
 
-    const principal = await this.auth.principalFromCookies(socket.handshake.headers.cookie);
+    const proven = await this.auth.principalsFromCookies(socket.handshake.headers.cookie);
+    const principal = proven.user ?? proven.link;
     if (principal === undefined) throw new Error('unauthorized');
     const userId = principal.kind === 'user' ? principal.userId : null;
     const user =
@@ -166,6 +171,7 @@ export class RealtimeGateway
     socket.data = {
       principal,
       subject: toSubject(principal),
+      shareLink: proven.user === undefined ? null : (proven.link ?? null),
       userId,
       name: user?.name ?? null,
       projectId: null,
@@ -206,13 +212,28 @@ export class RealtimeGateway
     const parsed = SubscribeSchema.safeParse(body);
     if (!parsed.success || !this.reachable(state, 'project:subscribe')) return NOT_FOUND;
     const { projectId } = parsed.data;
-    const subject = state.subject;
-    if (subject === null) return NOT_FOUND;
+    const own = state.subject;
+    if (own === null) return NOT_FOUND;
+    let subject: Subject = own;
     // §7.12 step 4 — a share-link session can never address a second project.
     if (subject.kind === 'share_link' && subject.projectId !== projectId) return NOT_FOUND;
 
     return this.serial(projectId, async () => {
-      const ctx = await this.filter.computeContext(subject, projectId);
+      let ctx = await this.filter.computeContext(subject, projectId);
+      const link = state.shareLink;
+      if (!ctx.canOpenProject && link?.projectId === projectId) {
+        // §7.12 addendum: the account can't see this project; the link it also holds can.
+        const linkSubject = toSubject(link);
+        if (linkSubject !== null) {
+          const linkCtx = await this.filter.computeContext(linkSubject, projectId);
+          if (linkCtx.canOpenProject) {
+            state.principal = link;
+            state.subject = linkSubject;
+            subject = linkSubject;
+            ctx = linkCtx;
+          }
+        }
+      }
       if (!ctx.canOpenProject) return NOT_FOUND;
       const raw = await this.load(projectId);
       const project = await this.prisma.project.findFirst({
