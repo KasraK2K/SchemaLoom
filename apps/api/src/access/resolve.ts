@@ -244,6 +244,69 @@ export function allAccessMap(
   };
 }
 
+/**
+ * Phase 10 §3 — whether a subject sees every entity and every restricted field of a
+ * project. The same rule as `isCompleteView`, from the map and skeleton alone.
+ */
+export function hasCompleteView(map: ProjectPermissionMap, skel: ProjectSkeleton): boolean {
+  if (visibleEntityIds(map, skel).size !== skel.entities.length) return false;
+  const ok = restrictedOkEntityIds(map, skel);
+  return [...skel.entitiesWithRestrictedFields].every((id) => ok.has(id));
+}
+
+/** Phase 10 §3 — reading and commenting on a change request's draft. */
+export const DRAFT_REVIEW_ATOMS: AtomSet = new Set<PermissionAtom>([
+  'schema:view',
+  'comment:create',
+  'export:run',
+  'history:view',
+  'field:viewRestricted',
+]);
+/** The author edits their draft; nobody manages its sharing, which is the main project's. */
+export const DRAFT_AUTHOR_ATOMS: AtomSet = new Set<PermissionAtom>([
+  ...DRAFT_REVIEW_ATOMS,
+  'schema:edit',
+  'docs:edit',
+]);
+
+export interface DraftMapInput {
+  readonly draftProjectId: string;
+  readonly draftSkel: ProjectSkeleton;
+  /** The subject's map and skeleton on the MAIN project. */
+  readonly parentMap: ProjectPermissionMap;
+  readonly parentSkel: ProjectSkeleton;
+  readonly subject: Subject;
+  /** The author of an OPEN request. A merged request's draft is read-only for everyone. */
+  readonly canEdit: boolean;
+  readonly restrictedFieldMode: RestrictedFieldMode;
+}
+
+/**
+ * Phase 10 §3 — a draft's map is derived, never granted: a complete view of the main
+ * project or nothing. Uniform across the draft, so no main-project area or entity id
+ * has to be re-keyed into draft ids. `ai:use` follows the main project, because it is a
+ * per-grant toggle that costs money.
+ */
+export function draftMap(input: DraftMapInput): ProjectPermissionMap {
+  const { parentMap, subject, draftSkel } = input;
+  if (subject.kind !== 'user' || !hasCompleteView(parentMap, input.parentSkel)) {
+    return emptyMap(input.draftProjectId, subject);
+  }
+  const atoms = new Set(input.canEdit ? DRAFT_AUTHOR_ATOMS : DRAFT_REVIEW_ATOMS);
+  if (parentMap.projectAtoms.has('ai:use')) atoms.add('ai:use');
+  return {
+    projectId: input.draftProjectId,
+    subjectKey: subjectKey(subject),
+    orgRole: parentMap.orgRole,
+    projectAtoms: atoms,
+    areaAtoms: new Map(draftSkel.areaIds.map((a) => [a, atoms])),
+    entityOverrides: new Map(),
+    restrictedFieldMode: input.restrictedFieldMode,
+    // A grant on the main project that expires takes the draft with it.
+    validUntil: parentMap.validUntil,
+  };
+}
+
 /** Never cached: a nonexistent or unreachable project has no row to key it by. */
 export function emptyMap(projectId: string, subject: Subject): ProjectPermissionMap {
   return {

@@ -39,6 +39,7 @@ import {
   atomsAt,
   canOpenProject,
   computeProjectMap,
+  draftMap,
   emptyMap,
   restrictedOkEntityIds,
   visibleEntityIds,
@@ -128,7 +129,13 @@ export class PermissionResolver {
     const rows = await this.readProjectRows(ids, generationUserId(subject));
     const resolved = await Promise.all(
       [...rows.values()].map(
-        async (row) => [row.projectId, await this.cachedMap(subject, row)] as const,
+        async (row) =>
+          [
+            row.projectId,
+            row.draftOfId === null
+              ? await this.cachedMap(subject, row)
+              : await this.draftMapFor(subject, row, true),
+          ] as const,
       ),
     );
     for (const [id, map] of resolved) out.set(id, map);
@@ -147,6 +154,7 @@ export class PermissionResolver {
     const rows = await this.readProjectRows([projectId], generationUserId(subject));
     const row = rows.get(projectId);
     if (!row) return emptyMap(projectId, subject);
+    if (row.draftOfId !== null) return this.draftMapFor(subject, row, false);
     return this.compute(subject, row, { useCache: false });
   }
 
@@ -301,6 +309,40 @@ export class PermissionResolver {
   // Resolution
   // =====================================================================================
 
+  /**
+   * Phase 10 §3 — a draft's map is derived from the subject's map on the MAIN project,
+   * so it is not cached under the draft's own generations: every grant change on the main
+   * project reaches it at once, through the main project's cache key.
+   */
+  private async draftMapFor(
+    subject: Subject,
+    row: ProjectRow,
+    useCache: boolean,
+  ): Promise<ProjectPermissionMap> {
+    const parentId = row.draftOfId;
+    if (parentId === null || row.draftOfDraft) return emptyMap(row.projectId, subject);
+    const [parentMap, parentSkel, draftSkel] = await Promise.all([
+      useCache
+        ? this.resolveProject(subject, parentId)
+        : this.resolveProjectUncached(subject, parentId),
+      this.skeleton(parentId),
+      this.skeletonAt(row.projectId, row.pg, useCache),
+    ]);
+    return draftMap({
+      draftProjectId: row.projectId,
+      draftSkel,
+      parentMap,
+      parentSkel,
+      subject,
+      canEdit:
+        subject.kind === 'user' &&
+        row.draftOpen &&
+        row.draftAuthorId !== null &&
+        row.draftAuthorId === subject.userId,
+      restrictedFieldMode: row.restrictedFieldMode,
+    });
+  }
+
   private cachedMap(subject: Subject, row: ProjectRow): Promise<ProjectPermissionMap> {
     const key = permMapKey(row.projectId, subjectKey(subject), row);
     return this.single(key, async () => {
@@ -419,10 +461,16 @@ export class PermissionResolver {
              p.restricted_field_mode::text AS "restrictedFieldMode",
              p.perm_generation             AS "pg",
              o.perm_generation             AS "og",
-             COALESCE(u.perm_generation, 0) AS "sg"
+             COALESCE(u.perm_generation, 0) AS "sg",
+             p.draft_of_id                 AS "draftOfId",
+             parent.draft_of_id IS NOT NULL AS "draftOfDraft",
+             cr.author_id                  AS "draftAuthorId",
+             COALESCE(cr.status = 'open', false) AS "draftOpen"
         FROM projects p
         JOIN organizations o ON o.id = p.organization_id AND o.deleted_at IS NULL
         LEFT JOIN users u ON u.id = ${userId}::text
+        LEFT JOIN projects parent ON parent.id = p.draft_of_id
+        LEFT JOIN change_requests cr ON cr.draft_project_id = p.id
        WHERE p.id IN (${Prisma.join([...projectIds])})
          AND p.deleted_at IS NULL`;
     for (const r of rows) {
@@ -433,6 +481,10 @@ export class PermissionResolver {
         pg: Number(r.pg),
         og: Number(r.og),
         sg: Number(r.sg),
+        draftOfId: r.draftOfId ?? null,
+        draftOfDraft: r.draftOfDraft === true,
+        draftAuthorId: r.draftAuthorId ?? null,
+        draftOpen: r.draftOpen === true,
       });
     }
     return out;
@@ -837,12 +889,23 @@ interface RawProjectRow {
   pg: number | bigint;
   og: number | bigint;
   sg: number | bigint;
+  draftOfId?: string | null;
+  draftOfDraft?: boolean | null;
+  draftAuthorId?: string | null;
+  draftOpen?: boolean | null;
 }
 
 export interface ProjectRow extends Generations {
   readonly projectId: string;
   readonly organizationId: string;
   readonly restrictedFieldMode: RestrictedFieldMode;
+  /** Phase 10: the main project, when this row is a change request's draft. */
+  readonly draftOfId: string | null;
+  /** A draft of a draft is never created; if one exists it resolves to nothing. */
+  readonly draftOfDraft: boolean;
+  readonly draftAuthorId: string | null;
+  /** The request is `open`, so its author may still edit the draft. */
+  readonly draftOpen: boolean;
 }
 
 interface OrgMembership {

@@ -199,25 +199,27 @@ model User {
   groupMemberships      GroupMember[]
   createdProjects       Project[]
   updatedDocs           Doc[]
-  authoredComments      Comment[]           @relation("CommentAuthor")
-  resolvedComments      Comment[]           @relation("CommentResolvedBy")
+  authoredComments      Comment[]             @relation("CommentAuthor")
+  resolvedComments      Comment[]             @relation("CommentResolvedBy")
   savedQueries          SavedQuery[]
   aiThreads             AiThread[]
   snapshots             Snapshot[]
   shareLinks            ShareLink[]
   grantsIssued          AccessGrant[]
-  docDraftsCreated      DocDraft[]          @relation("DocDraftCreatedBy")
-  docDraftsReviewed     DocDraft[]          @relation("DocDraftReviewedBy")
+  docDraftsCreated      DocDraft[]            @relation("DocDraftCreatedBy")
+  docDraftsReviewed     DocDraft[]            @relation("DocDraftReviewedBy")
   exportJobs            ExportJob[]
-  accessRequestsMade    AccessRequest[]     @relation("AccessRequestRequestedBy")
-  accessRequestsDecided AccessRequest[]     @relation("AccessRequestDecidedBy")
+  changeRequests        ChangeRequest[]
+  changeRequestReviews  ChangeRequestReview[]
+  accessRequestsMade    AccessRequest[]       @relation("AccessRequestRequestedBy")
+  accessRequestsDecided AccessRequest[]       @relation("AccessRequestDecidedBy")
   activityEvents        ActivityLog[]
   auditEvents           AuditLog[]
   savedConnections      ProjectConnection[]
-  notifications         Notification[]      @relation("NotificationRecipient")
-  notificationsCaused   Notification[]      @relation("NotificationActor")
-  invitationsSent       Invitation[]        @relation("InvitationInvitedBy")
-  invitationsAccepted   Invitation[]        @relation("InvitationAcceptedBy")
+  notifications         Notification[]        @relation("NotificationRecipient")
+  notificationsCaused   Notification[]        @relation("NotificationActor")
+  invitationsSent       Invitation[]          @relation("InvitationInvitedBy")
+  invitationsAccepted   Invitation[]          @relation("InvitationAcceptedBy")
 
   @@index([lastSeenAt])
   @@map("users")
@@ -472,6 +474,9 @@ model Project {
   /// isRestricted toggle, restrictedFieldMode change and soft-delete. Section 3.2.
   permGeneration      Int                 @default(0) @map("perm_generation")
   createdById         String?             @map("created_by_id")
+  /// Phase 10: set on a change request's draft, a hidden copy of this project. Drafts
+  /// are left out of every listing and resolve their permissions from the main project.
+  draftOfId           String?             @map("draft_of_id")
   deletedAt           DateTime?           @map("deleted_at") @db.Timestamptz(6)
   /// C7 for the project object itself (name, settings, engine version). Canvas
   /// geometry does NOT bump it — section 10.4.
@@ -485,6 +490,8 @@ model Project {
   /// workspace service, which is the only place that can offer "move them first".
   workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: NoAction)
   createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  draftOf      Project?     @relation("ProjectDrafts", fields: [draftOfId], references: [id], onDelete: Cascade)
+  drafts       Project[]    @relation("ProjectDrafts")
 
   namespaces         Namespace[]
   areas              Area[]
@@ -513,8 +520,11 @@ model Project {
   auditLogs          AuditLog[]
   notifications      Notification[]
   connection         ProjectConnection?
+  changeRequests     ChangeRequest[]     @relation("ChangeRequestProject")
+  draftOfRequest     ChangeRequest?      @relation("ChangeRequestDraft")
 
   @@index([organizationId, deletedAt])
+  @@index([draftOfId])
   @@index([workspaceId, deletedAt])
   @@index([engineId])
   @@map("projects")
@@ -1612,4 +1622,72 @@ model ExportJob {
   @@index([projectId, createdAt(sort: Desc)])
   @@index([expiresAt])
   @@map("export_jobs")
+}
+
+// =====================================================================================
+// Phase 10 — change requests (docs/phase10/DESIGN.md)
+// =====================================================================================
+
+enum ChangeRequestStatus {
+  open
+  merged
+  closed
+
+  @@map("change_request_status")
+}
+
+enum ReviewVerdict {
+  approved
+  changes_requested
+
+  @@map("review_verdict")
+}
+
+/// A proposed set of schema edits. The edits live in `draftProject`, a hidden copy of
+/// `project`; `idMap` translates the draft's object ids back to the main project's.
+model ChangeRequest {
+  id             String              @id @default(cuid())
+  projectId      String              @map("project_id")
+  draftProjectId String              @unique @map("draft_project_id")
+  authorId       String?             @map("author_id")
+  title          String
+  description    String              @default("")
+  status         ChangeRequestStatus @default(open)
+  /// The main project's snapshot the draft started from (or was last updated from).
+  baseSnapshotId String              @map("base_snapshot_id")
+  /// `{ [draftId]: mainId }` for every object the fork or an update copied.
+  idMap          Json                @map("id_map")
+  /// Requested reviewers, notified on create.
+  reviewerIds    String[]            @map("reviewer_ids")
+  mergedById     String?             @map("merged_by_id")
+  mergedAt       DateTime?           @map("merged_at") @db.Timestamptz(6)
+  closedAt       DateTime?           @map("closed_at") @db.Timestamptz(6)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  project      Project               @relation("ChangeRequestProject", fields: [projectId], references: [id], onDelete: Cascade)
+  draftProject Project               @relation("ChangeRequestDraft", fields: [draftProjectId], references: [id], onDelete: Cascade)
+  author       User?                 @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  reviews      ChangeRequestReview[]
+
+  @@index([projectId, status, createdAt(sort: Desc)])
+  @@map("change_requests")
+}
+
+/// One reviewer's verdict. It counts only while the draft's `schemaRevision` still
+/// equals `draftRevision` (§4): any edit after it makes the review stale.
+model ChangeRequestReview {
+  id              String        @id @default(cuid())
+  changeRequestId String        @map("change_request_id")
+  reviewerId      String?       @map("reviewer_id")
+  verdict         ReviewVerdict
+  note            String        @default("")
+  draftRevision   BigInt        @map("draft_revision")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+  reviewer      User?         @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([changeRequestId, createdAt])
+  @@map("change_request_reviews")
 }

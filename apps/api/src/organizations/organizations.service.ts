@@ -107,7 +107,8 @@ export class OrganizationsService {
     if (!member) return [];
 
     const rows = await this.prisma.project.findMany({
-      where: { organizationId: member.organizationId, deletedAt: null },
+      // Phase 10: a change request's draft is opened from its request, never listed.
+      where: { organizationId: member.organizationId, deletedAt: null, draftOfId: null },
       select: { id: true, name: true, engineId: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' },
     });
