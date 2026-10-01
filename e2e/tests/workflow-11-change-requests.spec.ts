@@ -301,4 +301,28 @@ test.describe('workflow 11 — propose, review, merge', () => {
     ]);
     expect(edit.status()).toBe(403);
   });
+
+  test('the requested reviewer, the author and the analyst get what each may see', async () => {
+    const types = async (email: string) => {
+      const session = await signIn(email);
+      const response = await session.api.get('/api/notifications');
+      const { notifications } = (await response.json()) as {
+        notifications: { type: string; title: string; url: string | null }[];
+      };
+      return notifications.filter((n) => n.type.startsWith('change_request.'));
+    };
+    const adam = await types(SEED_EMAILS.admin);
+    expect(adam.map((n) => n.type)).toContain('change_request.review_requested');
+    expect(adam.find((n) => n.type === 'change_request.merged')).toBeUndefined(); // he merged
+
+    const olivia = await types(SEED_EMAILS.owner);
+    expect(olivia.map((n) => n.type)).toEqual(
+      expect.arrayContaining(['change_request.reviewed', 'change_request.merged']),
+    );
+    expect(olivia[0]?.url).toBe(`/${SEED.orgSlug}/p/${projectId}/changes/${requestId}`);
+    // L7: free text that can name tables never reaches a stored title.
+    expect(olivia.some((n) => n.title.includes('Add invoices'))).toBe(false);
+
+    expect(await types(SEED_EMAILS.analyst)).toEqual([]);
+  });
 });

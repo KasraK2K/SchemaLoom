@@ -57,6 +57,9 @@ const EMAIL_PREF: Partial<Record<NotificationType, keyof NotificationPrefs>> = {
   'drift.detected': 'emailDrift',
   'drift.check_failed': 'emailDrift',
   'drift.check_recovered': 'emailDrift',
+  'change_request.review_requested': 'emailChangeRequests',
+  'change_request.reviewed': 'emailChangeRequests',
+  'change_request.merged': 'emailChangeRequests',
 };
 
 const PAGE_SIZE = 20;

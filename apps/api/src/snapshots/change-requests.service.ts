@@ -4,8 +4,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import type { NotificationType } from '@schemaloom/contracts';
 import {
   IR_OBJECT_TYPES,
   RawSchemaModel,
@@ -25,6 +27,7 @@ import {
   type Subject,
 } from '../access';
 import type { ChangeRequest, ChangeRequestReview } from '../generated/prisma/client';
+import { NotificationsService } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { SchemaWriter } from '../schema';
 import { freshIds, invertIds, remapIds, type IdMap } from './change-request-ids';
@@ -132,12 +135,15 @@ type Row = ChangeRequest & {
  */
 @Injectable()
 export class ChangeRequestsService {
+  private readonly logger = new Logger(ChangeRequestsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly resolver: PermissionResolver,
     private readonly filter: VisibilityFilter,
     private readonly writer: SchemaWriter,
     private readonly snapshots: SnapshotsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ── create ─────────────────────────────────────────────────────────────────────────
@@ -228,6 +234,13 @@ export class ChangeRequestsService {
       await this.prisma.project.delete({ where: { id: row.draftProjectId } });
       throw error;
     }
+    await this.notify(
+      row,
+      row.reviewerIds,
+      user.userId,
+      'change_request.review_requested',
+      'You were asked to review a change request',
+    );
     return summary(row, await this.draftRevision(row.draftProjectId));
   }
 
@@ -310,6 +323,15 @@ export class ChangeRequestsService {
         draftRevision: (await this.draftRevision(row.draftProjectId)) ?? 0n,
       },
     });
+    await this.notify(
+      row,
+      row.authorId === null ? [] : [row.authorId],
+      user.userId,
+      'change_request.reviewed',
+      input.verdict === 'approved'
+        ? 'Your change request was approved'
+        : 'Changes were requested on your change request',
+    );
     return this.summaryOf(row.id);
   }
 
@@ -381,6 +403,16 @@ export class ChangeRequestsService {
       }
       throw error;
     }
+    await this.notify(
+      row,
+      [
+        ...(row.authorId === null ? [] : [row.authorId]),
+        ...row.reviews.flatMap((r) => (r.reviewerId === null ? [] : [r.reviewerId])),
+      ],
+      user.userId,
+      'change_request.merged',
+      'A change request you are part of was merged',
+    );
     return this.summaryOf(row.id);
   }
 
@@ -447,6 +479,60 @@ export class ChangeRequestsService {
   }
 
   // ── shared ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Phase 10 §7. Recipients are re-checked at send time (doc 05 L17): only someone with a
+   * complete view of the main project can open the request, so no one else gets a row.
+   * Titles carry no request title, which is free text that can name tables (L7). Best
+   * effort: the write it reports on has already committed.
+   */
+  private async notify(
+    row: { readonly id: string; readonly projectId: string },
+    recipients: readonly string[],
+    actorUserId: string,
+    type: NotificationType,
+    title: string,
+  ): Promise<void> {
+    try {
+      const users = [...new Set(recipients)].filter((id) => id !== actorUserId);
+      if (users.length === 0) return;
+      const project = await this.prisma.project.findFirst({
+        where: { id: row.projectId },
+        select: { organizationId: true },
+      });
+      if (project === null) return;
+      const skel = await this.resolver.skeleton(row.projectId);
+      const maps = await Promise.all(
+        users.map((userId) =>
+          this.resolver.resolveProject(
+            { kind: 'user', userId, orgId: project.organizationId },
+            row.projectId,
+          ),
+        ),
+      );
+      const allowed = users.filter((_, i) => {
+        const map = maps[i];
+        return map !== undefined && hasCompleteView(map, skel);
+      });
+      if (allowed.length === 0) return;
+      const base = await this.notifications.projectUrl(row.projectId);
+      const url = base === null ? null : `${base}/changes/${row.id}`;
+      await this.notifications.send(
+        allowed.map((userId) => ({
+          userId,
+          actorUserId,
+          organizationId: project.organizationId,
+          projectId: row.projectId,
+          type,
+          title,
+          url,
+          data: { changeRequestId: row.id },
+        })),
+      );
+    } catch (error) {
+      this.logger.warn({ err: error, changeRequestId: row.id, type }, 'notification failed');
+    }
+  }
 
   /** The three models of §5 plus what the page needs, read once per call. */
   private async state(row: Row): Promise<MergeState> {
