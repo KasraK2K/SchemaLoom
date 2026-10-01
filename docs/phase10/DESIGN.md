@@ -1,6 +1,12 @@
 # Phase 10: Schema change requests
 
-Status: **approved 2026-10-01** with every default in §10. Building in the §9 order. Roadmap row 10.
+Status: **approved 2026-10-01** with every default in §10, and **built** the same day. Roadmap row 10.
+
+**As built:** the base IR is stored on the request (`baseIr`), not as a snapshot, because
+auto snapshots are pruned. Update from main is author-only, and closing keeps the draft
+(read-only) instead of soft-deleting it. The review diff is redacted with the reviewer's
+uniform map over a skeleton built from the model itself, so tables the draft deleted or
+created still show. Covered by e2e workflow 11, including a conflict and the browser flow.
 
 A change request is the pull request of a schema: someone proposes edits in a draft, others
 review the diff and the migration SQL, and an editor merges it into the project. It sits on

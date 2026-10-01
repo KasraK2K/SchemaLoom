@@ -4,6 +4,7 @@ import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
 import { CanvasClient } from '@/features/canvas/canvas-client';
 import { dehydrateIr } from '@/features/canvas/ir-prefetch';
+import { ChangeRequestActions } from '@/features/change-requests/change-requests-view';
 import { ExportMenu } from '@/features/exports/export-menu';
 import { ProjectTabs } from '@/features/history/project-tabs';
 import { InspectorPanel } from '@/features/inspector/inspector-panel';
@@ -47,6 +48,7 @@ export default async function ProjectCanvasPage({
         }
         actions={
           <>
+            <ChangeRequestActions orgSlug={orgSlug} projectId={projectId} />
             <ExportMenu projectId={projectId} />
             <ProjectSettingsDialog projectId={projectId} />
             <ProjectShareButton projectId={projectId} />

@@ -53,12 +53,25 @@ export class ProjectsService {
         enginePluginVersion: true,
         restrictedFieldMode: true,
         updatedAt: true,
+        draftOfRequest: { select: { id: true, projectId: true, title: true, status: true } },
       },
     });
     // Unreachable behind the guard, which resolves no map for a project with no row.
     // Kept because a handler that trusts a guard opens a route the day the guard moves.
     if (!row) throw new NotFoundException({ code: 'not_found' });
-    return toDetail(row, map);
+    const request = row.draftOfRequest;
+    return toDetail(
+      row,
+      map,
+      request === null
+        ? null
+        : {
+            projectId: request.projectId,
+            changeRequestId: request.id,
+            title: request.title,
+            status: request.status,
+          },
+    );
   }
 
   async rename(projectId: string, name: string): Promise<void> {

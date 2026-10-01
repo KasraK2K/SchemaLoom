@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 /**
- * Phase 4 §1.2 — "Canvas | History | Docs" in the project header. The web does not know the
+ * Phase 4 §1.2 — "Canvas | History | Docs | Changes" in the project header. The web does not know the
  * caller's atoms, so History is always offered; without `history:view` the page renders
  * the API's refusal as its "not available" state.
  */
@@ -22,11 +22,14 @@ export function ProjectTabs({
     { href: base, label: 'Canvas' },
     { href: `${base}/history`, label: 'History' },
     { href: `${base}/docs`, label: 'Docs' },
+    { href: `${base}/changes`, label: 'Changes' },
   ];
   return (
     <nav aria-label="Project views" className="flex items-center gap-1">
       {tabs.map((tab) => {
-        const active = pathname === tab.href;
+        // A request page sits under Changes, so that tab stays lit there.
+        const active =
+          pathname === tab.href || (tab.label === 'Changes' && pathname.startsWith(`${tab.href}/`));
         return (
           <Link
             key={tab.href}

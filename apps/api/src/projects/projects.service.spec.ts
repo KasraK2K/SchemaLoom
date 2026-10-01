@@ -32,6 +32,7 @@ const ROW = {
   enginePluginVersion: '2.1.0',
   restrictedFieldMode: 'mask' as const,
   updatedAt: new Date(0),
+  draftOfRequest: null,
 };
 
 const INPUT = {
@@ -209,6 +210,7 @@ describe('ProjectsService.detail', () => {
       restrictedFieldMode: 'mask',
       role: 'manager',
       orgRole: 'member',
+      draft: null,
     });
     expect(detail.atoms).toEqual([...PERMISSION_ATOMS].sort((a, b) => (a < b ? -1 : 1)));
     expect(h.projectFindFirst).toHaveBeenCalledTimes(1);

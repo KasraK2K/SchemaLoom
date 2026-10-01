@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn, write, type Session } from '../fixtures/api';
+import { signIn, signedInPage, write, type Session } from '../fixtures/api';
 import { entityNames, fetchIr, type Ir } from '../fixtures/ir';
 import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
@@ -324,5 +324,34 @@ test.describe('workflow 11 — propose, review, merge', () => {
     expect(olivia.some((n) => n.title.includes('Add invoices'))).toBe(false);
 
     expect(await types(SEED_EMAILS.analyst)).toEqual([]);
+  });
+
+  test('in the browser: propose from the canvas, land on the draft, open the request', async ({
+    browser,
+  }) => {
+    const page = await signedInPage(browser, SEED_EMAILS.owner);
+    await page.goto(`/${SEED.orgSlug}/p/${projectId}`);
+    await page.getByRole('button', { name: 'Propose a change' }).click();
+    await page.getByLabel('Title').fill('Rename clients');
+    await page.getByRole('button', { name: 'Create draft' }).click();
+
+    const banner = page.getByRole('status').filter({ hasText: 'Draft for' });
+    await expect(banner).toContainText('Rename clients', { timeout: 30_000 });
+    expect(page.url()).not.toContain(projectId);
+    await page.screenshot({ path: 'test-results/cr-draft-canvas.png' });
+
+    await banner.getByRole('link', { name: 'View request' }).click();
+    await expect(page.getByRole('heading', { name: 'Rename clients' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Merge into the project' })).toBeDisabled();
+    await expect(page.getByText('The draft has no changes to merge yet.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Changes', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await page.screenshot({ path: 'test-results/cr-request-page.png', fullPage: true });
+
+    await page.getByRole('link', { name: '← Change requests' }).click();
+    await expect(page.getByRole('link', { name: /Rename clients/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Add invoices/ })).toBeVisible();
   });
 });

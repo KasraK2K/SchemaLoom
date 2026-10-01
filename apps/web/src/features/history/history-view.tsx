@@ -510,7 +510,7 @@ function MigrationPane({
 /** A migration plan: counts, copy/download, manual steps, then each step. Shared by the
  *  snapshot migration and the drift check (Phase 6 §6). Without `onAllowDestructive` the
  *  toggle is hidden: the drift check chooses before it reads the database. */
-function PlanBody({
+export function PlanBody({
   plan,
   fileName,
   allowDestructive,
@@ -636,7 +636,7 @@ function StepRow({ step }: { readonly step: MigrationStep }) {
   );
 }
 
-function DiffBody({
+export function DiffBody({
   diff,
   hideCosmetic,
   entityName,

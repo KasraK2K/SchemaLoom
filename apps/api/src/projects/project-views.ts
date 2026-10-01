@@ -51,6 +51,15 @@ export interface ProjectDetail {
   readonly role: BuiltInResourceRole | null;
   /** `null` for a share-link subject: a link belongs to no organisation (§7.1). */
   readonly orgRole: OrgRole | null;
+  /** Phase 10: set when this project is a change request's draft, for the canvas banner. */
+  readonly draft: DraftOf | null;
+}
+
+export interface DraftOf {
+  readonly projectId: string;
+  readonly changeRequestId: string;
+  readonly title: string;
+  readonly status: 'open' | 'merged' | 'closed';
 }
 
 /** Exactly the columns `toSummary` reads. A Prisma row satisfies it structurally. */
@@ -75,7 +84,11 @@ export const toSummary = (row: ProjectSummaryRow, map: ProjectPermissionMap): Pr
   role: effectiveRole(map.projectAtoms),
 });
 
-export const toDetail = (row: ProjectDetailRow, map: ProjectPermissionMap): ProjectDetail => ({
+export const toDetail = (
+  row: ProjectDetailRow,
+  map: ProjectPermissionMap,
+  draft: DraftOf | null = null,
+): ProjectDetail => ({
   id: row.id,
   name: row.name,
   engineId: row.engineId,
@@ -86,4 +99,5 @@ export const toDetail = (row: ProjectDetailRow, map: ProjectPermissionMap): Proj
   atoms: [...map.projectAtoms].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
   role: effectiveRole(map.projectAtoms),
   orgRole: map.orgRole,
+  draft,
 });
