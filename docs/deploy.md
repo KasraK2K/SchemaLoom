@@ -95,6 +95,13 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
 | `INTROSPECT_ALLOW_PRIVATE_HOSTS`                                                   | "Read a database" refuses private and internal addresses (RFC 1918, loopback, link-local, the cloud metadata address) unless this is `true`. Keep it `false` on a service open to the internet. The api image ships `pg_dump` (`PG_CLIENT_MAJOR` build arg). |
 | `INTROSPECTION_ENABLED`                                                            | optional, default `true`. `false` removes "Read a database" and the drift check (their routes answer 404).                                                                                                                                                   |
 
+**Changing `SECRETS_ENCRYPTION_KEY`** makes everything encrypted under the old key unreadable,
+including saved database connections (`docs/phase6/SAVED-CONNECTIONS.md`). There is no
+re-encryption job. After the change, Sync and Compare answer "can't be read with this server's
+key" (409 `connection.undecryptable`), and a project manager re-enters the connection's
+passwords and keys with **Edit connection**. Keep the key in your secret store, not only in the
+server's `.env`.
+
 ## 3. The web app
 
 `NEXT_PUBLIC_*` values are inlined into the browser bundle at build time, so set them for the

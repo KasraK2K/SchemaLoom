@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX, ApiError, apiFetch, apiUrl, CSRF_HEADER, readCookie } from './api-client';
+import {
+  API_PREFIX,
+  ApiError,
+  apiFetch,
+  apiUrl,
+  CSRF_HEADER,
+  readCookie,
+  toApiError,
+} from './api-client';
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -239,5 +247,13 @@ describe('apiFetch refresh on 401', () => {
       .map((c) => urlOf(c[0]))
       .filter((u) => u.endsWith('/auth/refresh'));
     expect(refreshes).toHaveLength(1);
+  });
+});
+
+describe('toApiError', () => {
+  it('says what a read-only (423) project needs instead of a generic failure', () => {
+    const error = toApiError(423, { error: { code: 'engine.read-only' } });
+    expect(error.code).toBe('engine.read-only');
+    expect(error.message).toMatch(/read-only until an operator upgrades its engine/);
   });
 });

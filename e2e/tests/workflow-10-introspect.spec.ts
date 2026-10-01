@@ -107,6 +107,60 @@ test.describe('workflow 10 — read a live database', () => {
     }
   });
 
+  test('6c: save → Sync and Compare with it → edit → forget', async () => {
+    const owner = await signIn(SEED_EMAILS.owner);
+    const analyst = await signIn(SEED_EMAILS.analyst);
+    const saved = `/api/projects/${P}/connection`;
+    const schema = `w10s_${tag}`;
+    const own = { ...connection, schemas: [schema] };
+    executeSql(
+      db,
+      `CREATE SCHEMA "${schema}"; CREATE TABLE "${schema}".w10s_t (id serial PRIMARY KEY);`,
+    );
+    try {
+      // Choosing the connection is a manager's call; the analyst may not.
+      const refused = await analyst.api.put(saved, {
+        headers: write(analyst),
+        data: { connection: own },
+      });
+      expect([403, 404]).toContain(refused.status());
+
+      const put = await owner.api.put(saved, { headers: write(owner), data: { connection: own } });
+      expect(put.status(), await put.text()).toBe(200);
+      const view = (await put.json()) as { values: Record<string, unknown>; secretsSet: string[] };
+      expect(view.values).not.toHaveProperty('password');
+      expect(view.secretsSet).toContain('password');
+
+      const sync = await post(owner, '/introspect/preview', { saved: true });
+      expect(sync.status(), await sync.text()).toBe(200);
+      expect(((await sync.json()) as { preview: { creates: string[] } }).preview.creates).toContain(
+        'w10s_t',
+      );
+      // The pg_dump serial triple comes back as one serial column (6a fix).
+      const drift = await post(owner, '/introspect/drift', { saved: true });
+      expect(drift.status(), await drift.text()).toBe(200);
+
+      // A blank password is kept while the target stays put, and refused when it moves.
+      const kept = await owner.api.put(saved, {
+        headers: write(owner),
+        data: { connection: { ...own, password: '' } },
+      });
+      expect(kept.status(), await kept.text()).toBe(200);
+      const moved = await owner.api.put(saved, {
+        headers: write(owner),
+        data: { connection: { ...own, host: 'elsewhere.example.com', password: '' } },
+      });
+      expect(moved.status()).toBe(422);
+
+      const forget = await owner.api.delete(saved, { headers: write(owner) });
+      expect(forget.status()).toBe(204);
+      expect((await owner.api.get(saved)).status()).toBe(404);
+    } finally {
+      await owner.api.delete(saved, { headers: write(owner) });
+      executeSql(db, `DROP SCHEMA "${schema}" CASCADE;`);
+    }
+  });
+
   test('a caller without schema:edit cannot read a database', async () => {
     const analyst = await signIn(SEED_EMAILS.analyst);
     const response = await post(analyst, '/introspect/preview', { connection });

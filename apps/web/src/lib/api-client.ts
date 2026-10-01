@@ -205,7 +205,12 @@ export async function apiResponse(path: string, init: ApiRequestInit = {}): Prom
   return response;
 }
 
+/** 423 (`engine.read-only`, doc 03 §15): no retry or other account helps, so say what does. */
+const READ_ONLY_MESSAGE =
+  'This project is read-only until an operator upgrades its engine. You can still view and export it.';
+
 export function toApiError(status: number, payload: unknown): ApiError {
+  if (status === 423) return new ApiError(status, 'engine.read-only', READ_ONLY_MESSAGE);
   const parsed = ErrorEnvelopeSchema.safeParse(payload);
   if (!parsed.success) {
     return new ApiError(status, 'unknown', `Request failed with status ${String(status)}`);
