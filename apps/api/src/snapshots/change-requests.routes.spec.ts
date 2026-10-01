@@ -37,6 +37,7 @@ describe('ChangeRequestsController route markers', () => {
 
   it('serves exactly the change-request routes', () => {
     expect(Object.keys(table).sort()).toEqual([
+      'DELETE /api/change-requests/:id',
       'GET /api/change-requests/:id',
       'GET /api/change-requests/:id/migration',
       'GET /api/projects/:projectId/change-requests',
@@ -62,6 +63,7 @@ describe('ChangeRequestsController route markers', () => {
       wheres: [{ project: 'projectId' }],
     });
     expect(table['GET /api/change-requests/:id']).toEqual([AUTHENTICATED_META]);
+    expect(table['DELETE /api/change-requests/:id']).toEqual([AUTHENTICATED_META]);
   });
 
   it('exposes nothing to a share-link subject (R21)', () => {

@@ -8,6 +8,15 @@ auto snapshots are pruned. Update from main is author-only, and closing keeps th
 uniform map over a skeleton built from the model itself, so tables the draft deleted or
 created still show. Covered by e2e workflow 11, including a conflict and the browser flow.
 
+**Added 2026-10-01 (owner's request): Delete.** `DELETE /change-requests/:id` removes a
+request and its draft for good, for the author or an editor of the project, only while it is
+unmerged (a merged request is part of the project's history) and unreviewed (a review is
+someone else's work, so close it instead). Otherwise 409 `change_request_merged` or
+`change_request_reviewed`. Audited as `change_request.deleted`. Notifications that linked to
+it now open a "does not exist" page. The request page also says plainly when the draft has
+no changes yet, with a link to it, because editing the project instead of the draft is the
+easy mistake.
+
 A change request is the pull request of a schema: someone proposes edits in a draft, others
 review the diff and the migration SQL, and an editor merges it into the project. It sits on
 top of what already exists: the canvas, SchemaWriter, history diffs, the migration generator,

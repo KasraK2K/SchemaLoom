@@ -24,6 +24,7 @@ import {
   changeRequestQueryOptions,
   changeRequestsKey,
   changeRequestsQueryOptions,
+  deleteChangeRequest,
   draftOfQueryOptions,
   mergeChange,
   proposeChange,
@@ -315,7 +316,7 @@ export function ChangeRequestView({
         )}
       </header>
 
-      <MergeBar request={r} />
+      <MergeBar request={r} orgSlug={orgSlug} />
       {r.conflicts.length > 0 && <ConflictList conflicts={r.conflicts} />}
       <Reviews request={r} />
 
@@ -342,7 +343,23 @@ export function ChangeRequestView({
           </button>
         ))}
       </nav>
-      {tab === 'changes' ? (
+      {tab === 'changes' && r.changes.entries.length === 0 ? (
+        <div role="note" className="flex flex-col gap-1 rounded border border-border p-3 text-sm">
+          <p className="font-medium text-text">Nothing has changed in the draft yet.</p>
+          <p className="text-xs text-text-muted">
+            This request shows only edits made in its draft: the canvas with the “Draft for change
+            request” banner. Edits made on the project itself are not part of it.
+          </p>
+          {r.status === 'open' && (
+            <Link
+              href={projectHref(orgSlug, r.draftProjectId)}
+              className="text-xs text-accent hover:underline"
+            >
+              Open the draft to make your changes
+            </Link>
+          )}
+        </div>
+      ) : tab === 'changes' ? (
         <DiffBody diff={r.changes} hideCosmetic entityName={entityName} canvasHref={() => null} />
       ) : (
         <Migration requestId={r.id} title={r.title} />
@@ -375,8 +392,16 @@ function Migration({ requestId, title }: { readonly requestId: string; readonly 
 }
 
 /** Merge, Update from main, Close/Reopen — each disabled with the API's reason. */
-function MergeBar({ request: r }: { readonly request: ChangeRequestDetail }) {
+function MergeBar({
+  request: r,
+  orgSlug,
+}: {
+  readonly request: ChangeRequestDetail;
+  readonly orgSlug: string;
+}) {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [reset, setReset] = useState<ChangeRequestConflict[] | null>(null);
   const refresh = async () => {
     await Promise.all([
@@ -400,8 +425,19 @@ function MergeBar({ request: r }: { readonly request: ChangeRequestDetail }) {
     mutationFn: () => setOpen(r.id, r.status !== 'open'),
     onSettled: refresh,
   });
-  const error = merge.error ?? update.error ?? toggle.error;
-  const busy = merge.isPending || update.isPending || toggle.isPending;
+  const remove = useMutation({
+    mutationFn: () => deleteChangeRequest(r.id),
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: changeRequestKey(r.id) });
+      await queryClient.invalidateQueries({ queryKey: changeRequestsKey(r.projectId) });
+      router.push(`${projectHref(orgSlug, r.projectId)}/changes`);
+    },
+    onSettled: () => {
+      setConfirmingDelete(false);
+    },
+  });
+  const error = merge.error ?? update.error ?? toggle.error ?? remove.error;
+  const busy = merge.isPending || update.isPending || toggle.isPending || remove.isPending;
 
   return (
     <section
@@ -444,6 +480,42 @@ function MergeBar({ request: r }: { readonly request: ChangeRequestDetail }) {
             {r.status === 'open' ? 'Close' : 'Reopen'}
           </Button>
         )}
+        {r.canDelete &&
+          (confirmingDelete ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  remove.mutate();
+                }}
+              >
+                {remove.isPending ? 'Deleting…' : 'Delete the request and its draft'}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setConfirmingDelete(false);
+                }}
+              >
+                Keep
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                setConfirmingDelete(true);
+              }}
+            >
+              Delete
+            </Button>
+          ))}
         <span className="text-xs text-text-muted">
           {r.status === 'merged'
             ? `Merged ${relativeTime(r.mergedAt ?? r.updatedAt)}.`

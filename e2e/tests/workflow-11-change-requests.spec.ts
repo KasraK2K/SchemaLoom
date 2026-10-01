@@ -326,6 +326,48 @@ test.describe('workflow 11 — propose, review, merge', () => {
     expect(await types(SEED_EMAILS.analyst)).toEqual([]);
   });
 
+  test('delete: a merged or reviewed request stays; an unreviewed one goes with its draft', async () => {
+    const del = (session: Session, id: string) =>
+      session.api.delete(`/api/change-requests/${id}`, { headers: write(session) });
+    const propose = async (title: string) => {
+      const created = await olivia.api.post(`/api/projects/${projectId}/change-requests`, {
+        headers: write(olivia),
+        data: { title },
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      return (await created.json()) as { id: string; draftProjectId: string };
+    };
+
+    const merged = await del(olivia, requestId);
+    expect(merged.status()).toBe(409);
+    expect(((await merged.json()) as { error: { code: string } }).error.code).toBe(
+      'change_request_merged',
+    );
+
+    const reviewed = await propose('Reviewed');
+    const adam = await signIn(SEED_EMAILS.admin);
+    const verdict = await adam.api.post(`/api/change-requests/${reviewed.id}/reviews`, {
+      headers: write(adam),
+      data: { verdict: 'changes_requested' },
+    });
+    expect(verdict.status(), await verdict.text()).toBe(201);
+    expect((await del(olivia, reviewed.id)).status()).toBe(409);
+
+    // Someone without a complete view gets the same 404 as a wrong id.
+    const unreviewed = await propose('Throwaway');
+    const alex = await signIn(SEED_EMAILS.analyst);
+    expect((await del(alex, unreviewed.id)).status()).toBe(404);
+
+    const gone = await del(olivia, unreviewed.id);
+    expect(gone.status(), await gone.text()).toBe(204);
+    expect((await olivia.api.get(`/api/change-requests/${unreviewed.id}`)).status()).toBe(404);
+    expect((await olivia.api.get(`/api/projects/${unreviewed.draftProjectId}/ir`)).status()).toBe(
+      404,
+    );
+    // Closed, not deleted, so the reviewed one doesn't clutter the browser test's list.
+    await olivia.api.post(`/api/change-requests/${reviewed.id}/close`, { headers: write(olivia) });
+  });
+
   test('in the browser: propose from the canvas, land on the draft, open the request', async ({
     browser,
   }) => {
@@ -344,6 +386,10 @@ test.describe('workflow 11 — propose, review, merge', () => {
     await expect(page.getByRole('heading', { name: 'Rename clients' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Merge into the project' })).toBeDisabled();
     await expect(page.getByText('The draft has no changes to merge yet.')).toBeVisible();
+    await expect(page.getByRole('note')).toContainText('Nothing has changed in the draft yet.');
+    await expect(
+      page.getByRole('link', { name: 'Open the draft to make your changes' }),
+    ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Changes', exact: true })).toHaveAttribute(
       'aria-current',
       'page',
@@ -353,5 +399,13 @@ test.describe('workflow 11 — propose, review, merge', () => {
     await page.getByRole('link', { name: '← Change requests' }).click();
     await expect(page.getByRole('link', { name: /Rename clients/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /Add invoices/ })).toBeVisible();
+
+    // Delete, confirmed: back on the list, and the request is gone.
+    await page.getByRole('link', { name: /Rename clients/ }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete the request and its draft' }).click();
+    await expect(page.getByRole('link', { name: '← Change requests' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Add invoices/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Rename clients/ })).toHaveCount(0);
   });
 });

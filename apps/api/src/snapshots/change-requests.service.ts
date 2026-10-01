@@ -103,6 +103,8 @@ export interface ChangeRequestDetail extends ChangeRequestSummary {
   readonly canReview: boolean;
   /** Close and reopen. Update from main is the author's alone. */
   readonly canManage: boolean;
+  /** `canManage`, and nobody has reviewed it yet: delete removes the request and its draft. */
+  readonly canDelete: boolean;
   readonly isAuthor: boolean;
 }
 
@@ -280,6 +282,7 @@ export class ChangeRequestsService {
       mergeBlockedBy: blocker(row, state, canEditMain || canEditSomeArea(map)),
       canReview: row.status === 'open' && !isAuthor && canEditMain,
       canManage: row.status !== 'merged' && (isAuthor || canEditMain),
+      canDelete: row.status !== 'merged' && (isAuthor || canEditMain) && row.reviews.length === 0,
       isAuthor,
     };
   }
@@ -476,6 +479,51 @@ export class ChangeRequestsService {
       throw new ConflictException({ code: 'change_request_not_open', status: row.status });
     }
     return this.summaryOf(row.id);
+  }
+
+  /**
+   * Removes the request and its draft for good: the draft project row goes, and the request
+   * cascades with it, as when a fork fails. Only while unmerged (a merged request is part of
+   * the project's history) and unreviewed (a review is someone else's work; close instead).
+   */
+  async remove(subject: Subject, id: string): Promise<void> {
+    const { row, map } = await this.readable(subject, id);
+    const user = asUser(subject);
+    if (row.authorId !== user.userId && !map.projectAtoms.has('schema:edit')) {
+      throw new ForbiddenException({ code: 'forbidden', details: { atom: 'schema:edit' } });
+    }
+    const organizationId = await this.prisma.$transaction(async (tx) => {
+      // Re-checked inside the transaction: a merge or a review may have landed meanwhile.
+      const gone = await tx.changeRequest.deleteMany({
+        where: { id: row.id, status: { not: 'merged' }, reviews: { none: {} } },
+      });
+      if (gone.count !== 1) {
+        const now = await tx.changeRequest.findUnique({
+          where: { id: row.id },
+          select: { status: true },
+        });
+        throw new ConflictException({
+          code: now?.status === 'merged' ? 'change_request_merged' : 'change_request_reviewed',
+        });
+      }
+      await tx.project.delete({ where: { id: row.draftProjectId } });
+      const project = await tx.project.findUniqueOrThrow({
+        where: { id: row.projectId },
+        select: { organizationId: true },
+      });
+      return project.organizationId;
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        projectId: row.projectId,
+        actorUserId: user.userId,
+        action: 'change_request.deleted',
+        resourceType: 'change_request',
+        resourceId: row.id,
+        metadata: { draftProjectId: row.draftProjectId },
+      },
+    });
   }
 
   // ── shared ─────────────────────────────────────────────────────────────────────────

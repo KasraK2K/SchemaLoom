@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   NotFoundException,
@@ -135,6 +136,14 @@ export class ChangeRequestsController {
   @Post('change-requests/:id/close')
   close(@Req() req: Request, @Param('id') id: string): Promise<ChangeRequestSummary> {
     return this.requests.setOpen(subjectOf(req), id, false);
+  }
+
+  @ApiOperation({ summary: 'Delete an unmerged, unreviewed request and its draft' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete('change-requests/:id')
+  async remove(@Req() req: Request, @Param('id') id: string): Promise<void> {
+    await this.requests.remove(subjectOf(req), id);
   }
 
   @ApiOperation({ summary: 'Reopen a closed request' })

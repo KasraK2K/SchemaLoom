@@ -61,6 +61,7 @@ export const detailSchema = summarySchema.extend({
   mergeBlockedBy: z.enum(MERGE_BLOCKERS).nullable(),
   canReview: z.boolean(),
   canManage: z.boolean(),
+  canDelete: z.boolean().default(false),
   isAuthor: z.boolean(),
 });
 export type ChangeRequestDetail = z.infer<typeof detailSchema>;
@@ -172,6 +173,11 @@ export async function setOpen(id: string, open: boolean): Promise<void> {
   await apiFetch<unknown>(`/change-requests/${enc(id)}/${open ? 'reopen' : 'close'}`, {
     method: 'POST',
   });
+}
+
+/** Unmerged and unreviewed only; the draft goes with it. */
+export async function deleteChangeRequest(id: string): Promise<void> {
+  await apiFetch<unknown>(`/change-requests/${enc(id)}`, { method: 'DELETE' });
 }
 
 /** What the page says instead of a disabled Merge button with no reason. */
