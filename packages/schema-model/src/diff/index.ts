@@ -9,6 +9,12 @@ export { deepDiff } from './deep-diff.js';
 export { diffModels, isCosmeticOnly } from './diff-models.js';
 export { RedactedDiffError, opsFromDiff, type RestoreOp } from './ops-from-diff.js';
 export {
+  threeWay,
+  type MergeConflict,
+  type ThreeWayOptions,
+  type ThreeWayResult,
+} from './three-way.js';
+export {
   nameSimilarity,
   renameCandidates,
   type EntityRenameCandidate,

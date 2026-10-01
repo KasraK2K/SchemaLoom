@@ -1,6 +1,6 @@
 # Phase 10: Schema change requests
 
-Status: **proposed 2026-10-01**, waiting for approval. Roadmap row 10.
+Status: **approved 2026-10-01** with every default in §10. Building in the §9 order. Roadmap row 10.
 
 A change request is the pull request of a schema: someone proposes edits in a draft, others
 review the diff and the migration SQL, and an editor merges it into the project. It sits on
