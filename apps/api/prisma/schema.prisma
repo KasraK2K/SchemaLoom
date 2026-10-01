@@ -1653,8 +1653,10 @@ model ChangeRequest {
   title          String
   description    String              @default("")
   status         ChangeRequestStatus @default(open)
-  /// The main project's snapshot the draft started from (or was last updated from).
-  baseSnapshotId String              @map("base_snapshot_id")
+  /// The main project's IR the draft started from (or was last updated from): the `base`
+  /// of the three-way merge. Kept on the row, not as a snapshot, because auto snapshots
+  /// are pruned and a long-lived request must not lose its base.
+  baseIr         Json                @map("base_ir")
   /// `{ [draftId]: mainId }` for every object the fork or an update copied.
   idMap          Json                @map("id_map")
   /// Requested reviewers, notified on create.

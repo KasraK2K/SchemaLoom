@@ -38,7 +38,7 @@ main project. That is the one decision everything else follows from:
   the main project with the id they already have, which is unique.
 - **The fork** reads the main project's live IR, creates the draft row (same engine and
   engine version), and writes everything with `planImport` creates through SchemaWriter. It
-  also stores the starting point as a snapshot of the main project (`baseSnapshotId`). If the
+  also stores the starting point as a snapshot of the main project (`baseIr`). If the
   fork fails partway, the draft row is deleted.
 - **Hidden everywhere else.** Project lists, org counts, drift schedules, saved connections
   and search filter on `draftOfId IS NULL`. Grants, share links and connections are not

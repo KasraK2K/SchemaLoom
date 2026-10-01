@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SchemaModule } from '../schema';
+import { ChangeRequestsController } from './change-requests.controller';
+import { ChangeRequestsService } from './change-requests.service';
 import { ImportController, SnapshotsController } from './snapshots.controller';
 import { SnapshotsService } from './snapshots.service';
 
@@ -14,8 +16,8 @@ import { SnapshotsService } from './snapshots.service';
  */
 @Module({
   imports: [SchemaModule],
-  controllers: [SnapshotsController, ImportController],
-  providers: [SnapshotsService],
+  controllers: [SnapshotsController, ImportController, ChangeRequestsController],
+  providers: [SnapshotsService, ChangeRequestsService],
   exports: [SnapshotsService],
 })
 export class SnapshotsModule {}
