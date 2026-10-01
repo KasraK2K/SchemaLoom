@@ -42,8 +42,9 @@ main project. That is the one decision everything else follows from:
   fork fails partway, the draft row is deleted.
 - **Hidden everywhere else.** Project lists, org counts, drift schedules, saved connections
   and search filter on `draftOfId IS NULL`. Grants, share links and connections are not
-  copied. Deleting the main project cascades to its drafts. Closing a request soft-deletes
-  its draft.
+  copied. Deleting the main project cascades to its drafts. Closing or merging a request
+  makes its draft read-only (as built: the draft is kept, so a closed request still shows
+  its diff and reopening is a status flip).
 
 ## 3. Who can do what
 
@@ -70,7 +71,7 @@ key includes the main project's generations as well.
 | create a change request   | complete view + `comment:create` at the main project. A commenter can propose; that's the point                                                                                |
 | approve / request changes | complete view + `schema:edit` at the main project, and not the author                                                                                                          |
 | merge                     | at least one current approval (§4), and the merger's own `SchemaWriter` checks on main pass for every op. An editor of one area can't merge a change that touches another area |
-| update from main, close   | the author, or anyone who could merge                                                                                                                                          |
+| update from main          | the author only (as built: the draft's writes are the author's)                                                                                                                |
 
 ## 4. Reviews
 
@@ -162,7 +163,7 @@ fails the §3 check, like exports do.
 | `POST /change-requests/:id/reviews`           | `{ verdict, note }`                                                      |
 | `POST /change-requests/:id/update-from-main`  | §5                                                                       |
 | `POST /change-requests/:id/merge`             | `{ expectedDraftRevision }`, so an edit made after review can't sneak in |
-| `POST /change-requests/:id/close` / `/reopen` | soft-deletes / restores the draft                                        |
+| `POST /change-requests/:id/close` / `/reopen` | author or project editor; the draft stays, read-only while closed        |
 
 Notifications (new types in `NOTIFICATION_TYPES` and `EMAIL_PREF`):
 

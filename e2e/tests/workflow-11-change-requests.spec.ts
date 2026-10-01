@@ -165,4 +165,140 @@ test.describe('workflow 11 — propose, review, merge', () => {
       }),
     ]);
   });
+
+  interface Detail {
+    status: string;
+    draftRevision: string;
+    mergeBlockedBy: string | null;
+    conflicts: { type: string; id: string; name: string; reason: string }[];
+    reviews: { verdict: string; current: boolean }[];
+  }
+  const detail = async (session: Session): Promise<Detail> => {
+    const response = await session.api.get(`/api/change-requests/${requestId}`);
+    expect(response.status(), await response.text()).toBe(200);
+    return (await response.json()) as Detail;
+  };
+  const review = (session: Session, verdict: string) =>
+    session.api.post(`/api/change-requests/${requestId}/reviews`, {
+      headers: write(session),
+      data: { verdict },
+    });
+  const renameIn = async (session: Session, project: string, from: string, to: string) => {
+    const ir = await fetchIr(session, project);
+    const entity = entityByName(ir, from);
+    const response = await ops(session, project, [
+      {
+        op: 'update',
+        type: 'entity',
+        id: entity?.id,
+        expectedVersion: entity?.version ?? 0,
+        patch: { name: to },
+      },
+    ]);
+    expect(response.status(), await response.text()).toBe(201);
+  };
+
+  test('reviews: the author cannot approve, changes requested blocks, an edit makes reviews stale', async () => {
+    const adam = await signIn(SEED_EMAILS.admin);
+    expect((await detail(olivia)).mergeBlockedBy).toBe('needs_approval');
+
+    const own = await review(olivia, 'approved');
+    expect(own.status(), await own.text()).toBe(403);
+
+    expect((await review(adam, 'changes_requested')).status()).toBe(201);
+    expect((await detail(olivia)).mergeBlockedBy).toBe('changes_requested');
+
+    await renameIn(olivia, draftId, 'purchases', 'purchase_orders');
+    const stale = await detail(olivia);
+    expect(stale.reviews.map((r) => r.current)).toEqual([false]);
+    expect(stale.mergeBlockedBy).toBe('needs_approval');
+
+    expect((await review(adam, 'approved')).status()).toBe(201);
+    expect((await detail(adam)).mergeBlockedBy).toBeNull();
+  });
+
+  test('the migration SQL is the rename', async () => {
+    const response = await olivia.api.get(`/api/change-requests/${requestId}/migration`);
+    expect(response.status(), await response.text()).toBe(200);
+    const { script } = (await response.json()) as { script: string };
+    expect(script).toMatch(/RENAME TO "?purchase_orders"?/);
+  });
+
+  test('a change to the same table on both sides is a conflict until updated from main', async () => {
+    await renameIn(olivia, projectId, 'customers', 'clients');
+    await renameIn(olivia, draftId, 'customers', 'buyers');
+
+    const conflicted = await detail(olivia);
+    expect(conflicted.mergeBlockedBy).toBe('conflicts');
+    expect(conflicted.conflicts).toEqual([
+      expect.objectContaining({ type: 'entity', name: 'clients', reason: 'both_changed' }),
+    ]);
+    const refused = await olivia.api.post(`/api/change-requests/${requestId}/merge`, {
+      headers: write(olivia),
+      data: { expectedDraftRevision: conflicted.draftRevision },
+    });
+    expect(refused.status(), await refused.text()).toBe(409);
+
+    const adam = await signIn(SEED_EMAILS.admin);
+    const notAuthor = await adam.api.post(`/api/change-requests/${requestId}/update-from-main`, {
+      headers: write(adam),
+    });
+    expect(notAuthor.status()).toBe(403);
+
+    const updated = await olivia.api.post(`/api/change-requests/${requestId}/update-from-main`, {
+      headers: write(olivia),
+    });
+    expect(updated.status(), await updated.text()).toBe(200);
+    const { reset } = (await updated.json()) as { reset: { name: string }[] };
+    expect(reset.map((r) => r.name)).toEqual(['buyers']);
+    // Main won on the conflict; the draft's other change survived.
+    expect(entityNames(await fetchIr(olivia, draftId))).toEqual(['clients', 'purchase_orders']);
+    const after = await detail(olivia);
+    expect(after.conflicts).toEqual([]);
+    expect(after.mergeBlockedBy).toBe('needs_approval');
+  });
+
+  test('an approved request merges once, as the merger, and the draft goes read-only', async () => {
+    const adam = await signIn(SEED_EMAILS.admin);
+    expect((await review(adam, 'approved')).status()).toBe(201);
+    const ready = await detail(adam);
+    expect(ready.mergeBlockedBy).toBeNull();
+
+    const stale = await adam.api.post(`/api/change-requests/${requestId}/merge`, {
+      headers: write(adam),
+      data: { expectedDraftRevision: '0' },
+    });
+    expect(stale.status()).toBe(409);
+
+    const merged = await adam.api.post(`/api/change-requests/${requestId}/merge`, {
+      headers: write(adam),
+      data: { expectedDraftRevision: ready.draftRevision },
+    });
+    expect(merged.status(), await merged.text()).toBe(200);
+    expect(((await merged.json()) as { status: string }).status).toBe('merged');
+
+    expect(entityNames(await fetchIr(olivia, projectId))).toEqual(['clients', 'purchase_orders']);
+    const snapshots = await olivia.api.get(`/api/projects/${projectId}/snapshots`);
+    const names = ((await snapshots.json()) as { name: string }[]).map((s) => s.name);
+    expect(names).toContain('Before merging "Add invoices"');
+
+    const again = await adam.api.post(`/api/change-requests/${requestId}/merge`, {
+      headers: write(adam),
+      data: { expectedDraftRevision: ready.draftRevision },
+    });
+    expect(again.status()).toBe(409);
+
+    const draft = await fetchIr(olivia, draftId);
+    const orders = entityByName(draft, 'purchase_orders');
+    const edit = await ops(olivia, draftId, [
+      {
+        op: 'update',
+        type: 'entity',
+        id: orders?.id,
+        expectedVersion: orders?.version ?? 0,
+        patch: { name: 'late_edit' },
+      },
+    ]);
+    expect(edit.status()).toBe(403);
+  });
 });

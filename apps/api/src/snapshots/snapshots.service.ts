@@ -517,6 +517,34 @@ export class SnapshotsService {
     };
   }
 
+  /**
+   * Phase 10 — the migration for a change request: `before` and `after` are already
+   * redacted for a caller with a complete view (`ChangeRequestsService.reviewerView`).
+   */
+  async migrationBetween(
+    projectId: string,
+    before: RedactedModel,
+    after: RedactedModel,
+    request: MigrationRequest,
+  ): Promise<MigrationView> {
+    const project = await loadLiveProject(this.prisma, projectId);
+    const engine = this.registry.tryGet(project.engineId);
+    const annotate = engine?.annotateDiff;
+    if (engine === undefined || annotate === undefined || engine.migrationGenerator === undefined) {
+      throw new UnprocessableEntityException({ code: 'engine.migrations_unavailable' });
+    }
+    const diff = annotate(
+      diffModels(before, after, {
+        ignoreCosmetic: true,
+        from: { kind: 'live' },
+        to: { kind: 'live', label: 'Change request' },
+      }),
+      before,
+      after,
+    );
+    return this.plan(engine, projectId, project.live.engineVersion, diff, before, after, request);
+  }
+
   /** The engine's plan for `diff`, each reason rendered for the caller, plus the script. */
   private async plan(
     engine: EngineDefinition,

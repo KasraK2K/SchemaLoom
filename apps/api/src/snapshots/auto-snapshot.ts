@@ -7,7 +7,8 @@ export const AUTO_SNAPSHOT_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
 export interface AutoSnapshotInput {
   readonly projectId: string;
-  readonly kind: 'import' | 'restore';
+  /** `auto`: before a change request is merged (Phase 10). */
+  readonly kind: 'import' | 'restore' | 'auto';
   readonly name: string;
   /** The model as it was BEFORE the write this snapshot precedes. */
   readonly live: LiveIr;

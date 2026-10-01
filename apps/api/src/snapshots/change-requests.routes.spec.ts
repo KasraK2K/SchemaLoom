@@ -38,7 +38,13 @@ describe('ChangeRequestsController route markers', () => {
   it('serves exactly the change-request routes', () => {
     expect(Object.keys(table).sort()).toEqual([
       'GET /api/change-requests/:id',
+      'GET /api/change-requests/:id/migration',
       'GET /api/projects/:projectId/change-requests',
+      'POST /api/change-requests/:id/close',
+      'POST /api/change-requests/:id/merge',
+      'POST /api/change-requests/:id/reopen',
+      'POST /api/change-requests/:id/reviews',
+      'POST /api/change-requests/:id/update-from-main',
       'POST /api/projects/:projectId/change-requests',
     ]);
   });

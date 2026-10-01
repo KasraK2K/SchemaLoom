@@ -36,7 +36,7 @@ import type { LiveIr } from './live-ir';
  * On an UPDATE the key is dropped from the patch, so the live row keeps its value. On a
  * CREATE there is no live row to preserve, so the defaults below are fail-closed.
  */
-const FROZEN: Partial<Record<IrObjectType, readonly string[]>> = {
+export const FROZEN: Partial<Record<IrObjectType, readonly string[]>> = {
   entity: ['areaId'],
   field: ['isRestricted'],
 };
@@ -52,7 +52,11 @@ const CREATE_DEFAULTS: Partial<Record<IrObjectType, Readonly<Record<string, unkn
  * through the SAME zod boundary a hand edit goes through is what keeps restore from being
  * a privileged bulk overwrite with its own rules.
  */
-function toOperation(op: RestoreOp, createDefaults = CREATE_DEFAULTS): unknown {
+function toOperation(
+  op: RestoreOp,
+  createDefaults = CREATE_DEFAULTS,
+  frozenKeys = FROZEN,
+): unknown {
   switch (op.op) {
     case 'create':
       return {
@@ -61,7 +65,7 @@ function toOperation(op: RestoreOp, createDefaults = CREATE_DEFAULTS): unknown {
         object: { ...op.object, ...(createDefaults[op.type] ?? {}) },
       };
     case 'update': {
-      const frozen = new Set(FROZEN[op.type] ?? []);
+      const frozen = new Set(frozenKeys[op.type] ?? []);
       const patch = Object.fromEntries(
         Object.entries(op.object).filter(([key]) => !frozen.has(key)),
       );
@@ -80,6 +84,9 @@ export const restoreDiff = (live: LiveIr, snapshot: LiveIr, to: SnapshotRef): Sc
 /**
  * @param createDefaults R28's fail-closed defaults. SQL import passes `{}`: a column read
  *   from DDL has never been marked Restricted, so there is no earlier decision to preserve.
+ * @param frozen R28's frozen keys. A change request passes `{}` for both: its area moves
+ *   and restriction changes were reviewed, and `SchemaWriter` still checks each one
+ *   (`sharing:manage` to un-restrict, both areas to move) against the merger.
  * @returns `null` when the snapshot already matches live — there is nothing to write, and
  *   an empty batch fails `ops.min(1)` at the boundary.
  */
@@ -90,9 +97,10 @@ export function planRestore(
   batchId: string,
   label: string,
   createDefaults = CREATE_DEFAULTS,
+  frozen = FROZEN,
 ): SchemaOperationBatch | null {
   const ops = opsFromDiff(restoreDiff(live, snapshot, to), live).map((op) =>
-    toOperation(op, createDefaults),
+    toOperation(op, createDefaults, frozen),
   );
   if (ops.length === 0) return null;
   if (ops.length > MAX_OPS_PER_BATCH) {
@@ -122,10 +130,11 @@ export function planImport(
   imported: LiveIr,
   batchId: () => string,
   label: string,
+  frozen = FROZEN,
 ): SchemaOperationBatch[] {
   const ops = sortOps(
     opsFromDiff(restoreDiff(live, imported, { kind: 'import', label }), live).map((op) =>
-      SchemaOperationSchema.parse(toOperation(op, {})),
+      SchemaOperationSchema.parse(toOperation(op, {}, frozen)),
     ),
   );
   const batches: SchemaOperationBatch[] = [];
