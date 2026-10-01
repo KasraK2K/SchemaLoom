@@ -48,6 +48,7 @@
     "@schemaloom/config": "workspace:*",
     "@types/node": "^22.15.0",
     "eslint": "catalog:",
+    "prisma": "^6.16.0",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

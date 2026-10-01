@@ -44,6 +44,7 @@ import {
   type CommentSubject,
   type IndexColumnInput,
 } from './export-ddl.js';
+import { buildPrismaExport } from './export-prisma.js';
 import { CODE } from './messages.js';
 import { quoteDocText } from './sql-text.js';
 import { TYPE_CATALOG } from './types.js';
@@ -612,6 +613,8 @@ export const EXPORTER: Exporter = {
   // Not `async`: there is no I/O to await, and the SDK's signature is a Promise only because
   // another engine's exporter may need one.
   export(input: ExportInput): Promise<ExportResult> {
-    return Promise.resolve(buildExport(input));
+    return Promise.resolve(
+      input.options.format === 'prisma' ? buildPrismaExport(input) : buildExport(input),
+    );
   },
 };

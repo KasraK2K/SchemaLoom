@@ -1,7 +1,7 @@
 # SchemaLoom roadmap
 
 This is the single list of what is built, what comes next, and in what order. It is for human
-contributors and AI agents alike. Last updated 2026-09-30.
+contributors and AI agents alike. Last updated 2026-10-01.
 
 ## How this file works
 
@@ -44,7 +44,8 @@ a reason to come back every week, then reach more databases and teams.
 | 6b  | **Drift check: design vs. live database**           | `built`  | `docs/phase6/DESIGN.md` §6         | "Production has 4 changes your design doesn't," plus the SQL to reconcile. The reason to come back every week. |
 | 6c  | Saved connections (Sync now, Compare now)           | `built`  | `docs/phase6/SAVED-CONNECTIONS.md` | Sync and compare later without re-typing credentials. Scheduled checks and alerts follow as 6d.                |
 | 6d  | Scheduled drift checks + alerts                     | `built`  | `docs/phase6/SCHEDULED-DRIFT.md`   | Turns Compare into a monitor: managers hear when the database moves away from the design.                      |
-| 7   | ORM round-trip: Prisma export first, then import    | `idea`   | —                                  | For many teams the ORM file is the source of truth. An exporter plugs into the existing exporter contract.     |
+| 7   | **Prisma export**                                   | `built`  | `docs/phase7/DESIGN.md`            | For many teams the ORM file is the source of truth. A second export format of the engine.                      |
+| 7b  | Prisma import                                       | `idea`   | —                                  | The other half of the round trip (`DESIGN.md` Q4). Wait until the export is in use.                            |
 | 8   | Drizzle / TypeORM / Django exporters                | `idea`   | —                                  | Same contract as 7. Build only the ones users ask for.                                                         |
 | 9   | Second engine: MySQL / MariaDB                      | `idea`   | —                                  | Roughly doubles the market. The engine boundary is built for this. Wait until 6a–6b are proven on PostgreSQL.  |
 | 10  | Schema change requests (propose → review → merge)   | `idea`   | —                                  | PR-style review for schema edits, on top of comments, history and migrations. What teams pay for.              |

@@ -1,0 +1,83 @@
+// Views are not included: Prisma supports them only as a preview feature.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public", "sales"]
+}
+
+enum user_role {
+  member
+  admin
+  super_admin @map("super-admin")
+
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model audit_log {
+  at DateTime? @db.Timestamp(6)
+
+  @@ignore
+  @@schema("public")
+}
+
+model posts {
+  id              BigInt  @id(map: "posts_pk") @default(autoincrement())
+  author_id       String  @db.Uuid
+  editor_id       String? @db.Uuid
+  body            Json?
+  status          Int     @default(1) @db.SmallInt
+  title           String  @default("Untitled 'draft'")
+  users           users   @relation("posts_author_id_fkey", fields: [author_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_editor_id users?  @relation("posts_editor_id_fkey", fields: [editor_id], references: [id])
+
+  @@index([author_id])
+  @@index([body], map: "posts_body_gin", type: Gin)
+  @@index([status(sort: Desc), title])
+  @@unique([title, status])
+  @@schema("public")
+}
+
+model profiles {
+  user_id String  @id @db.Uuid
+  bio     String?
+  users   users   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// People who sign in
+model users {
+  id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email            String                    @unique @db.VarChar(320)
+  /// Shown "as is"
+  name             String?
+  tags             String[]
+  role             user_role                 @default(member)
+  balance          Decimal                   @default(0) @db.Decimal(12, 2)
+  created_at       DateTime                  @default(now()) @db.Timestamptz(6)
+  Display_Name     String?                   @map("Display Name") @db.VarChar(80)
+  manager_id       String?                   @db.Uuid
+  active           Unsupported("tstzrange")?
+  posts            posts[]                   @relation("posts_author_id_fkey")
+  posts_editor_id  posts[]                   @relation("posts_editor_id_fkey")
+  profiles         profiles?
+  users            users?                    @relation("users_manager_fk", fields: [manager_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "users_manager_fk")
+  users_manager_id users[]                   @relation("users_manager_fk")
+
+  @@schema("public")
+
+  // Not supported by Prisma, left out: check constraint "users_balance_check"
+  // Not supported by Prisma, left out: index "users_lower_email"
+}
+
+model invoices {
+  id Int @id @default(autoincrement())
+
+  @@schema("sales")
+}

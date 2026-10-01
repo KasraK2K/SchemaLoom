@@ -90,7 +90,8 @@ export interface RenderStatementsOptions {
   readonly lineComment?: string;
 }
 
-/** Joins with `result.separator` and a blank line between phases. */
+/** Joins with `result.separator` and a blank line between phases (none when the separator
+ *  already ends a line). */
 export function renderStatements(
   result: ExportResult,
   options: RenderStatementsOptions = {},
@@ -102,7 +103,8 @@ export function renderStatements(
 
   for (const statement of result.statements) {
     if (statement.phase !== phase) {
-      if (phase !== null) lines.push('');
+      // A separator that already ends a line (Prisma's '\n') would double the blank line.
+      if (phase !== null && !separator.endsWith('\n')) lines.push('');
       if (options.phaseHeadings === true) lines.push(`${lineComment} ${statement.phase}`);
       phase = statement.phase;
     }

@@ -194,6 +194,14 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
       supportsComments: true,
       supportsDrops: true,
     },
+    // Phase 7 — `export-prisma.ts`.
+    {
+      id: 'prisma',
+      displayName: 'Prisma schema',
+      fileExtension: 'prisma',
+      supportsComments: true,
+      supportsDrops: false,
+    },
   ],
   // Phase 6 §2 — the "From a database" form; `introspector.ts` reads these ids.
   connectionFields: [

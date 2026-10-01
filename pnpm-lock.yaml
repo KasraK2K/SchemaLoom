@@ -458,6 +458,9 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 9.39.5(jiti@2.7.0)
+      prisma:
+        specifier: ^6.16.0
+        version: 6.19.3(typescript@5.9.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.28)(tsx@4.23.15)(typescript@5.9.3)
