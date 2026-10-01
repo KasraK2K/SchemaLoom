@@ -1,6 +1,23 @@
 # Phase 10b: Protected projects (schema changes only through change requests)
 
-Status: **approved 2026-10-01** with every default in §7. Roadmap row 10b.
+Status: **built 2026-10-01** (approved the same day with every default in §7). Roadmap row 10b.
+
+**As built**, with these adjustments:
+
+- **Its own route**, `PATCH /projects/:projectId/require-change-requests` with
+  `{ enabled }`, like `restricted-field-mode`, rather than a key on `PATCH …/settings`: the
+  value is a real column, and the settings route patches the JSON `settings` blob. `GET
+…/settings` and `GET /projects/:projectId` return `requireChangeRequests`.
+- **The canvas is not put in share-link `readOnly` mode**, because that mode also stops
+  dragging and auto-layout, which §1 keeps. A protected project hides the schema actions
+  instead (add table, Import SQL, Sync, connecting tables, deleting links), and the header
+  shows a **Protected** chip next to **Propose a change**. The inspector's edit controls
+  stay visible; an edit there gets the protected sentence from the 423. Hiding them too
+  can come with a general "can I edit?" signal in the inspector.
+- **The area-editors note** in the settings checkbox is always shown, rather than only when
+  the project has area-scoped editors.
+- A **queued** import or Sync job on a protected project fails in the job with the same
+  423; the controls that start one are hidden, so this is only reachable through the API.
 
 Phase 10 left this out on purpose (`DESIGN.md` Q4: "Requests are opt-in; direct editing
 keeps working"). In practice that made the easy mistake the common one: people edit the

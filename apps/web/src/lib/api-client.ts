@@ -209,9 +209,17 @@ export async function apiResponse(path: string, init: ApiRequestInit = {}): Prom
 const READ_ONLY_MESSAGE =
   'This project is read-only until an operator upgrades its engine. You can still view and export it.';
 
+/** 423 `project_protected` (Phase 10b): the other read-only, with its own way forward. */
+const PROTECTED_MESSAGE =
+  'This project is protected: schema changes go through change requests. Propose a change to edit it.';
+
 export function toApiError(status: number, payload: unknown): ApiError {
-  if (status === 423) return new ApiError(status, 'engine.read-only', READ_ONLY_MESSAGE);
   const parsed = ErrorEnvelopeSchema.safeParse(payload);
+  if (status === 423) {
+    return parsed.success && parsed.data.error.code === 'project_protected'
+      ? new ApiError(status, 'project_protected', PROTECTED_MESSAGE)
+      : new ApiError(status, 'engine.read-only', READ_ONLY_MESSAGE);
+  }
   if (!parsed.success) {
     return new ApiError(status, 'unknown', `Request failed with status ${String(status)}`);
   }

@@ -470,6 +470,9 @@ model Project {
   /// would put a zod parse of the whole settings object on the hot path and on the
   /// security path (section 7).
   restrictedFieldMode RestrictedFieldMode @default(mask) @map("restricted_field_mode")
+  /// Phase 10b (docs/phase10/PROTECTED-PROJECTS.md): schema writes only through a
+  /// change-request merge. A real column because `SchemaWriter` reads it on every write.
+  requireChangeRequests Boolean @default(false) @map("require_change_requests")
   /// Permission-cache generation for this project (doc 05 R19). Bumped by every
   /// grant write, share-link create/revoke, area create/delete, entity area move,
   /// isRestricted toggle, restrictedFieldMode change and soft-delete. Section 3.2.

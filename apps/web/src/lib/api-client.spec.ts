@@ -256,4 +256,11 @@ describe('toApiError', () => {
     expect(error.code).toBe('engine.read-only');
     expect(error.message).toMatch(/read-only until an operator upgrades its engine/);
   });
+
+  it('tells a protected project (Phase 10b) apart from an old engine', () => {
+    const error = toApiError(423, { error: { code: 'project_protected', message: 'Locked' } });
+    expect(error.code).toBe('project_protected');
+    expect(error.message).toMatch(/Propose a change/);
+    expect(toApiError(423, null).code).toBe('engine.read-only');
+  });
 });

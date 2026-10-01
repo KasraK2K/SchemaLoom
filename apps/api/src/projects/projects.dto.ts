@@ -41,4 +41,8 @@ export class UpdateProjectDto extends createZodDto(UpdateProjectSchema) {}
 export const RestrictedFieldModeBodySchema = z.object({ mode: restrictedFieldModeSchema }).strict();
 export class RestrictedFieldModeDto extends createZodDto(RestrictedFieldModeBodySchema) {}
 
+/** Phase 10b — `PATCH /projects/:id/require-change-requests`. */
+export const RequireChangeRequestsBodySchema = z.object({ enabled: z.boolean() }).strict();
+export class RequireChangeRequestsDto extends createZodDto(RequireChangeRequestsBodySchema) {}
+
 export class ProjectSettingsPatchDto extends createZodDto(projectSettingsPatchSchema) {}

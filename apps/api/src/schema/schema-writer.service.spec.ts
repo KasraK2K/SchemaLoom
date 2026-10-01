@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, HttpException, NotFoundException } from '@nestjs/common';
 import { redact } from '@schemaloom/schema-model';
 import { describe, expect, it, vi } from 'vitest';
 import type { PermissionResolver, ProjectPermissionMap, ProjectSkeleton } from '../access';
@@ -14,6 +14,7 @@ import {
   indexRow,
   linkEndpointRow,
   linkRow,
+  projectRow,
   storeContext,
 } from './fixture';
 import { SchemaOperationBatchSchema, type SchemaOperationBatch } from './ops';
@@ -69,6 +70,7 @@ function harness(store: Partial<Store> = world()): {
     assertAll: spy,
     context: async (over = {}) => ({
       projectId: PROJECT,
+      origin: 'edit',
       actorUserId: 'usr_ana',
       map: {} as ProjectPermissionMap,
       skel: {} as ProjectSkeleton,
@@ -143,6 +145,42 @@ describe('SchemaWriter — optimistic concurrency (C7)', () => {
   });
 });
 
+describe('SchemaWriter — protected projects (Phase 10b §2)', () => {
+  const rename = () =>
+    batch([
+      { op: 'update', type: 'field', id: 'fld_total', expectedVersion: 3, patch: { name: 'sum' } },
+    ]);
+  const protectedWorld = () => {
+    const store = world();
+    store.project = [projectRow({ requireChangeRequests: true })];
+    return store;
+  };
+
+  it.each(['edit', 'import', 'restore', 'draft'] as const)(
+    'refuses a %s write with 423 project_protected, writing nothing',
+    async (origin) => {
+      const { writer, context, prisma } = harness(protectedWorld());
+      const error = await writer
+        .apply(rename(), await context({ origin }))
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).getStatus()).toBe(423);
+      expect((error as HttpException).getResponse()).toEqual({ code: 'project_protected' });
+      expect(prisma.store.field?.find((f) => f.id === 'fld_total')?.name).not.toBe('sum');
+    },
+  );
+
+  it('lets a change-request merge through', async () => {
+    const { writer, context } = harness(protectedWorld());
+    await expect(writer.apply(rename(), await context({ origin: 'merge' }))).resolves.toBeDefined();
+  });
+
+  it('changes nothing for an unprotected project', async () => {
+    const { writer, context } = harness();
+    await expect(writer.apply(rename(), await context({ origin: 'edit' }))).resolves.toBeDefined();
+  });
+});
+
 describe('SchemaWriter — visibility before version (§8.6 rule 1)', () => {
   it('reports not-found for an invisible target and never reads its version', async () => {
     const store = world();
@@ -167,6 +205,7 @@ describe('SchemaWriter — visibility before version (§8.6 rule 1)', () => {
     await expect(
       writer.apply(ops, {
         projectId: PROJECT,
+        origin: 'edit',
         actorUserId: null,
         map: {} as ProjectPermissionMap,
         skel: {} as ProjectSkeleton,

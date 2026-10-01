@@ -66,8 +66,9 @@ export const detailSchema = summarySchema.extend({
 });
 export type ChangeRequestDetail = z.infer<typeof detailSchema>;
 
-/** `GET /projects/:id`'s `draft`, which is all the canvas banner needs. */
-const draftOfSchema = z.object({
+/** `GET /projects/:id`'s `draft` and Phase 10b's flag: all the canvas banner needs. */
+const shellSchema = z.object({
+  requireChangeRequests: z.boolean().default(false),
   draft: z
     .object({
       projectId: z.string(),
@@ -120,11 +121,20 @@ export function changeRequestMigrationQueryOptions(id: string, allowDestructive:
   });
 }
 
-export function draftOfQueryOptions(projectId: string) {
+export const projectShellKey = (projectId: string): readonly unknown[] => [
+  'project',
+  projectId,
+  'shell',
+];
+
+/** Whether this project is a draft (and of what), and whether it is protected (10b). */
+export function projectShellQueryOptions(projectId: string) {
   return queryOptions({
-    queryKey: ['project', projectId, 'draft-of'],
-    queryFn: async () =>
-      draftOfSchema.parse(await apiFetch<unknown>(`/projects/${enc(projectId)}`)).draft ?? null,
+    queryKey: projectShellKey(projectId),
+    queryFn: async () => {
+      const shell = shellSchema.parse(await apiFetch<unknown>(`/projects/${enc(projectId)}`));
+      return { draft: shell.draft ?? null, requireChangeRequests: shell.requireChangeRequests };
+    },
     retry: false,
     staleTime: 60_000,
   });

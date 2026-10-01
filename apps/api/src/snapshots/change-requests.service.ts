@@ -376,6 +376,7 @@ export class ChangeRequestsService {
     try {
       await this.writer.apply(batch, {
         projectId: row.projectId,
+        origin: 'merge',
         actorUserId: user.userId,
         map,
         skel,
@@ -703,6 +704,7 @@ export class ChangeRequestsService {
       ]);
       await this.writer.apply(batch, {
         projectId: draftProjectId,
+        origin: 'draft',
         actorUserId: user.userId,
         map,
         skel,

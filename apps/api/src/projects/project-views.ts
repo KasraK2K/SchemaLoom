@@ -53,6 +53,8 @@ export interface ProjectDetail {
   readonly orgRole: OrgRole | null;
   /** Phase 10: set when this project is a change request's draft, for the canvas banner. */
   readonly draft: DraftOf | null;
+  /** Phase 10b: schema edits only through change requests; the canvas opens read-only. */
+  readonly requireChangeRequests: boolean;
 }
 
 export interface DraftOf {
@@ -74,6 +76,7 @@ export interface ProjectDetailRow extends ProjectSummaryRow {
   readonly engineVersion: string;
   readonly enginePluginVersion: string;
   readonly restrictedFieldMode: RestrictedFieldMode;
+  readonly requireChangeRequests: boolean;
 }
 
 export const toSummary = (row: ProjectSummaryRow, map: ProjectPermissionMap): ProjectSummary => ({
@@ -100,4 +103,5 @@ export const toDetail = (
   role: effectiveRole(map.projectAtoms),
   orgRole: map.orgRole,
   draft,
+  requireChangeRequests: row.requireChangeRequests,
 });

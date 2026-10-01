@@ -52,6 +52,7 @@ export class ProjectsService {
         engineVersion: true,
         enginePluginVersion: true,
         restrictedFieldMode: true,
+        requireChangeRequests: true,
         updatedAt: true,
         draftOfRequest: { select: { id: true, projectId: true, title: true, status: true } },
       },
@@ -81,7 +82,7 @@ export class ProjectsService {
   async settings(projectId: string): Promise<ProjectSettingsView> {
     const row = await this.prisma.project.findFirstOrThrow({
       where: { id: projectId, deletedAt: null },
-      select: { restrictedFieldMode: true, settings: true },
+      select: SETTINGS_SELECT,
     });
     return toSettingsView(row);
   }
@@ -106,7 +107,7 @@ export class ProjectsService {
       const row = await tx.project.update({
         where: { id: projectId },
         data: { restrictedFieldMode: mode },
-        select: { restrictedFieldMode: true, settings: true },
+        select: SETTINGS_SELECT,
       });
       await this.writer.audit(tx, subject, projectId, before.organizationId, {
         action: 'project.restricted_field_mode_changed',
@@ -141,13 +142,50 @@ export class ProjectsService {
         const row = await tx.project.update({
           where: { id: projectId },
           data: { settings },
-          select: { restrictedFieldMode: true, settings: true },
+          select: SETTINGS_SELECT,
         });
         await this.writer.audit(tx, subject, projectId, before.organizationId, {
           action: 'project.settings_changed',
           resourceType: 'project',
           resourceId: projectId,
           metadata: { before: readSettings(before.settings).ai, after: settings.ai },
+        });
+        return toSettingsView(row);
+      },
+      { bump: false },
+    );
+  }
+
+  /**
+   * Phase 10b — "Require change requests". Gates a feature, not visibility, so no bump
+   * (like the AI switch); locked, re-checked and audited. A draft is never protected: it is
+   * where protected changes are made.
+   */
+  async setRequireChangeRequests(
+    subject: Subject & { kind: 'user' },
+    projectId: string,
+    enabled: boolean,
+  ): Promise<ProjectSettingsView> {
+    return this.writer.write(
+      subject,
+      projectId,
+      async ({ tx, map }) => {
+        assertManages(map);
+        const before = await tx.project.findUniqueOrThrow({
+          where: { id: projectId },
+          select: { organizationId: true, requireChangeRequests: true, draftOfId: true },
+        });
+        if (before.draftOfId !== null) throw new NotFoundException({ code: 'not_found' });
+        const row = await tx.project.update({
+          where: { id: projectId },
+          data: { requireChangeRequests: enabled },
+          select: SETTINGS_SELECT,
+        });
+        await this.writer.audit(tx, subject, projectId, before.organizationId, {
+          action: 'project.protection_changed',
+          resourceType: 'project',
+          resourceId: projectId,
+          metadata: { before: before.requireChangeRequests, after: enabled },
         });
         return toSettingsView(row);
       },
@@ -271,6 +309,7 @@ export class ProjectsService {
         engineVersion: true,
         enginePluginVersion: true,
         restrictedFieldMode: true,
+        requireChangeRequests: true,
         updatedAt: true,
       },
     });
@@ -335,7 +374,15 @@ export class ProjectsService {
 export interface ProjectSettingsView {
   readonly restrictedFieldMode: RestrictedFieldMode;
   readonly ai: ProjectSettings['ai'];
+  /** Phase 10b. */
+  readonly requireChangeRequests: boolean;
 }
+
+const SETTINGS_SELECT = {
+  restrictedFieldMode: true,
+  settings: true,
+  requireChangeRequests: true,
+} as const;
 
 function readSettings(raw: unknown): ProjectSettings {
   const parsed = projectSettingsStoredSchema.safeParse(raw ?? {});
@@ -345,8 +392,13 @@ function readSettings(raw: unknown): ProjectSettings {
 function toSettingsView(row: {
   restrictedFieldMode: RestrictedFieldMode;
   settings: unknown;
+  requireChangeRequests: boolean;
 }): ProjectSettingsView {
-  return { restrictedFieldMode: row.restrictedFieldMode, ai: readSettings(row.settings).ai };
+  return {
+    restrictedFieldMode: row.restrictedFieldMode,
+    ai: readSettings(row.settings).ai,
+    requireChangeRequests: row.requireChangeRequests,
+  };
 }
 
 /** The guard checked `sharing:manage` on a possibly cached map; this is the R26 re-check

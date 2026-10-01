@@ -13,12 +13,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { z } from 'zod';
 import { ProjectApiTokens } from '@/features/api-tokens/api-tokens';
+import { projectShellKey } from '@/features/change-requests/change-requests-api';
 import { SavedConnectionSettings } from '@/features/projects/saved-connection';
 import { ApiError, apiFetch } from '@/lib/api-client';
 
 /** `GET /projects/:id/settings` — `ProjectSettingsView` in `apps/api/src/projects`. */
 const settingsSchema = z.object({
   restrictedFieldMode: restrictedFieldModeSchema,
+  requireChangeRequests: z.boolean().default(false),
   ai: z.object({ enabled: z.boolean(), includeDocsInContext: z.boolean() }),
 });
 type ProjectSettings = z.infer<typeof settingsSchema>;
@@ -55,8 +57,10 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
           body: write.body,
         }),
       ),
-    onSuccess: (next) => {
+    onSuccess: async (next) => {
       client.setQueryData(settingsKey(projectId), next);
+      // The canvas, History and the header read protection from the project shell.
+      await client.invalidateQueries({ queryKey: projectShellKey(projectId) });
     },
   });
 
@@ -65,6 +69,9 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
   };
   const setAi = (ai: Partial<ProjectSettings['ai']>) => {
     save.mutate({ path: 'settings', body: { ai } });
+  };
+  const setProtected = (enabled: boolean) => {
+    save.mutate({ path: 'require-change-requests', body: { enabled } });
   };
   const error = query.error ?? save.error;
   const settings = query.data;
@@ -136,11 +143,36 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
                 Include documentation in what the AI sees
               </label>
             </fieldset>
+            <fieldset className="flex flex-col gap-1">
+              <legend className="mb-1 text-sm text-text">Change requests</legend>
+              <label className="flex items-center gap-2 text-sm text-text">
+                <input
+                  type="checkbox"
+                  className="size-3.5 accent-accent"
+                  checked={settings.requireChangeRequests}
+                  disabled={save.isPending}
+                  onChange={(event) => {
+                    setProtected(event.target.checked);
+                  }}
+                />
+                Require change requests
+              </label>
+              <p className="text-xs text-text-muted">
+                Schema changes are only possible by merging a reviewed change request: no direct
+                edits, imports, syncs or restores, for anyone. Layout, comments and docs stay
+                editable. People with access to only some areas can’t propose changes, so they lose
+                editing.
+              </p>
+            </fieldset>
             <SavedConnectionSettings projectId={projectId} />
           </div>
         )}
         {/* Not a manager-only setting: anyone who can open the project may hold a token. */}
-        {open && <ProjectApiTokens projectId={projectId} />}
+        {open && (
+          <div className="pt-3">
+            <ProjectApiTokens projectId={projectId} />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -52,8 +54,16 @@ import { assertOpsVisible } from './visibility-gate';
  *   4. the writes themselves, atomic (§8.6 rule 5) — any failure rolls the whole batch
  *      back, because partial application of a user gesture is worse than a retry.
  */
+/**
+ * Phase 10b (docs/phase10/PROTECTED-PROJECTS.md §2): where a write comes from. Required, so
+ * every new caller has to choose. On a project that requires change requests only `merge`
+ * passes; `draft` is a change request's own draft, which is never protected.
+ */
+export type WriteOrigin = 'edit' | 'import' | 'restore' | 'merge' | 'draft';
+
 export interface WriteContext {
   readonly projectId: Id;
+  readonly origin: WriteOrigin;
   /** Null for a system write (a job, a cascade from a project setting). */
   readonly actorUserId: Id | null;
   readonly map: ProjectPermissionMap;
@@ -161,6 +171,7 @@ export class SchemaWriter {
     const { projectId } = ctx;
     const engine = await this.gate.checkWrite(tx, projectId);
     if (engine !== null) assertEngineProps(engine, ops, ctx.redacted);
+    await assertUnprotected(tx, projectId, ctx.origin);
     await this.assertVersions(tx, ops, ctx);
     await ctx.beforeWrite?.(tx);
 
@@ -480,3 +491,22 @@ const raceConflict = (type: IrObjectType, id: Id, expectedVersion: number): Conf
     code: 'VERSION_CONFLICT',
     conflicts: [{ type, id, expectedVersion }],
   });
+
+/**
+ * Phase 10b §2 — read inside the write's transaction, so turning protection on applies to
+ * the next write. A protected project takes schema only from a change-request merge.
+ */
+async function assertUnprotected(
+  tx: SchemaDb,
+  projectId: Id,
+  origin: WriteOrigin,
+): Promise<void> {
+  if (origin === 'merge') return;
+  const project = await tx.project.findFirst({
+    where: { id: projectId },
+    select: { requireChangeRequests: true },
+  });
+  if (project?.requireChangeRequests === true) {
+    throw new HttpException({ code: 'project_protected' }, HttpStatus.LOCKED);
+  }
+}

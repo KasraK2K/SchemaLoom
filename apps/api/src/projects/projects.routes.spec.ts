@@ -64,6 +64,7 @@ describe('ProjectsController route markers', () => {
       'GET /api/projects/:projectId',
       'GET /api/projects/:projectId/settings',
       'PATCH /api/projects/:projectId',
+      'PATCH /api/projects/:projectId/require-change-requests',
       'PATCH /api/projects/:projectId/restricted-field-mode',
       'PATCH /api/projects/:projectId/settings',
       'POST /api/projects',
@@ -77,6 +78,7 @@ describe('ProjectsController route markers', () => {
       'settings',
       'updateSettings',
       'setRestrictedFieldMode',
+      'setRequireChangeRequests',
     ]) {
       const r = route(handler);
       expect(r?.markers).toEqual([PERM_META]);

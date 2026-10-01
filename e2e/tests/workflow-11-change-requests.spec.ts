@@ -408,4 +408,125 @@ test.describe('workflow 11 — propose, review, merge', () => {
     await expect(page.getByRole('link', { name: /Add invoices/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /Rename clients/ })).toHaveCount(0);
   });
+
+  test('a protected project takes schema only from a merge (Phase 10b)', async ({ browser }) => {
+    const adam = await signIn(SEED_EMAILS.admin);
+    const protect = (enabled: boolean) =>
+      olivia.api.patch(`/api/projects/${projectId}/require-change-requests`, {
+        headers: write(olivia),
+        data: { enabled },
+      });
+    const refused = async (response: { status(): number; json(): Promise<unknown> }) => {
+      expect(response.status()).toBe(423);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+        'project_protected',
+      );
+    };
+
+    // Only a sharing manager can switch it.
+    const byAdam = await adam.api.patch(`/api/projects/${projectId}/require-change-requests`, {
+      headers: write(adam),
+      data: { enabled: true },
+    });
+    expect(byAdam.status()).toBe(403);
+    const on = await protect(true);
+    expect(on.status(), await on.text()).toBe(200);
+    expect(((await on.json()) as { requireChangeRequests: boolean }).requireChangeRequests).toBe(
+      true,
+    );
+    const shell = await olivia.api.get(`/api/projects/${projectId}`);
+    expect(((await shell.json()) as { requireChangeRequests: boolean }).requireChangeRequests).toBe(
+      true,
+    );
+
+    try {
+      const main = await fetchIr(olivia, projectId);
+      const target = Object.values(main.objects.entity)[0];
+      expect(target).toBeDefined();
+      const name = target?.name ?? '';
+
+      // Direct edit, import and restore: refused, for the owner too (Q2).
+      await refused(
+        await ops(olivia, projectId, [
+          {
+            op: 'update',
+            type: 'entity',
+            id: target?.id,
+            expectedVersion: target?.version ?? 0,
+            patch: { name: 'direct_edit' },
+          },
+        ]),
+      );
+      await refused(
+        await olivia.api.post(`/api/projects/${projectId}/import`, {
+          headers: write(olivia),
+          data: { source: 'CREATE TABLE sneaky (id int PRIMARY KEY);' },
+        }),
+      );
+      // The oldest snapshot ("Before merging…") differs from live; restoring an identical
+      // one writes nothing and so never reaches SchemaWriter.
+      const listed = await olivia.api.get(`/api/projects/${projectId}/snapshots`);
+      const snapshots = (await listed.json()) as { id: string; createdAt: string }[];
+      const snapshotId = [...snapshots].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
+        ?.id;
+      expect(snapshotId).toBeDefined();
+      await refused(
+        await olivia.api.post(`/api/projects/${projectId}/snapshots/${snapshotId ?? ''}/restore`, {
+          headers: write(olivia),
+        }),
+      );
+
+      // Layout and comments still work (§1, Q6).
+      const moved = await olivia.api.post(`/api/projects/${projectId}/schema/geometry`, {
+        headers: write(olivia),
+        data: {
+          batchId: `bat_e2e_geo_${String(Date.now())}`,
+          entities: [{ id: target?.id, position: { x: 40, y: 40 } }],
+        },
+      });
+      expect(moved.status(), await moved.text()).toBeLessThan(300);
+
+      // The canvas says so, hides the schema actions, and keeps layout.
+      const page = await signedInPage(browser, SEED_EMAILS.owner);
+      await page.goto(`/${SEED.orgSlug}/p/${projectId}`);
+      await expect(page.getByRole('status').filter({ hasText: 'Protected' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Auto-layout' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Import SQL' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Propose a change' })).toBeVisible();
+      await page.screenshot({ path: 'test-results/protected-canvas.png' });
+      await page.getByRole('button', { name: 'Project settings' }).click();
+      await expect(page.getByLabel('Require change requests')).toBeChecked();
+      await page.screenshot({ path: 'test-results/protected-settings.png' });
+      await page.close();
+
+      // The way in: propose, edit the draft, approve, merge.
+      const created = await olivia.api.post(`/api/projects/${projectId}/change-requests`, {
+        headers: write(olivia),
+        data: { title: 'Rename under protection' },
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      const request = (await created.json()) as { id: string; draftProjectId: string };
+      await renameIn(olivia, request.draftProjectId, name, `${name}_v2`);
+      const approved = await adam.api.post(`/api/change-requests/${request.id}/reviews`, {
+        headers: write(adam),
+        data: { verdict: 'approved' },
+      });
+      expect(approved.status(), await approved.text()).toBe(201);
+      const detail = (await (
+        await olivia.api.get(`/api/change-requests/${request.id}`)
+      ).json()) as { draftRevision: string };
+      const merged = await olivia.api.post(`/api/change-requests/${request.id}/merge`, {
+        headers: write(olivia),
+        data: { expectedDraftRevision: detail.draftRevision },
+      });
+      expect(merged.status(), await merged.text()).toBeLessThan(300);
+      expect(entityNames(await fetchIr(olivia, projectId))).toContain(`${name}_v2`);
+    } finally {
+      expect((await protect(false)).status()).toBe(200);
+    }
+
+    // Off again: a direct edit works.
+    const first = Object.values((await fetchIr(olivia, projectId)).objects.entity)[0];
+    await renameIn(olivia, projectId, first?.name ?? '', 'after_unprotect');
+  });
 });

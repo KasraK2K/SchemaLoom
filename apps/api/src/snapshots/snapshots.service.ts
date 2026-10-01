@@ -689,7 +689,7 @@ export class SnapshotsService {
         ops: renaming,
         label: 'Import SQL: confirmed renames',
       });
-      result = await this.write(ctx, project, batch, snapshotOnce());
+      result = await this.write(ctx, project, batch, 'import', snapshotOnce());
       await reload();
       // The additive merge now runs against the RENAMED model.
       merged = mergeImport(current.live, model);
@@ -698,7 +698,7 @@ export class SnapshotsService {
     const batches = planImport(current.live, merged.model, randomUUID, 'Import SQL');
     for (const [i, batch] of batches.entries()) {
       if (i > 0) await reload();
-      result = await this.write(batchCtx, current, batch, snapshotOnce());
+      result = await this.write(batchCtx, current, batch, 'import', snapshotOnce());
     }
     return {
       result: result ?? this.noop(ctx, randomUUID(), project),
@@ -848,7 +848,7 @@ export class SnapshotsService {
     // see — a concurrently CREATED object, which no op of ours names — and the catch below
     // converts the version conflicts it does see into the same answer.
     await this.assertUnchanged(ctx.projectId, project.schemaRevision);
-    return this.write(ctx, project, batch, beforeWrite);
+    return this.write(ctx, project, batch, 'restore', beforeWrite);
   }
 
   private noop(ctx: SnapshotContext, batchId: string, project: LiveProject): SchemaOperationResult {
@@ -866,6 +866,7 @@ export class SnapshotsService {
     ctx: SnapshotContext,
     project: LiveProject,
     batch: SchemaOperationBatch,
+    origin: 'import' | 'restore',
     beforeWrite?: BeforeWrite,
   ): Promise<SchemaOperationResult> {
     const redacted = this.filter.redactWith(
@@ -878,6 +879,7 @@ export class SnapshotsService {
     try {
       return await this.writer.apply(batch, {
         projectId: ctx.projectId,
+        origin,
         actorUserId: ctx.actorUserId,
         map: ctx.map,
         skel: ctx.skel,

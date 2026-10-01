@@ -83,7 +83,14 @@ export class SchemaController {
     @Body() batch: SchemaOpsDto,
   ): Promise<SchemaOperationResult> {
     const { redacted, map, skel, actorUserId } = await this.view(req, projectId);
-    return this.writer.apply(batch, { projectId, actorUserId, map, skel, redacted });
+    return this.writer.apply(batch, {
+      projectId,
+      origin: 'edit',
+      actorUserId,
+      map,
+      skel,
+      redacted,
+    });
   }
 
   /**

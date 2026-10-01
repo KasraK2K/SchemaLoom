@@ -15,6 +15,7 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useEngine } from '@/engines';
 import { irQueryOptions } from '@/features/canvas/ir-query';
+import { projectShellQueryOptions } from '@/features/change-requests/change-requests-api';
 import { EngineGate } from '@/features/project/engine-gate';
 import { SshHostKeyNote, hasConnectionForm } from '@/features/projects/connection-form';
 import { relativeTime } from '@/features/projects/relative-time';
@@ -354,6 +355,8 @@ function DiffPane({
   // The live diff also carries `fullView` and the counts the restore dialog needs.
   const live = useQuery(diffQueryOptions(projectId, snapshot.id, null));
   const ir = useQuery(irQueryOptions(projectId));
+  // Phase 10b Q3: a protected project takes no restore; say so instead of offering one.
+  const isProtected = useQuery(projectShellQueryOptions(projectId)).data?.requireChangeRequests;
   const [hideCosmetic, setHideCosmetic] = useState(true);
   const [restoring, setRestoring] = useState(false);
   const [showSql, setShowSql] = useState(false);
@@ -408,27 +411,35 @@ function DiffPane({
           />
           Hide cosmetic
         </label>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={live.data?.fullView !== true}
-          title={
-            live.data?.fullView === false
-              ? 'Restoring needs access to every table in the project.'
-              : undefined
-          }
-          onClick={() => {
-            setRestoring(true);
-          }}
-        >
-          Restore
-        </Button>
+        {isProtected !== true && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={live.data?.fullView !== true}
+            title={
+              live.data?.fullView === false
+                ? 'Restoring needs access to every table in the project.'
+                : undefined
+            }
+            onClick={() => {
+              setRestoring(true);
+            }}
+          >
+            Restore
+          </Button>
+        )}
         {snapshot.kind === 'manual' && (
           <DeleteButton projectId={projectId} snapshotId={snapshot.id} onDeleted={onDeleted} />
         )}
       </header>
       {snapshot.description !== null && (
         <p className="text-xs text-text-muted">{snapshot.description}</p>
+      )}
+      {isProtected === true && (
+        <p className="text-xs text-text-muted">
+          This project is protected, so it can’t be restored directly. Propose a change, or ask a
+          manager to turn off “Require change requests” first.
+        </p>
       )}
       {live.data?.fullView === false && (
         <p className="text-xs text-text-muted">

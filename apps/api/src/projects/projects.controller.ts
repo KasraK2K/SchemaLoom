@@ -25,6 +25,7 @@ import type { ProjectDetail } from './project-views';
 import {
   CreateProjectDto,
   ProjectSettingsPatchDto,
+  RequireChangeRequestsDto,
   RestrictedFieldModeDto,
   UpdateProjectDto,
 } from './projects.dto';
@@ -146,6 +147,21 @@ export class ProjectsController {
     @Body() body: RestrictedFieldModeDto,
   ): Promise<ProjectSettingsView> {
     return this.projects.setRestrictedFieldMode(userSubject(getSubject(req)), projectId, body.mode);
+  }
+
+  @ApiOperation({ summary: 'Require change requests for every schema change (Phase 10b)' })
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @Patch(':projectId/require-change-requests')
+  setRequireChangeRequests(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: RequireChangeRequestsDto,
+  ): Promise<ProjectSettingsView> {
+    return this.projects.setRequireChangeRequests(
+      userSubject(getSubject(req)),
+      projectId,
+      body.enabled,
+    );
   }
 
   /** Soft delete (C8 tombstone). The resolver skips tombstoned projects, so every route

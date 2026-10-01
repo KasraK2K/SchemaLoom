@@ -25,8 +25,8 @@ import {
   changeRequestsKey,
   changeRequestsQueryOptions,
   deleteChangeRequest,
-  draftOfQueryOptions,
   mergeChange,
+  projectShellQueryOptions,
   proposeChange,
   reviewChange,
   setOpen,
@@ -74,10 +74,26 @@ export function ChangeRequestActions({
   readonly orgSlug: string;
   readonly projectId: string;
 }) {
-  const draftOf = useQuery(draftOfQueryOptions(projectId));
-  if (draftOf.data === undefined) return null;
-  if (draftOf.data === null) return <ProposeChangeButton orgSlug={orgSlug} projectId={projectId} />;
-  const { projectId: mainId, changeRequestId, title, status } = draftOf.data;
+  const shell = useQuery(projectShellQueryOptions(projectId));
+  if (shell.data === undefined) return null;
+  if (shell.data.draft === null) {
+    const propose = <ProposeChangeButton orgSlug={orgSlug} projectId={projectId} />;
+    if (!shell.data.requireChangeRequests) return propose;
+    // Phase 10b §1: say it before anyone tries an edit that the api will refuse.
+    return (
+      <span
+        role="status"
+        className="flex items-center gap-2 rounded border border-border bg-surface-sunken px-2 py-0.5 text-xs text-text"
+      >
+        <span className="font-medium">Protected</span>
+        <span className="hidden text-text-muted lg:inline">
+          Schema changes go through change requests.
+        </span>
+        {propose}
+      </span>
+    );
+  }
+  const { projectId: mainId, changeRequestId, title, status } = shell.data.draft;
   return (
     <span
       role="status"

@@ -39,7 +39,7 @@ export class GeometryWriter {
 
   async apply(
     batch: GeometryBatch,
-    ctx: Omit<WriteContext, 'redacted'>,
+    ctx: Omit<WriteContext, 'redacted' | 'origin'>,
   ): Promise<SchemaOperationResult> {
     const ids = [...new Set(batch.entities.map((e) => e.id))];
     const refs: ResourceRef[] = ids.map((id) => ({ type: 'entity', id }));
@@ -53,7 +53,7 @@ export class GeometryWriter {
   private async run(
     tx: SchemaDb,
     batch: GeometryBatch,
-    ctx: Omit<WriteContext, 'redacted'>,
+    ctx: Omit<WriteContext, 'redacted' | 'origin'>,
     ids: readonly Id[],
   ): Promise<SchemaOperationResult> {
     const { projectId } = ctx;
