@@ -4,6 +4,7 @@ import {
   type ExportOptions,
 } from '@schemaloom/engine-sdk';
 import type { IrObject, RedactedModel } from '@schemaloom/schema-model';
+import type { ProjectPermissionMap } from '../access';
 import { renderMarkdown, type ExportDoc } from './export-markdown';
 import { renderPdf } from './export-pdf';
 
@@ -170,4 +171,15 @@ export function exportObjectKey(
   fileExtension: string,
 ): string {
   return `exports/${projectId}/${exportJobId}.${fileExtension}`;
+}
+
+/**
+ * Q29 — the atoms an export row is held to: the project's, or its area's for an
+ * area-scoped one. `undefined` means the area is gone or invisible (a 404).
+ */
+export function exportAtomsOf(
+  map: ProjectPermissionMap,
+  areaId: string | null | undefined,
+): ProjectPermissionMap['projectAtoms'] | undefined {
+  return areaId === null || areaId === undefined ? map.projectAtoms : map.areaAtoms.get(areaId);
 }

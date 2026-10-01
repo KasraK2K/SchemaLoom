@@ -4,13 +4,17 @@ import {
   Button,
   ChevronDown,
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@schemaloom/ui';
+import { useQuery } from '@tanstack/react-query';
 import { Fragment, useCallback, useState } from 'react';
 import { useEngine } from '@/engines';
+import { irQueryOptions } from '@/features/canvas/ir-query';
 import { EngineGate } from '@/features/project/engine-gate';
 import { renderCanvasImage } from './canvas-image';
 import {
@@ -32,13 +36,13 @@ export function useExport(projectId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const run = useCallback(
-    async (format: string): Promise<void> => {
+    async (format: string, areaId?: string): Promise<void> => {
       setBusy(format);
       setError(null);
       try {
         const url = isImage(format)
           ? await runImageExport(projectId, format, await renderCanvasImage(format))
-          : await runServerExport(projectId, format);
+          : await runServerExport(projectId, format, areaId);
         startDownload(url);
       } catch (caught) {
         setError(exportErrorMessage(caught));
@@ -57,6 +61,10 @@ export function useExport(projectId: string) {
  * engine's own exporter descriptors — read from the engine facet, like every other
  * capability on the client, so no engine id is written here. `images: false` drops the
  * diagram entries on a page without a canvas.
+ *
+ * Scope (Q29): the areas the caller can see are offered too, because a grant on one area
+ * holds `export:run` there and not at the project. The client does not know the caller's
+ * atoms, so a scope they cannot export answers the usual 403 message.
  */
 export function ExportMenu({
   projectId,
@@ -88,6 +96,11 @@ function ExportMenuInner({
 }) {
   const engine = useEngine();
   const { run, busy, error } = useExport(projectId);
+  const { data: model } = useQuery(irQueryOptions(projectId));
+  const areas = Object.values(model?.objects.area ?? {}).sort((a, b) => a.ordinal - b.ordinal);
+  const [areaId, setAreaId] = useState<string | null>(null);
+  // A deleted or newly hidden area falls back to the whole project.
+  const scope = areas.some((a) => a.id === areaId) ? areaId : null;
 
   const groups: { id: string; label: string }[][] = [
     engine.capabilities.exportFormats.map((f) => ({ id: f.id, label: f.displayName })),
@@ -96,7 +109,7 @@ function ExportMenuInner({
       { id: 'markdown', label: 'Documentation (Markdown)' },
       { id: 'pdf', label: 'Documentation (PDF)' },
     ],
-    images
+    images && scope === null
       ? [
           { id: 'png', label: 'Diagram (PNG)' },
           { id: 'svg', label: 'Diagram (SVG)' },
@@ -119,6 +132,24 @@ function ExportMenuInner({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {areas.length > 0 && (
+            <>
+              <DropdownMenuLabel>Scope</DropdownMenuLabel>
+              {[{ id: null, name: 'Whole project' }, ...areas].map((a) => (
+                <DropdownMenuCheckboxItem
+                  key={a.id ?? ''}
+                  checked={scope === a.id}
+                  onSelect={(event) => {
+                    event.preventDefault(); // keep the menu open to pick a format
+                    setAreaId(a.id);
+                  }}
+                >
+                  {a.name === '' ? 'Untitled area' : a.name}
+                </DropdownMenuCheckboxItem>
+              ))}
+              <DropdownMenuSeparator />
+            </>
+          )}
           {groups.map((group, i) => (
             <Fragment key={group[0]?.id ?? i}>
               {i > 0 && <DropdownMenuSeparator />}
@@ -126,7 +157,7 @@ function ExportMenuInner({
                 <DropdownMenuItem
                   key={item.id}
                   onSelect={() => {
-                    void run(item.id);
+                    void run(item.id, scope ?? undefined);
                   }}
                 >
                   {item.label}

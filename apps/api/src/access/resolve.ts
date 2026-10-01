@@ -97,6 +97,26 @@ export function canOpenProject(map: ProjectPermissionMap): boolean {
   return false;
 }
 
+/**
+ * Q29: the subject's map with everything outside one area dropped, so an area-scoped
+ * export redacts through the same `redact()` as every other read and no second filter
+ * exists. Entity overrides survive only for entities inside the area.
+ */
+export function narrowToArea(
+  map: ProjectPermissionMap,
+  skel: ProjectSkeleton,
+  areaId: string,
+): ProjectPermissionMap {
+  return {
+    ...map,
+    projectAtoms: EMPTY_ATOMS,
+    areaAtoms: new Map([[areaId, map.areaAtoms.get(areaId) ?? EMPTY_ATOMS]]),
+    entityOverrides: new Map(
+      [...map.entityOverrides].filter(([id]) => skel.entityById.get(id)?.areaId === areaId),
+    ),
+  };
+}
+
 /** §7.2 — ancestry, most specific first. Organization and workspace are not in the chain. */
 export function ancestorChain(
   projectId: string,

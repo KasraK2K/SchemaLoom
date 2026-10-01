@@ -14,7 +14,12 @@ import type { ExportJob } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PRESIGN_PUT_TTL_SEC, StorageService } from '../storage';
 import { EXPORT_ARTIFACT_TTL_MS } from './export.processor';
-import { CORE_EXPORT_FORMATS, IMAGE_EXPORT_FORMATS, exportObjectKey } from './export-render';
+import {
+  CORE_EXPORT_FORMATS,
+  IMAGE_EXPORT_FORMATS,
+  exportAtomsOf,
+  exportObjectKey,
+} from './export-render';
 import { JobsService } from './jobs.service';
 import type { ExportDdlOptions } from './queues';
 
@@ -58,7 +63,7 @@ export interface ExportJobView {
  * its one key and `complete` checks what landed there before the row says `done`.
  *
  * Rows are the requester's own. Every id-addressed read answers 404 for a row that is not
- * the caller's, and re-checks `export:run` at the project, so a revoked grant also revokes
+ * the caller's, and re-checks `export:run` at the project (or the row's area), so a revoked grant also revokes
  * the download of an artifact made before it.
  */
 @Injectable()
@@ -71,18 +76,33 @@ export class ExportsService {
     @Inject(ENGINE_REGISTRY) private readonly registry: EngineRegistry,
   ) {}
 
-  async create(subject: User, projectId: string, input: CreateExportInput): Promise<ExportJobView> {
+  /**
+   * `areaId` is set by `POST /areas/:id/exports`, whose guard already checked `export:run`
+   * at that area. Images are project-only: the browser renders the canvas it holds, which
+   * is not cut to one area.
+   */
+  async create(
+    subject: User,
+    projectId: string,
+    input: CreateExportInput,
+    areaId?: string,
+  ): Promise<ExportJobView> {
     const { format } = input;
-    if (isImageFormat(format))
+    if (isImageFormat(format)) {
+      if (areaId !== undefined) {
+        throw new BadRequestException({ code: 'export_format_unsupported', format });
+      }
       return this.createUpload(subject, projectId, format, input.sizeBytes);
+    }
     await this.assertServerFormat(projectId, format);
 
     const row = await this.prisma.exportJob.create({
-      data: { projectId, requestedById: subject.userId, format },
+      data: { projectId, requestedById: subject.userId, format, areaId: areaId ?? null },
     });
     await this.jobs.enqueueExport({
       exportJobId: row.id,
       projectId,
+      ...(areaId === undefined ? {} : { areaId }),
       subject,
       format,
       ...(input.options === undefined ? {} : { options: input.options }),
@@ -199,7 +219,9 @@ export class ExportsService {
     }
     const map = await this.resolver.resolveProject(subject, row.projectId);
     if (!canOpenProject(map)) throw notFound(id);
-    if (!map.projectAtoms.has('export:run')) throw new ForbiddenException({ code: 'forbidden' });
+    const atoms = exportAtomsOf(map, row.areaId);
+    if (atoms === undefined) throw notFound(id);
+    if (!atoms.has('export:run')) throw new ForbiddenException({ code: 'forbidden' });
     return row;
   }
 }

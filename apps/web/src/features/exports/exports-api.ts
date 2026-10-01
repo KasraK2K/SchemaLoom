@@ -28,20 +28,29 @@ const POLL_MS = 1000;
 /** A render that has not finished in two minutes is stuck, not slow. */
 const POLL_LIMIT = 120;
 
-const startExport = async (projectId: string, body: object): Promise<ExportJob> =>
-  exportJobSchema.parse(
-    await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/exports`, {
-      method: 'POST',
-      body,
-    }),
-  );
+const startExport = async (path: string, body: object): Promise<ExportJob> =>
+  exportJobSchema.parse(await apiFetch<unknown>(path, { method: 'POST', body }));
+
+const projectExports = (projectId: string): string =>
+  `/projects/${encodeURIComponent(projectId)}/exports`;
 
 const getExport = async (id: string): Promise<ExportJob> =>
   exportJobSchema.parse(await apiFetch<unknown>(`/exports/${encodeURIComponent(id)}`));
 
-/** Queue a server-rendered format and wait for its download link. */
-export async function runServerExport(projectId: string, format: string): Promise<string> {
-  let job = await startExport(projectId, { format });
+/**
+ * Queue a server-rendered format and wait for its download link. With `areaId`, the
+ * export holds only that area (Q29) — what an area-scoped grant can export.
+ */
+export async function runServerExport(
+  projectId: string,
+  format: string,
+  areaId?: string,
+): Promise<string> {
+  const path =
+    areaId === undefined
+      ? projectExports(projectId)
+      : `/areas/${encodeURIComponent(areaId)}/exports`;
+  let job = await startExport(path, { format });
   for (let i = 0; i < POLL_LIMIT && job.status !== 'done' && job.status !== 'failed'; i++) {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
     job = await getExport(job.id);
@@ -55,7 +64,7 @@ export async function runImageExport(
   format: ImageFormat,
   blob: Blob,
 ): Promise<string> {
-  const job = await startExport(projectId, { format, sizeBytes: blob.size });
+  const job = await startExport(projectExports(projectId), { format, sizeBytes: blob.size });
   if (job.uploadUrl === undefined) throw new Error('The server did not return an upload URL.');
   // Content-Type and Content-Length are signed into the URL: send exactly the declared type.
   const put = await fetch(job.uploadUrl, {

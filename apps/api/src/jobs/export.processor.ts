@@ -1,12 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { EngineRegistry } from '@schemaloom/engine-sdk';
-import { PermissionResolver, VisibilityFilter, canOpenProject, isCompleteView } from '../access';
+import {
+  PermissionResolver,
+  VisibilityFilter,
+  canOpenProject,
+  isCompleteView,
+  narrowToArea,
+} from '../access';
 import { ENGINE_REGISTRY } from '../engines';
 import { NotificationsService } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { SchemaLoader } from '../schema';
 import { StorageService } from '../storage';
-import { exportObjectKey, renderExport } from './export-render';
+import { exportAtomsOf, exportObjectKey, renderExport } from './export-render';
 import type { ExportJobData, ExportJobResult } from './queues';
 
 /**
@@ -53,11 +59,13 @@ export class ExportProcessor {
     try {
       // doc 05 L11: `export:run` is re-checked HERE, not only at enqueue, so a grant revoked
       // while the job sat in the queue stops the render.
-      const map = await this.resolver.resolveProject(subject, projectId);
-      if (!canOpenProject(map) || !map.projectAtoms.has('export:run')) {
+      const full = await this.resolver.resolveProject(subject, projectId);
+      if (!canOpenProject(full) || exportAtomsOf(full, data.areaId)?.has('export:run') !== true) {
         throw new Error('export_access_revoked');
       }
       const skel = await this.resolver.skeleton(projectId);
+      // Q29: an area export redacts with the map cut to that area, so it holds no more.
+      const map = data.areaId === undefined ? full : narrowToArea(full, skel, data.areaId);
       const model = this.visibility.redactWith(
         await this.loader.load(projectId),
         subject,

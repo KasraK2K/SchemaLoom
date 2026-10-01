@@ -23,12 +23,14 @@ interface Row {
   storageKey: string | null;
   error: string | null;
   expiresAt: Date | null;
+  areaId?: string | null;
 }
 
 function harness(
   opts: {
     rows?: Row[];
     atoms?: string[];
+    areaAtoms?: Record<string, string[]>;
     head?: { size: number; contentType: string } | null;
   } = {},
 ) {
@@ -70,7 +72,13 @@ function harness(
   const atoms = new Set(opts.atoms ?? ['schema:view', 'export:run']);
   const resolver = {
     resolveProject: () =>
-      Promise.resolve({ projectAtoms: atoms, areaAtoms: new Map(), entityOverrides: new Map() }),
+      Promise.resolve({
+        projectAtoms: atoms,
+        areaAtoms: new Map(
+          Object.entries(opts.areaAtoms ?? {}).map(([id, a]) => [id, new Set(a)] as const),
+        ),
+        entityOverrides: new Map(),
+      }),
   } as unknown as PermissionResolver;
   const registry = {
     tryGet: () => ({ exporter: {}, capabilities: { exportFormats: [{ id: 'postgresql-ddl' }] } }),
@@ -198,5 +206,43 @@ describe('ExportsService.get', () => {
       'schema.png',
     );
     expect(EXPORT_DOWNLOAD_TTL_SEC).toBe(600);
+  });
+});
+
+describe('area-scoped exports (Q29)', () => {
+  const AREA_ONLY = { atoms: [], areaAtoms: { ar_bill: ['schema:view', 'export:run'] } };
+
+  it('queues with the area on the row and in the job', async () => {
+    const h = harness(AREA_ONLY);
+    const out = await h.service.create(ANA, 'prj', { format: 'pdf' }, 'ar_bill');
+    expect(h.rows.get(out.id)?.areaId).toBe('ar_bill');
+    expect(h.enqueueExport).toHaveBeenCalledWith(expect.objectContaining({ areaId: 'ar_bill' }));
+  });
+
+  it('refuses an image: the browser canvas is not cut to one area', async () => {
+    const h = harness(AREA_ONLY);
+    await expect(
+      h.service.create(ANA, 'prj', { format: 'png', sizeBytes: 10 }, 'ar_bill'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('holds the download to the area grant, not the project', async () => {
+    const row = uploadRow({ format: 'pdf', status: 'done', areaId: 'ar_bill' });
+    await expect(
+      harness({ ...AREA_ONLY, rows: [row] }).service.get(ANA, row.id),
+    ).resolves.toMatchObject({ downloadUrl: 'https://s3/get' });
+    await expect(
+      harness({ atoms: [], areaAtoms: { ar_bill: ['schema:view'] }, rows: [row] }).service.get(
+        ANA,
+        row.id,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('is 404 once the area is gone', async () => {
+    const row = uploadRow({ format: 'pdf', status: 'done', areaId: 'ar_gone' });
+    await expect(
+      harness({ ...AREA_ONLY, rows: [row] }).service.get(ANA, row.id),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -1589,6 +1589,9 @@ model ExportJob {
   id            String    @id @default(cuid())
   projectId     String    @map("project_id")
   requestedById String?   @map("requested_by_id")
+  /// Q29: set by `POST /areas/:id/exports`; the export holds only this area. No FK: a
+  /// deleted area makes the row a 404, like any other access it no longer grants.
+  areaId        String?   @map("area_id")
   /// "ddl" | "ir-json" | "png" | "svg" | "markdown" | "pdf" — an open set, since a
   /// future engine's exporter adds its own.
   format        String

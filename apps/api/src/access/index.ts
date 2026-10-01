@@ -57,6 +57,7 @@ export {
   computeProjectMap,
   emptyMap,
   inheritedAtoms,
+  narrowToArea,
   nextExpiryOf,
   restrictedOkEntityIds,
   visibleEntityIds,

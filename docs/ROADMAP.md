@@ -69,4 +69,6 @@ OpenSSH bastion.
 
 Small fixes that don't need a design doc. Pick one up freely.
 
-- Area-scoped export is still deferred (Q29).
+- None open. Area-scoped export (Q29) was built 2026-10-01: `POST /areas/:id/exports` for
+  server formats, plus a Scope choice in the Export menu. Images stay project-only, because
+  the browser canvas is not cut to one area.

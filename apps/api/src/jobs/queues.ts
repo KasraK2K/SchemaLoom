@@ -50,6 +50,8 @@ export interface ExportJobData {
   /** The `export_jobs` row this job reports into. */
   readonly exportJobId: string;
   readonly projectId: string;
+  /** Q29: `POST /areas/:id/exports`. The render sees only this area. */
+  readonly areaId?: string;
   readonly subject: Subject;
   /** `ir-json`, `markdown`, `pdf`, or an `ExportFormatDescriptor.id` the engine declares. */
   readonly format: string;

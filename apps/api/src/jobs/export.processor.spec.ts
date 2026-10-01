@@ -53,7 +53,9 @@ interface Harness {
   readonly send: ReturnType<typeof vi.fn>;
 }
 
-function harness(over: { put?: () => Promise<void>; atoms?: string[] } = {}): Harness {
+function harness(
+  over: { put?: () => Promise<void>; atoms?: string[]; billAtoms?: string[] } = {},
+): Harness {
   const updates: Harness['updates'] = [];
   const prisma = {
     exportJob: {
@@ -82,10 +84,22 @@ function harness(over: { put?: () => Promise<void>; atoms?: string[] } = {}): Ha
     resolveProject: () =>
       Promise.resolve({
         projectAtoms: new Set(over.atoms ?? ['schema:view', 'export:run']),
-        areaAtoms: new Map(),
-        entityOverrides: new Map(),
+        areaAtoms: new Map([
+          ['ar_bill', new Set(over.billAtoms ?? [])],
+          ['ar_cat', new Set(['schema:view', 'export:run'])],
+        ]),
+        entityOverrides: new Map([
+          ['ent_inv', new Set(['schema:view'])],
+          ['ent_prod', new Set(['schema:view'])],
+        ]),
       }),
-    skeleton: () => Promise.resolve({}),
+    skeleton: () =>
+      Promise.resolve({
+        entityById: new Map([
+          ['ent_inv', { id: 'ent_inv', areaId: 'ar_bill' }],
+          ['ent_prod', { id: 'ent_prod', areaId: 'ar_cat' }],
+        ]),
+      }),
   } as unknown as PermissionResolver;
   const loader = {
     load: () => Promise.resolve(new RawSchemaModel(model)),
@@ -194,5 +208,29 @@ describe('ExportProcessor', () => {
         data: { exportJobId: 'exj_1', format: 'ir-json' },
       }),
     ]);
+  });
+});
+
+describe('ExportProcessor, area-scoped (Q29)', () => {
+  const AREA_DATA: ExportJobData = { ...DATA, areaId: 'ar_bill' };
+
+  it('redacts with the map cut to the one area', async () => {
+    const h = harness({ atoms: [], billAtoms: ['schema:view', 'export:run'] });
+    await h.processor.run(AREA_DATA);
+
+    const map = h.redactModel.mock.calls[0]?.[3] as {
+      projectAtoms: Set<string>;
+      areaAtoms: Map<string, Set<string>>;
+      entityOverrides: Map<string, Set<string>>;
+    };
+    expect(map.projectAtoms.size).toBe(0);
+    expect([...map.areaAtoms.keys()]).toEqual(['ar_bill']);
+    expect([...map.entityOverrides.keys()]).toEqual(['ent_inv']);
+  });
+
+  it('checks export:run at the area, not the project', async () => {
+    const h = harness({ atoms: ['schema:view', 'export:run'], billAtoms: ['schema:view'] });
+    await expect(h.processor.run(AREA_DATA)).rejects.toThrow('export_access_revoked');
+    expect(h.put).not.toHaveBeenCalled();
   });
 });

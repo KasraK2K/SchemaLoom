@@ -35,9 +35,10 @@ describe('ExportsController route markers', () => {
   const routes = sweep();
   const table = Object.fromEntries(routes.map((r) => [`${r.method} ${r.path}`, r.markers]));
 
-  it('serves exactly the three export routes', () => {
+  it('serves exactly the four export routes', () => {
     expect(Object.keys(table).sort()).toEqual([
       'GET /api/exports/:id',
+      'POST /api/areas/:areaId/exports',
       'POST /api/exports/:id/complete',
       'POST /api/projects/:projectId/exports',
     ]);
@@ -51,11 +52,18 @@ describe('ExportsController route markers', () => {
 
   it('gates the start on export:run and the id-addressed routes on identity', () => {
     expect(table['POST /api/projects/:projectId/exports']).toEqual([PERM_META]);
+    expect(table['POST /api/areas/:areaId/exports']).toEqual([PERM_META]);
     expect(table['GET /api/exports/:id']).toEqual([AUTHENTICATED_META]);
     expect(table['POST /api/exports/:id/complete']).toEqual([AUTHENTICATED_META]);
     const create = (ExportsController.prototype as unknown as Record<string, object>).create;
     expect(Reflect.getMetadata(PERM_META, create ?? {}) as unknown).toMatchObject({
       atom: 'export:run',
+    });
+    const forArea = (ExportsController.prototype as unknown as Record<string, object>)
+      .createForArea;
+    expect(Reflect.getMetadata(PERM_META, forArea ?? {}) as unknown).toEqual({
+      atom: 'export:run',
+      wheres: [{ area: 'areaId' }],
     });
   });
 

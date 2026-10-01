@@ -171,6 +171,58 @@ test.describe('workflow 2 — an area grant and a project grant, from the receiv
     expect(error.code).toBe('object_redacted');
   });
 
+  // Q29 — `export:run` sits on Billing, not the project, so only the area route exports.
+  test('the freelancer exports Billing, and only Billing', async () => {
+    const dana = await signIn(SEED_EMAILS.freelancer);
+    const start = (path: string) =>
+      dana.api.post(path, { headers: write(dana), data: { format: 'ir-json' } });
+
+    // She holds nothing AT the project or on Catalog, so both are invisible to her: 404.
+    expect((await start(`/api/projects/${SEED.projectId}/exports`)).status()).toBe(404);
+    expect((await start(`/api/areas/${SEED.areas.catalog}/exports`)).status()).toBe(404);
+
+    const created = await start(`/api/areas/${SEED.areas.billing}/exports`);
+    expect(created.status(), await created.text()).toBe(201);
+    let job = (await created.json()) as { id: string; status: string; downloadUrl?: string };
+    await expect
+      .poll(
+        async () => {
+          job = (await (await dana.api.get(`/api/exports/${job.id}`)).json()) as typeof job;
+          return job.status;
+        },
+        { timeout: 30_000 },
+      )
+      .toBe('done');
+
+    const file = await dana.api.get(job.downloadUrl ?? '');
+    const bytes = await file.text();
+    for (const name of ['customers', 'order_items', 'orders']) expect(bytes).toContain(name);
+    for (const name of HIDDEN_FROM_FREELANCER) {
+      expect(bytes.includes(name), `leaked "${name}"`).toBe(false);
+    }
+  });
+
+  test('the Export menu offers her areas as a scope, and exports through the area', async ({
+    browser,
+  }) => {
+    const page = await signedInPage(browser, SEED_EMAILS.freelancer);
+    await page.goto(`/${SEED.orgSlug}/p/${SEED.projectId}`);
+    await page.getByRole('button', { name: 'Export' }).click();
+    // The client lists the areas it can see: Billing only, after "Whole project".
+    const scopes = page.getByRole('menuitemcheckbox');
+    await expect(scopes).toHaveCount(2);
+    await scopes.nth(1).click();
+    // The menu stays open; images go, because the canvas is not cut to one area.
+    await expect(scopes.nth(1)).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('menuitem', { name: 'Diagram (PNG)' })).toHaveCount(0);
+
+    const started = page.waitForRequest(
+      (r) => r.method() === 'POST' && r.url().endsWith(`/api/areas/${SEED.areas.billing}/exports`),
+    );
+    await page.getByRole('menuitem', { name: 'Schema (JSON)' }).click();
+    await started;
+  });
+
   test('the analyst sees every table, with salary masked and nameless', async () => {
     const alex = await signIn(SEED_EMAILS.analyst);
     const ir = await fetchIr(alex, SEED.projectId);

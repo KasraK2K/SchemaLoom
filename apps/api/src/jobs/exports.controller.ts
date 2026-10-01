@@ -12,7 +12,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { Authenticated, RequirePermission } from '../access';
+import { Authenticated, RequirePermission, getAccessContext } from '../access';
 import { getSubject } from '../auth';
 import { ExportsService, IMAGE_EXPORT_MAX_BYTES, type ExportJobView } from './exports.service';
 
@@ -33,8 +33,8 @@ export const createExportSchema = z.object({
 export class CreateExportDto extends createZodDto(createExportSchema) {}
 
 /**
- * Doc 05 §2.2 `export:run`: `POST /projects/:id/exports`, `GET /exports/:id` (own jobs
- * only), plus `POST /exports/:id/complete` for the browser-rendered images. The id-addressed
+ * Doc 05 §2.2 `export:run`: `POST /projects/:id/exports` (or `/areas/:id/exports`, Q29),
+ * `GET /exports/:id` (own jobs only), plus `POST /exports/:id/complete` for the browser-rendered images. The id-addressed
  * routes name no project, so they are `@Authenticated()` and the service derives the
  * project from the row. None is in `SHARE_LINK_ROUTES`.
  */
@@ -52,6 +52,20 @@ export class ExportsController {
     @Body() body: CreateExportDto,
   ): Promise<ExportJobView> {
     return this.exports.create(user(req), projectId, body);
+  }
+
+  /** Q29 — the same, cut to one area, for a subject whose grant is on the area. */
+  @ApiOperation({ summary: 'Start a server-rendered export of one area' })
+  @RequirePermission('export:run', { area: 'areaId' })
+  @Post('areas/:areaId/exports')
+  createForArea(
+    @Req() req: Request,
+    @Param('areaId') areaId: string,
+    @Body() body: CreateExportDto,
+  ): Promise<ExportJobView> {
+    const access = getAccessContext(req);
+    if (access === null) throw new ForbiddenException({ code: 'route_not_classified' });
+    return this.exports.create(user(req), access.projectId, body, areaId);
   }
 
   @ApiOperation({
