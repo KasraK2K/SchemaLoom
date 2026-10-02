@@ -24,10 +24,12 @@ const ROLE_LABELS: Record<OrgRole, string> = {
 export function MembersManager({
   orgSlug,
   orgRole,
+  meId,
   members,
 }: {
   readonly orgSlug: string;
   readonly orgRole: OrgRole;
+  readonly meId: string;
   readonly members: readonly MemberView[];
 }) {
   const router = useRouter();
@@ -57,8 +59,9 @@ export function MembersManager({
       )}
       <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
         {members.map((member) => {
-          // An admin can never touch an owner; the API says so too.
-          const editable = manages && (orgRole === 'owner' || member.role !== 'owner');
+          // An admin can never touch an owner, and nobody re-ranks themselves; the API says so too.
+          const isMe = member.userId === meId;
+          const editable = manages && !isMe && (orgRole === 'owner' || member.role !== 'owner');
           const choices = orgRole === 'owner' ? ORG_ROLES : ORG_ROLES.filter((r) => r !== 'owner');
           return (
             <li
@@ -106,7 +109,10 @@ export function MembersManager({
                   </Button>
                 </>
               ) : (
-                <span className="text-sm text-text-muted">{ROLE_LABELS[member.role]}</span>
+                <span className="text-sm text-text-muted">
+                  {ROLE_LABELS[member.role]}
+                  {isMe && ' (you)'}
+                </span>
               )}
             </li>
           );

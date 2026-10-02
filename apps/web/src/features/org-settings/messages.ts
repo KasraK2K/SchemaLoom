@@ -6,6 +6,9 @@ export function orgAdminMessage(error: unknown): string {
   if (error.code === 'last_owner') {
     return 'An organisation needs at least one owner. Make someone else an owner first.';
   }
+  if (error.code === 'own_role') {
+    return 'You cannot change your own role. Ask another owner to do it.';
+  }
   if (error.status === 403) {
     return 'You do not have permission to do that. Owners and admins manage members and groups; only owners change or appoint owners.';
   }

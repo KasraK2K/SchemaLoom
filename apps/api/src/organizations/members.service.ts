@@ -97,6 +97,9 @@ export class MembersService {
     targetId: string,
     role: OrgRole,
   ): Promise<MemberView> {
+    // Nobody re-ranks themselves: an owner stepping down is another owner's call, and an
+    // admin could otherwise demote themselves out of the page they are on.
+    if (actorId === targetId) throw new ForbiddenException({ code: 'own_role' });
     const organizationId = await this.change(
       actorId,
       orgSlug,

@@ -27,6 +27,11 @@ export async function listMembers(orgSlug: string): Promise<MemberView[]> {
   return MemberViewSchema.array().parse(await serverFetch<unknown>(`${org(orgSlug)}/members`));
 }
 
+/** The signed-in user's id, so the members list can mark (and lock) their own row. */
+export async function myUserId(): Promise<string> {
+  return z.object({ id: z.string() }).parse(await serverFetch<unknown>('/auth/me')).id;
+}
+
 export async function listGroups(orgSlug: string): Promise<GroupView[]> {
   return GroupViewSchema.array().parse(await serverFetch<unknown>(`${org(orgSlug)}/groups`));
 }

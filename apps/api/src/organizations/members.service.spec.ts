@@ -185,6 +185,14 @@ describe('MembersService', () => {
     expect(h.invalidate).toHaveBeenCalledWith({ user: 'usr_target' });
   });
 
+  it('nobody changes their own role, owner or not', async () => {
+    const h = harness();
+    await expect(
+      h.members.setRole('usr_actor', 'acme', 'usr_actor', 'member'),
+    ).rejects.toMatchObject({ status: 403, response: { code: 'own_role' } });
+    expect(h.tx.orgMember.update).not.toHaveBeenCalled();
+  });
+
   it('removal drops the membership and the org group memberships, leaving grants in place (R12.2)', async () => {
     const h = harness();
     await h.members.remove('usr_actor', 'acme', 'usr_target');

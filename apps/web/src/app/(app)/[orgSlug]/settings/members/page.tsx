@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
 import { MembersManager } from '@/features/org-settings/members-manager';
-import { listMembers } from '@/features/org-settings/org-settings-api';
+import { listMembers, myUserId } from '@/features/org-settings/org-settings-api';
 import { OrgSettingsNav } from '@/features/org-settings/org-settings-nav';
 import { listOrganizations } from '@/features/projects';
 
@@ -15,7 +15,7 @@ export default async function OrgMembersPage({ params }: { params: Promise<{ org
   const { orgSlug } = await params;
   const org = (await listOrganizations()).find((candidate) => candidate.slug === orgSlug);
   if (org === undefined || org.orgRole === 'guest') notFound();
-  const members = await listMembers(orgSlug);
+  const [members, meId] = await Promise.all([listMembers(orgSlug), myUserId()]);
 
   return (
     <AppShell
@@ -37,7 +37,7 @@ export default async function OrgMembersPage({ params }: { params: Promise<{ org
           Everyone in {org.name}. To invite someone new, share a project with their email from its
           Share dialog.
         </p>
-        <MembersManager orgSlug={orgSlug} orgRole={org.orgRole} members={members} />
+        <MembersManager orgSlug={orgSlug} orgRole={org.orgRole} meId={meId} members={members} />
       </div>
     </AppShell>
   );
