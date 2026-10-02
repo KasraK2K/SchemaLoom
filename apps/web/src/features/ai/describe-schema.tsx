@@ -13,9 +13,11 @@ import { aiErrorMessage, draftSchema } from './ai-api';
 export function DescribeSchema({
   projectId,
   onDraft,
+  autoFocus = false,
 }: {
   readonly projectId: string;
   readonly onDraft: (source: string) => void;
+  readonly autoFocus?: boolean;
 }) {
   const [description, setDescription] = useState('');
   const draft = useMutation({
@@ -31,6 +33,7 @@ export function DescribeSchema({
         Describe a schema
         <textarea
           rows={2}
+          autoFocus={autoFocus}
           value={description}
           placeholder="e.g. customers, orders and order items for a small shop"
           onChange={(e) => {

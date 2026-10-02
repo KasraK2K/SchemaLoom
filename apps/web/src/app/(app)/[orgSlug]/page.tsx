@@ -57,9 +57,11 @@ export default async function OrgProjectsPage({
           )}
         </div>
         <p className="mt-1 text-sm text-text-muted">
-          {projects.length === 0
-            ? 'Nothing here you can open yet.'
-            : 'Everything in this organisation you have access to.'}
+          {projects.length > 0
+            ? 'Everything in this organisation you have access to.'
+            : org.orgRole === 'guest'
+              ? 'Nothing here you can open yet.'
+              : 'No projects yet. Pick a way to start.'}
         </p>
         {projects.length > 0 && <ProjectList orgSlug={orgSlug} projects={projects} />}
         {/* Doc 05 §3.2: a guest cannot create projects; the API would refuse anyway. */}

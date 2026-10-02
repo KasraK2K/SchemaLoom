@@ -74,6 +74,11 @@ export const EngineOptionSchema = z.object({
     targetVersions: z.array(z.string()).default([]),
     defaultTargetVersion: z.string().nullable().default(null),
   }),
+  templates: z
+    .array(
+      z.object({ id: z.string(), title: z.string(), summary: z.string(), tableCount: z.number() }),
+    )
+    .default([]),
 });
 export interface EngineOption {
   id: string;
@@ -84,6 +89,15 @@ export interface EngineOption {
   /** Database versions a project can target, newest first; empty means free text. */
   targetVersions: string[];
   defaultTargetVersion: string | null;
+  /** Phase 12 — starting schemas; the SQL comes from `fetchTemplate`. */
+  templates: TemplateOption[];
+}
+
+export interface TemplateOption {
+  id: string;
+  title: string;
+  summary: string;
+  tableCount: number;
 }
 
 export async function listEngines(): Promise<EngineOption[]> {
@@ -97,6 +111,7 @@ export async function listEngines(): Promise<EngineOption[]> {
     connectionFields: engine.capabilities.connectionFields,
     targetVersions: engine.capabilities.targetVersions,
     defaultTargetVersion: engine.capabilities.defaultTargetVersion,
+    templates: engine.templates,
   }));
 }
 

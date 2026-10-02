@@ -9,6 +9,7 @@ import { QUERY_VALIDATOR } from './query-validator.js';
 import { extractReferences } from './references.js';
 import { postgresFacet } from './static.js';
 import { VALIDATOR } from './validator.js';
+import { TEMPLATES } from './templates.js';
 
 /**
  * `@schemaloom/engine-postgresql` — the full `EngineDefinition`, loaded by `apps/api`
@@ -35,6 +36,7 @@ export const postgresEngine: EngineDefinition = {
   annotateDiff,
   migrationGenerator: MIGRATION_GENERATOR,
   aiProfile: AI_PROFILE,
+  templates: TEMPLATES,
 };
 
 export { postgresFacet } from './static.js';

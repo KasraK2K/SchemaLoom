@@ -296,4 +296,45 @@ export const IMPORT_CHECKS: readonly ConformanceCheck[] = [
       }
     },
   },
+  {
+    // Phase 12: a template is a promise that one click gives a clean project. Checked here so
+    // a template cannot rot silently when the importer changes. An engine with none passes.
+    id: 'templates/import-cleanly',
+    requires: 'importer+exporter',
+    run: async (ctx) => {
+      const templates = ctx.engine.templates ?? [];
+      const problems: string[] = [];
+      const ids = templates.map((t) => t.id);
+      if (new Set(ids).size !== ids.length) problems.push('template ids are not unique');
+      const formats = ctx.engine.capabilities.importFormats.map((f) => f.id);
+      for (const template of templates) {
+        if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(template.id)) {
+          problems.push(`${template.id}: id is not kebab-case`);
+        }
+        if (!formats.includes(template.importFormat)) {
+          problems.push(`${template.id}: ${template.importFormat} is not an import format`);
+          continue;
+        }
+        const fixture = { name: template.id, format: template.importFormat, source: '' };
+        const { report, model } = await runImport(ctx, fixture, template.source);
+        for (const statement of report.statements) {
+          if (statement.status !== 'applied') {
+            problems.push(`${template.id}: ${statement.kind} is ${statement.status}`);
+          }
+        }
+        const tables = Object.keys(model.objects.entity).length;
+        if (tables !== template.tableCount) {
+          problems.push(
+            `${template.id}: imports ${String(tables)} tables, not ${String(template.tableCount)}`,
+          );
+        }
+        const exported = await runExport(ctx, ctx.fixtures.redactForExport(model));
+        if (exported.incomplete) problems.push(`${template.id}: export is incomplete`);
+        for (const d of exported.diagnostics.filter((d) => d.severity === 'error')) {
+          problems.push(`${template.id}: export error ${d.code}`);
+        }
+      }
+      expect(problems).toEqual([]);
+    },
+  },
 ];

@@ -66,9 +66,9 @@ test.describe('workflow 1 — from sign-up to a laid-out, grouped project', () =
     await page.getByLabel('Organisation name').fill(`Import Co ${stamp}`);
     await page.getByRole('button', { name: 'Create organisation' }).click();
 
-    await open('Import', 'Target version');
+    await open('Import', 'Name');
     await page.getByLabel('Name', { exact: true }).fill('Shop');
-    await page.getByLabel('Target version').fill('16');
+    // Target version is a dropdown that defaults to the engine's default (16).
     await page
       .getByRole('textbox', { name: 'SQL' })
       .fill(

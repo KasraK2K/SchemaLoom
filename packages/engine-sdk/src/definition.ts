@@ -8,6 +8,7 @@ import type { AnnotatedDiff, MigrationGenerator } from './migration.js';
 import type { QueryValidator } from './query.js';
 import type { IrObject, IrObjectRef, SchemaDiff, SchemaModel } from './ir.js';
 import type { EnginePropsSchemas } from './props.js';
+import type { ProjectTemplate } from './templates.js';
 import type { PropsUpgrade } from './versioning.js';
 import type { TerminologyBundle } from './terminology.js';
 import type { TypeCatalog } from './type-catalog.js';
@@ -95,6 +96,9 @@ export interface EngineDefinition extends EngineStaticFacet {
    * major 1. `props/previous-major-migrates` checks the chain is complete.
    */
   readonly propsUpgrades?: readonly PropsUpgrade[];
+  /** Phase 12 — starting schemas offered on the projects page and in the import dialog.
+   *  `templates/import-cleanly` imports each one and demands every statement applies. */
+  readonly templates?: readonly ProjectTemplate[];
 
   /**
    * The engine's only obligation to the permission system (§3.1). REQUIRED, pure, synchronous,

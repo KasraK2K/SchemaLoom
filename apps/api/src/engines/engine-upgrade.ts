@@ -69,7 +69,7 @@ async function propsRows(tx: Tx, projectId: string): Promise<[EnginePropsKind, P
       tx.customType.findMany({ where, select: { id: true, kind: true, engineProps: true } }),
       tx.entity.findMany({ where, select: { id: true, kind: true, engineProps: true } }),
       tx.field.findMany({ where, select: { id: true, engineProps: true } }),
-      tx.constraint.findMany({ where, select: { id: true, engineProps: true } }),
+      tx.constraint.findMany({ where, select: { id: true, kind: true, engineProps: true } }),
       tx.schemaIndex.findMany({ where, select: { id: true, engineProps: true } }),
       tx.schemaIndexColumn.findMany({
         where,
@@ -129,7 +129,7 @@ async function propsRows(tx: Tx, projectId: string): Promise<[EnginePropsKind, P
       'constraint',
       constraint.map((r) => ({
         label: `constraint ${r.id}`,
-        subKind: null,
+        subKind: r.kind,
         engineProps: r.engineProps,
         write: (t: Tx, p: EngineProps) =>
           t.constraint.update({

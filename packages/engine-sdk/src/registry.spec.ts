@@ -93,6 +93,27 @@ describe('EngineRegistry', () => {
     expect(descriptor).not.toHaveProperty('extractReferences');
     expect(descriptor).not.toHaveProperty('propsSchemas');
     expect(descriptor).not.toHaveProperty('typeCatalog');
+    expect(descriptor?.templates).toEqual([]);
+  });
+
+  it('lists template metadata, never the source (Phase 12)', () => {
+    const registry = createEngineRegistry([]);
+    registry.register({
+      ...fixtureEngine,
+      templates: [
+        {
+          id: 'shop',
+          title: 'Shop',
+          summary: 'A shop.',
+          tableCount: 2,
+          importFormat: 'ddl',
+          source: 'CREATE TABLE a (id int);',
+        },
+      ],
+    });
+    expect(registry.catalog().available[0]?.templates).toEqual([
+      { id: 'shop', title: 'Shop', summary: 'A shop.', tableCount: 2 },
+    ]);
   });
 
   it('orders both arrays by displayName', () => {

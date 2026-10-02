@@ -110,6 +110,7 @@ describe('<NoProjects>', () => {
             connectionFields: [{ id: 'host', label: 'Host', kind: 'text', required: true }],
             targetVersions: ['16', '15'],
             defaultTargetVersion: '16',
+            templates: [{ id: 'shop', title: 'Shop', summary: 'A shop.', tableCount: 3 }],
           },
         ]}
       />,
@@ -117,11 +118,12 @@ describe('<NoProjects>', () => {
     expect(html).toContain('Start blank');
     expect(html).toContain('Import SQL');
     expect(html).toContain('Read a database');
+    expect(html).toContain('Start from a template');
     // Every starting point is live once an engine supports it.
     expect(html).not.toContain('disabled=""');
   });
 
-  it('disables "Read a database" when no engine has a connection form', () => {
+  it('disables "Read a database" and templates when no engine has them', () => {
     const html = renderToStaticMarkup(
       <NoProjects
         orgId="org_1"
@@ -134,11 +136,13 @@ describe('<NoProjects>', () => {
             connectionFields: [],
             targetVersions: [],
             defaultTargetVersion: null,
+            templates: [],
           },
         ]}
       />,
     );
-    expect(html.match(/disabled=""/g)).toHaveLength(1);
+    // "Read a database" and "Start from a template": nothing to connect to, no templates.
+    expect(html.match(/disabled=""/g)).toHaveLength(2);
   });
 });
 

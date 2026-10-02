@@ -124,7 +124,7 @@ export function CanvasSurface({
   const [newEntityAt, setNewEntityAt] = useState<Point | null>(null);
   const [importing, setImporting] = useState(false);
   /** 6c — Sync opens the import dialog on its database tab */
-  const [importFrom, setImportFrom] = useState<'sql' | 'database'>('sql');
+  const [importFrom, setImportFrom] = useState<'sql' | 'database' | 'describe'>('sql');
 
   useEffect(() => {
     setNodes(builtNodes);
@@ -560,13 +560,21 @@ export function CanvasSurface({
     ) : (
       <>
         <CanvasEmptyState
-          projectId={projectId}
           onNewEntity={() => {
             setNewEntityAt({ x: 0, y: 0 });
           }}
           onImport={
             canImport
               ? () => {
+                  setImportFrom('sql');
+                  setImporting(true);
+                }
+              : undefined
+          }
+          onDescribe={
+            canImport
+              ? () => {
+                  setImportFrom('describe');
                   setImporting(true);
                 }
               : undefined

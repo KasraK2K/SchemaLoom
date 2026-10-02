@@ -1,7 +1,7 @@
 # SchemaLoom roadmap
 
 This is the single list of what is built, what comes next, and in what order. It is for human
-contributors and AI agents alike. Last updated 2026-10-01.
+contributors and AI agents alike. Last updated 2026-10-02.
 
 ## How this file works
 
@@ -51,7 +51,7 @@ a reason to come back every week, then reach more databases and teams.
 | 10  | Schema change requests (propose → review → merge)   | `built`  | `docs/phase10/DESIGN.md`             | PR-style review for schema edits, on top of comments, history and migrations. What teams pay for.              |
 | 10b | Protected projects: changes only via requests       | `built`  | `docs/phase10/PROTECTED-PROJECTS.md` | Makes review mandatory where it matters. Without it, anyone with edit access skips the request.                |
 | 11  | CLI + CI: `schemaloom pull`, `diff --fail-on-drift` | `built`  | `docs/phase11/DESIGN.md`             | Puts SchemaLoom in the deploy pipeline. Reuses 6b's drift endpoint with an API token.                          |
-| 12  | First-run experience: sample projects, templates    | `idea`   | —                                    | A new user currently lands on an empty canvas.                                                                 |
+| 12  | First-run experience: sample projects, templates    | `built`  | `docs/phase12/DESIGN.md`             | A new user currently lands on an empty canvas.                                                                 |
 | 13  | SQLite engine                                       | `idea`   | —                                    | Cheap second or third engine, popular with indie developers.                                                   |
 | 14  | Enterprise: SAML/OIDC SSO, audit log viewer         | `parked` | —                                    | Wait until a paying customer asks. The audit log data already exists.                                          |
 | 15  | Remaining Phase 3 login paths (magic link, TOTP…)   | `parked` | `docs/phase1/00-OVERVIEW.md` Q28     | Cut on purpose in Q28. Additive when needed.                                                                   |

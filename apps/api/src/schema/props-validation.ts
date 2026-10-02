@@ -58,10 +58,12 @@ export function assertEngineProps(
   }
 }
 
-/** `Entity.kind` / `Link.kind` / `CustomType.kind`; null for every other type, including a
- *  constraint, whose `kind` is not a props sub-kind (sdk props.ts). */
+/** `Entity.kind` / `Link.kind` / `CustomType.kind` / `Constraint.kind`, the sub-kinds sdk
+ *  props.ts names (and the conformance suite passes); null for every other type. */
 function subKindOf(type: EnginePropsKind, object: object): string | null {
-  if (type !== 'entity' && type !== 'link' && type !== 'customType') return null;
+  if (type !== 'entity' && type !== 'link' && type !== 'customType' && type !== 'constraint') {
+    return null;
+  }
   const kind = (object as { kind?: unknown }).kind;
   return typeof kind === 'string' ? kind : null;
 }

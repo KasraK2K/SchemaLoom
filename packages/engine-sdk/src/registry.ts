@@ -2,6 +2,7 @@ import type { EngineCapabilities } from './capabilities.js';
 import type { EngineDefinition, EngineParadigm } from './definition.js';
 import type { EngineId } from './diagnostics.js';
 import { DuplicateEngineError, UnknownEngineError } from './errors.js';
+import type { ProjectTemplateSummary } from './templates.js';
 import type { TerminologyBundle } from './terminology.js';
 
 /** Data, not code: an engine the picker advertises before any implementation exists. The LIST
@@ -21,6 +22,8 @@ export interface EngineDescriptor extends AnnouncedEngine {
   readonly version: string;
   readonly capabilities: EngineCapabilities;
   readonly terminology: TerminologyBundle;
+  /** Phase 12 — never the source; `GET /engines/:id/templates/:templateId` serves that. */
+  readonly templates: readonly ProjectTemplateSummary[];
 }
 
 export interface EngineCatalog {
@@ -52,6 +55,12 @@ function describe(engine: EngineDefinition): EngineDescriptor {
     version: engine.version,
     capabilities: engine.capabilities,
     terminology: engine.terminology,
+    templates: (engine.templates ?? []).map(({ id, title, summary, tableCount }) => ({
+      id,
+      title,
+      summary,
+      tableCount,
+    })),
   };
 }
 

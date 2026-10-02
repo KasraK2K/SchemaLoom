@@ -12,7 +12,7 @@ const STARTING_POINTS = [
     id: 'import',
     icon: Upload,
     title: 'Import SQL',
-    body: 'Paste a dump or a migration file. Every object keeps its engine properties.',
+    body: 'Paste a dump or a migration file, or load a template. Every object keeps its engine properties.',
     action: 'Import',
   },
   {
@@ -30,20 +30,22 @@ const STARTING_POINTS = [
  * of the three ways in exists.
  *
  * A card whose handler is absent stays `disabled` rather than disappearing, so the shape
- * of the screen does not change when it starts working ("Describe" waits for the AI).
+ * of the screen does not change for a caller who cannot import.
  */
 export function CanvasEmptyState({
-  projectId,
   onNewEntity,
   onImport,
+  onDescribe,
 }: {
-  projectId: string;
   onNewEntity?: () => void;
   onImport?: () => void;
+  /** Phase 12: opens the import dialog on its Describe box */
+  onDescribe?: () => void;
 }) {
   const handlers: Record<string, (() => void) | undefined> = {
     blank: onNewEntity,
     import: onImport,
+    describe: onDescribe,
   };
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 p-8">
@@ -76,8 +78,6 @@ export function CanvasEmptyState({
           </li>
         ))}
       </ul>
-
-      <p className="font-mono text-xs text-text-subtle">project {projectId}</p>
     </div>
   );
 }

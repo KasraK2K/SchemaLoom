@@ -137,6 +137,7 @@ export type ConformanceCheckId =
   | 'export/redaction-is-announced'
   | 'roundtrip/ddl-ir-ddl'
   | 'roundtrip/idempotent'
+  | 'templates/import-cleanly'
   | 'validator/deterministic'
   | 'validator/sorted'
   | 'validator/clean-on-reference-ir'
@@ -191,6 +192,7 @@ export const CONFORMANCE_CHECKS: readonly ConformanceCheckId[] = [
   'export/redaction-is-announced',
   'roundtrip/ddl-ir-ddl',
   'roundtrip/idempotent',
+  'templates/import-cleanly',
   'validator/deterministic',
   'validator/sorted',
   'validator/clean-on-reference-ir',

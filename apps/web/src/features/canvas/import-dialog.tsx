@@ -9,14 +9,17 @@ import {
   DialogTitle,
   cn,
 } from '@schemaloom/ui';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useEngine } from '@/engines';
 import { DescribeSchema } from '@/features/ai/describe-schema';
 import { SshHostKeyNote, hasConnectionForm } from '@/features/projects/connection-form';
 import {
+  fetchTemplate,
   importInto,
   importIntrospected,
   introspectPreview,
+  listTemplates,
   previewImport,
   type ConfirmedRename,
   type Imported,
@@ -51,13 +54,22 @@ export function ImportDialog({
   readonly onOpenChange: (open: boolean) => void;
   readonly projectId: string;
   readonly onImported: () => Promise<void>;
-  /** 'database' for the toolbar's Sync */
-  readonly initialFrom?: 'sql' | 'database';
+  /** 'database' for the toolbar's Sync; 'describe' for the empty canvas's Describe card */
+  readonly initialFrom?: 'sql' | 'database' | 'describe';
 }) {
   const facet = useEngine();
   const format = facet.capabilities.importFormats[0];
   const connectionFields = facet.capabilities.connectionFields;
-  const [from, setFrom] = useState<'sql' | 'database'>(initialFrom);
+  const [from, setFrom] = useState<'sql' | 'database'>(
+    initialFrom === 'database' ? 'database' : 'sql',
+  );
+  // Phase 12 — "Load a template" fills the SQL box, like Describe does.
+  const templates = useQuery({
+    queryKey: ['engine-templates', facet.id],
+    queryFn: () => listTemplates(facet.id),
+    enabled: open,
+    staleTime: Infinity,
+  });
   const choice = useConnectionChoice(projectId, connectionFields);
   /** "Not saved: only managers can…" after a read that fell back to the typed details */
   const [note, setNote] = useState<string | null>(null);
@@ -78,7 +90,7 @@ export function ImportDialog({
     if (busy) return;
     onOpenChange(next);
     if (!next) {
-      setFrom(initialFrom);
+      setFrom(initialFrom === 'database' ? 'database' : 'sql');
       choice.reset();
       setNote(null);
       setSourceId(null);
@@ -334,10 +346,39 @@ export function ImportDialog({
               <ConnectionSection choice={choice} fields={connectionFields} disabled={busy} />
             ) : (
               <>
-                <DescribeSchema projectId={projectId} onDraft={setSource} />
+                <DescribeSchema
+                  projectId={projectId}
+                  onDraft={setSource}
+                  autoFocus={initialFrom === 'describe'}
+                />
+                {(templates.data?.length ?? 0) > 0 && (
+                  <label className="flex flex-col gap-1 text-xs text-text-muted">
+                    Load a template
+                    <select
+                      value=""
+                      disabled={busy}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        if (id === '') return;
+                        setError(null);
+                        fetchTemplate(facet.id, id).then(setSource, () => {
+                          setError('Could not load the template. Try again.');
+                        });
+                      }}
+                      className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-text"
+                    >
+                      <option value="">Choose a template…</option>
+                      {templates.data?.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.title} ({template.tableCount} tables)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <textarea
                   required
-                  autoFocus
+                  autoFocus={initialFrom !== 'describe'}
                   rows={12}
                   aria-label="SQL"
                   value={source}

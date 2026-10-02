@@ -18,9 +18,9 @@ const engine = {
     entity: (subKind: string | null) =>
       subKind === 'table' ? z.object({ fillfactor: z.number().int().optional() }).strict() : STRICT,
     field: constantProps(z.object({ default: z.string().optional() }).strict()),
-    // If a constraint's `kind` were taken as a sub-kind, `primaryKey` would pick this schema.
+    // Resolved by `Constraint.kind`: only a CHECK models an expression.
     constraint: (subKind: string | null) =>
-      subKind === null ? z.object({ expression: z.string().optional() }).strict() : z.never(),
+      subKind === 'check' ? z.object({ expression: z.string().optional() }).strict() : STRICT,
     index: constantProps(STRICT),
     indexColumn: constantProps(z.object({ opclass: z.string().optional() }).strict()),
     link: constantProps(STRICT),
@@ -81,8 +81,17 @@ describe('assertEngineProps (doc 04 §8.6 rule 9)', () => {
         create('field', { id: 'f', engineProps: { default: 'now()' } }),
         create('entity', { id: 'e', kind: 'table', engineProps: { fillfactor: 80 } }),
         create('constraint', { id: 'c', kind: 'primaryKey', engineProps: {} }),
+        create('constraint', { id: 'k', kind: 'check', engineProps: { expression: 'x > 0' } }),
       ),
     ).not.toThrow();
+    // An expression on a primary key is not something the engine models.
+    expect(
+      rejection(
+        write(
+          create('constraint', { id: 'p', kind: 'primaryKey', engineProps: { expression: 'x' } }),
+        ),
+      ).status,
+    ).toBe(422);
     // `fillfactor` is a table prop; a view does not model it.
     expect(
       rejection(write(create('entity', { id: 'v', kind: 'view', engineProps: { fillfactor: 80 } })))
@@ -114,5 +123,14 @@ describe('assertEngineProps (doc 04 §8.6 rule 9)', () => {
     };
     expect(run({ id: 'f1', engineProps: {} })).not.toThrow();
     expect(rejection(run({ id: 'f2', engineProps: { notAPostgresProp: 1 } })).status).toBe(422);
+    // What the importer writes for `CHECK (quantity > 0)`.
+    const check = create('constraint', {
+      id: 'c1',
+      kind: 'check',
+      engineProps: { expression: 'quantity > 0' },
+    });
+    expect(() => {
+      assertEngineProps(postgres, [check] as SchemaOperation[], model);
+    }).not.toThrow();
   });
 });

@@ -172,6 +172,54 @@ describe('ENGINE_MANIFEST', () => {
   });
 });
 
+describe('GET /engines/:engineId/templates/:templateId (Phase 12)', () => {
+  const shop = {
+    id: 'shop',
+    title: 'Shop',
+    summary: 'A shop.',
+    tableCount: 1,
+    importFormat: 'ddl',
+    source: 'CREATE TABLE a (id int);',
+  };
+
+  it('serves the source, and the catalog lists only metadata', async () => {
+    const registry = createEngineRegistry([]);
+    registry.register({ ...fakeEngine(), templates: [shop] });
+    const controller = await controllerWith(registry);
+    expect(controller.template('fakesql', 'shop')).toEqual({
+      importFormat: 'ddl',
+      source: 'CREATE TABLE a (id int);',
+    });
+    expect(controller.catalog().available[0]?.templates).toEqual([
+      { id: 'shop', title: 'Shop', summary: 'A shop.', tableCount: 1 },
+    ]);
+  });
+
+  it('404s an unknown engine or template', async () => {
+    const registry = createEngineRegistry([]);
+    registry.register({ ...fakeEngine(), templates: [shop] });
+    const controller = await controllerWith(registry);
+    for (const [engineId, templateId] of [
+      ['nope', 'shop'],
+      ['fakesql', 'nope'],
+    ] as const) {
+      let thrown: unknown;
+      try {
+        controller.template(engineId, templateId);
+      } catch (error) {
+        thrown = error;
+      }
+      expect((thrown as HttpException).getStatus()).toBe(404);
+    }
+  });
+
+  it('ships PostgreSQL templates', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [EnginesModule] }).compile();
+    const pg = moduleRef.get(EnginesController).catalog().available[0];
+    expect(pg?.templates.map((t) => t.id)).toEqual(['ecommerce', 'saas', 'blog']);
+  });
+});
+
 describe('the registry EnginesModule builds', () => {
   it('lists available and coming-soon separately, and a registration wins', async () => {
     // Announced as 'mysql' AND registered: it must appear as available, never in both.

@@ -6,7 +6,8 @@ import { IR_OBJECT_TYPES, type EngineProps, type IrObjectType } from './ir.js';
 /**
  * Resolved per sub-kind, because a table and a view genuinely have different props, as do a
  * foreign key and an embedded-document link. `subKind` is `Entity.kind` / `Link.kind` /
- * `CustomType.kind`, and null for kinds that have no sub-kind.
+ * `CustomType.kind` / `Constraint.kind` (a CHECK has an expression, a key does not), and null
+ * for kinds that have no sub-kind.
  */
 export type EnginePropsResolver = (subKind: string | null) => z.ZodType<EngineProps>;
 

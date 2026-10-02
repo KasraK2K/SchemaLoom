@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Database, FilePlus2, Upload } from '@schemaloom/ui';
+import { Button, Database, FilePlus2, LayoutGrid, Upload } from '@schemaloom/ui';
 import { useState } from 'react';
 import { z } from 'zod';
 import { ApiError, apiFetch } from '@/lib/api-client';
@@ -10,7 +10,12 @@ import {
   initialDraft,
   type ConnectionDraft,
 } from './connection-form';
-import type { EngineOption, ProjectSummary, WorkspaceSummary } from './projects-api';
+import type {
+  EngineOption,
+  ProjectSummary,
+  TemplateOption,
+  WorkspaceSummary,
+} from './projects-api';
 import { saveConnection, type ConnectionSource } from './saved-connection';
 
 const CreatedSchema = z.object({ id: z.string() });
@@ -170,6 +175,41 @@ export async function previewImport(
   );
 }
 
+/** Phase 12 — a template's SQL; the caller imports it like any pasted source. */
+export async function fetchTemplate(engineId: string, templateId: string): Promise<string> {
+  return z
+    .object({ source: z.string() })
+    .parse(
+      await apiFetch<unknown>(
+        `/engines/${encodeURIComponent(engineId)}/templates/${encodeURIComponent(templateId)}`,
+      ),
+    ).source;
+}
+
+/** The templates one engine offers, read from `GET /engines` in the browser. */
+export async function listTemplates(engineId: string): Promise<TemplateOption[]> {
+  const { available } = z
+    .object({
+      available: z.array(
+        z.object({
+          id: z.string(),
+          templates: z
+            .array(
+              z.object({
+                id: z.string(),
+                title: z.string(),
+                summary: z.string(),
+                tableCount: z.number(),
+              }),
+            )
+            .default([]),
+        }),
+      ),
+    })
+    .parse(await apiFetch<unknown>('/engines'));
+  return available.find((engine) => engine.id === engineId)?.templates ?? [];
+}
+
 const STARTING_POINTS = [
   {
     mode: 'blank',
@@ -191,6 +231,13 @@ const STARTING_POINTS = [
     title: 'Read a database',
     body: 'Connect to a running database and import its schema. Only the schema is read.',
     action: 'Connect',
+  },
+  {
+    mode: 'template',
+    icon: LayoutGrid,
+    title: 'Start from a template',
+    body: 'A small, realistic schema to explore or build on. You can change everything.',
+    action: 'Choose',
   },
 ] as const;
 
@@ -229,10 +276,20 @@ export function NoProjects({
   const [name, setName] = useState('');
   const [engineId, setEngineId] = useState(engines[0]?.id ?? '');
   const [engineVersion, setEngineVersion] = useState(engines[0]?.defaultTargetVersion ?? '');
+  const [templateId, setTemplateId] = useState('');
+  /** Pre-fills the name with the template's title, unless the user typed their own. */
+  const chooseTemplate = (next: TemplateOption | undefined) => {
+    const previous = engines.flatMap((e) => e.templates).find((t) => t.id === templateId);
+    setTemplateId(next?.id ?? '');
+    setName((current) =>
+      next !== undefined && (current === '' || current === previous?.title) ? next.title : current,
+    );
+  };
   /** Switching engine resets the version to that engine's default: "16" means nothing to MySQL. */
-  const chooseEngine = (next: EngineOption) => {
+  const chooseEngine = (next: EngineOption, m: Mode | null = mode) => {
     setEngineId(next.id);
     setEngineVersion(next.defaultTargetVersion ?? '');
+    if (m === 'template') chooseTemplate(next.templates[0]);
   };
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? '');
   const [workspaceName, setWorkspaceName] = useState('');
@@ -253,12 +310,18 @@ export function NoProjects({
   const importFormat = engine?.importFormats[0];
   const canImport = engines.some((candidate) => candidate.importFormats.length > 0);
   const canRead = engines.some((candidate) => candidate.connectionFields.length > 0);
+  const hasTemplates = engines.some((candidate) => candidate.templates.length > 0);
+  const fromTemplate = mode === 'template';
   const importing = mode === 'import' || mode === 'database';
   const intoExisting = importing && target !== NEW_PROJECT;
-  /** Engines each mode can use: import needs a format, database needs a connection form. */
+  /** Engines each mode can use: import needs a format, database a connection form, template one. */
   const usable = (candidate: EngineOption, m: Mode = mode ?? 'blank') =>
     m === 'blank' ||
-    (m === 'import' ? candidate.importFormats.length > 0 : candidate.connectionFields.length > 0);
+    (m === 'import'
+      ? candidate.importFormats.length > 0
+      : m === 'template'
+        ? candidate.templates.length > 0
+        : candidate.connectionFields.length > 0);
 
   if (skipped !== null) {
     return (
@@ -314,7 +377,8 @@ export function NoProjects({
               disabled={
                 engines.length === 0 ||
                 (point.mode === 'import' && !canImport) ||
-                (point.mode === 'database' && !canRead)
+                (point.mode === 'database' && !canRead) ||
+                (point.mode === 'template' && !hasTemplates)
               }
               onClick={() => {
                 setMode(point.mode);
@@ -322,7 +386,8 @@ export function NoProjects({
                   engine !== undefined && usable(engine, point.mode)
                     ? engine
                     : engines.find((c) => usable(c, point.mode));
-                if (next !== undefined && next.id !== engineId) chooseEngine(next);
+                if (next !== undefined && next.id !== engineId) chooseEngine(next, point.mode);
+                else if (point.mode === 'template') chooseTemplate(next?.templates[0]);
                 if (point.mode === 'database') setDraft(initialDraft(next?.connectionFields ?? []));
               }}
             >
@@ -378,14 +443,17 @@ export function NoProjects({
       const id = intoExisting ? target : (createdId ?? (await createProject()));
       if (!intoExisting) setCreatedId(id);
       const href = `/${encodeURIComponent(orgSlug)}/p/${encodeURIComponent(id)}`;
-      if (importing) {
+      if (importing || fromTemplate) {
         const { report, existing } =
           mode === 'database'
             ? await importIntrospected(
                 id,
                 (await introspectPreview(id, await databaseSource(id))).sourceId,
               )
-            : await importInto(id, source);
+            : await importInto(
+                id,
+                fromTemplate ? await fetchTemplate(engineId, templateId) : source,
+              );
         // `ignored` is SET, COMMENT, GRANT…: nothing the schema lost, so it isn't a loss.
         const notApplied = report.statements.filter(
           (s) => s.status !== 'applied' && s.status !== 'ignored',
@@ -411,8 +479,33 @@ export function NoProjects({
       }}
     >
       <h2 className="text-sm font-medium text-text">
-        {mode === 'blank' ? 'New project' : mode === 'database' ? 'Read a database' : 'Import SQL'}
+        {mode === 'blank'
+          ? 'New project'
+          : mode === 'database'
+            ? 'Read a database'
+            : mode === 'template'
+              ? 'Start from a template'
+              : 'Import SQL'}
       </h2>
+      {fromTemplate && engine !== undefined && (
+        <label className="flex flex-col gap-1 text-sm text-text">
+          Template
+          <select
+            value={templateId}
+            disabled={createdId !== null}
+            onChange={(e) => {
+              chooseTemplate(engine.templates.find((t) => t.id === e.target.value));
+            }}
+            className={inputClass}
+          >
+            {engine.templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.title}: {template.summary} ({template.tableCount} tables)
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {importing && importTargets.length > 0 && (
         <label className="flex flex-col gap-1 text-sm text-text">
           Into
@@ -597,7 +690,7 @@ export function NoProjects({
         <Button type="submit" variant="primary" size="sm" disabled={busy}>
           {busy
             ? 'Working…'
-            : mode === 'blank'
+            : mode === 'blank' || fromTemplate
               ? 'Create project'
               : intoExisting
                 ? 'Import'
