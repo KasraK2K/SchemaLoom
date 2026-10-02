@@ -156,7 +156,15 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ csrfToken: string }> {
     const token = cookie(req, COOKIE_NAMES.refresh);
-    if (!token) throw new UnauthorizedException({ code: 'REFRESH_TOKEN_MISSING' });
+    if (!token) {
+      // Nothing can revive this session, so drop what's left of it. A leftover
+      // `sl_presence` (30 days, and `localhost` cookies ignore the port) otherwise makes
+      // the web middleware bounce /signup back to /login forever. Only here: an invalid
+      // token can be the loser of a two-tab rotation race, and clearing would log out
+      // the winner.
+      clearUserSessionCookies(res, cookiePolicyFrom(this.config));
+      throw new UnauthorizedException({ code: 'REFRESH_TOKEN_MISSING' });
+    }
     return this.write(res, await this.auth.refresh(token, sessionContext(req), preferredOrg(req)));
   }
 
