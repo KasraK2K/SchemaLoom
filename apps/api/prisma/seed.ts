@@ -276,9 +276,13 @@ async function main(): Promise<void> {
     return fieldId(entityId, column, i);
   };
 
-  for (const [fromTable, fromColumn, toTable, toColumn, name] of FOREIGN_KEYS) {
+  for (const [i, [fromTable, fromColumn, toTable, toColumn, name]] of FOREIGN_KEYS.entries()) {
+    // Fixed ids like every other row: a random cuid lands in the freelancer's payload, and
+    // the leak tests' byte scan once found "sku" inside one (workflows 2 and 4).
+    const n = String(i + 1).padStart(6, '0');
     const link = await prisma.link.create({
       data: {
+        id: `lnk_seed_demo_fk_${n}`,
         projectId: SEED.projectId,
         name,
         kind: 'foreign_key',
@@ -289,6 +293,7 @@ async function main(): Promise<void> {
     });
     await prisma.linkEndpoint.create({
       data: {
+        id: `lep_seed_demo_fk_${n}`,
         projectId: SEED.projectId,
         linkId: link.id,
         ordinal: 0,
