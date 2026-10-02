@@ -85,65 +85,92 @@ Node >= 22.12 is required (`.nvmrc` pins 22; 24 works).
 
 ---
 
-## Run it with Docker only
+## Running SchemaLoom
 
-To use SchemaLoom without installing Node, pnpm or PostgreSQL tools, you only need Docker:
+There are two ways to run it. Pick one; you don't need both.
 
-```bash
-cp .env.example .env
-```
+| Mode            | Use it when                                       | Open                    |
+| --------------- | ------------------------------------------------- | ----------------------- |
+| **Development** | You are changing the code (hot reload, debuggers) | <http://localhost:3000> |
+| **Docker app**  | You want to use it or try the production build    | <http://localhost:8080> |
 
-Fill in the four secrets as described below. Without Node, use
-`docker run --rm node:22-alpine node -e "…"` in place of `node -e "…"`. Then:
+Both use the same Postgres, Redis, MinIO and Mailpit containers and the same database.
+For a real server (TLS, a domain, backups), follow [docs/deploy.md](docs/deploy.md) or
+[docs/self-host-ubuntu.md](docs/self-host-ubuntu.md) instead.
 
-```bash
-pnpm app:up
-```
-
-(`docker compose up -d --build` without pnpm.) The first run builds the images, which takes
-a few minutes; rerun it after pulling a newer version. Open <http://localhost:8080>. Sign-up emails land in Mailpit at <http://localhost:8025>. The
-api image includes `pg_dump`, so **Read a database** (with SSH tunnels and certificate files)
-works as is. To read a database running on your own machine, use `host.docker.internal` as
-the host.
-
-## Getting started
+### 1. Configure `.env` (both modes, once)
 
 ```bash
 cp .env.example .env
 ```
 
-Then fill in the four required secrets in `.env` — generate each with:
+Every service and the api read their settings from this one file. Fill in the four
+required secrets. `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` and `CSRF_SECRET` each take:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` and `CSRF_SECRET` take that value.
 `SECRETS_ENCRYPTION_KEY` needs 32 raw bytes instead:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-Start the stateful services (Postgres 16, Redis 7, MinIO, Mailpit):
+Without Node, use `docker run --rm node:22-alpine node -e "…"` in place of `node -e "…"`.
 
-```bash
-pnpm infra:up
-```
-
-Then install and verify:
-
-```bash
-pnpm install && pnpm build && pnpm test
-```
-
-`apps/web` and `apps/api` run on the **host** via `pnpm dev`, not in Docker — faster
-restarts, working debuggers, and no bind-mount file-watching problems (which are worst on
-Windows, the primary dev platform here).
+MinIO is published on port 9900 (console 9901) because 9000 is often taken by other local
+tools. If a port in `.env` is busy on your machine, change it there.
 
 > Postgres and MinIO read their credentials only when the data volume is first created.
-> After changing one in `.env`, `docker compose down -v` — editing the file alone will not
-> fix a running volume.
+> After changing one in `.env`, `docker compose down -v` (this **deletes the database**);
+> editing the file alone will not fix an existing volume.
+
+### 2a. Development
+
+Run these from the repo root, in order:
+
+| Step | Command                                                    | Why                                                                                                                                                  |
+| ---- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `pnpm install`                                             | Installs every package in the workspace. Rerun after pulling changes to `pnpm-lock.yaml`.                                                            |
+| 2    | `pnpm infra:up`                                            | Starts only Postgres 16, Redis 7, MinIO and Mailpit in Docker. **This does not start the app**; nothing listens on :3000 yet.                        |
+| 3    | `docker compose ps`                                        | Wait until postgres, redis and minio show `healthy`, so the next steps don't fail on a database that is still starting.                              |
+| 4    | `pnpm --filter @schemaloom/api exec prisma migrate deploy` | Creates or updates the tables. Required on a new or reset database and after pulling new migrations. Safe to rerun; it applies only what is missing. |
+| 5    | `pnpm --filter @schemaloom/api db:seed` _(optional)_       | Adds a demo org, users of every role and a sample e-commerce schema. Idempotent.                                                                     |
+| 6    | `pnpm dev`                                                 | Builds the packages, then runs the api on :3001 and the web app on :3000 in watch mode. Keep this terminal open.                                     |
+
+Open <http://localhost:3000> once the web app prints `Ready`. Emails (sign-up, invites)
+land in Mailpit at <http://localhost:8025>.
+
+Use `migrate deploy`, not `pnpm db:migrate`: the latter runs `prisma migrate dev`, which is
+interactive and may generate a new migration. Use it only when you change
+`apps/api/prisma/schema.prisma`.
+
+`apps/web` and `apps/api` run on the **host**, not in Docker: faster restarts, working
+debuggers, and no bind-mount file-watching problems (which are worst on Windows, the
+primary dev platform here).
+
+To check everything builds and passes: `pnpm build && pnpm test`.
+
+**Stopping:** press Ctrl+C in the `pnpm dev` terminal, then `pnpm infra:down` to stop the
+containers (your data is kept). On Windows, Ctrl+C can leave `node` processes holding
+:3000/:3001; see [Troubleshooting](#troubleshooting).
+
+### 2b. Docker app
+
+| Step | Command         | Why                                                                                                                                                                       |
+| ---- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `pnpm app:up`   | Builds the api and web images, runs the migrations in a one-off `migrate` container, then starts everything behind a proxy on :8080. Rerun after pulling a newer version. |
+| 2    | `pnpm app:logs` | Follows the migrate, api, web and proxy logs. Use it if :8080 doesn't respond.                                                                                            |
+| 3    | `pnpm app:down` | Stops every container. Your data is kept.                                                                                                                                 |
+
+Without pnpm, step 1 is `docker compose up -d --build`. The first build takes a few
+minutes. Open <http://localhost:8080>; emails land in Mailpit at <http://localhost:8025>.
+
+There is no seed step: sign up to create the first account. The api image includes
+`pg_dump`, so **Read a database** (with SSH tunnels and certificate files) works as is. To
+read a database running on your own machine, use `host.docker.internal` as the host, not
+`localhost`.
 
 ---
 
