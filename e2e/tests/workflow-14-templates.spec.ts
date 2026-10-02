@@ -42,6 +42,13 @@ test.describe('workflow 14 — templates and the first-run canvas', () => {
       'payments',
       'products',
     ]);
+
+    // The template's COMMENT ON statements arrive as docs: 6 tables and 4 columns.
+    const docs = await page.request.get(`${API_URL}/api/projects/${projectId}/docs`);
+    const written = ((await docs.json()) as { docs: { targetType: string }[] }).docs.filter(
+      (d) => d.targetType !== 'project',
+    );
+    expect(written).toHaveLength(10);
   });
 
   test('an empty project can load a template or describe a schema', async ({ browser }) => {

@@ -3,7 +3,8 @@ import type { ProjectTemplate } from '@schemaloom/engine-sdk';
 /**
  * Phase 12 — the schemas "Start from a template" offers. Plain DDL, imported by the ordinary
  * importer; `templates/import-cleanly` fails if any statement stops applying. That is why
- * there is no COMMENT ON (reported `ignored`) and no CREATE EXTENSION.
+ * there is no CREATE EXTENSION. The COMMENT ON statements become the project's first docs
+ * (on tables and columns defined above them; anything else would be reported `ignored`).
  *
  * Each one shows a little of everything the canvas draws: FKs, a composite key, an enum, a
  * CHECK, a unique index and a partial index.
@@ -63,6 +64,17 @@ CREATE TABLE payments (
 
 CREATE INDEX orders_customer_id_idx ON orders (customer_id);
 CREATE INDEX orders_open_idx ON orders (placed_at) WHERE status IN ('pending', 'paid');
+
+COMMENT ON TABLE customers IS 'People who have an account with the shop. One row per account.';
+COMMENT ON COLUMN customers.email IS 'Login and contact address. Unique across all customers.';
+COMMENT ON TABLE addresses IS 'Shipping addresses a customer has saved. Deleted with the customer.';
+COMMENT ON TABLE products IS 'The catalogue. Inactive products stay for old orders but are not for sale.';
+COMMENT ON COLUMN products.list_price IS 'Current price. Orders keep the price they were placed at.';
+COMMENT ON TABLE orders IS 'One row per checkout. The total is the sum of its order items.';
+COMMENT ON COLUMN orders.status IS 'pending until paid, then shipped; cancelled can happen at any point before shipping.';
+COMMENT ON TABLE order_items IS 'The products in an order, one row per product.';
+COMMENT ON COLUMN order_items.unit_price IS 'The product price when the order was placed.';
+COMMENT ON TABLE payments IS 'Money received for an order. An order can have several payments.';
 `;
 
 const SAAS = `CREATE TYPE member_role AS ENUM ('owner', 'admin', 'member');
@@ -114,6 +126,17 @@ CREATE TABLE invoices (
 
 CREATE UNIQUE INDEX subscriptions_one_active_idx ON subscriptions (organization_id) WHERE cancelled_at IS NULL;
 CREATE INDEX invoices_unpaid_idx ON invoices (issued_at) WHERE paid_at IS NULL;
+
+COMMENT ON TABLE organizations IS 'A tenant: the company or team that pays. Every other row belongs to one.';
+COMMENT ON COLUMN organizations.slug IS 'URL-safe name, unique across all organizations.';
+COMMENT ON TABLE users IS 'A person who can sign in. A user can belong to several organizations.';
+COMMENT ON TABLE memberships IS 'Which users belong to which organization, and with what role.';
+COMMENT ON TABLE plans IS 'What can be bought. The id is a readable key such as starter or pro.';
+COMMENT ON COLUMN plans.seat_limit IS 'Maximum members on this plan. Empty means unlimited.';
+COMMENT ON TABLE subscriptions IS 'An organization on a plan. At most one active subscription per organization.';
+COMMENT ON COLUMN subscriptions.cancelled_at IS 'Set when the subscription ends. Empty while it is active.';
+COMMENT ON TABLE invoices IS 'One row per billing period of a subscription.';
+COMMENT ON COLUMN invoices.paid_at IS 'Empty while the invoice is unpaid.';
 `;
 
 const BLOG = `CREATE TYPE post_status AS ENUM ('draft', 'published', 'archived');
@@ -157,6 +180,14 @@ CREATE TABLE comments (
 
 CREATE INDEX posts_published_idx ON posts (published_at) WHERE status = 'published';
 CREATE INDEX comments_post_id_idx ON comments (post_id);
+
+COMMENT ON TABLE authors IS 'People who write posts.';
+COMMENT ON TABLE posts IS 'Articles. Only published posts are shown to readers.';
+COMMENT ON COLUMN posts.slug IS 'The post URL path. Unique across all posts.';
+COMMENT ON COLUMN posts.published_at IS 'Set when the post is published; required for a published post.';
+COMMENT ON TABLE tags IS 'Topics a post can be filed under.';
+COMMENT ON TABLE post_tags IS 'Which tags each post has.';
+COMMENT ON TABLE comments IS 'Reader comments on a post. Deleted with the post.';
 `;
 
 export const TEMPLATES: readonly ProjectTemplate[] = [
