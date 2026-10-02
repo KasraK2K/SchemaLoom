@@ -77,7 +77,10 @@ export function pgDumpInvocation(req: Pick<IntrospectRequest, 'connection' | 're
 }
 
 const MESSAGES: Record<IntrospectErrorCode, string> = {
-  not_available: 'Reading a database is not available on this server (pg_dump is not installed).',
+  not_available:
+    'Reading a database needs pg_dump, and the server cannot find it. Install the PostgreSQL ' +
+    'client tools (the same major version as the database, or newer) where the api runs, ' +
+    'or set PG_DUMP_PATH to pg_dump.',
   unreachable: 'Could not reach the database. Check the host and port.',
   auth_failed: 'The database refused the user name or password.',
   tls_failed: 'The TLS connection failed. Check the SSL mode.',

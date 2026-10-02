@@ -90,6 +90,7 @@ function build(opts: {
   engine?: Partial<EngineDefinition>;
   fullView?: boolean;
   allowPrivate?: boolean;
+  nodeEnv?: 'development' | 'production';
   /** what the saved-connection store hands back for `{ saved: true }` */
   saved?: Record<string, unknown>;
 }) {
@@ -102,7 +103,12 @@ function build(opts: {
   const cache = new Map<string, string>();
   const deps = {
     config: {
-      get: (key: string) => (key === 'INTROSPECTION_ENABLED' ? true : (opts.allowPrivate ?? true)),
+      get: (key: string) =>
+        key === 'NODE_ENV'
+          ? (opts.nodeEnv ?? 'production')
+          : key === 'INTROSPECTION_ENABLED'
+            ? true
+            : (opts.allowPrivate ?? true),
     },
     registry: { tryGet: () => engine },
     prisma: {
@@ -200,6 +206,22 @@ describe('IntrospectService', () => {
         }),
       }),
     );
+  });
+
+  it('a missing pg_dump points at the Docker app in development only', async () => {
+    const missing = () => new IntrospectError('not_available', 'Needs pg_dump.');
+    const dev = build({ nodeEnv: 'development' });
+    dev.introspect.mockRejectedValueOnce(missing());
+    await expect(dev.service.preview(ctx, { connection })).rejects.toMatchObject({
+      status: 503,
+      response: { message: expect.stringContaining('pnpm app:up') },
+    });
+
+    const prod = build({});
+    prod.introspect.mockRejectedValueOnce(missing());
+    await expect(prod.service.preview(ctx, { connection })).rejects.toMatchObject({
+      response: { message: 'Needs pg_dump.' },
+    });
   });
 
   it('applies a source once, for its own user and project only', async () => {

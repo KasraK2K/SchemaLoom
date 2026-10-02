@@ -56,6 +56,12 @@ interface StoredSource {
   readonly storageKey: string;
 }
 
+/** `pnpm dev` runs the api on the host, which usually has no pg_dump; the api image does. */
+const DEV_PG_DUMP_HINT =
+  ' In development (pnpm dev) the api runs on your machine. To read a database without ' +
+  'installing anything, use the Docker app instead (pnpm app:up, then http://localhost:8080); ' +
+  'its api image includes pg_dump.';
+
 const STATUS: Record<IntrospectError['code'], HttpStatus> = {
   not_available: HttpStatus.SERVICE_UNAVAILABLE,
   too_large: HttpStatus.PAYLOAD_TOO_LARGE,
@@ -101,6 +107,7 @@ export interface DriftView extends SshSeen {
 export class IntrospectService {
   private readonly enabled: boolean;
   private readonly allowPrivate: boolean;
+  private readonly development: boolean;
 
   constructor(
     config: ConfigService<AppEnv, true>,
@@ -115,6 +122,7 @@ export class IntrospectService {
   ) {
     this.enabled = config.get('INTROSPECTION_ENABLED', { infer: true });
     this.allowPrivate = config.get('INTROSPECT_ALLOW_PRIVATE_HOSTS', { infer: true });
+    this.development = config.get('NODE_ENV', { infer: true }) === 'development';
   }
 
   async preview(ctx: SnapshotContext, connection: ConnectionSource): Promise<IntrospectPreview> {
@@ -317,8 +325,13 @@ export class IntrospectService {
         ...seen(tunnel?.hostKey),
         ...(actorUserId === null ? { scheduled: true } : {}),
       });
+      const hint = error.code === 'not_available' && this.development ? DEV_PG_DUMP_HINT : '';
       throw new HttpException(
-        { code: `introspect.${error.code}`, message: error.message, ...seen(tunnel?.hostKey) },
+        {
+          code: `introspect.${error.code}`,
+          message: error.message + hint,
+          ...seen(tunnel?.hostKey),
+        },
         STATUS[error.code],
       );
     } finally {
