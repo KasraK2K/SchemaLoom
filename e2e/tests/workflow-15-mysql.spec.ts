@@ -140,4 +140,111 @@ test.describe('workflow 15 — a MySQL / MariaDB project', () => {
       Object.values(ir.objects.index).filter((i) => i.name === 'idx_customer_id'),
     ).toHaveLength(2);
   });
+
+  test('9c: a snapshot-to-live migration is MySQL DDL, and says it cannot be rolled back', async () => {
+    const owner = await signIn(SEED_EMAILS.owner);
+    const created = await owner.api.post('/api/projects', {
+      headers: write(owner),
+      data: {
+        organizationId: SEED.orgId,
+        name: `MySQL migration ${String(Date.now())}`,
+        engineId: 'mysql',
+        engineVersion: 'MySQL 8.4',
+      },
+    });
+    const projectId = ((await created.json()) as { id: string }).id;
+    const imported = await owner.api.post(`/api/projects/${projectId}/import`, {
+      headers: write(owner),
+      data: { source: DUMP },
+    });
+    expect(imported.status(), await imported.text()).toBe(201);
+
+    const snapshot = await owner.api.post(`/api/projects/${projectId}/snapshots`, {
+      headers: write(owner),
+      data: { name: 'before the migration' },
+    });
+    expect(snapshot.status(), await snapshot.text()).toBe(201);
+    const base = ((await snapshot.json()) as { id: string }).id;
+
+    // Change the design: a new column (an additive import) and a renamed table (an op).
+    const added = await owner.api.post(`/api/projects/${projectId}/import`, {
+      headers: write(owner),
+      data: { source: 'CREATE TABLE `orders` (`shipped_at` datetime NULL);' },
+    });
+    expect(added.status(), await added.text()).toBe(201);
+    const ir = (await (await owner.api.get(`/api/projects/${projectId}/ir`)).json()) as {
+      objects: { entity: Record<string, { id: string; name: string; version: number }> };
+    };
+    const customers = Object.values(ir.objects.entity).find((e) => e.name === 'customers');
+    const renamed = await owner.api.post(`/api/projects/${projectId}/schema/ops`, {
+      headers: write(owner),
+      data: {
+        batchId: `bat_e2e_w15_${String(Date.now())}`,
+        projectId,
+        ops: [
+          {
+            op: 'update',
+            type: 'entity',
+            id: customers?.id,
+            expectedVersion: customers?.version,
+            patch: { name: 'clients' },
+          },
+        ],
+        label: 'Rename customers',
+      },
+    });
+    expect(renamed.status(), await renamed.text()).toBe(201);
+
+    const plan = await owner.api.get(`/api/projects/${projectId}/snapshots/${base}/migration/live`);
+    expect(plan.status(), await plan.text()).toBe(200);
+    const { script } = (await plan.json()) as { script: string };
+    expect(script).toContain('cannot be rolled back as a whole');
+    expect(script).toContain('RENAME TABLE `customers` TO `clients`;');
+    expect(script).toContain(
+      'ALTER TABLE `orders` ADD COLUMN `shipped_at` datetime NULL AFTER `total`;',
+    );
+    expect(script).not.toMatch(/^BEGIN|^COMMIT/m);
+  });
+
+  test('9d: a saved query is validated against the MySQL schema', async () => {
+    const owner = await signIn(SEED_EMAILS.owner);
+    const created = await owner.api.post('/api/projects', {
+      headers: write(owner),
+      data: {
+        organizationId: SEED.orgId,
+        name: `MySQL queries ${String(Date.now())}`,
+        engineId: 'mysql',
+        engineVersion: 'MariaDB 11.4',
+      },
+    });
+    const projectId = ((await created.json()) as { id: string }).id;
+    await owner.api.post(`/api/projects/${projectId}/import`, {
+      headers: write(owner),
+      data: { source: DUMP },
+    });
+
+    const validate = async (query: string) => {
+      const response = await owner.api.post(`/api/projects/${projectId}/queries/validate`, {
+        headers: write(owner),
+        data: { query },
+      });
+      expect(response.status(), await response.text()).toBe(200);
+      return (await response.json()) as {
+        parsed: boolean;
+        identifiers: { text: string; status: string; suggestions: string[] }[];
+      };
+    };
+
+    const good = await validate(
+      'SELECT c.`email`, COUNT(o.id) FROM customers c LEFT JOIN orders o ON o.customer_id = c.id GROUP BY c.email LIMIT 10',
+    );
+    expect(good.parsed).toBe(true);
+    expect(good.identifiers.filter((i) => i.status !== 'resolved')).toEqual([]);
+
+    const typo = await validate('SELECT emial FROM customers');
+    expect(typo.identifiers.find((i) => i.text === 'emial')).toMatchObject({
+      status: 'unknown',
+      suggestions: ['email'],
+    });
+  });
 });

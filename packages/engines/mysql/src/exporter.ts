@@ -48,7 +48,7 @@ const str = (props: EngineProps, key: string): string | undefined => {
 };
 const flag = (props: EngineProps, key: string): boolean => props[key] === true;
 
-const ACTION_SQL: Readonly<Record<string, string>> = {
+export const ACTION_SQL: Readonly<Record<string, string>> = {
   noAction: 'NO ACTION',
   restrict: 'RESTRICT',
   cascade: 'CASCADE',
@@ -100,7 +100,7 @@ function keyPart(column: IndexColumn, fields: ReadonlyMap<Id, Field>): string | 
   return `${quoteIdentifier(field.name)}${typeof length === 'number' ? `(${String(length)})` : ''}${direction}`;
 }
 
-function indexDefinition(index: Index, fields: ReadonlyMap<Id, Field>): string | null {
+export function indexDefinition(index: Index, fields: ReadonlyMap<Id, Field>): string | null {
   const parts: string[] = [];
   for (const column of [...index.columns].sort((a, b) => a.ordinal - b.ordinal)) {
     if (column.role !== 'key') continue;
@@ -121,7 +121,7 @@ function indexDefinition(index: Index, fields: ReadonlyMap<Id, Field>): string |
   return `${lead} ${quoteIdentifier(index.name)} (${parts.join(',')})${invisible}`;
 }
 
-function constraintDefinition(
+export function constraintDefinition(
   constraint: Constraint,
   fields: ReadonlyMap<Id, Field>,
 ): string | null {
@@ -147,7 +147,7 @@ function constraintDefinition(
   return null;
 }
 
-function tableOptions(props: EngineProps, comment: string | undefined): string {
+export function tableOptions(props: EngineProps, comment: string | undefined): string {
   const out: string[] = [];
   out.push(`ENGINE=${str(props, 'engine') ?? 'InnoDB'}`);
   const charset = str(props, 'charset');
@@ -160,8 +160,29 @@ function tableOptions(props: EngineProps, comment: string | undefined): string {
   return out.join(' ');
 }
 
+/** `CREATE [OR REPLACE] [ALGORITHM=…] [SQL SECURITY …] VIEW `v` AS body [WITH … CHECK OPTION]` */
+export function viewStatement(
+  name: string,
+  props: EngineProps,
+  body: string,
+  orReplace: boolean,
+): string {
+  const head = [
+    orReplace ? 'CREATE OR REPLACE' : 'CREATE',
+    str(props, 'algorithm') === undefined ? undefined : `ALGORITHM=${String(props.algorithm)}`,
+    str(props, 'sqlSecurity') === undefined
+      ? undefined
+      : `SQL SECURITY ${String(props.sqlSecurity)}`,
+    'VIEW',
+    quoteIdentifier(name),
+    'AS',
+  ].filter((part) => part !== undefined);
+  const check = str(props, 'checkOption');
+  return `${head.join(' ')} ${body}${check === undefined ? '' : ` WITH ${check} CHECK OPTION`}`;
+}
+
 /** Dependency depth over `refs.entityIds`: a table before the view selecting from it. */
-function entityDepths(entities: readonly Entity[]): ReadonlyMap<Id, number> {
+export function entityDepths(entities: readonly Entity[]): ReadonlyMap<Id, number> {
   const byId = new Map(entities.map((e) => [e.id, e]));
   const depths = new Map<Id, number>();
   const visiting = new Set<Id>();
@@ -281,21 +302,10 @@ function buildExport(input: ExportInput): ExportResult {
         skip('entity', entity.id, 'the view has no definition');
         continue;
       }
-      const head = [
-        options.includeIfNotExists ? 'CREATE OR REPLACE' : 'CREATE',
-        str(props, 'algorithm') === undefined ? undefined : `ALGORITHM=${String(props.algorithm)}`,
-        str(props, 'sqlSecurity') === undefined
-          ? undefined
-          : `SQL SECURITY ${String(props.sqlSecurity)}`,
-        'VIEW',
-        quoteIdentifier(entity.name),
-        'AS',
-      ].filter((p) => p !== undefined);
-      const check = str(props, 'checkOption');
       pending.push({
         phase: 'entities',
         kind: 'CREATE VIEW',
-        text: `${head.join(' ')} ${body}${check === undefined ? '' : ` WITH ${check} CHECK OPTION`}`,
+        text: viewStatement(entity.name, props, body, options.includeIfNotExists),
         target: { type: 'entity', id: entity.id },
         rank,
         sort: entity.name,

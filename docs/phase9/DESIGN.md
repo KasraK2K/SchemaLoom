@@ -1,7 +1,7 @@
 # Second engine: MySQL / MariaDB (roadmap 9)
 
-Status: **approved** 2026-10-02 with every default in §10. **9a built** the same day; 9b–9d
-follow.
+Status: **approved** 2026-10-02 with every default in §10. **9a, 9c and 9d built** the same
+day; 9b waits for a reachable MySQL server to verify against.
 
 **As built (9a):**
 
@@ -29,6 +29,21 @@ COMMENT '…'` (the only way MySQL comments one column). The importer reads that
   from Docker Hub was blocked (403) from this network on 2026-10-02, so 9a is verified against
   canonical `SHOW CREATE TABLE` / mysqldump text, the conformance round trip and e2e workflow
   15, not yet against live servers.
+
+**As built (9c, migrations):** `migration.ts` and `annotate.ts`. Renames run first (`RENAME
+TABLE`, `RENAME COLUMN`, `RENAME INDEX`), then drops (foreign keys first), then `MODIFY COLUMN`
+with the whole definition, then creates (`CREATE TABLE` with keys inline, `ADD COLUMN … AFTER`),
+then keys, indexes and foreign keys. A column renumbered by a neighbour's add or drop is covered
+by that step; a real reorder becomes `MODIFY COLUMN … AFTER`. `transaction` is always null, and
+the first statement is preceded by a comment saying the script cannot be rolled back. A CHECK is
+dropped with `DROP CHECK` on MySQL and `DROP CONSTRAINT` on MariaDB.
+
+**As built (9d, queries and AI):** `query-validator.ts` resolves tables, aliases, CTE names and
+columns from node-sql-parser's AST against the caller's redacted model, with one name scope per
+statement (a `ponytail:` note says how to go per subquery). The MariaDB grammar gives tables no
+location and pads a column's location with the following space, so ranges are trimmed and a
+missing one is found in the query text. `ai-profile.ts` is the PostgreSQL profile with MySQL
+prompts, backtick quoting and no schema (`N`) lines.
 
 ## 1. Why now, and what "done" means
 

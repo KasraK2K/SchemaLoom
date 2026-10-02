@@ -6,7 +6,10 @@
 export type Ast = Record<string, unknown>;
 
 interface NodeSqlParser {
-  astify(sql: string, options: { database: string }): unknown;
+  astify(
+    sql: string,
+    options: { database: string; parseOptions?: { includeLocations: boolean } },
+  ): unknown;
   exprToSQL(expr: unknown, options: { database: string }): string;
   sqlify(ast: unknown, options: { database: string }): string;
 }
@@ -29,7 +32,7 @@ function load(): Promise<NodeSqlParser> {
 export interface MySqlParser {
   /** Every statement in `sql`. Tries the target's dialect first, then the other one: the
    *  MariaDB grammar knows `uuid` columns, the MySQL one some ALTER forms MariaDB's lacks. */
-  parse(sql: string): readonly Ast[];
+  parse(sql: string, options?: { readonly locations?: boolean }): readonly Ast[];
   /** An expression AST back to SQL text, backtick-quoted. */
   expression(expr: unknown): string;
   /** A SELECT AST back to SQL text. */
@@ -40,11 +43,15 @@ export async function loadMySqlParser(mariaDbFirst: boolean): Promise<MySqlParse
   const parser = await load();
   const dialects = mariaDbFirst ? ['MariaDB', 'MySQL'] : ['MySQL', 'MariaDB'];
   return {
-    parse(sql) {
+    parse(sql, options) {
       let last: unknown;
+      const parseOptions = options?.locations === true ? { includeLocations: true } : undefined;
       for (const database of dialects) {
         try {
-          const ast = parser.astify(sql, { database });
+          const ast = parser.astify(sql, {
+            database,
+            ...(parseOptions === undefined ? {} : { parseOptions }),
+          });
           return (Array.isArray(ast) ? ast : [ast]).filter(
             (node): node is Ast => typeof node === 'object' && node !== null,
           );

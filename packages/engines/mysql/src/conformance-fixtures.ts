@@ -253,6 +253,13 @@ export function redactedModel(): RedactedModel {
 
 const REFERENCE_MODEL = referenceModel();
 
+/** A fresh reference model with one edit applied — for the migration pairs. */
+function edited(edit: (model: SchemaModel) => void): SchemaModel {
+  const model = referenceModel();
+  edit(model);
+  return model;
+}
+
 function objectOrThrow<T>(value: T | undefined, id: string): T {
   if (value === undefined) throw new Error(`fixture: ${id} is missing`);
   return value;
@@ -283,8 +290,94 @@ export const CONFORMANCE_FIXTURES: ConformanceFixtures = {
     },
   ],
   // 9d adds the query validator, 9c the migration generator; their checks skip until then.
-  queries: [],
-  migrations: [],
+  queries: [
+    {
+      name: 'aliases and a view',
+      query: 'SELECT o.id, o.customer_id FROM orders o JOIN order_summary AS s ON s.id = o.id',
+      expect: {
+        touchedEntityNames: ['orders', 'order_summary'],
+        unknownIdentifiers: [],
+        parsed: true,
+      },
+    },
+    {
+      name: 'a stub does not resolve by its real name',
+      query: 'SELECT * FROM customers',
+      expect: { touchedEntityNames: [], unknownIdentifiers: ['customers'], parsed: true },
+    },
+    {
+      name: 'a masked column reads like a typo',
+      query: 'SELECT total, net_totl FROM orders',
+      expect: {
+        touchedEntityNames: ['orders'],
+        unknownIdentifiers: ['total', 'net_totl'],
+        parsed: true,
+      },
+    },
+    {
+      name: 'unparseable',
+      query: 'SELECT FROM WHERE (',
+      expect: { touchedEntityNames: [], unknownIdentifiers: [], parsed: false },
+    },
+  ],
+  migrations: [
+    {
+      name: 'add a column and an index',
+      before: REFERENCE_MODEL,
+      after: edited((m) => {
+        m.objects.field.fd_cust_nick = column({
+          id: 'fd_cust_nick',
+          name: 'nickname',
+          entityId: 'en_customers',
+          ordinal: 5,
+          type: { name: 'varchar', args: [64] },
+        });
+        m.objects.index.ix_cust_nick = index({
+          id: 'ix_cust_nick',
+          name: 'idx_nickname',
+          entityId: 'en_customers',
+          columns: [indexColumn({ ordinal: 0, fieldId: 'fd_cust_nick' })],
+        });
+      }),
+      expectDestructive: false,
+      expectLossy: false,
+    },
+    {
+      name: 'drop a column',
+      before: REFERENCE_MODEL,
+      after: edited((m) => {
+        delete m.objects.field.fd_cust_updated;
+      }),
+      expectDestructive: true,
+      expectLossy: false,
+    },
+    {
+      name: 'narrow a varchar and require a value',
+      before: REFERENCE_MODEL,
+      after: edited((m) => {
+        const email = objectOrThrow(m.objects.field.fd_cust_email, 'fd_cust_email');
+        m.objects.field.fd_cust_email = { ...email, type: { name: 'varchar', args: [64] } };
+        const bio = objectOrThrow(m.objects.field.fd_cust_bio, 'fd_cust_bio');
+        m.objects.field.fd_cust_bio = { ...bio, isNullable: false };
+      }),
+      expectDestructive: false,
+      expectLossy: true,
+    },
+    {
+      name: 'rename a table, a column and an index',
+      before: REFERENCE_MODEL,
+      after: edited((m) => {
+        const customers = objectOrThrow(m.objects.entity.en_customers, 'en_customers');
+        m.objects.entity.en_customers = { ...customers, name: 'clients' };
+        const email = objectOrThrow(m.objects.field.fd_cust_email, 'fd_cust_email');
+        m.objects.field.fd_cust_email = { ...email, name: 'email_address' };
+        const prefix = objectOrThrow(m.objects.index.ix_cust_email_prefix, 'ix_cust_email_prefix');
+        m.objects.index.ix_cust_email_prefix = { ...prefix, name: 'idx_email_address_prefix' };
+      }),
+      expectDestructive: false,
+      expectLossy: false,
+    },
+  ],
   invalidProps: [
     { kind: 'namespace', subKind: null, value: { owner: 42 } },
     { kind: 'entity', subKind: 'table', value: { rowFormat: 'SIDEWAYS' } },

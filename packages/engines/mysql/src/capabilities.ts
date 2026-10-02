@@ -101,8 +101,8 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
     expressionIndexes: true,
     includeColumns: false,
     comments: true,
-    migrations: false,
-    queryValidation: false,
+    migrations: true,
+    queryValidation: true,
   },
   typeDescriptors: TYPE_DESCRIPTORS,
   // Q4: a project is one database.

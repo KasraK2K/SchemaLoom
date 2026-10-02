@@ -1,6 +1,10 @@
 import type { EngineDefinition } from '@schemaloom/engine-sdk';
+import { AI_PROFILE } from './ai-profile.js';
+import { annotateDiff } from './annotate.js';
 import { EXPORTER } from './exporter.js';
 import { IMPORTER } from './importer.js';
+import { MIGRATION_GENERATOR } from './migration.js';
+import { QUERY_VALIDATOR } from './query-validator.js';
 import { extractReferences } from './references.js';
 import { mysqlFacet } from './static.js';
 import { VALIDATOR } from './validator.js';
@@ -17,6 +21,10 @@ export const mysqlEngine: EngineDefinition = {
   importer: IMPORTER,
   exporter: EXPORTER,
   extractReferences,
+  annotateDiff,
+  migrationGenerator: MIGRATION_GENERATOR,
+  queryValidator: QUERY_VALIDATOR,
+  aiProfile: AI_PROFILE,
 };
 
 export { mysqlFacet } from './static.js';
@@ -28,7 +36,11 @@ export {
   isMariaDb,
   normalizeName,
 } from './static.js';
+export { annotateDiff, typeChangeRisk } from './annotate.js';
 export { EXPORTER } from './exporter.js';
+export { MIGRATION_GENERATOR } from './migration.js';
+export { QUERY_VALIDATOR } from './query-validator.js';
+export { AI_PROFILE } from './ai-profile.js';
 export { IMPORTER } from './importer.js';
 export { VALIDATOR, type MySqlValidator, type ValidationInput } from './validator.js';
 export { extractReferences } from './references.js';

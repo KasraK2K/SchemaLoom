@@ -28,6 +28,17 @@ export const CODE = {
   /** never emitted for a redacted model (doc 03 §10.3 rule 4) */
   exportOmitted: 'mysql.export-omitted',
   importStatementFailed: 'mysql.import-statement-failed',
+  /** §11.2 — a step's `reasonCode`, and an `unsupported` entry's two codes */
+  migrationDropsData: 'mysql.migration-drops-data',
+  migrationTypeNarrowed: 'mysql.migration-type-narrowed',
+  migrationTableCopy: 'mysql.migration-table-copy',
+  migrationNotNull: 'mysql.migration-not-null',
+  migrationChange: 'mysql.migration-change',
+  migrationUnsupported: 'mysql.migration-unsupported',
+  /** §12 — worded so a hidden object and a typo read the same (doc 05 P8) */
+  queryUnknownRelation: 'mysql.query-unknown-relation',
+  queryUnknownColumn: 'mysql.query-unknown-column',
+  queryAmbiguousColumn: 'mysql.query-ambiguous-column',
 } as const;
 
 export const DIAGNOSTIC_MESSAGES: DiagnosticMessages = {
@@ -63,4 +74,15 @@ export const DIAGNOSTIC_MESSAGES: DiagnosticMessages = {
     'This expression refers to something that has been renamed or removed',
   [CODE.exportOmitted]: 'Not exported: {reason}',
   [CODE.importStatementFailed]: 'This statement could not be imported: {reason}',
+  [CODE.migrationDropsData]: 'Permanently deletes {object} and every value stored in it',
+  [CODE.migrationTypeNarrowed]:
+    'Changing {from} to {to} may truncate, round or reject existing values, and copies the table',
+  [CODE.migrationTableCopy]: 'Changing {from} to {to} copies the whole table under a lock',
+  [CODE.migrationNotNull]:
+    'Making {object} NOT NULL copies the table, and fails if any row holds NULL (strict mode)',
+  [CODE.migrationChange]: '{object}: {property} ({change})',
+  [CODE.migrationUnsupported]: 'Needs a manual step — {reason}',
+  [CODE.queryUnknownRelation]: 'No table or view named “{name}”',
+  [CODE.queryUnknownColumn]: 'No column named “{name}” here',
+  [CODE.queryAmbiguousColumn]: '“{name}” is a column of more than one table here — qualify it',
 };
