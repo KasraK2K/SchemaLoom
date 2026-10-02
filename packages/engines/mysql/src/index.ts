@@ -7,6 +7,7 @@ import { MIGRATION_GENERATOR } from './migration.js';
 import { QUERY_VALIDATOR } from './query-validator.js';
 import { extractReferences } from './references.js';
 import { mysqlFacet } from './static.js';
+import { TEMPLATES } from './templates.js';
 import { VALIDATOR } from './validator.js';
 
 /**
@@ -25,6 +26,7 @@ export const mysqlEngine: EngineDefinition = {
   migrationGenerator: MIGRATION_GENERATOR,
   queryValidator: QUERY_VALIDATOR,
   aiProfile: AI_PROFILE,
+  templates: TEMPLATES,
 };
 
 export { mysqlFacet } from './static.js';

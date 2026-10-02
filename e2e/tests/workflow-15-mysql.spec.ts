@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn, signedInPage, write, type Session } from '../fixtures/api';
+import { API_URL, signIn, signedInPage, write, type Session } from '../fixtures/api';
 import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 /**
@@ -58,6 +58,46 @@ test.describe('workflow 15 — a MySQL / MariaDB project', () => {
     await page.getByLabel('Engine').selectOption({ label: 'MySQL / MariaDB' });
     const versions = await page.getByLabel('Target version').locator('option').allTextContents();
     expect(versions).toEqual(['MySQL 8.4', 'MySQL 8.0', 'MariaDB 11.4', 'MariaDB 10.11']);
+  });
+
+  test('starts a MySQL project from a template, documented', async ({ browser }) => {
+    test.setTimeout(120_000);
+    const page = await signedInPage(browser, SEED_EMAILS.owner);
+    await page.goto(`/${SEED.orgSlug}`);
+    await expect(async () => {
+      await page.getByRole('button', { name: 'Choose', exact: true }).click();
+      await expect(page.getByLabel('Template')).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 30_000 });
+    await page.getByLabel('Engine').selectOption({ label: 'MySQL / MariaDB' });
+    await page.getByLabel('Template').selectOption('ecommerce');
+    await page.getByLabel('Name', { exact: true }).fill(`MySQL shop ${String(Date.now())}`);
+    await page.getByRole('button', { name: 'Create project' }).click();
+    await expect(page).toHaveURL(/\/p\/[^/]+$/, { timeout: 60_000 });
+
+    const projectId = page.url().split('/p/')[1] ?? '';
+    const project = (await (
+      await page.request.get(`${API_URL}/api/projects/${projectId}`)
+    ).json()) as {
+      engineId: string;
+    };
+    expect(project.engineId).toBe('mysql');
+    const ir = (await (
+      await page.request.get(`${API_URL}/api/projects/${projectId}/ir`)
+    ).json()) as {
+      objects: { entity: Record<string, { name: string }> };
+    };
+    expect(
+      Object.values(ir.objects.entity)
+        .map((e) => e.name)
+        .sort(),
+    ).toEqual(['addresses', 'customers', 'order_items', 'orders', 'payments', 'products']);
+    const docs = (await (
+      await page.request.get(`${API_URL}/api/projects/${projectId}/docs`)
+    ).json()) as {
+      docs: { targetType: string }[];
+    };
+    // Six table comments and four column comments.
+    expect(docs.docs.filter((d) => d.targetType !== 'project')).toHaveLength(10);
   });
 
   test('imports a dump with comments, shows it, and exports MySQL DDL', async ({ browser }) => {

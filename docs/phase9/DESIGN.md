@@ -45,6 +45,10 @@ location and pads a column's location with the following space, so ranges are tr
 missing one is found in the query text. `ai-profile.ts` is the PostgreSQL profile with MySQL
 prompts, backtick quoting and no schema (`N`) lines.
 
+**Templates (roadmap 12, for MySQL):** `templates.ts` ships the same three starting schemas as
+the PostgreSQL engine (E-commerce, SaaS, Blog), written the MySQL way, with every table and the
+key columns documented through inline `COMMENT '…'`.
+
 ## 1. Why now, and what "done" means
 
 PostgreSQL is the only engine. The engine boundary (doc 03) was built so a second one is "a
