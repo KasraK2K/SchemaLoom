@@ -50,10 +50,12 @@ describe('OrganizationsController route markers', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       'DELETE /api/organizations/:orgSlug/groups/:groupId',
       'DELETE /api/organizations/:orgSlug/groups/:groupId/members/:userId',
+      'DELETE /api/organizations/:orgSlug/invitations/:invitationId',
       'DELETE /api/organizations/:orgSlug/members/:userId',
       'DELETE /api/organizations/:orgSlug/roles/:roleId',
       'GET /api/organizations',
       'GET /api/organizations/:orgSlug/groups',
+      'GET /api/organizations/:orgSlug/invitations',
       'GET /api/organizations/:orgSlug/members',
       'GET /api/organizations/:orgSlug/projects',
       'GET /api/organizations/:orgSlug/roles',
@@ -64,6 +66,8 @@ describe('OrganizationsController route markers', () => {
       'POST /api/organizations',
       'POST /api/organizations/:orgSlug/groups',
       'POST /api/organizations/:orgSlug/groups/:groupId/members',
+      'POST /api/organizations/:orgSlug/invitations',
+      'POST /api/organizations/:orgSlug/invitations/:invitationId/resend',
       'POST /api/organizations/:orgSlug/roles',
       'POST /api/organizations/:orgSlug/workspaces',
     ]);

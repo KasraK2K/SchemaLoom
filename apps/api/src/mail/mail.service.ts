@@ -109,6 +109,24 @@ export class MailService {
     });
   }
 
+  /** Roadmap 16: an org invite from Settings → Members. The link creates the account too. */
+  async sendMemberInvitationEmail(
+    to: string,
+    inviterName: string,
+    orgName: string,
+    token: string,
+  ): Promise<void> {
+    const base = this.config.get('WEB_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
+    const url = `${base}/invite/${encodeURIComponent(token)}`;
+    const body = `${inviterName} invited you to join ${orgName} on SchemaLoom. The invitation expires in 7 days.`;
+    await this.send({
+      to,
+      subject: `${inviterName} invited you to ${orgName} on SchemaLoom`,
+      text: `Hi,\n\n${body}\n${url}`,
+      html: layout('Hi,', body, url, 'Accept the invitation'),
+    });
+  }
+
   /**
    * Phase 4 §4 — one in-app notification, mirrored by email when the recipient's pref is
    * on. `title` is templated from ids (doc 05 L7/L17) and never quotes schema text.

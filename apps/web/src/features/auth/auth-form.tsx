@@ -11,7 +11,9 @@ import { clientEnv } from '@/env.client';
 import { ApiError, apiFetch, apiUrl } from '@/lib/api-client';
 import {
   afterFirstFactor,
+  fetchInvitedEmail,
   fetchOAuthProviders,
+  fetchSignupOpen,
   requestMagicLink,
   safeNextPath,
   signIn,
@@ -50,9 +52,10 @@ interface FieldProps {
   autoComplete: string;
   error: FieldError | undefined;
   registration: ReturnType<ReturnType<typeof useForm>['register']>;
+  readOnly?: boolean;
 }
 
-function Field({ label, type, autoComplete, error, registration }: FieldProps) {
+function Field({ label, type, autoComplete, error, registration, readOnly }: FieldProps) {
   const id = useId();
   const errorId = `${id}-error`;
   return (
@@ -68,8 +71,9 @@ function Field({ label, type, autoComplete, error, registration }: FieldProps) {
         // is colour-only feedback and fails WCAG AA on its own.
         aria-invalid={error !== undefined}
         aria-describedby={error === undefined ? undefined : errorId}
+        readOnly={readOnly}
         className={cn(
-          'rounded-md border bg-surface px-3 py-2 text-sm text-text',
+          'rounded-md border bg-surface px-3 py-2 text-sm text-text read-only:text-text-muted',
           'placeholder:text-text-subtle',
           error === undefined ? 'border-border' : 'border-danger',
         )}
@@ -94,6 +98,8 @@ export function messageFor(error: unknown): string {
         return 'That email and password do not match.';
       case 'email_taken':
         return 'An account with that email already exists.';
+      case 'signup_closed':
+        return 'Sign-up is by invitation. Ask an owner of your organisation to invite you.';
       case 'invalid_code':
         return 'That code is not right. Codes change every 30 seconds.';
       case 'token_invalid':
@@ -121,6 +127,10 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   const params = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
+  // Roadmap 16. `null` while loading; the API refuses a closed sign-up anyway, so a
+  // failed read only hides the "Create one" link rather than blocking anything.
+  const [signupOpen, setSignupOpen] = useState<boolean | null>(null);
+  const inviteToken = isSignUp ? (params.get('invite') ?? undefined) : undefined;
 
   // `?expired=1` means a Server Component hit a 401 it could not refresh itself. The
   // refresh token usually still works, so spend it here and go straight back; only a
@@ -148,12 +158,37 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
     formState: { errors, isSubmitting },
   } = form;
 
+  useEffect(() => {
+    fetchSignupOpen()
+      .then(setSignupOpen)
+      .catch(() => {
+        setSignupOpen(false);
+      });
+  }, []);
+
+  // An invitation link fixes the address: the token only admits the invited one.
+  useEffect(() => {
+    if (inviteToken === undefined) return;
+    fetchInvitedEmail(inviteToken)
+      .then((email) => {
+        form.setValue('email', email);
+      })
+      .catch(() => {
+        setFormError('This invitation is no longer valid. Ask whoever invited you for a new one.');
+      });
+  }, [inviteToken, form]);
+
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
     try {
       let destination = safeNextPath(params.get('next'));
       if (isSignUp) {
-        await signUp({ email: values.email, password: values.password, name: values.name });
+        await signUp({
+          email: values.email,
+          password: values.password,
+          name: values.name,
+          inviteToken,
+        });
       } else {
         destination = afterFirstFactor(
           await signIn(values.email, values.password),
@@ -183,6 +218,23 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
     }
   };
 
+  if (isSignUp && inviteToken === undefined && signupOpen === false) {
+    return (
+      <div className="mt-6 flex flex-col gap-4">
+        <p className="text-sm text-text">
+          Sign-up is by invitation. Ask an owner of your organisation to invite you; the email
+          they send has a link to create your account.
+        </p>
+        <p className="text-sm text-text-muted">
+          Already have an account?{' '}
+          <Link href="/login" className="text-accent-text underline underline-offset-2">
+            Sign in
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="mt-6 flex flex-col gap-4" noValidate>
       {isSignUp && (
@@ -200,6 +252,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
         autoComplete="email"
         error={errors.email}
         registration={register('email')}
+        readOnly={inviteToken !== undefined}
       />
       <Field
         label="Password"
@@ -235,15 +288,17 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
 
       <OAuthButtons />
 
-      <p className="text-sm text-text-muted">
-        {isSignUp ? 'Already have an account? ' : 'No account yet? '}
-        <Link
-          href={isSignUp ? '/login' : '/signup'}
-          className="text-accent-text underline underline-offset-2"
-        >
-          {isSignUp ? 'Sign in' : 'Create one'}
-        </Link>
-      </p>
+      {(isSignUp || signupOpen === true) && (
+        <p className="text-sm text-text-muted">
+          {isSignUp ? 'Already have an account? ' : 'No account yet? '}
+          <Link
+            href={isSignUp ? '/login' : '/signup'}
+            className="text-accent-text underline underline-offset-2"
+          >
+            {isSignUp ? 'Sign in' : 'Create one'}
+          </Link>
+        </p>
+      )}
     </form>
   );
 }

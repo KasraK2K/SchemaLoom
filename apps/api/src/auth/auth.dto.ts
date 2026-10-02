@@ -14,6 +14,8 @@ export const registerSchema = z.object({
   email,
   password,
   name: z.string().trim().min(1).max(120),
+  /** From an invitation link: lets a closed install accept this sign-up (roadmap 16). */
+  inviteToken: z.string().min(1).max(512).optional(),
 });
 export class RegisterDto extends createZodDto(registerSchema) {}
 

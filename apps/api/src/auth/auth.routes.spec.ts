@@ -47,6 +47,7 @@ const PUBLIC_ROUTES = [
   'GET /api/auth/google',
   'GET /api/auth/google/callback',
   'GET /api/auth/providers',
+  'GET /api/auth/signup-policy',
   'POST /api/auth/2fa/verify',
   'POST /api/auth/login',
   'POST /api/auth/logout',

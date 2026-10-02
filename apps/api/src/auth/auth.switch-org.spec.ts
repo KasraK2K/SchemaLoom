@@ -7,6 +7,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 import type { TokensService } from './tokens.service';
 import type { TwoFactorService } from './two-factor.service';
+import type { SignupPolicy } from './signup-policy';
 import type { VerificationService } from './verification.service';
 
 /** `usr_ana` belongs to `org_first` (joined first) and `org_second`. */
@@ -31,6 +32,7 @@ function service() {
     {} as MailService,
     {} as ConfigService<AppEnv, true>,
     {} as TwoFactorService,
+    {} as SignupPolicy,
   );
 }
 

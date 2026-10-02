@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 import { API_URL, signIn, write, type Session } from '../fixtures/api';
 import { fetchIr } from '../fixtures/ir';
 import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
@@ -13,12 +13,23 @@ import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 const batchId = (tag: string): string => `bat_e2e_${tag}_${String(Date.now())}`;
 
+/**
+ * Roadmap 16: the first two tests sign up strangers, which needs SIGNUP_MODE=open (the e2e
+ * api sets it; a reused dev server may not). Workflow 13 covers the invite-only path.
+ */
+async function skipUnlessSignupOpen(request: APIRequestContext): Promise<void> {
+  const policy = await request.get(`${API_URL}/api/auth/signup-policy`);
+  const { open } = (await policy.json()) as { open: boolean };
+  test.skip(!open, 'sign-up is closed on this api (SIGNUP_MODE=invite)');
+}
+
 interface MeResponse {
   readonly email: string;
 }
 
 test.describe('workflow 1 — from sign-up to a laid-out, grouped project', () => {
   test('a new account can be created and signs in', async ({ request }) => {
+    await skipUnlessSignupOpen(request);
     const email = `signup-${String(Date.now())}@acme.test`;
     const created = await request.post(`${API_URL}/api/auth/register`, {
       data: { email, password: 'SchemaLoom!demo1', name: 'New Signup' },
@@ -31,7 +42,11 @@ test.describe('workflow 1 — from sign-up to a laid-out, grouped project', () =
     expect(((await me.json()) as MeResponse).email).toBe(email);
   });
 
-  test('signs up, creates an org, imports SQL and lands on a laid-out canvas', async ({ page }) => {
+  test('signs up, creates an org, imports SQL and lands on a laid-out canvas', async ({
+    page,
+    request,
+  }) => {
+    await skipUnlessSignupOpen(request);
     test.setTimeout(120_000);
     // A click that lands before React hydrates does nothing; retry until the form opens.
     const open = async (button: string, field: string) => {

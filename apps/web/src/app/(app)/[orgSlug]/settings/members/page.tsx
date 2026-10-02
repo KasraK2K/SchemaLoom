@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
+import { InvitesManager } from '@/features/org-settings/invites-manager';
 import { MembersManager } from '@/features/org-settings/members-manager';
-import { listMembers, myUserId } from '@/features/org-settings/org-settings-api';
+import { listInvites, listMembers, myUserId } from '@/features/org-settings/org-settings-api';
 import { OrgSettingsNav } from '@/features/org-settings/org-settings-nav';
 import { listOrganizations } from '@/features/projects';
 
@@ -15,7 +16,12 @@ export default async function OrgMembersPage({ params }: { params: Promise<{ org
   const { orgSlug } = await params;
   const org = (await listOrganizations()).find((candidate) => candidate.slug === orgSlug);
   if (org === undefined || org.orgRole === 'guest') notFound();
-  const [members, meId] = await Promise.all([listMembers(orgSlug), myUserId()]);
+  const manages = org.orgRole === 'owner' || org.orgRole === 'admin';
+  const [members, meId, invites] = await Promise.all([
+    listMembers(orgSlug),
+    myUserId(),
+    manages ? listInvites(orgSlug) : Promise.resolve([]),
+  ]);
 
   return (
     <AppShell
@@ -34,10 +40,11 @@ export default async function OrgMembersPage({ params }: { params: Promise<{ org
         <OrgSettingsNav orgSlug={orgSlug} orgRole={org.orgRole} current="members" />
         <h1 className="text-lg font-semibold text-text">Members</h1>
         <p className="mt-1 mb-6 text-sm text-text-muted">
-          Everyone in {org.name}. To invite someone new, share a project with their email from its
-          Share dialog.
+          Everyone in {org.name}.
+          {manages && ' Invite new people below; they join with the role you pick.'}
         </p>
         <MembersManager orgSlug={orgSlug} orgRole={org.orgRole} meId={meId} members={members} />
+        {manages && <InvitesManager orgSlug={orgSlug} orgRole={org.orgRole} invites={invites} />}
       </div>
     </AppShell>
   );

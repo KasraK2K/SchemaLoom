@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { MailModule } from '../mail/mail.module';
 import { GroupsService } from './groups.service';
+import { MemberInvitesService } from './member-invites.service';
 import { MembersService } from './members.service';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
@@ -12,8 +14,15 @@ import { RolesService } from './roles.service';
  * `toSummary`, a pure function, not a provider.
  */
 @Module({
+  imports: [MailModule],
   controllers: [OrganizationsController],
-  providers: [OrganizationsService, RolesService, MembersService, GroupsService],
+  providers: [
+    OrganizationsService,
+    RolesService,
+    MembersService,
+    GroupsService,
+    MemberInvitesService,
+  ],
   exports: [OrganizationsService],
 })
 export class OrganizationsModule {}

@@ -12,6 +12,7 @@ import type { AppEnv } from '../config/env';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { issueCsrfToken } from './csrf';
+import { SignupPolicy } from './signup-policy';
 import { burnPasswordTime, hashPassword, verifyPassword } from './password';
 import { TokensService, type SessionContext } from './tokens.service';
 import { PER_CHALLENGE, TwoFactorService } from './two-factor.service';
@@ -89,6 +90,7 @@ export class AuthService implements OnModuleInit {
     private readonly mail: MailService,
     private readonly config: ConfigService<AppEnv, true>,
     private readonly twoFactor: TwoFactorService,
+    private readonly signup: SignupPolicy,
   ) {}
 
   /** Fails the boot rather than the first login when a TTL string is malformed. */
@@ -222,22 +224,39 @@ export class AuthService implements OnModuleInit {
 
   // ------------------------------------------------------------ password auth
 
-  async register(input: { email: string; password: string; name: string }): Promise<string> {
+  /** With an invitation token the address is already proven, so no verification email. */
+  async register(input: {
+    email: string;
+    password: string;
+    name: string;
+    inviteToken?: string;
+  }): Promise<string> {
     const email = normalizeEmail(input.email);
     const passwordHash = await hashPassword(input.password);
-    let userId: string;
+    let created: { id: string; verified: boolean };
     try {
-      const user = await this.prisma.user.create({
-        data: { email, name: input.name.trim(), passwordHash },
-        select: { id: true },
-      });
-      userId = user.id;
+      created = await this.signup.createUser(
+        email,
+        { inviteToken: input.inviteToken, emailProven: false },
+        async (tx, verified) => {
+          const user = await tx.user.create({
+            data: {
+              email,
+              name: input.name.trim(),
+              passwordHash,
+              emailVerifiedAt: verified ? new Date() : null,
+            },
+            select: { id: true },
+          });
+          return { id: user.id, verified };
+        },
+      );
     } catch (error) {
       if (isUniqueViolation(error)) throw new ConflictException({ code: 'EMAIL_TAKEN' });
       throw error;
     }
-    await this.sendVerification(userId, email, input.name.trim());
-    return userId;
+    if (!created.verified) await this.sendVerification(created.id, email, input.name.trim());
+    return created.id;
   }
 
   /**
@@ -370,14 +389,16 @@ export class AuthService implements OnModuleInit {
       return existing.id;
     }
     try {
-      const created = await this.prisma.user.create({
-        data: {
-          email: consumed.email,
-          name: consumed.email.split('@')[0] ?? consumed.email,
-          emailVerifiedAt: now,
-        },
-        select: { id: true },
-      });
+      const created = await this.signup.createUser(consumed.email, { emailProven: true }, (tx) =>
+        tx.user.create({
+          data: {
+            email: consumed.email,
+            name: consumed.email.split('@')[0] ?? consumed.email,
+            emailVerifiedAt: now,
+          },
+          select: { id: true },
+        }),
+      );
       return created.id;
     } catch (error) {
       // Registered between the read and the write — the token was single-use, so this
@@ -417,15 +438,17 @@ export class AuthService implements OnModuleInit {
     const userId =
       byEmail?.id ??
       (
-        await this.prisma.user.create({
-          data: {
-            email,
-            name: profile.name,
-            avatarUrl: profile.avatarUrl,
-            emailVerifiedAt: profile.emailVerified ? new Date() : null,
-          },
-          select: { id: true },
-        })
+        await this.signup.createUser(email, { emailProven: profile.emailVerified }, (tx) =>
+          tx.user.create({
+            data: {
+              email,
+              name: profile.name,
+              avatarUrl: profile.avatarUrl,
+              emailVerifiedAt: profile.emailVerified ? new Date() : null,
+            },
+            select: { id: true },
+          }),
+        )
       ).id;
 
     await this.prisma.account.create({

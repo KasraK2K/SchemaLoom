@@ -10,6 +10,7 @@ import { githubStrategyProvider } from './github.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { googleStrategyProvider } from './google.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { SignupPolicy } from './signup-policy';
 import { TokensService } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
@@ -41,11 +42,12 @@ import { VerificationService } from './verification.service';
     JwtAuthGuard,
     ApiTokenAuthService,
     TwoFactorService,
+    SignupPolicy,
     GoogleAuthGuard,
     googleStrategyProvider,
     GitHubAuthGuard,
     githubStrategyProvider,
   ],
-  exports: [JwtAuthGuard, AuthService, TokensService],
+  exports: [JwtAuthGuard, AuthService, TokensService, SignupPolicy],
 })
 export class AuthModule {}

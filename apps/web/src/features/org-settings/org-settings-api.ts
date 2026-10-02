@@ -27,6 +27,22 @@ export async function listMembers(orgSlug: string): Promise<MemberView[]> {
   return MemberViewSchema.array().parse(await serverFetch<unknown>(`${org(orgSlug)}/members`));
 }
 
+/** `GET /organizations/:slug/invitations` — `apps/api/src/organizations/member-invites.service.ts`. */
+export const PendingInviteSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  role: orgRoleSchema,
+  invitedBy: z.string().nullable(),
+  expiresAt: z.string(),
+});
+export type PendingInvite = z.infer<typeof PendingInviteSchema>;
+
+export async function listInvites(orgSlug: string): Promise<PendingInvite[]> {
+  return PendingInviteSchema.array().parse(
+    await serverFetch<unknown>(`${org(orgSlug)}/invitations`),
+  );
+}
+
 /** The signed-in user's id, so the members list can mark (and lock) their own row. */
 export async function myUserId(): Promise<string> {
   return z.object({ id: z.string() }).parse(await serverFetch<unknown>('/auth/me')).id;

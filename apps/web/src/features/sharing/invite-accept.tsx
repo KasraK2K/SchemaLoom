@@ -139,7 +139,9 @@ export function InviteAccept({
       ) : (
         <div className="flex gap-2">
           <Button asChild>
-            <Link href={`/signup?next=${next}`}>Create an account</Link>
+            <Link href={`/signup?invite=${encodeURIComponent(token)}&next=${next}`}>
+              Create an account
+            </Link>
           </Button>
           <Button asChild variant="outline">
             <Link href={`/login?next=${next}`}>Sign in</Link>

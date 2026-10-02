@@ -61,6 +61,12 @@ export const envSchema = z
     REFRESH_TOKEN_TTL: z.string().min(1).default('30d'),
     COOKIE_DOMAIN: optionalStr,
     COOKIE_SECURE: z.preprocess((v) => (v === '' ? undefined : v), z.stringbool().optional()),
+    // Roadmap 16: `invite` lets only the first account sign up freely; everyone after needs
+    // an invitation. A hosted deploy that welcomes new teams sets `open`.
+    SIGNUP_MODE: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.enum(['invite', 'open']).default('invite'),
+    ),
 
     // oauth — both-or-neither per provider
     GOOGLE_CLIENT_ID: optionalStr,

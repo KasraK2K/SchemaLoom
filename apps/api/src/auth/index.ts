@@ -28,6 +28,7 @@ export {
 } from './subject';
 export { TokensService, type ShareSessionClaims } from './tokens.service';
 export { AuthService } from './auth.service';
+export { SignupPolicy, hashInviteToken } from './signup-policy';
 export {
   API_TOKEN_PREFIX,
   ApiTokenAuthService,

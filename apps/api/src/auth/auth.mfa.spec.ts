@@ -7,6 +7,7 @@ import { magicLinkSchema } from './auth.dto';
 import { AuthService, isMfaChallenge } from './auth.service';
 import type { TokensService } from './tokens.service';
 import type { TwoFactorService } from './two-factor.service';
+import type { SignupPolicy } from './signup-policy';
 import type { VerificationService } from './verification.service';
 
 interface UserRow {
@@ -81,6 +82,11 @@ function setup(
     {} as MailService,
     config,
     twoFactor as unknown as TwoFactorService,
+    // Open sign-up: the policy itself is covered by signup-policy.spec.ts.
+    {
+      createUser: (_email: string, _proof: unknown, create: (tx: unknown) => unknown) =>
+        create(prisma),
+    } as unknown as SignupPolicy,
   );
   return { auth, tokens, twoFactor, users };
 }

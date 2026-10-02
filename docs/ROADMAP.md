@@ -55,6 +55,7 @@ a reason to come back every week, then reach more databases and teams.
 | 13  | SQLite engine                                       | `idea`   | —                                    | Cheap second or third engine, popular with indie developers.                                                   |
 | 14  | Enterprise: SAML/OIDC SSO, audit log viewer         | `parked` | —                                    | Wait until a paying customer asks. The audit log data already exists.                                          |
 | 15  | Remaining Phase 3 login paths (magic link, TOTP…)   | `parked` | `docs/phase1/00-OVERVIEW.md` Q28     | Cut on purpose in Q28. Additive when needed.                                                                   |
+| 16  | Invite-only sign-up + org member invites            | `built`  | `docs/phase16/DESIGN.md`             | A self-hosted install should not let strangers in. The first account is the owner; everyone else is invited.   |
 
 **6a/6b verified (2026-09-30)** with pg_dump 18.6 in Docker: the api image builds, the engine's
 live spec and workflow 10 pass. That run found pg_dump 17.6+'s `\restrict` lines, which the

@@ -50,6 +50,7 @@ import { isGitHubConfigured } from './github.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { isGoogleConfigured, type OAuthUser } from './google.strategy';
 import { Public } from './public.decorator';
+import { SignupPolicy } from './signup-policy';
 import { MFA_CHALLENGE_TTL_SEC, TokensService, type DeviceSession } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
 
@@ -84,6 +85,7 @@ export class AuthController {
     private readonly tokens: TokensService,
     private readonly twoFactor: TwoFactorService,
     private readonly config: ConfigService<AppEnv, true>,
+    private readonly signup: SignupPolicy,
   ) {}
 
   private write(res: Response, bundle: SessionBundle): { csrfToken: string } {
@@ -114,6 +116,13 @@ export class AuthController {
     }
     this.write(res, outcome);
     res.redirect(web);
+  }
+
+  /** Whether the sign-up form is open to anyone right now (roadmap 16). */
+  @Public()
+  @Get('signup-policy')
+  async signupPolicy(): Promise<{ open: boolean }> {
+    return { open: await this.signup.isOpen() };
   }
 
   @Public()

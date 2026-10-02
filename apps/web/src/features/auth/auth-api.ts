@@ -86,10 +86,24 @@ export function afterFirstFactor(result: LoginResult, next: string | null): stri
   return result.mfaRequired ? `/two-factor?next=${encodeURIComponent(target)}` : target;
 }
 
+/** Roadmap 16: false once an invite-only install has its first account. */
+export async function fetchSignupOpen(): Promise<boolean> {
+  return z.object({ open: z.boolean() }).parse(await apiFetch<unknown>('/auth/signup-policy'))
+    .open;
+}
+
+/** The address an invitation link is for; the sign-up form locks its email field to it. */
+export async function fetchInvitedEmail(token: string): Promise<string> {
+  return z
+    .object({ email: z.string() })
+    .parse(await apiFetch<unknown>(`/invitations/${encodeURIComponent(token)}`)).email;
+}
+
 export async function signUp(input: {
   email: string;
   password: string;
   name: string;
+  inviteToken?: string;
 }): Promise<AuthUser> {
   const data = await apiFetch<unknown>('/auth/register', {
     method: 'POST',

@@ -16,10 +16,12 @@ import { Authenticated } from '../access';
 import { getPrincipal } from '../auth';
 import type { ProjectSummary } from '../projects';
 import { GroupsService, type GroupView } from './groups.service';
+import { MemberInvitesService, type PendingInvite } from './member-invites.service';
 import { MembersService, type MemberView } from './members.service';
 import {
   AddGroupMemberDto,
   CreateGroupDto,
+  CreateInviteDto,
   CreateOrganizationDto,
   CreateRoleDto,
   CreateWorkspaceDto,
@@ -39,6 +41,7 @@ export class OrganizationsController {
     private readonly roles: RolesService,
     private readonly members: MembersService,
     private readonly groups: GroupsService,
+    private readonly invites: MemberInvitesService,
   ) {}
 
   /**
@@ -203,6 +206,55 @@ export class OrganizationsController {
     @Param('userId') userId: string,
   ): Promise<void> {
     await this.members.remove(this.userId(req), orgSlug, userId);
+  }
+
+  /**
+   * Roadmap 16 — org invites. Same marker and membership-first rule as the member routes;
+   * `MemberInvitesService` applies owner/admin, and owners-only for an owner invite.
+   */
+  @ApiOperation({ summary: 'Pending org invitations (owner or admin)' })
+  @Authenticated()
+  @Get(':orgSlug/invitations')
+  async listInvites(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+  ): Promise<PendingInvite[]> {
+    return this.invites.list(this.userId(req), orgSlug);
+  }
+
+  @ApiOperation({ summary: 'Invite someone to the organisation by email (owner or admin)' })
+  @Authenticated()
+  @Post(':orgSlug/invitations')
+  async createInvite(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Body() dto: CreateInviteDto,
+  ): Promise<PendingInvite> {
+    return this.invites.create(this.userId(req), orgSlug, dto.email, dto.role);
+  }
+
+  @ApiOperation({ summary: 'Send an org invitation again with a new link (owner or admin)' })
+  @Authenticated()
+  @HttpCode(200)
+  @Post(':orgSlug/invitations/:invitationId/resend')
+  async resendInvite(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('invitationId') invitationId: string,
+  ): Promise<PendingInvite> {
+    return this.invites.resend(this.userId(req), orgSlug, invitationId);
+  }
+
+  @ApiOperation({ summary: 'Revoke an org invitation (owner or admin)' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete(':orgSlug/invitations/:invitationId')
+  async revokeInvite(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('invitationId') invitationId: string,
+  ): Promise<void> {
+    await this.invites.revoke(this.userId(req), orgSlug, invitationId);
   }
 
   @ApiOperation({ summary: 'Groups of the organisation with their members' })

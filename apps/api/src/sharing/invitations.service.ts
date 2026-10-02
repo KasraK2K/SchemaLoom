@@ -1,10 +1,17 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { BUILT_IN_ROLE_ORDER } from '@schemaloom/contracts';
+import { BUILT_IN_ROLE_ORDER, type OrgRole } from '@schemaloom/contracts';
 import { PermissionResolver } from '../access';
 import { PrincipalType } from '../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { lockProject, type Tx } from './access-write';
 import { hashInviteToken } from './grants.service';
+
+const ORG_ROLE_NAMES: Record<OrgRole, string> = {
+  owner: 'Owner',
+  admin: 'Admin',
+  member: 'Member',
+  guest: 'Guest',
+};
 
 export interface InvitationView {
   organizationName: string;
@@ -87,7 +94,9 @@ export class InvitationsService {
     return {
       organizationName: inv.organization.name,
       email: inv.email,
-      roleName: grant?.role.name ?? null,
+      // An org invite (roadmap 16) carries an org role instead of a project role.
+      roleName:
+        grant?.role.name ?? (inv.accessGrantId === null ? ORG_ROLE_NAMES[inv.orgRole] : null),
     };
   }
 

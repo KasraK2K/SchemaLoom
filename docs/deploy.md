@@ -94,6 +94,11 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
 | `ANTHROPIC_API_KEY`                                                                | optional. Without it, the AI routes answer 503.                                                                                                                                                                                                              |
 | `INTROSPECT_ALLOW_PRIVATE_HOSTS`                                                   | "Read a database" refuses private and internal addresses (RFC 1918, loopback, link-local, the cloud metadata address) unless this is `true`. Keep it `false` on a service open to the internet. The api image ships `pg_dump` (`PG_CLIENT_MAJOR` build arg). |
 | `INTROSPECTION_ENABLED`                                                            | optional, default `true`. `false` removes "Read a database" and the drift check (their routes answer 404).                                                                                                                                                   |
+| `SIGNUP_MODE`                                                                      | optional, default `invite`: only the first account signs up freely (it becomes the owner of the org it creates), and everyone after joins through an invitation from Settings → Members. Set `open` for a hosted service where anyone may sign up.           |
+
+**Upgrading an install that relied on open sign-up:** from roadmap 16 on, sign-up closes once
+an account exists. Existing accounts keep working. To keep letting strangers sign up, set
+`SIGNUP_MODE=open`.
 
 **Changing `SECRETS_ENCRYPTION_KEY`** makes everything encrypted under the old key unreadable,
 including saved database connections (`docs/phase6/SAVED-CONNECTIONS.md`). There is no

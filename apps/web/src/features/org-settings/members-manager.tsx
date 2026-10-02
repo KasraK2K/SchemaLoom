@@ -8,7 +8,7 @@ import { apiFetch } from '@/lib/api-client';
 import { orgAdminMessage } from './messages';
 import type { MemberView } from './org-settings-api';
 
-const ROLE_LABELS: Record<OrgRole, string> = {
+export const ROLE_LABELS: Record<OrgRole, string> = {
   owner: 'Owner',
   admin: 'Admin',
   member: 'Member',

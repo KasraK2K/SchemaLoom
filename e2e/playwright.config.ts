@@ -40,6 +40,8 @@ export default defineConfig({
         NODE_ENV: 'production',
         // Phase 6: workflow 10 reads the e2e database, which is on localhost.
         INTROSPECT_ALLOW_PRIVATE_HOSTS: 'true',
+        // Roadmap 16: workflow 1 signs up strangers; workflow 13 covers invite-only.
+        SIGNUP_MODE: 'open',
       },
     },
     {

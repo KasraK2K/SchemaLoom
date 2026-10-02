@@ -31,6 +31,9 @@ export class UpdateRoleDto extends createZodDto(updateRoleSchema) {}
 export const updateMemberSchema = z.object({ role: orgRoleSchema });
 export class UpdateMemberDto extends createZodDto(updateMemberSchema) {}
 
+export const createInviteSchema = z.object({ email: z.email().max(254), role: orgRoleSchema });
+export class CreateInviteDto extends createZodDto(createInviteSchema) {}
+
 const groupName = z.string().trim().min(1).max(120);
 const groupDescription = z.string().trim().max(500).nullable();
 

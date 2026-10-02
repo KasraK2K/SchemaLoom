@@ -109,6 +109,10 @@ Then edit it:
   `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` for Google sign-in (callback
   `https://app.example.com/api/auth/google/callback`).
 - **`COOKIE_DOMAIN`:** leave it unset. With one host, every cookie stays host-only.
+- **Who can sign up:** by default (`SIGNUP_MODE=invite`) only the first person to sign up gets
+  in on their own. That account creates the organisation and is its owner; invite everyone else
+  from **Settings → Members**. Sign up yourself right after the first start. Set
+  `SIGNUP_MODE=open` only if anyone who reaches the site should be able to create an account.
 - **Reading databases on your own network:** "Read a database" refuses private addresses
   (`10.x`, `192.168.x`, `localhost`, …) by default. If the databases you want to import live on
   your network, set `INTROSPECT_ALLOW_PRIVATE_HOSTS=true`. Every read is written to the audit log.
@@ -304,6 +308,9 @@ sudo systemctl restart schemaloom-web
 ```
 
 Always run `migrate` before starting the new api.
+
+Updating from a version before invite-only sign-up (roadmap 16) closes sign-up for new people
+unless `.env` has `SIGNUP_MODE=open`. Existing accounts are not affected.
 
 If the release bumps an engine's **major** version, projects on the old major open read-only
 until their stored props are converted. Run this once after the new api is up; it prints one

@@ -6,6 +6,7 @@ export function orgAdminMessage(error: unknown): string {
   if (error.code === 'last_owner') {
     return 'An organisation needs at least one owner. Make someone else an owner first.';
   }
+  if (error.code === 'already_member') return 'That person is already a member.';
   if (error.code === 'own_role') {
     return 'You cannot change your own role. Ask another owner to do it.';
   }

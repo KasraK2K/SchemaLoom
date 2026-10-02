@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -16,6 +16,7 @@ import {
   type ResourceRef,
   type Subject,
 } from '../access';
+import { hashInviteToken } from '../auth';
 import { PrincipalType } from '../generated/prisma/enums';
 import { MailService } from '../mail/mail.service';
 import { NotificationsService, type CreatedNotification } from '../notifications';
@@ -75,10 +76,8 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** The shape `access_grants_email_shape_ck` enforces, checked first so it is a 400. */
 const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-/** Same scheme as `VerificationService`: only `sha256(token)` is stored. */
-export function hashInviteToken(raw: string): string {
-  return createHash('sha256').update(raw).digest('hex');
-}
+/** Lives with the sign-up policy, which checks invitation tokens too. */
+export { hashInviteToken };
 
 /**
  * Doc 05 §7.7 ("Who has access"), §7.14 (the grant write path) and R4/R4a.
