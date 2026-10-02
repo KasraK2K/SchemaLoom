@@ -19,6 +19,9 @@
     "db:seed": "turbo db:seed",
     "infra:up": "docker compose up -d postgres redis minio mailpit",
     "infra:down": "docker compose down",
+    "app:up": "docker compose up -d --build",
+    "app:down": "docker compose down",
+    "app:logs": "docker compose logs -f migrate api web proxy",
     "format": "prettier --write ."
   },
   "devDependencies": {

@@ -97,11 +97,11 @@ Fill in the four secrets as described below. Without Node, use
 `docker run --rm node:22-alpine node -e "…"` in place of `node -e "…"`. Then:
 
 ```bash
-docker compose up -d
+pnpm app:up
 ```
 
-The first run builds the images, which takes a few minutes. After pulling a newer version, run
-`docker compose up -d --build`. Open <http://localhost:8080>. Sign-up emails land in Mailpit at <http://localhost:8025>. The
+(`docker compose up -d --build` without pnpm.) The first run builds the images, which takes
+a few minutes; rerun it after pulling a newer version. Open <http://localhost:8080>. Sign-up emails land in Mailpit at <http://localhost:8025>. The
 api image includes `pg_dump`, so **Read a database** (with SSH tunnels and certificate files)
 works as is. To read a database running on your own machine, use `host.docker.internal` as
 the host.
@@ -199,7 +199,8 @@ Dependency edges only ever point downward; `schema-model` depends on nothing but
 | `pnpm test:e2e`                | Playwright against built apps                       |
 | `pnpm typecheck`               | `tsc --noEmit` everywhere                           |
 | `pnpm lint`                    | ESLint, type-aware                                  |
-| `pnpm infra:up` / `infra:down` | Docker services                                     |
+| `pnpm infra:up` / `infra:down` | Docker services only (pair with `pnpm dev`)         |
+| `pnpm app:up` / `app:down`     | Whole app in Docker on :8080 (`app:logs` to follow) |
 
 `test` excludes `*.int.spec.ts` on purpose: integration tests need Docker and a live
 database, which would make `pnpm test` uncacheable and unrunnable on a clean machine.
