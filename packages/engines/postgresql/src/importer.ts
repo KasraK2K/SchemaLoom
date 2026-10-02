@@ -1,6 +1,7 @@
 import type {
   Diagnostic,
   ImportContext,
+  ImportedDoc,
   ImportOptions,
   ImportReport,
   ImportResult,
@@ -12,6 +13,7 @@ import type {
   SchemaModel,
 } from '@schemaloom/engine-sdk';
 import { CAPABILITIES } from './capabilities.js';
+import { commentDoc } from './import-comments.js';
 import { ImportModel } from './import-model.js';
 import { statementsOf } from './import-ast.js';
 import { seatReferences } from './import-refs.js';
@@ -64,8 +66,11 @@ interface StatementState {
   readonly produced: IrObjectRef[];
   readonly losses: string[];
   failure: string | null;
-  /** pass 3 folded this statement into a serial column (`import-serial.ts`) */
+  /** pass 3 folded this statement into a serial column (`import-serial.ts`), or pass 4
+   *  turned a COMMENT into a doc */
   absorbed: boolean;
+  /** why an ignored statement was ignored, when more specific than its classification */
+  note?: string;
 }
 
 function parseErrorMessage(error: unknown): string {
@@ -90,7 +95,10 @@ function statusOf(state: StatementState): { status: ImportStatementStatus; reaso
   if (state.failure !== null) return { status: 'failed', reason: state.failure };
   if (state.absorbed) return { status: 'applied', reason: null };
   if (classification.phase === 'ignored') {
-    return { status: 'ignored', reason: classification.reason ?? 'not part of the schema model' };
+    return {
+      status: 'ignored',
+      reason: state.note ?? classification.reason ?? 'not part of the schema model',
+    };
   }
   if (classification.phase === 'unsupported') {
     return {
@@ -209,6 +217,21 @@ async function importDdl(
     if (!state.produced.some((p) => p.id === ref.id)) state.produced.push(ref);
   }
 
+  // --- pass 4: COMMENT ON a table, view or column → a doc on it (last one wins) -----------
+  const docs = new Map<string, ImportedDoc>();
+  for (const state of states) {
+    if (state.parsed.parseError !== null || state.parsed.classification.kind !== 'COMMENT') {
+      continue;
+    }
+    const doc = commentDoc(state.parsed.statement, model);
+    if (typeof doc === 'string') {
+      state.note = doc;
+    } else {
+      docs.set(doc.target.id, doc);
+      state.absorbed = true;
+    }
+  }
+
   // --- report ----------------------------------------------------------------------------
   const countsByStatus = emptyCounts();
   const statements: ImportStatementReport[] = states.map((state, ordinal) => {
@@ -253,7 +276,7 @@ async function importDdl(
     truncated,
   };
 
-  return { model: built, report, diagnostics };
+  return { model: built, report, diagnostics, docs: [...docs.values()] };
 }
 
 export const IMPORTER: Importer = {

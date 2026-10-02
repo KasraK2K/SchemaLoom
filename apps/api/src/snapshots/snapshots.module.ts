@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DocsModule } from '../docs';
 import { NotificationsModule } from '../notifications';
 import { SchemaModule } from '../schema';
 import { ChangeRequestsController } from './change-requests.controller';
@@ -16,7 +17,7 @@ import { SnapshotsService } from './snapshots.service';
  * unrelated set of providers and a second permission cache.
  */
 @Module({
-  imports: [SchemaModule, NotificationsModule],
+  imports: [SchemaModule, NotificationsModule, DocsModule],
   controllers: [SnapshotsController, ImportController, ChangeRequestsController],
   providers: [SnapshotsService, ChangeRequestsService],
   exports: [SnapshotsService],

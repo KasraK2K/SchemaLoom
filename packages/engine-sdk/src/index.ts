@@ -148,6 +148,7 @@ export { checkLink, type LinkCheck, type LinkCheckInput, type LinkCheckReason } 
 export {
   IMPORT_STATEMENT_STATUSES,
   type ImportContext,
+  type ImportedDoc,
   type ImportOptions,
   type ImportReport,
   type ImportResult,

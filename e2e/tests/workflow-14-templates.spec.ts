@@ -70,4 +70,49 @@ test.describe('workflow 14 — templates and the first-run canvas', () => {
     await page.getByLabel('Load a template').selectOption('blog');
     await expect(page.getByRole('textbox', { name: 'SQL' })).toHaveValue(/CREATE TABLE posts/);
   });
+
+  test('COMMENT ON in imported SQL becomes docs, and a hand-written doc is kept', async () => {
+    const owner = await signIn(SEED_EMAILS.owner);
+    const created = await owner.api.post('/api/projects', {
+      headers: write(owner),
+      data: {
+        organizationId: SEED.orgId,
+        name: `Comments ${String(Date.now())}`,
+        engineId: 'postgresql',
+        engineVersion: '16',
+      },
+    });
+    const projectId = ((await created.json()) as { id: string }).id;
+    const importSql = (source: string) =>
+      owner.api.post(`/api/projects/${projectId}/import`, {
+        headers: write(owner),
+        data: { source },
+      });
+    const docs = async () =>
+      (
+        (await (await owner.api.get(`/api/projects/${projectId}/docs`)).json()) as {
+          docs: { targetType: string; plainText: string }[];
+        }
+      ).docs
+        .filter((d) => d.targetType !== 'project')
+        .map((d) => d.plainText)
+        .sort();
+
+    const first = await importSql(
+      'CREATE TABLE orders (id bigint PRIMARY KEY, total numeric);\n' +
+        "COMMENT ON TABLE orders IS 'One row per order';\n" +
+        "COMMENT ON COLUMN orders.total IS 'Gross, in cents';",
+    );
+    expect(first.status(), await first.text()).toBe(201);
+    expect(((await first.json()) as { documented: number }).documented).toBe(2);
+    expect(await docs()).toEqual(['Gross, in cents', 'One row per order']);
+
+    // Re-importing a different comment does not replace the doc that exists.
+    const again = await importSql(
+      'CREATE TABLE orders (id bigint PRIMARY KEY, total numeric);\n' +
+        "COMMENT ON TABLE orders IS 'Something else';",
+    );
+    expect(((await again.json()) as { documented: number }).documented).toBe(0);
+    expect(await docs()).toEqual(['Gross, in cents', 'One row per order']);
+  });
 });

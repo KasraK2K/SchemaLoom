@@ -193,6 +193,56 @@ export class DocsService {
     return toView(row, type, targetId, true);
   }
 
+  /**
+   * SQL import's comments (`ImportResult.docs`), written as docs ADDITIVELY like the rest of
+   * an import: a target that already has a doc keeps it, and only targets the caller can
+   * see and holds `docs:edit` on are written. One read, one insert, one broadcast.
+   *
+   * @returns how many docs were created
+   */
+  async importDocs(
+    subject: Subject,
+    projectId: string,
+    docs: readonly { targetType: 'entity' | 'field'; targetId: string; text: string }[],
+  ): Promise<number> {
+    if (subject.kind !== 'user' || docs.length === 0) return 0;
+    const view = await this.view(subject, projectId);
+    const documented = new Set(
+      (
+        await this.prisma.doc.findMany({
+          where: { projectId, targetId: { in: docs.map((d) => d.targetId) } },
+          select: { targetId: true },
+        })
+      ).map((row) => row.targetId),
+    );
+    const writable = docs.filter(
+      (d) =>
+        !documented.has(d.targetId) &&
+        targetVisible(view.redacted, projectId, d.targetType, d.targetId) &&
+        this.canEdit(view, d.targetType, d.targetId),
+    );
+    if (writable.length === 0) return 0;
+    const { count } = await this.prisma.doc.createMany({
+      data: writable.map((d) => {
+        const content = parseContent(textToRichText(d.text));
+        return {
+          id: randomUUID(),
+          projectId,
+          targetType: d.targetType,
+          targetId: d.targetId,
+          content: content as Prisma.InputJsonValue,
+          plainText: docPlainText(content),
+          updatedById: subject.userId,
+          version: 1,
+        };
+      }),
+      // A doc written since the read above wins too: the `(target_type, target_id)` index.
+      skipDuplicates: true,
+    });
+    if (count > 0) await this.broadcast(projectId, subject.userId);
+    return count;
+  }
+
   // -------------------------------------------------------------------------------------
 
   private async view(
@@ -259,6 +309,18 @@ function parseContent(raw: unknown): Record<string, unknown> {
   const parsed = clean === null ? null : richTextSchema.safeParse(clean);
   if (parsed?.success !== true) throw new BadRequestException({ code: 'invalid_doc_content' });
   return parsed.data;
+}
+
+/** A comment's plain text as TipTap JSON: one paragraph per non-blank line. */
+function textToRichText(text: string): unknown {
+  return {
+    type: 'doc',
+    content: text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== '')
+      .map((line) => ({ type: 'paragraph', content: [{ type: 'text', text: line }] })),
+  };
 }
 
 /** Undefined = leave as stored; null = clear. Facts exist for entities and fields only. */

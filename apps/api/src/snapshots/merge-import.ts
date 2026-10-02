@@ -14,6 +14,9 @@ export interface MergedImport {
   /** The imported model with every matched object carrying its LIVE id (keys too), for
    *  the rename generator and for validating confirmed renames against. */
   readonly imported: SchemaModel;
+  /** Imported id → live id, for every imported object live already had. An unmatched
+   *  object is written with its imported id, so `liveIds.get(id) ?? id` is where it lives. */
+  readonly liveIds: ReadonlyMap<string, string>;
 }
 
 /**
@@ -130,5 +133,6 @@ export function mergeImport(live: LiveIr, imported: SchemaModel): MergedImport {
     model: blobToLive({ ...live, objects }),
     existing,
     imported: { ...retargeted, objects: rekeyed },
+    liveIds: liveIdOf,
   };
 }

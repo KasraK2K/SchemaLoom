@@ -88,6 +88,17 @@ export interface ImportResult {
   readonly model: SchemaModel;
   readonly report: ImportReport;
   readonly diagnostics: readonly Diagnostic[];
+  /** Comments in the source (PostgreSQL's `COMMENT ON`) on entities and fields of `model`.
+   *  Docs are server-owned, so they ride beside the IR rather than in it; core writes them
+   *  as docs, additively (a target that already has a doc keeps it). */
+  readonly docs?: readonly ImportedDoc[];
+}
+
+export interface ImportedDoc {
+  /** an entity or field in `ImportResult.model` — the only IR objects that carry docs */
+  readonly target: { readonly type: 'entity' | 'field'; readonly id: Id };
+  /** plain text, as written in the source */
+  readonly text: string;
 }
 
 export interface Importer {

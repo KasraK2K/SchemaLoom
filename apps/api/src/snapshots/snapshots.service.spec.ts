@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
-import type { EngineDefinition, EngineRegistry } from '@schemaloom/engine-sdk';
+import type { EngineDefinition, EngineRegistry, ImportedDoc } from '@schemaloom/engine-sdk';
 import {
   redact,
   type RawSchemaModel,
@@ -13,6 +13,7 @@ import type {
   ProjectSkeleton,
   VisibilityFilter,
 } from '../access';
+import type { DocsService } from '../docs';
 import { EngineGate } from '../engines';
 import { ENGINE_MANIFEST } from '../engines/engines.manifest';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -61,6 +62,7 @@ interface Harness {
   /** Make every project read AFTER the next one report a bumped `schemaRevision`. */
   readonly drift: () => void;
   readonly writeCalls: () => string[];
+  readonly importDocs: Mock<DocsService['importDocs']>;
 }
 
 function harness(
@@ -69,6 +71,8 @@ function harness(
     context?: Partial<VisibilityContext>;
     engine?: string;
     imported?: SchemaModel;
+    /** `ImportResult.docs` from the fake importer */
+    importedDocs?: readonly ImportedDoc[];
     /** the real registered engine, for the migration routes */
     realEngine?: boolean;
   } = {},
@@ -160,6 +164,10 @@ function harness(
     };
   });
 
+  const importDocs = vi.fn<DocsService['importDocs']>((_s, _p, docs) =>
+    Promise.resolve(docs.length),
+  );
+
   const gate = new EngineGate({
     tryGet: () => ({ version: over.engine ?? '1.0.0' }) as unknown as EngineDefinition,
   } as unknown as EngineRegistry);
@@ -182,7 +190,11 @@ function harness(
                 },
                 importer: {
                   import: () =>
-                    Promise.resolve({ model: over.imported, report: { statementCount: 1 } }),
+                    Promise.resolve({
+                      model: over.imported,
+                      report: { statementCount: 1 },
+                      docs: over.importedDocs,
+                    }),
                 },
               } as unknown as EngineDefinition),
       } as unknown as EngineRegistry,
@@ -190,7 +202,9 @@ function harness(
         resolveProject: () => Promise.resolve(CTX.map),
         skeleton: () => Promise.resolve(CTX.skel),
       } as unknown as PermissionResolver,
+      { importDocs } as unknown as DocsService,
     ),
+    importDocs,
     apply,
     rows,
     store: fake.store,
@@ -427,6 +441,36 @@ describe('SnapshotsService.importSource', () => {
 
     expect(h.apply.mock.calls.map(([batch]) => batch.ops.length)).toEqual([2000, 1000]);
     expect(skeleton).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands comments to the docs module under LIVE ids, after the schema writes', async () => {
+    // The imported `ent_x` matches live `ent_a` by key; `ent_new` is created as is.
+    const imported = JSON.parse(
+      JSON.stringify(
+        await liveFrom(storeOf({ entity: [entityRow('ent_a'), entityRow('ent_new')] })),
+      )
+        .replaceAll('"ns_public"', '"ns_imported"')
+        .replaceAll('"ent_a"', '"ent_x"'),
+    ) as SchemaModel;
+    const named = imported.objects.entity.ent_x;
+    if (named !== undefined) imported.objects.entity.ent_x = { ...named, name: 'ent_a' };
+    const h = harness(storeOf({ entity: [entityRow('ent_a')] }), {
+      imported,
+      importedDocs: [
+        { target: { type: 'entity', id: 'ent_x' }, text: 'existing table' },
+        { target: { type: 'entity', id: 'ent_new' }, text: 'new table' },
+      ],
+    });
+
+    const outcome = await h.service.importSource(CTX, 'CREATE TABLE …');
+
+    expect(h.importDocs).toHaveBeenCalledWith(CTX.subject, CTX.projectId, [
+      { targetType: 'entity', targetId: 'ent_a', text: 'existing table' },
+      { targetType: 'entity', targetId: 'ent_new', text: 'new table' },
+    ]);
+    expect(outcome.documented).toBe(2);
+    const docsCall = h.importDocs.mock.invocationCallOrder[0] ?? 0;
+    expect(docsCall).toBeGreaterThan(h.apply.mock.invocationCallOrder[0] ?? Infinity);
   });
 });
 

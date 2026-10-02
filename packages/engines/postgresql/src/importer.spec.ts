@@ -223,14 +223,14 @@ describe('the report accounts for every statement (§9.1)', () => {
       { kind: 'TRANSACTION', status: 'ignored' },
       { kind: 'CREATE TABLE', status: 'applied' },
       { kind: 'CREATE TRIGGER', status: 'unsupported' },
-      { kind: 'COMMENT', status: 'ignored' },
+      { kind: 'COMMENT', status: 'applied' },
       { kind: 'ALTER TABLE', status: 'partial' },
       { kind: 'unparsed', status: 'failed' },
       { kind: 'TRANSACTION', status: 'ignored' },
     ]);
 
     // "3 statements could not be applied" is this subtraction and nothing else (§9.1).
-    expect(report.statementCount - report.countsByStatus.applied).toBe(7);
+    expect(report.statementCount - report.countsByStatus.applied).toBe(6);
 
     for (const statement of report.statements) {
       if (statement.status === 'applied') continue;
@@ -412,6 +412,49 @@ ALTER TABLE ONLY public.customers ALTER COLUMN email SET DEFAULT ''::text;
     expect(notApplied).toEqual([
       'CREATE SEQUENCE public.tickets_id_seq AS',
       'ALTER SEQUENCE public.tickets_id_seq OWN',
+    ]);
+  });
+});
+
+describe('COMMENT ON becomes a doc (roadmap 12 follow-up)', () => {
+  const source = `
+CREATE TABLE public.orders (id bigint PRIMARY KEY, total numeric NOT NULL);
+CREATE VIEW public.big_orders AS SELECT id FROM public.orders WHERE total > 100;
+COMMENT ON TABLE orders IS 'One row per order';
+COMMENT ON COLUMN public.orders.total IS 'Gross, in cents';
+COMMENT ON VIEW public.big_orders IS 'Orders over 100';
+COMMENT ON TABLE orders IS 'Replaced: the last comment wins';
+COMMENT ON TABLE public.elsewhere IS 'Not in this file';
+COMMENT ON INDEX orders_pkey IS 'Indexes carry no docs';
+COMMENT ON COLUMN orders.id IS NULL;
+`;
+
+  it('documents tables, views and columns defined in the same source', async () => {
+    const { model, docs } = await importDdl(source);
+    const entities = byName(model.objects.entity);
+    const orders = entities.get('orders');
+    const total = Object.values(model.objects.field).find((f) => f.name === 'total');
+    expect(docs).toEqual([
+      {
+        target: { type: 'entity', id: orders?.id },
+        text: 'Replaced: the last comment wins',
+      },
+      { target: { type: 'field', id: total?.id }, text: 'Gross, in cents' },
+      { target: { type: 'entity', id: entities.get('big_orders')?.id }, text: 'Orders over 100' },
+    ]);
+  });
+
+  it('says why each other comment adds no doc', async () => {
+    const { report } = await importDdl(source);
+    const comments = report.statements.filter((s) => s.kind === 'COMMENT');
+    expect(comments.map((s) => [s.status, s.reason])).toEqual([
+      ['applied', null],
+      ['applied', null],
+      ['applied', null],
+      ['applied', null],
+      ['ignored', 'The commented object is not defined in this source'],
+      ['ignored', 'Only tables, views and columns carry docs in SchemaLoom'],
+      ['ignored', 'An empty comment adds no doc'],
     ]);
   });
 });

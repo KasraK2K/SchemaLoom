@@ -148,6 +148,12 @@ export const IMPORT_CHECKS: readonly ConformanceCheck[] = [
         problems.push(
           ...assertReportShape(result.report, result.model).map((p) => `${fixture.name}: ${p}`),
         );
+        // An imported doc names an entity or field of the model it came with.
+        for (const doc of result.docs ?? []) {
+          if (result.model.objects[doc.target.type][doc.target.id] === undefined) {
+            problems.push(`${fixture.name}: doc for missing ${doc.target.type} ${doc.target.id}`);
+          }
+        }
 
         // `objectCounts` drives "will create 12 tables, 34 columns, 8 links" (§9.1), so it
         // has to be the truth about the model and not a running tally that drifted.

@@ -74,3 +74,7 @@ Small fixes that don't need a design doc. Pick one up freely.
 - None open. Area-scoped export (Q29) was built 2026-10-01: `POST /areas/:id/exports` for
   server formats, plus a Scope choice in the Export menu. Images stay project-only, because
   the browser canvas is not cut to one area.
+- Built 2026-10-02: `COMMENT ON` in imported SQL becomes docs (`docs/phase12/DESIGN.md` §5).
+  Tables, views and columns defined in the same source get a doc; existing docs are never
+  replaced, and only callers with `docs:edit` write them. A comment on a table that is not in
+  the source (a migration commenting on an existing table) is still reported as ignored.

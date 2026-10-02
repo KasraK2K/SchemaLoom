@@ -246,6 +246,45 @@ describe('DocsService.write', () => {
   });
 });
 
+describe('DocsService.importDocs (SQL import comments)', () => {
+  const docs = [
+    { targetType: 'entity' as const, targetId: 'ent_open', text: 'Orders\n\nOne row each' },
+    { targetType: 'field' as const, targetId: 'fld_name', text: 'Customer name' },
+    { targetType: 'field' as const, targetId: 'fld_sal', text: 'Salary' },
+    { targetType: 'entity' as const, targetId: 'ent_secret', text: 'Payroll' },
+  ];
+
+  it('writes only visible, editable, undocumented targets, as paragraphs', async () => {
+    const { db, next, service } = setup([docRow('field', 'fld_name', 'Written by hand')]);
+    // Eve edits `ent_open` (and so its fields); `fld_sal` is masked and `ent_secret` a stub.
+    expect(await service.importDocs(user('eve'), P, docs)).toBe(1);
+
+    const created = db.store.doc?.find((r) => r.targetId === 'ent_open');
+    expect(created).toMatchObject({
+      targetType: 'entity',
+      plainText: docPlainText(created?.content),
+      version: 1,
+    });
+    expect(created?.content).toEqual({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Orders' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'One row each' }] },
+      ],
+    });
+    // The hand-written doc is untouched.
+    expect(db.store.doc?.find((r) => r.targetId === 'fld_name')?.plainText).toBe('Written by hand');
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes nothing for a viewer or a share link, and broadcasts nothing', async () => {
+    const { next, service } = setup();
+    expect(await service.importDocs(user('bob'), P, docs)).toBe(0);
+    expect(await service.importDocs(link, P, docs)).toBe(0);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
 describe('sanitizeRichText', () => {
   it('strips unknown nodes, marks and attributes, and unsafe links', () => {
     const dirty = {

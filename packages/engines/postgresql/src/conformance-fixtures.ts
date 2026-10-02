@@ -322,7 +322,6 @@ export const CONFORMANCE_FIXTURES: ConformanceFixtures = {
       source: MIXED_DDL,
       expectNotApplied: [
         'ALTER TABLE', // EXCLUDE: partial
-        'COMMENT', // ignored
         'CREATE TRIGGER', // unsupported
         'SET', // ignored
         'TRANSACTION', // ignored (BEGIN)

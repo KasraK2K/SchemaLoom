@@ -132,7 +132,9 @@ protected) and engine gate. **No migration.**
 - **Docs in templates.** `COMMENT ON` is "ignored" by the importer today (the reason string
   says the docs module should import it, and it doesn't yet). Templates ship without object
   docs. Importing comments into docs is its own small feature, and it helps every import, not
-  just templates.
+  just templates. _Built 2026-10-02 as a follow-up:_ the importer returns `ImportResult.docs`
+  and `SnapshotsService.importSource` writes them through `DocsService.importDocs`, additively.
+  The templates themselves still carry no comments.
 - **Areas in templates.** SQL can't carry SchemaLoom areas. A template could later grow an
   `areas: { name, tables[] }[]` field applied after import; not now.
 - **Auto-creating a sample project** for every new org. That clutters real orgs, and in

@@ -67,7 +67,8 @@ const IGNORED: Readonly<Record<string, { kind: string; reason: string }>> = {
   },
   CommentStmt: {
     kind: 'COMMENT',
-    reason: 'Comments are imported by the documentation module, not by the schema model',
+    // Replaced per statement when pass 4 can't turn it into a doc (`import-comments.ts`).
+    reason: 'Comments become docs only on tables, views and columns',
   },
   SelectStmt: { kind: 'SELECT', reason: 'A query does not describe the schema' },
   GrantStmt: { kind: 'GRANT', reason: 'Privileges are managed by SchemaLoom, not by the schema' },

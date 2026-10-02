@@ -13,6 +13,7 @@ import {
   type DiagnosticParam,
   type EngineDefinition,
   type EngineRegistry,
+  type ImportedDoc,
   type ImportReport,
   type IrObjectRef,
   type MigrationPlan,
@@ -38,6 +39,7 @@ import {
   type ProjectSkeleton,
 } from '../access';
 import type { Subject } from '../auth';
+import { DocsService } from '../docs';
 import { ENGINE_REGISTRY, EngineGate } from '../engines';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -297,6 +299,8 @@ export interface ImportOutcome {
   readonly report: ImportReport;
   /** Imported tables that already existed and were left unchanged. */
   readonly existing: readonly string[];
+  /** Docs created from the source's comments (existing docs are never replaced). */
+  readonly documented: number;
 }
 
 type BeforeWrite = NonNullable<WriteContext['beforeWrite']>;
@@ -320,6 +324,7 @@ export class SnapshotsService {
     private readonly gate: EngineGate,
     @Inject(ENGINE_REGISTRY) private readonly registry: EngineRegistry,
     private readonly resolver: PermissionResolver,
+    private readonly docs: DocsService,
   ) {}
 
   /**
@@ -659,7 +664,7 @@ export class SnapshotsService {
     maxBytes: number = SYNC_IMPORT_MAX_BYTES,
     renames: readonly ConfirmedRename[] = [],
   ): Promise<ImportOutcome> {
-    const { project, model, report } = await this.parseSource(ctx, source, maxBytes);
+    const { project, model, report, docs } = await this.parseSource(ctx, source, maxBytes);
 
     let merged = mergeImport(project.live, model);
     const renaming = renames.length === 0 ? [] : renameOps(project.live, merged.imported, renames);
@@ -700,10 +705,21 @@ export class SnapshotsService {
       if (i > 0) await reload();
       result = await this.write(batchCtx, current, batch, 'import', snapshotOnce());
     }
+    // After the schema: every target now exists, under its live id.
+    const documented = await this.docs.importDocs(
+      ctx.subject,
+      ctx.projectId,
+      docs.map((d) => ({
+        targetType: d.target.type,
+        targetId: merged.liveIds.get(d.target.id) ?? d.target.id,
+        text: d.text,
+      })),
+    );
     return {
       result: result ?? this.noop(ctx, randomUUID(), project),
       report,
       existing: merged.existing,
+      documented,
     };
   }
 
@@ -764,6 +780,7 @@ export class SnapshotsService {
     project: LiveProject;
     model: SchemaModel;
     report: ImportReport;
+    docs: readonly ImportedDoc[];
     engine: EngineDefinition;
   }> {
     const visibility = this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel);
@@ -781,6 +798,7 @@ export class SnapshotsService {
     project: LiveProject;
     model: SchemaModel;
     report: ImportReport;
+    docs: readonly ImportedDoc[];
     engine: EngineDefinition;
   }> {
     if (Buffer.byteLength(source, 'utf8') > maxBytes) {
@@ -794,7 +812,11 @@ export class SnapshotsService {
       throw new UnprocessableEntityException({ code: 'engine.import_unavailable' });
     }
 
-    const { model, report } = await engine.importer.import(
+    const {
+      model,
+      report,
+      docs = [],
+    } = await engine.importer.import(
       source,
       {
         format: format.id,
@@ -807,7 +829,7 @@ export class SnapshotsService {
       },
       { projectId, serverVersion: project.live.engineVersion, newId: randomUUID },
     );
-    return { project, model, report, engine };
+    return { project, model, report, docs, engine };
   }
 
   /** Q4 — the snapshot written inside the batch it precedes (see `auto-snapshot.ts`). */

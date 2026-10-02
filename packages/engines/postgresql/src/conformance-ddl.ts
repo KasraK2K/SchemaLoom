@@ -82,7 +82,7 @@ CREATE TABLE public.invoices (
 CREATE TRIGGER invoices_audit AFTER INSERT ON public.invoices
   FOR EACH ROW EXECUTE FUNCTION audit_row();
 
--- Understood, re-applied by the docs module rather than the schema model.
+-- Becomes a doc on the table (the API writes it), so it counts as applied.
 COMMENT ON TABLE public.invoices IS 'One row per invoice';
 
 -- Represented with loss: EXCLUDE has no place in the IR.
