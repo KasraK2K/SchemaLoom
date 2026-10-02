@@ -3,6 +3,7 @@ import { AI_PROFILE } from './ai-profile.js';
 import { annotateDiff } from './annotate.js';
 import { EXPORTER } from './exporter.js';
 import { IMPORTER } from './importer.js';
+import { INTROSPECTOR } from './introspector.js';
 import { MIGRATION_GENERATOR } from './migration.js';
 import { QUERY_VALIDATOR } from './query-validator.js';
 import { extractReferences } from './references.js';
@@ -12,15 +13,16 @@ import { VALIDATOR } from './validator.js';
 
 /**
  * `@schemaloom/engine-mysql` — the full `EngineDefinition` (design §4), loaded by `apps/api`
- * only. Step 9a: design, import and export. The introspector (9b), the migration generator
- * and `annotateDiff` (9c), and the query validator and AI profile (9d) are added as they are
- * built; conformance holds each `features` flag to its service.
+ * only: design, import and export (9a), the introspector (9b), the migration generator and
+ * `annotateDiff` (9c), and the query validator and AI profile (9d). Conformance holds each
+ * `features` flag to its service.
  */
 export const mysqlEngine: EngineDefinition = {
   ...mysqlFacet,
   validator: VALIDATOR,
   importer: IMPORTER,
   exporter: EXPORTER,
+  introspector: INTROSPECTOR,
   extractReferences,
   annotateDiff,
   migrationGenerator: MIGRATION_GENERATOR,
@@ -44,5 +46,11 @@ export { MIGRATION_GENERATOR } from './migration.js';
 export { QUERY_VALIDATOR } from './query-validator.js';
 export { AI_PROFILE } from './ai-profile.js';
 export { IMPORTER } from './importer.js';
+export {
+  INTROSPECTOR,
+  classifyMySqlError,
+  formatServerVersion,
+  mysqlConnectionOptions,
+} from './introspector.js';
 export { VALIDATOR, type MySqlValidator, type ValidationInput } from './validator.js';
 export { extractReferences } from './references.js';

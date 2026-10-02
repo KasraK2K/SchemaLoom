@@ -132,6 +132,7 @@ test.describe('workflow 10 — read a live database', () => {
       expect(view.secretsSet).toContain('password');
 
       const sync = await post(owner, '/introspect/preview', { saved: true });
+      test.skip(sync.status() === 503, 'pg_dump is not installed where the api runs');
       expect(sync.status(), await sync.text()).toBe(200);
       expect(((await sync.json()) as { preview: { creates: string[] } }).preview.creates).toContain(
         'w10s_t',

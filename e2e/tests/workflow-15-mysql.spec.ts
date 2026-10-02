@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
+import { createConnection } from 'mysql2/promise';
 import { API_URL, signIn, signedInPage, write, type Session } from '../fixtures/api';
 import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 /**
  * Roadmap 9a (`docs/phase9/DESIGN.md`): a MySQL / MariaDB project, end to end through the real
  * api and browser — pick the engine, import a mysqldump-style file with inline comments, open
- * the canvas, and download the DDL export.
+ * the canvas, and download the DDL export. 9b reads a live MariaDB and checks drift.
  */
 
 const DUMP = `/*!40101 SET NAMES utf8mb4 */;
@@ -244,6 +245,95 @@ test.describe('workflow 15 — a MySQL / MariaDB project', () => {
       'ALTER TABLE `orders` ADD COLUMN `shipped_at` datetime NULL AFTER `total`;',
     );
     expect(script).not.toMatch(/^BEGIN|^COMMIT/m);
+  });
+
+  /**
+   * 9b — read a live MariaDB, import it, see no drift while the database is unchanged, then
+   * add a column there and see the check report it. Needs the compose `mysql` profile
+   * (`docker compose --profile mysql up -d mariadb`) and MARIADB_TEST_URL, e.g.
+   * mysql://root:schemaloom@127.0.0.1:3307; skipped otherwise.
+   */
+  test('9b: read a live MariaDB, then drift after a database change', async () => {
+    test.skip(process.env.MARIADB_TEST_URL === undefined, 'MARIADB_TEST_URL is not set');
+    test.setTimeout(120_000);
+    const server = new URL(process.env.MARIADB_TEST_URL ?? '');
+    const database = `w15_${String(Date.now())}`;
+    const admin = await createConnection({
+      host: server.hostname,
+      port: Number(server.port || 3306),
+      user: decodeURIComponent(server.username),
+      password: decodeURIComponent(server.password),
+      multipleStatements: true,
+    });
+    const owner = await signIn(SEED_EMAILS.owner);
+    try {
+      await admin.query(`CREATE DATABASE \`${database}\`; USE \`${database}\`; ${DUMP}`);
+      const created = await owner.api.post('/api/projects', {
+        headers: write(owner),
+        data: {
+          organizationId: SEED.orgId,
+          name: `MariaDB live ${database}`,
+          engineId: 'mysql',
+          engineVersion: 'MariaDB 11.4',
+        },
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      const projectId = ((await created.json()) as { id: string }).id;
+      const post = (path: string, data: unknown) =>
+        owner.api.post(`/api/projects/${projectId}${path}`, { headers: write(owner), data });
+      const connection = {
+        host: server.hostname,
+        port: Number(server.port || 3306),
+        database,
+        user: decodeURIComponent(server.username),
+        password: decodeURIComponent(server.password),
+        sslmode: 'REQUIRED',
+      };
+
+      const preview = await post('/introspect/preview', { connection });
+      expect(preview.status(), await preview.text()).toBe(200);
+      const read = (await preview.json()) as {
+        preview: { creates: string[] };
+        sourceId: string;
+        serverVersion: string;
+      };
+      expect(read.serverVersion).toMatch(/^MariaDB 11\.4/);
+      expect(read.preview.creates).toEqual(expect.arrayContaining(['customers', 'orders']));
+
+      const applied = await post('/introspect/apply', { sourceId: read.sourceId });
+      expect(applied.status(), await applied.text()).toBe(201);
+      const { id: jobId } = (await applied.json()) as { id: string };
+      await expect
+        .poll(
+          async () => {
+            const job = await owner.api.get(`/api/projects/${projectId}/import/jobs/${jobId}`);
+            return ((await job.json()) as { state: string }).state;
+          },
+          { timeout: 30_000 },
+        )
+        .toBe('completed');
+
+      interface Drift {
+        diff: { entries: { change: string; objectType: string }[] };
+        migration: { script: string };
+      }
+      // An unchanged database is no drift: MariaDB's SHOW CREATE spellings import as is.
+      const same = await post('/introspect/drift', { connection });
+      expect(same.status(), await same.text()).toBe(200);
+      expect(((await same.json()) as Drift).diff.entries).toEqual([]);
+
+      await admin.query(`ALTER TABLE \`${database}\`.\`orders\` ADD COLUMN \`w15_note\` text`);
+      const drift = await post('/introspect/drift', { connection });
+      expect(drift.status(), await drift.text()).toBe(200);
+      const { diff, migration } = (await drift.json()) as Drift;
+      expect(diff.entries).toContainEqual(
+        expect.objectContaining({ change: 'removed', objectType: 'field' }),
+      );
+      expect(migration.script).toContain('w15_note');
+    } finally {
+      await admin.query(`DROP DATABASE IF EXISTS \`${database}\``);
+      await admin.end();
+    }
   });
 
   test('9d: a saved query is validated against the MySQL schema', async () => {

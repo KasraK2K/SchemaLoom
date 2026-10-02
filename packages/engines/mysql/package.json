@@ -41,6 +41,7 @@
   "dependencies": {
     "@schemaloom/engine-sdk": "workspace:*",
     "@schemaloom/schema-model": "workspace:*",
+    "mysql2": "^3.24.5",
     "node-sql-parser": "catalog:",
     "zod": "catalog:"
   },

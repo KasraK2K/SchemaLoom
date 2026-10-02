@@ -1,4 +1,4 @@
-import type { SchemaModel } from '@schemaloom/schema-model';
+import { diffModels, type SchemaModel } from '@schemaloom/schema-model';
 import { describe, expect, it } from 'vitest';
 import {
   baseStore,
@@ -7,7 +7,7 @@ import {
   entityRow,
   fieldRow,
 } from '../schema/fixture';
-import { mergeImport } from './merge-import';
+import { mergeImport, withDesignOnly } from './merge-import';
 import { planImport } from './restore-plan';
 import { liveFrom } from './test-fixture';
 
@@ -21,6 +21,27 @@ async function importedFrom(store: Parameters<typeof liveFrom>[0]): Promise<Sche
 
 let n = 0;
 const ids = () => `b${String(++n)}`;
+
+describe('drift against an unchanged database', () => {
+  it('is empty when only SchemaLoom-side attributes and the custom-type null differ', async () => {
+    const store = baseStore({
+      entity: [entityRow('ent_orders', { name: 'orders' })],
+      field: [fieldRow('fld_id', 'ent_orders', { name: 'id', position: 0, isPii: true })],
+    });
+    const live = await liveFrom(store);
+    // What a database read looks like: no PII flag, no doc, no customTypeId key at all.
+    const read = await importedFrom(store);
+    const field = read.objects.field.i_fld_id;
+    if (field === undefined) throw new Error('fixture');
+    const { customTypeId: _absent, ...type } = field.type;
+    (read.objects.field as Record<string, unknown>).i_fld_id = { ...field, isPii: false, type };
+
+    const database = withDesignOnly(mergeImport(live, read).imported, live);
+    expect(diffModels(database, live, { ignoreCosmetic: true }).entries).toEqual([]);
+    // Without the copy, the PII flag alone is drift.
+    expect(diffModels(mergeImport(live, read).imported, live).entries).toHaveLength(1);
+  });
+});
 
 describe('mergeImport', () => {
   it('adds new tables and new columns, and retargets them onto existing ids', async () => {

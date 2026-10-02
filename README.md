@@ -6,8 +6,8 @@ Visual database design workspace: design schemas on a canvas, document every tab
 column, and generate queries with AI from a selection — where the AI only ever sees what
 you selected and what you are allowed to see.
 
-PostgreSQL in v1, behind a pluggable engine architecture so other engines arrive later as
-packages rather than as changes to core code.
+PostgreSQL and MySQL / MariaDB, behind a pluggable engine architecture so other engines
+arrive as packages rather than as changes to core code.
 
 ![Schema canvas with ten tables and their foreign keys](docs/screenshots/canvas.png)
 
@@ -168,7 +168,8 @@ Without pnpm, step 1 is `docker compose up -d --build`. The first build takes a 
 minutes. Open <http://localhost:8080>; emails land in Mailpit at <http://localhost:8025>.
 
 There is no seed step: sign up to create the first account. The api image includes
-`pg_dump`, so **Read a database** (with SSH tunnels and certificate files) works as is. To
+`pg_dump`, so **Read a database** (with SSH tunnels and certificate files) works as is.
+MySQL and MariaDB need no client tool, so that works under `pnpm dev` too. To
 read a database running on your own machine, use `host.docker.internal` as the host, not
 `localhost`.
 

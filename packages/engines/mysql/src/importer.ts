@@ -219,6 +219,10 @@ function defaultText(ctx: Ctx, value: unknown): string | undefined {
   if (!isAst(value) || value.type === 'null') return undefined;
   const { over: _onUpdate, ...rest } = value;
   const sql = ctx.parser.expression(rest);
+  // MySQL's SHOW CREATE quotes a numeric default (`'0.00'`) and MariaDB's doesn't; both
+  // spell CURRENT_TIMESTAMP, MariaDB with `()`. One form, so neither reads as drift.
+  if (value.type === 'number') return `'${sql}'`;
+  if (/^current_timestamp\(\)$/i.test(sql)) return 'CURRENT_TIMESTAMP';
   return value.parentheses === true && value.type === 'function' && !/^current_timestamp/i.test(sql)
     ? `(${sql})`
     : sql;
@@ -229,7 +233,9 @@ function onUpdateText(ctx: Ctx, value: unknown): string | undefined {
   if (text(over, 'type') !== 'on update') return undefined;
   const keyword = text(over, 'keyword') ?? 'CURRENT_TIMESTAMP';
   const args = list(get(over, 'expr'), 'value').map((v) => ctx.parser.expression(v));
-  return get(over, 'parentheses') === true ? `${keyword}(${args.join(', ')})` : keyword;
+  return get(over, 'parentheses') === true && args.length > 0
+    ? `${keyword}(${args.join(', ')})`
+    : keyword;
 }
 
 function declareColumn(ctx: Ctx, entity: Entity, def: Ast): Field | undefined {
@@ -246,8 +252,12 @@ function declareColumn(ctx: Ctx, entity: Entity, def: Ast): Field | undefined {
   if (onUpdate !== undefined) props.onUpdate = onUpdate;
   if (def.auto_increment !== undefined && def.auto_increment !== null) props.autoIncrement = true;
   const charset = text(get(def.character_set, 'value'), 'value');
-  if (charset !== undefined) props.charset = charset;
   const collation = text(get(def.collate, 'collate'), 'name');
+  // A collation names its charset (`utf8mb4_unicode_ci`), and SHOW CREATE TABLE spells both
+  // where a design says only COLLATE. Keeping the redundant one would read as drift.
+  if (charset !== undefined && !collation?.toLowerCase().startsWith(`${charset.toLowerCase()}_`)) {
+    props.charset = charset;
+  }
   if (collation !== undefined) props.collation = collation;
   if (isAst(def.generated)) {
     props.generatedExpression = ctx.parser.expression(def.generated.expr);
@@ -465,9 +475,11 @@ const stripOuterParens = (sql: string): string => {
   return trimmed.slice(1, -1).trim();
 };
 
-const ACTIONS: Readonly<Record<string, string>> = {
+/** RESTRICT is the default, so it imports as no prop: MariaDB's SHOW CREATE leaves it out,
+ *  MySQL's writes it, and either way the same key must not read as drift. */
+const ACTIONS: Readonly<Record<string, string | undefined>> = {
   'no action': 'noAction',
-  restrict: 'restrict',
+  restrict: undefined,
   cascade: 'cascade',
   'set null': 'setNull',
   'set default': 'setDefault',

@@ -59,7 +59,7 @@ import {
   type LiveProject,
 } from './live-ir';
 import { assertFullProjectView, assertSnapshotEngine } from './restore-guards';
-import { mergeImport } from './merge-import';
+import { mergeImport, withDesignOnly } from './merge-import';
 import { planImport, planRestore } from './restore-plan';
 
 /**
@@ -491,7 +491,6 @@ export class SnapshotsService {
     if (annotate === undefined || engine.migrationGenerator === undefined) {
       throw new UnprocessableEntityException({ code: 'engine.migrations_unavailable' });
     }
-    const database = mergeImport(project.live, model).imported;
     const design = this.filter.redactWith(
       project.raw,
       ctx.subject,
@@ -499,6 +498,7 @@ export class SnapshotsService {
       ctx.map,
       ctx.skel,
     );
+    const database = withDesignOnly(mergeImport(project.live, model).imported, design);
     const diff = annotate(
       diffModels(database, design, {
         ignoreCosmetic: true,
@@ -757,7 +757,8 @@ export class SnapshotsService {
    */
   async driftSummary(projectId: string, source: string, maxBytes: number): Promise<DriftSummary> {
     const { project, model } = await this.importAgainstLive(projectId, source, maxBytes);
-    const diff = diffModels(mergeImport(project.live, model).imported, project.live, {
+    const database = withDesignOnly(mergeImport(project.live, model).imported, project.live);
+    const diff = diffModels(database, project.live, {
       ignoreCosmetic: true,
       from: { kind: 'import', label: 'Database' },
       to: { kind: 'live' },

@@ -1,4 +1,5 @@
 import {
+  SSH_TUNNEL_FIELDS,
   defineCapabilities,
   type ConstraintKindDescriptor,
   type EngineCapabilities,
@@ -151,8 +152,46 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
   // Q7: the current LTS lines. A version names its product, so the picker shows it as is.
   targetVersions: ['MySQL 8.4', 'MySQL 8.0', 'MariaDB 11.4', 'MariaDB 10.11'],
   defaultTargetVersion: 'MySQL 8.4',
-  // 9b adds the "Read a database" form with the introspector.
-  connectionFields: [],
+  // 9b — the "Read a database" form; `introspector.ts` reads these ids. No schemas field: a
+  // project is one database (Q4).
+  connectionFields: [
+    { id: 'host', label: 'Host', kind: 'text', required: true },
+    { id: 'port', label: 'Port', kind: 'number', required: true, default: 3306 },
+    { id: 'database', label: 'Database', kind: 'text', required: true },
+    { id: 'user', label: 'User', kind: 'text', required: true },
+    { id: 'password', label: 'Password', kind: 'secret', required: false },
+    {
+      id: 'sslmode',
+      label: 'SSL mode',
+      kind: 'select',
+      required: true,
+      options: ['REQUIRED', 'VERIFY_IDENTITY', 'VERIFY_CA', 'DISABLED'],
+      default: 'REQUIRED',
+      insecureValues: ['DISABLED'],
+    },
+    {
+      id: 'sslca',
+      label: 'CA certificate (optional: the system trust store otherwise)',
+      kind: 'file',
+      required: false,
+      section: 'TLS',
+      showWhen: { field: 'sslmode', in: ['VERIFY_CA', 'VERIFY_IDENTITY'] },
+    },
+    ...(
+      [
+        { id: 'sslcert', label: 'Client certificate (optional)' },
+        // 6c — a private key: saved encrypted and never sent back to a browser.
+        { id: 'sslkey', label: 'Client key (optional)', secret: true },
+      ] as const
+    ).map((f) => ({
+      ...f,
+      kind: 'file' as const,
+      required: false,
+      section: 'TLS',
+      showWhen: { field: 'sslmode', in: ['REQUIRED', 'VERIFY_IDENTITY', 'VERIFY_CA'] },
+    })),
+    ...SSH_TUNNEL_FIELDS,
+  ],
 });
 
 /** The target version picks the dialect: `MariaDB 11.4` → MariaDB, anything else MySQL. */

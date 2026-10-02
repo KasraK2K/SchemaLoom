@@ -257,8 +257,12 @@ function keyBytes(field: Field, length: number | undefined): number {
   return 8;
 }
 
-function checkIndexes(model: SchemaModel, d: Diagnostics): void {
+function checkIndexes(model: SchemaModel, target: string, d: Diagnostics): void {
   for (const index of Object.values(model.objects.index)) {
+    // MySQL 8.0.13+ only; MariaDB refuses the CREATE TABLE.
+    if (isMariaDb(target) && index.columns.some((c) => c.expression !== null)) {
+      d.add('error', CODE.expressionIndexNotOnTarget, 'index', index.id, { target });
+    }
     const kind = INDEX_KINDS.get(index.kind);
     if (kind === undefined) {
       d.add('error', CODE.indexKindUnknown, 'index', index.id, { kind: index.kind });
@@ -362,7 +366,7 @@ function validate(input: ValidationInput): readonly Diagnostic[] {
   checkDuplicateNames(input.model, d);
   checkFields(input.model, target, d);
   checkConstraints(input.model, d);
-  checkIndexes(input.model, d);
+  checkIndexes(input.model, target, d);
   checkLinks(input.model, d);
   checkStaleReferences(input.model, d);
   return d.sorted();

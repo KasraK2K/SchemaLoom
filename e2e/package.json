@@ -15,8 +15,9 @@
   "devDependencies": {
     "@playwright/test": "^1.50.0",
     "@schemaloom/config": "workspace:*",
+    "@types/node": "^22.15.0",
     "eslint": "catalog:",
-    "typescript": "catalog:",
-    "@types/node": "^22.15.0"
+    "mysql2": "^3.24.5",
+    "typescript": "catalog:"
   }
 }

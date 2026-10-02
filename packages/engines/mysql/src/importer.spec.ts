@@ -84,7 +84,8 @@ describe('a mysqldump file', () => {
     expect(indexes.get('idx_customer_id')?.columns[1]?.direction).toBe('desc');
     const link = Object.values(model.objects.link)[0];
     expect(link?.name).toBe('fk_orders_customer');
-    expect(link?.engineProps).toEqual({ onDelete: 'restrict', onUpdate: 'cascade' });
+    // RESTRICT is the default, so it is no prop (MariaDB's SHOW CREATE leaves it out).
+    expect(link?.engineProps).toEqual({ onUpdate: 'cascade' });
   });
 
   it('replaces the placeholder view with the real one', async () => {
@@ -130,5 +131,47 @@ describe('the report accounts for every statement', () => {
     ]);
     expect(report.statements[4]?.reason).toBe('Partitioning is not kept');
     expect(byName(model.objects.entity).has('events')).toBe(true);
+  });
+});
+
+describe("each server's SHOW CREATE spelling", () => {
+  // 9b — what MySQL 8.4 and MariaDB 11.4 print for the same column; both must import the
+  // same, or an unchanged database reads as drift.
+  const columns = async (definition: string, serverVersion: string) => {
+    const { model } = await importDdl(`CREATE TABLE \`t\` (\n${definition}\n)`, serverVersion);
+    return Object.values(model.objects.field).map((f) => f.engineProps);
+  };
+
+  it('imports MySQL and MariaDB forms of a column alike', async () => {
+    const mysql = await columns(
+      [
+        "  `n` decimal(4,2) NOT NULL DEFAULT '0.00',",
+        "  `m` int NOT NULL DEFAULT '-1',",
+        '  `at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,',
+        '  `e` varchar(9) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,',
+        '  `g` varchar(9) GENERATED ALWAYS AS (lower(`e`)) VIRTUAL',
+      ].join('\n'),
+      'MySQL 8.4',
+    );
+    const mariadb = await columns(
+      [
+        '  `n` decimal(4,2) NOT NULL DEFAULT 0.00,',
+        '  `m` int NOT NULL DEFAULT -1,',
+        '  `at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),',
+        '  `e` varchar(9) COLLATE utf8mb4_unicode_ci NOT NULL,',
+        '  `g` varchar(9) GENERATED ALWAYS AS (lcase(`e`)) VIRTUAL',
+      ].join('\n'),
+      'MariaDB 11.4',
+    );
+    expect(mariadb).toEqual(mysql);
+    expect(mysql[2]).toEqual({ default: 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' });
+  });
+
+  it('keeps a charset its collation does not name', async () => {
+    const [props] = await columns(
+      '  `e` varchar(9) CHARACTER SET latin1 COLLATE utf8mb4_bin',
+      'MySQL 8.4',
+    );
+    expect(props).toEqual({ charset: 'latin1', collation: 'utf8mb4_bin' });
   });
 });

@@ -1,7 +1,6 @@
 # Second engine: MySQL / MariaDB (roadmap 9)
 
-Status: **approved** 2026-10-02 with every default in §10. **9a, 9c and 9d built** the same
-day; 9b waits for a reachable MySQL server to verify against.
+Status: **approved** 2026-10-02 with every default in §10. **9a–9d built** the same day.
 
 **As built (9a):**
 
@@ -29,6 +28,28 @@ COMMENT '…'` (the only way MySQL comments one column). The importer reads that
   from Docker Hub was blocked (403) from this network on 2026-10-02, so 9a is verified against
   canonical `SHOW CREATE TABLE` / mysqldump text, the conformance round trip and e2e workflow
   15, not yet against live servers.
+
+**As built (9b, live database):** `introspector.ts`. The socket is dialled to the address
+core's SSRF guard checked, and mysql2 gets the typed host name, so TLS verifies the
+certificate against the name. SSL modes use MySQL's own words (`REQUIRED`, `VERIFY_IDENTITY`,
+`VERIFY_CA`, `DISABLED`, the last declared insecure). `PREFERRED` is not offered, because
+it falls back to plain text without saying so. The session is set to read-only with
+`sql_mode = ''`, so `SHOW CREATE` uses backticks. Verified against MySQL 8.4 and MariaDB
+11.4 containers (Docker Hub was reachable this time): a round trip (export, run on the
+server, read back, import, export again) in `introspector.spec.ts`, and e2e workflow 15
+(read, import, no drift, add a column, drift). The round trip found:
+
+- MariaDB refuses `NULL` on a generated column, so the exporter writes nullability there only
+  for `NOT NULL`.
+- MariaDB has no functional key parts: a new validator error for MariaDB targets.
+- The two servers spell the same column differently: a quoted or bare numeric default,
+  `CURRENT_TIMESTAMP` with or without `()`, `lower` or `lcase`, `CHARACTER SET` repeated
+  next to a `COLLATE` that already names it, and `ON DELETE RESTRICT` (the default) written
+  or left out. The importer reads both spellings the same way, or an unchanged database
+  would read as drift.
+- MariaDB rewrites view bodies. That is still a known gap (ROADMAP).
+- Core drift compared docs, PII flags and store defaults. Fixed for every engine
+  (`withDesignOnly`, and `mergeImport` gives imported objects the stored form).
 
 **As built (9c, migrations):** `migration.ts` and `annotate.ts`. Renames run first (`RENAME
 TABLE`, `RENAME COLUMN`, `RENAME INDEX`), then drops (foreign keys first), then `MODIFY COLUMN`

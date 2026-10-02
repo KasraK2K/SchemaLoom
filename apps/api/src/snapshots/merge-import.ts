@@ -1,6 +1,8 @@
 import {
   IR_OBJECT_TYPES,
   logicalKey,
+  type Field,
+  type Index,
   type IrObjectType,
   type SchemaModel,
 } from '@schemaloom/schema-model';
@@ -82,6 +84,15 @@ export function mergeImport(live: LiveIr, imported: SchemaModel): MergedImport {
   const retargeted = JSON.parse(JSON.stringify(imported), (_key, value: unknown) =>
     typeof value === 'string' ? (liveIdOf.get(value) ?? value) : value,
   ) as SchemaModel;
+  // The store's write defaults (`row-write.ts`): an importer leaves "no custom type" and
+  // "ascending" out, the store reads them back as `null` and `'asc'`, and the diff counts
+  // absent as different (doc 04 §7.4 rule 2). Imported objects take the stored form.
+  for (const field of Object.values(retargeted.objects.field) as { type: Field['type'] }[]) {
+    field.type = { ...field.type, customTypeId: field.type.customTypeId ?? null };
+  }
+  for (const index of Object.values(retargeted.objects.index) as { columns: Index['columns'] }[]) {
+    index.columns = index.columns.map((c) => ({ ...c, direction: c.direction ?? 'asc' }));
+  }
 
   const hasPk = new Set(
     Object.values(live.objects.constraint)
@@ -135,4 +146,31 @@ export function mergeImport(live: LiveIr, imported: SchemaModel): MergedImport {
     imported: { ...retargeted, objects: rekeyed },
     liveIds: liveIdOf,
   };
+}
+
+/** What only SchemaLoom knows about an object: no database holds it, so no import has it. */
+const DESIGN_ONLY = ['doc', 'isDeprecated', 'isRestricted', 'isPii', 'areaId'] as const;
+
+/**
+ * Phase 6 §6 — drift is about the database. A database read (`mergeImport(…).imported`)
+ * has no docs, PII flags or areas, so each object it shares with the design takes the
+ * design's; otherwise every documented or flagged object would read as drift.
+ */
+export function withDesignOnly(database: SchemaModel, design: SchemaModel): SchemaModel {
+  const objects = Object.fromEntries(
+    IR_OBJECT_TYPES.map((type) => [
+      type,
+      Object.fromEntries(
+        Object.entries(database.objects[type] as Record<string, Record<string, unknown>>).map(
+          ([id, object]) => {
+            const ours = (design.objects[type] as Record<string, Record<string, unknown>>)[id];
+            if (ours === undefined) return [id, object];
+            const copied = DESIGN_ONLY.filter((key) => key in object && key in ours);
+            return [id, { ...object, ...Object.fromEntries(copied.map((k) => [k, ours[k]])) }];
+          },
+        ),
+      ),
+    ]),
+  ) as unknown as SchemaModel['objects'];
+  return { ...database, objects };
 }

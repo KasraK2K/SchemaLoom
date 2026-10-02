@@ -61,9 +61,30 @@ export async function loadMySqlParser(mariaDbFirst: boolean): Promise<MySqlParse
       }
       throw last instanceof Error ? last : new Error('could not parse the statement');
     },
-    expression: (expr) => parser.exprToSQL(expr, { database: 'MySQL' }),
+    expression: (expr) => parser.exprToSQL(canonicalFunctions(expr), { database: 'MySQL' }),
     select: (ast) => parser.sqlify(ast, { database: 'MySQL' }),
   };
+}
+
+/** MariaDB's SHOW CREATE writes `lower` as `lcase` and `upper` as `ucase`. */
+const FUNCTION_SYNONYMS: Readonly<Record<string, string>> = { lcase: 'lower', ucase: 'upper' };
+
+/** A copy of an expression AST with synonym function names in one spelling. */
+function canonicalFunctions(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(canonicalFunctions);
+  if (typeof node !== 'object' || node === null) return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) out[key] = canonicalFunctions(value);
+  // `{ type: 'function', name: { name: [{ type: 'default', value: 'lcase' }] } }`
+  const parts = (out.name as { name?: unknown } | undefined)?.name;
+  const part: unknown = Array.isArray(parts) && parts.length === 1 ? parts[0] : undefined;
+  if (out.type === 'function' && typeof part === 'object' && part !== null) {
+    const { value } = part as { value?: unknown };
+    const synonym = typeof value === 'string' ? FUNCTION_SYNONYMS[value.toLowerCase()] : undefined;
+    if (synonym !== undefined)
+      out.name = { ...(out.name as object), name: [{ ...part, value: synonym }] };
+  }
+  return out;
 }
 
 /** A parse error's first line, without the parser's long "expected …" list. */

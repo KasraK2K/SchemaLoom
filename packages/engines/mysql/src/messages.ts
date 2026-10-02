@@ -11,6 +11,7 @@ export const CODE = {
   typeUnknown: 'mysql.type-unknown',
   typeNeedsValues: 'mysql.type-needs-values',
   typeNotOnTarget: 'mysql.type-not-on-target',
+  expressionIndexNotOnTarget: 'mysql.expression-index-not-on-target',
   autoIncrementCount: 'mysql.auto-increment-count',
   autoIncrementNotInteger: 'mysql.auto-increment-not-integer',
   autoIncrementNotIndexed: 'mysql.auto-increment-not-indexed',
@@ -53,6 +54,8 @@ export const DIAGNOSTIC_MESSAGES: DiagnosticMessages = {
   [CODE.typeUnknown]: 'No such type as “{type}”',
   [CODE.typeNeedsValues]: 'An {type} column needs at least one value',
   [CODE.typeNotOnTarget]: '{type} is not available on {target}',
+  [CODE.expressionIndexNotOnTarget]:
+    '{target} has no functional key parts — index a generated column instead',
   [CODE.autoIncrementCount]: 'A table can have only one AUTO_INCREMENT column',
   [CODE.autoIncrementNotInteger]: 'AUTO_INCREMENT needs an integer column — this one is {type}',
   [CODE.autoIncrementNotIndexed]:

@@ -105,6 +105,22 @@ describe('MySQL validator', () => {
     expect(codes(parts, 'MariaDB 11.4')).toEqual([]);
   });
 
+  it('flags functional key parts on a MariaDB target only', () => {
+    const parts: ModelParts = {
+      entities: [orders],
+      indexes: [
+        index({
+          id: 'i1',
+          name: 'idx_lower',
+          entityId: 'e1',
+          columns: [indexColumn({ expression: 'lower(`ref`)' })],
+        }),
+      ],
+    };
+    expect(codes(parts, 'MariaDB 11.4')).toEqual([CODE.expressionIndexNotOnTarget]);
+    expect(codes(parts, 'MySQL 8.4')).toEqual([]);
+  });
+
   it('requires a foreign key to match type and signedness', () => {
     const parts = (unsigned: boolean): ModelParts => ({
       entities: [orders, items],

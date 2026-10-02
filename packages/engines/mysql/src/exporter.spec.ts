@@ -48,7 +48,7 @@ describe('MySQL export', () => {
     expect(sql).toContain('FULLTEXT KEY `ft_name` (`full_name`)');
     expect(sql).toContain(') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci');
     expect(sql).toContain(
-      'ALTER TABLE `orders` ADD CONSTRAINT `fk_orders_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE',
+      'ALTER TABLE `orders` ADD CONSTRAINT `fk_orders_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON UPDATE CASCADE',
     );
     expect(sql).toMatch(
       /CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `big_orders` AS select/,

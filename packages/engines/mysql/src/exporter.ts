@@ -79,7 +79,10 @@ export function columnDefinition(field: Field, comment: string | undefined): str
   if (generated !== undefined) {
     parts.push(`GENERATED ALWAYS AS (${generated}) ${str(p, 'generatedKind') ?? 'VIRTUAL'}`);
   }
-  parts.push(field.isNullable ? 'NULL' : 'NOT NULL');
+  // MariaDB refuses NULL (and NOT NULL) on a generated column; nullable is the default anyway.
+  if (generated === undefined || !field.isNullable) {
+    parts.push(field.isNullable ? 'NULL' : 'NOT NULL');
+  }
   const def = str(p, 'default');
   if (def !== undefined && generated === undefined) parts.push(`DEFAULT ${def}`);
   const onUpdate = str(p, 'onUpdate');
