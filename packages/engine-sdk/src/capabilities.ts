@@ -175,6 +175,12 @@ export interface EngineCapabilities {
    *  `introspector`; `capabilities/services-match-features` checks the two agree. Here and not
    *  on the introspector because the browser only ever sees capabilities. */
   readonly connectionFields: readonly ConnectionField[];
+  /** The database versions a project can target, newest first ("16", not "16.4": a minor
+   *  release adds no syntax). Empty = free text. Pure metadata today: it reaches the AI
+   *  prompt and the exports, and no generator branches on it. */
+  readonly targetVersions: readonly string[];
+  /** Pre-selected in the create form; one of `targetVersions`, null when that is empty. */
+  readonly defaultTargetVersion: string | null;
 }
 
 /** Phase 6 §1 — one input of the "From a database" form. `secret` renders as a password
@@ -278,10 +284,17 @@ export const SSH_TUNNEL_FIELDS: readonly ConnectionField[] = [
 
 export interface CapabilitiesInput extends Omit<
   EngineCapabilities,
-  'features' | 'typeCatalogSupportsArrays' | 'connectionFields'
+  | 'features'
+  | 'typeCatalogSupportsArrays'
+  | 'connectionFields'
+  | 'targetVersions'
+  | 'defaultTargetVersion'
 > {
   /** defaults to none: an engine without an introspector declares nothing */
   readonly connectionFields?: readonly ConnectionField[];
+  /** default none: the create form then asks for the version as free text */
+  readonly targetVersions?: readonly string[];
+  readonly defaultTargetVersion?: string | null;
   /** DEVIATION from doc 03 §4.1, which omits it: `CapabilitiesContradictionError` is specified
    *  to carry `engineId`, and `defineCapabilities` sees only this object. */
   readonly engineId: string;

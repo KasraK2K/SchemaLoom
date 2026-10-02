@@ -108,6 +108,8 @@ describe('<NoProjects>', () => {
             displayName: 'PG',
             importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }],
             connectionFields: [{ id: 'host', label: 'Host', kind: 'text', required: true }],
+            targetVersions: ['16', '15'],
+            defaultTargetVersion: '16',
           },
         ]}
       />,
@@ -130,6 +132,8 @@ describe('<NoProjects>', () => {
             displayName: 'PG',
             importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }],
             connectionFields: [],
+            targetVersions: [],
+            defaultTargetVersion: null,
           },
         ]}
       />,

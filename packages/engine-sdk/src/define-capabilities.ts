@@ -30,7 +30,15 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
   // Destructured, not spread wholesale: `engineId` and `typeDescriptors` are constructor
   // arguments, not capabilities, and `typeDescriptors` would put the whole type catalog into
   // every GET /engines payload.
-  const { engineId, typeDescriptors, features: declared, connectionFields = [], ...rest } = input;
+  const {
+    engineId,
+    typeDescriptors,
+    features: declared,
+    connectionFields = [],
+    targetVersions = [],
+    defaultTargetVersion = null,
+    ...rest
+  } = input;
 
   const features = Object.fromEntries(
     ENGINE_FEATURES.map((f) => [f, declared[f] ?? false]),
@@ -40,6 +48,8 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
     ...rest,
     features,
     connectionFields,
+    targetVersions,
+    defaultTargetVersion,
     typeCatalogSupportsArrays: typeDescriptors.some((d) => d.supportsArray),
   };
 
@@ -177,6 +187,22 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
     fail(
       'identifiers-sane',
       `identifiers.validUnquoted is not a valid regex: ${caps.identifiers.validUnquoted}`,
+    );
+  }
+
+  const versionDupes = duplicates(caps.targetVersions);
+  if (versionDupes.length > 0 || caps.targetVersions.some((v) => v.trim() === '')) {
+    fail('target-versions-sane', `targetVersions must be distinct and non-empty`);
+  }
+  if (
+    caps.targetVersions.length === 0
+      ? caps.defaultTargetVersion !== null
+      : caps.defaultTargetVersion === null ||
+        !caps.targetVersions.includes(caps.defaultTargetVersion)
+  ) {
+    fail(
+      'target-versions-sane',
+      `defaultTargetVersion "${String(caps.defaultTargetVersion)}" must be one of targetVersions (or null when there are none)`,
     );
   }
 

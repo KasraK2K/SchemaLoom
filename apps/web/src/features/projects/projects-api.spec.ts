@@ -13,5 +13,7 @@ describe('EngineOptionSchema', () => {
     expect(parsed.capabilities.connectionFields).toEqual(
       postgresFacet.capabilities.connectionFields,
     );
+    expect(parsed.capabilities.targetVersions).toContain('16');
+    expect(parsed.capabilities.defaultTargetVersion).toBe('16');
   });
 });

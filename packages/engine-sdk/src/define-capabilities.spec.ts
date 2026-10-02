@@ -155,6 +155,20 @@ describe('defineCapabilities', () => {
     });
   });
 
+  it('target-versions-sane: the default is one of the list, and no list means no default', () => {
+    const caps = defineCapabilities(relationalInput());
+    expect(caps.targetVersions).toEqual([]);
+    expect(caps.defaultTargetVersion).toBeNull();
+    expect(
+      defineCapabilities(relationalInput({ targetVersions: ['2', '1'], defaultTargetVersion: '1' }))
+        .defaultTargetVersion,
+    ).toBe('1');
+    expectRule('target-versions-sane', { targetVersions: ['2', '1'], defaultTargetVersion: '3' });
+    expectRule('target-versions-sane', { targetVersions: ['2', '1'] });
+    expectRule('target-versions-sane', { defaultTargetVersion: '1' });
+    expectRule('target-versions-sane', { targetVersions: ['1', '1'], defaultTargetVersion: '1' });
+  });
+
   it('identifiers-sane rejects an uncompilable validUnquoted regex', () => {
     expectRule('identifiers-sane', {
       identifiers: { ...relationalInput().identifiers, validUnquoted: '^[a-z' },

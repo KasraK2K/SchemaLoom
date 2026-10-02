@@ -228,7 +228,12 @@ export function NoProjects({
   const [target, setTarget] = useState(NEW_PROJECT);
   const [name, setName] = useState('');
   const [engineId, setEngineId] = useState(engines[0]?.id ?? '');
-  const [engineVersion, setEngineVersion] = useState('');
+  const [engineVersion, setEngineVersion] = useState(engines[0]?.defaultTargetVersion ?? '');
+  /** Switching engine resets the version to that engine's default: "16" means nothing to MySQL. */
+  const chooseEngine = (next: EngineOption) => {
+    setEngineId(next.id);
+    setEngineVersion(next.defaultTargetVersion ?? '');
+  };
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? '');
   const [workspaceName, setWorkspaceName] = useState('');
   const [source, setSource] = useState('');
@@ -317,7 +322,7 @@ export function NoProjects({
                   engine !== undefined && usable(engine, point.mode)
                     ? engine
                     : engines.find((c) => usable(c, point.mode));
-                if (next !== undefined) setEngineId(next.id);
+                if (next !== undefined && next.id !== engineId) chooseEngine(next);
                 if (point.mode === 'database') setDraft(initialDraft(next?.connectionFields ?? []));
               }}
             >
@@ -450,7 +455,8 @@ export function NoProjects({
               <select
                 value={engineId}
                 onChange={(e) => {
-                  setEngineId(e.target.value);
+                  const next = engines.find((candidate) => candidate.id === e.target.value);
+                  if (next !== undefined) chooseEngine(next);
                 }}
                 className={inputClass}
               >
@@ -465,15 +471,31 @@ export function NoProjects({
             </label>
             <label className="flex flex-1 flex-col gap-1 text-sm text-text">
               Target version
-              <input
-                required
-                maxLength={32}
-                value={engineVersion}
-                onChange={(e) => {
-                  setEngineVersion(e.target.value);
-                }}
-                className={inputClass}
-              />
+              {engine !== undefined && engine.targetVersions.length > 0 ? (
+                <select
+                  value={engineVersion}
+                  onChange={(e) => {
+                    setEngineVersion(e.target.value);
+                  }}
+                  className={inputClass}
+                >
+                  {engine.targetVersions.map((version) => (
+                    <option key={version} value={version}>
+                      {engine.displayName} {version}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  required
+                  maxLength={32}
+                  value={engineVersion}
+                  onChange={(e) => {
+                    setEngineVersion(e.target.value);
+                  }}
+                  className={inputClass}
+                />
+              )}
             </label>
           </div>
           {(workspaces.length > 0 || canManageWorkspaces) && (

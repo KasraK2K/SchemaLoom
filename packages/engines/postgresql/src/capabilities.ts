@@ -203,6 +203,9 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
       supportsDrops: false,
     },
   ],
+  // The supported PostgreSQL majors, newest first. Drop one when it reaches end of life.
+  targetVersions: ['18', '17', '16', '15', '14'],
+  defaultTargetVersion: '16',
   // Phase 6 §2 — the "From a database" form; `introspector.ts` reads these ids.
   connectionFields: [
     { id: 'host', label: 'Host', kind: 'text', required: true },

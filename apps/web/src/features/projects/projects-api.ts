@@ -71,6 +71,8 @@ export const EngineOptionSchema = z.object({
         }) satisfies z.ZodType<ConnectionField>,
       )
       .default([]),
+    targetVersions: z.array(z.string()).default([]),
+    defaultTargetVersion: z.string().nullable().default(null),
   }),
 });
 export interface EngineOption {
@@ -79,6 +81,9 @@ export interface EngineOption {
   importFormats: { id: string; fileExtensions: string[] }[];
   /** Phase 6 — the engine's "read a database" form; empty when it has none. */
   connectionFields: ConnectionField[];
+  /** Database versions a project can target, newest first; empty means free text. */
+  targetVersions: string[];
+  defaultTargetVersion: string | null;
 }
 
 export async function listEngines(): Promise<EngineOption[]> {
@@ -90,6 +95,8 @@ export async function listEngines(): Promise<EngineOption[]> {
     displayName: engine.displayName,
     importFormats: engine.capabilities.importFormats,
     connectionFields: engine.capabilities.connectionFields,
+    targetVersions: engine.capabilities.targetVersions,
+    defaultTargetVersion: engine.capabilities.defaultTargetVersion,
   }));
 }
 
