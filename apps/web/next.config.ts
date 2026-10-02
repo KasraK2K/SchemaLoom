@@ -12,7 +12,11 @@ const nextConfig: NextConfig = {
   // @schemaloom/ui and the engine UI packages are published from source (their exports
   // point at src/*.ts), so Next has to compile them rather than treat them as prebuilt
   // dependencies. Everything else in the workspace ships a dist.
-  transpilePackages: ['@schemaloom/ui', '@schemaloom/engine-postgresql-ui'],
+  transpilePackages: [
+    '@schemaloom/ui',
+    '@schemaloom/engine-postgresql-ui',
+    '@schemaloom/engine-mysql-ui',
+  ],
   // Linting is a separate turbo task with the repo's own flat config; running it again
   // here would be a second, differently-configured pass over the same files.
   eslint: { ignoreDuringBuilds: true },

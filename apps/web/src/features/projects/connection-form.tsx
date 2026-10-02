@@ -202,7 +202,7 @@ export function ConnectionForm({
           disabled={disabled}
           autoComplete="off"
           spellCheck={false}
-          placeholder="postgres://user@host:5432/database"
+          placeholder={`scheme://user@host:${String(fields.find((f) => f.id === 'port')?.default ?? 'port')}/database`}
           onChange={(e) => {
             setUrl(e.target.value);
             setUrlError(false);

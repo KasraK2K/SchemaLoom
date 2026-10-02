@@ -1,7 +1,7 @@
 import type { Diagnostic, EngineCapabilities } from '@schemaloom/engine-sdk/ui';
 import type { EngineProps } from '@schemaloom/schema-model';
 import { cn } from '@schemaloom/ui';
-import type { PropertyPanelProps, PropertyPanelSection } from './contract.js';
+import type { PropertyPanelProps, PropertyPanelSection } from '@schemaloom/engine-sdk/ui';
 
 /** Everything a panel section edits: the engine-owned bag plus R-1's blanking flag. */
 export interface PropsBearing {

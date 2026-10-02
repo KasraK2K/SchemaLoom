@@ -116,14 +116,15 @@ describe('EngineRegistry', () => {
     ]);
   });
 
-  it('orders both arrays by displayName', () => {
+  it('keeps registration order for available engines and sorts the announced ones', () => {
     const registry = createEngineRegistry(ANNOUNCED);
     const second: EngineDefinition = { ...fixtureEngine, id: 'aaa', displayName: 'AAA SQL' };
     registry.register(fixtureEngine);
     registry.register(second);
+    // The first registered engine is the picker's default, so order is deployment policy.
     expect(registry.catalog().available.map((e) => e.displayName)).toEqual([
-      'AAA SQL',
       'Fixture SQL',
+      'AAA SQL',
     ]);
     expect(registry.catalog().comingSoon.map((e) => e.displayName)).toEqual(['MongoDB', 'Neo4j']);
   });

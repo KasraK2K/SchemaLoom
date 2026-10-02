@@ -56,11 +56,12 @@ interface StoredSource {
   readonly storageKey: string;
 }
 
-/** `pnpm dev` runs the api on the host, which usually has no pg_dump; the api image does. */
+/** `pnpm dev` runs the api on the host, which usually lacks an engine's client tool (pg_dump);
+ *  the api image has them. Only an introspector that shells out throws `not_available`. */
 const DEV_PG_DUMP_HINT =
   ' In development (pnpm dev) the api runs on your machine. To read a database without ' +
   'installing anything, use the Docker app instead (pnpm app:up, then http://localhost:8080); ' +
-  'its api image includes pg_dump.';
+  'its api image includes the client tools.';
 
 const STATUS: Record<IntrospectError['code'], HttpStatus> = {
   not_available: HttpStatus.SERVICE_UNAVAILABLE,

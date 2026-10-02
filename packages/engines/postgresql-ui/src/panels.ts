@@ -1,6 +1,6 @@
 import { hasConstraintKind } from '@schemaloom/engine-sdk/ui';
 import type { Constraint, Entity, Field, Index, Link } from '@schemaloom/schema-model';
-import type { PropertyPanelSection } from './contract.js';
+import type { PropertyPanelSection } from '@schemaloom/engine-sdk/ui';
 import { propsSection } from './props-section.js';
 
 /**

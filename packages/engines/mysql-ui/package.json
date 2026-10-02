@@ -1,0 +1,39 @@
+{
+  "name": "@schemaloom/engine-mysql-ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./facet": {
+      "types": "./src/facet.ts",
+      "default": "./src/facet.ts"
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@schemaloom/engine-mysql": "workspace:*",
+    "@schemaloom/engine-sdk": "workspace:*",
+    "@schemaloom/schema-model": "workspace:*",
+    "@schemaloom/ui": "workspace:*",
+    "lucide-react": "^0.544.0"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@schemaloom/config": "workspace:*",
+    "@types/react": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

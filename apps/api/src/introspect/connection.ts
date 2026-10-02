@@ -90,9 +90,18 @@ export function validateConnection(
 
   const host = out.host;
   if (typeof host !== 'string' || host.trim() === '') invalid('host', 'Host is required.');
-  // Through a tunnel the leg the api can see is SSH-encrypted (§10.3.4).
-  if (out.sslmode === 'disable' && !allowPrivate && out.ssh !== 'ssh') {
-    invalid('sslmode', 'This server requires TLS to reach a database. Choose another SSL mode.');
+  // Through a tunnel the leg the api can see is SSH-encrypted (§10.3.4). Which values mean
+  // "no TLS" is the engine's to declare (`ConnectionField.insecureValues`).
+  if (!allowPrivate && out.ssh !== 'ssh') {
+    for (const field of fields) {
+      const value = out[field.id];
+      if (typeof value === 'string' && field.insecureValues?.includes(value) === true) {
+        invalid(
+          field.id,
+          `This server requires TLS to reach a database. Choose another ${field.label}.`,
+        );
+      }
+    }
   }
   return { ...out, host: (host as string).trim() };
 }

@@ -1,6 +1,6 @@
 import { postgresFacet } from '@schemaloom/engine-postgresql/static';
 import type { LinkCheck, LinkKindDescriptor } from '@schemaloom/engine-sdk/ui';
-import type { EngineUiPlugin, LinkStyle } from './contract.js';
+import type { EngineUiPlugin, LinkStyle } from '@schemaloom/engine-sdk/ui';
 import { PostgresEntityNode } from './entity-node.js';
 import { ENGINE_ICONS } from './icons.js';
 import {
@@ -76,4 +76,4 @@ export default postgresEngineUi;
 export { PostgresEntityNode } from './entity-node.js';
 export { PostgresTypeBadge } from './type-badge.js';
 export { PostgresTypePicker } from './type-picker.js';
-export type * from './contract.js';
+export type * from '@schemaloom/engine-sdk/ui';

@@ -33,6 +33,7 @@
     "@nestjs/websockets": "^11.2.6",
     "@prisma/client": "^6.16.0",
     "@schemaloom/contracts": "workspace:*",
+    "@schemaloom/engine-mysql": "workspace:*",
     "@schemaloom/engine-postgresql": "workspace:*",
     "@schemaloom/engine-sdk": "workspace:*",
     "@schemaloom/schema-model": "workspace:*",

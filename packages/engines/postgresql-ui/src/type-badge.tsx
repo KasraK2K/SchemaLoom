@@ -1,5 +1,5 @@
 import { cn } from '@schemaloom/ui';
-import type { TypeBadgeProps } from './contract.js';
+import type { TypeBadgeProps } from '@schemaloom/engine-sdk/ui';
 
 /**
  * The rendered spelling comes from `ResolvedType.display`, which the type catalog owns. This

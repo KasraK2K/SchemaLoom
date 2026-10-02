@@ -200,6 +200,10 @@ export interface ConnectionField {
   /** Phase 6c — a `file` holding a private key. With `kind: 'secret'` it is what a saved
    *  connection keeps encrypted and never returns to a browser. */
   readonly secret?: boolean;
+  /** Values of this field that send the connection unencrypted (PostgreSQL's `sslmode`
+   *  `disable`). Core refuses them unless private hosts are allowed or an SSH tunnel carries
+   *  the connection. Declared by the engine, so the guard knows no engine's vocabulary. */
+  readonly insecureValues?: readonly string[];
 }
 
 /** Phase 6c — the fields a saved connection never returns. */

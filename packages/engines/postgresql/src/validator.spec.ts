@@ -123,6 +123,19 @@ describe('identifiers', () => {
     ).toEqual([]);
   });
 
+  it('flags one index name on two tables of a schema (the store only checks per table)', () => {
+    const tables = [table({ id: 'e1', name: 'orders' }), table({ id: 'e2', name: 'invoices' })];
+    const fields = [
+      column({ id: 'f1', name: 'id', entityId: 'e1' }),
+      column({ id: 'f2', name: 'id', entityId: 'e2' }),
+    ];
+    const idx = (id: string, entityId: string, fieldId: string) =>
+      index({ id, name: 'idx_id', entityId, columns: [indexColumn({ fieldId })] });
+    expect(
+      codes({ entities: tables, fields, indexes: [idx('i1', 'e1', 'f1'), idx('i2', 'e2', 'f2')] }),
+    ).toEqual([CODE.duplicateName, CODE.duplicateName]);
+  });
+
   it('flags two tables whose names differ only in case', () => {
     const found = run({
       entities: [table({ id: 'e1', name: 'Orders' }), table({ id: 'e2', name: 'orders' })],

@@ -41,7 +41,9 @@ export interface EngineRegistry {
   list(): readonly EngineDefinition[];
   /** Registered engines become `available`; announced ids with no registration become
    *  `comingSoon`. Registration always wins, so shipping an engine needs no edit to the
-   *  announcement list. Both arrays are ordered by displayName. */
+   *  announcement list. `available` keeps REGISTRATION order — the deployment's manifest
+   *  order, whose first engine is the picker's default — and `comingSoon` is ordered by
+   *  displayName. */
   catalog(): EngineCatalog;
 }
 
@@ -100,7 +102,7 @@ export function createEngineRegistry(announced: readonly AnnouncedEngine[]): Eng
     },
     catalog(): EngineCatalog {
       return {
-        available: [...engines.values()].map(describe).sort(byDisplayName),
+        available: [...engines.values()].map(describe),
         comingSoon: announced.filter((a) => !engines.has(a.id)).sort(byDisplayName),
       };
     },

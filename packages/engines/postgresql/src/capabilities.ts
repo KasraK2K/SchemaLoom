@@ -220,6 +220,7 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
       required: true,
       options: ['require', 'verify-full', 'verify-ca', 'prefer', 'disable'],
       default: 'require',
+      insecureValues: ['disable'],
     },
     // §10.2 — PEM text; the introspector writes each to a 0600 temp file for libpq.
     {

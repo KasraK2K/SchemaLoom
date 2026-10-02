@@ -145,28 +145,25 @@ async function controllerWith(registry: EngineRegistry): Promise<EnginesControll
 }
 
 describe('ENGINE_MANIFEST', () => {
-  it('names exactly one engine: PostgreSQL, the v1 engine', () => {
-    // These two assertions were written against an EMPTY manifest, when the engine
-    // package did not exist yet. That premise changed deliberately when the package
-    // landed, so they now assert the opposite — that the one line is actually there.
-    // The manifest staying at length 1 is the C10 claim under test: a second engine
-    // means a second line HERE and nowhere else in apps/api.
-    expect(ENGINE_MANIFEST).toHaveLength(1);
-    expect(ENGINE_MANIFEST[0]?.id).toBe('postgresql');
+  it('names PostgreSQL and MySQL, PostgreSQL first', () => {
+    // The C10 claim under test: roadmap 9's second engine was a second line HERE (and a
+    // dependency), with nothing else in apps/api changed for it.
+    expect(ENGINE_MANIFEST.map((e) => e.id)).toEqual(['postgresql', 'mysql']);
   });
 
-  it('serves PostgreSQL as available and the rest as coming soon', async () => {
+  it('serves both engines as available and the rest as coming soon', async () => {
     const moduleRef = await Test.createTestingModule({ imports: [EnginesModule] }).compile();
     const catalog = moduleRef.get(EnginesController).catalog();
 
-    expect(catalog.available.map((e) => e.id)).toEqual(['postgresql']);
+    // Manifest order: PostgreSQL first, so it stays the picker's default.
+    expect(catalog.available.map((e) => e.id)).toEqual(['postgresql', 'mysql']);
 
     // A registration SHADOWS an announcement of the same id — otherwise the picker would
     // offer PostgreSQL twice, once greyed out as "coming soon".
     expect(catalog.comingSoon.map((e) => e.id)).not.toContain('postgresql');
 
     const announcedMinusRegistered = [...COMING_SOON]
-      .filter((e) => e.id !== 'postgresql')
+      .filter((e) => e.id !== 'postgresql' && e.id !== 'mysql')
       .sort((a, b) => (a.displayName < b.displayName ? -1 : 1));
     expect(catalog.comingSoon.map((e) => e.id)).toEqual(announcedMinusRegistered.map((e) => e.id));
   });
@@ -215,7 +212,10 @@ describe('GET /engines/:engineId/templates/:templateId (Phase 12)', () => {
 
   it('ships PostgreSQL templates', async () => {
     const moduleRef = await Test.createTestingModule({ imports: [EnginesModule] }).compile();
-    const pg = moduleRef.get(EnginesController).catalog().available[0];
+    const pg = moduleRef
+      .get(EnginesController)
+      .catalog()
+      .available.find((e) => e.id === 'postgresql');
     expect(pg?.templates.map((t) => t.id)).toEqual(['ecommerce', 'saas', 'blog']);
   });
 });
@@ -232,13 +232,13 @@ describe('the registry EnginesModule builds', () => {
     expect(catalog.comingSoon).toHaveLength(COMING_SOON.length - 1);
   });
 
-  it('orders both arrays by displayName', async () => {
+  it('keeps manifest order for available engines and sorts the announced ones', async () => {
     const registry = createEngineRegistry(COMING_SOON);
     registry.register(fakeEngine({ id: 'zed', displayName: 'Zed' }));
     registry.register(fakeEngine({ id: 'acme', displayName: 'Acme' }));
     const catalog = (await controllerWith(registry)).catalog();
 
-    expect(catalog.available.map((e) => e.displayName)).toEqual(['Acme', 'Zed']);
+    expect(catalog.available.map((e) => e.displayName)).toEqual(['Zed', 'Acme']);
     const names = catalog.comingSoon.map((e) => e.displayName);
     expect(names).toEqual([...names].sort());
   });

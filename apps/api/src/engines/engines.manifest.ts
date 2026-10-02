@@ -1,4 +1,5 @@
 import type { EngineDefinition } from '@schemaloom/engine-sdk';
+import { mysqlEngine } from '@schemaloom/engine-mysql';
 import { postgresEngine } from '@schemaloom/engine-postgresql';
 
 /**
@@ -16,4 +17,5 @@ import { postgresEngine } from '@schemaloom/engine-postgresql';
  * exception in one visible place, where an inline comment invites the next person to
  * copy it into a second file. Do not widen the rule.
  */
-export const ENGINE_MANIFEST: readonly EngineDefinition[] = [postgresEngine];
+// PostgreSQL first: specs that need "a real engine" take `ENGINE_MANIFEST[0]`.
+export const ENGINE_MANIFEST: readonly EngineDefinition[] = [postgresEngine, mysqlEngine];

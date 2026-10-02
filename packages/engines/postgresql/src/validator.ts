@@ -167,6 +167,27 @@ function checkDuplicateNames(model: SchemaModel, diagnostics: Diagnostics): void
   }
   groups.push({ type: 'customType', keys: typeKeys, names: typeNames });
 
+  // PostgreSQL names indexes and constraints per SCHEMA; the store only enforces per table
+  // (migration 20261002120000), so the wider rule is this diagnostic.
+  const namespaceOf = (entityId: Id) => model.objects.entity[entityId]?.namespaceId ?? '';
+  const scoped: readonly [
+    IrObjectType,
+    readonly { id: Id; entityId: Id; name: string | null }[],
+  ][] = [
+    ['index', Object.values(model.objects.index)],
+    ['constraint', Object.values(model.objects.constraint)],
+  ];
+  for (const [type, objects] of scoped) {
+    const keys = new Map<string, Id[]>();
+    const names = new Map<Id, string>();
+    for (const object of objects) {
+      if (object.name === null || object.name.length === 0) continue;
+      pushId(keys, `${namespaceOf(object.entityId)}\u0000${normalizeName(object.name)}`, object.id);
+      names.set(object.id, object.name);
+    }
+    groups.push({ type, keys, names });
+  }
+
   for (const { type, keys, names } of groups) {
     for (const ids of keys.values()) {
       if (ids.length < 2) continue;

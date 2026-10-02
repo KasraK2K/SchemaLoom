@@ -8,10 +8,8 @@
  * package get `formatMessage`, `checkLink` and the capability predicates without reaching for
  * the barrel.
  *
- * NO REACT. §16.1's React-typed plugin contract (`EngineUiPlugin`, `EngineNodeProps`,
- * `PropertyPanelSection`) is NOT here: this package must not gain a react dependency, since
- * `apps/api` resolves it too. That contract lives with a consumer that already has React —
- * see `@schemaloom/engine-postgresql-ui/contract`.
+ * NO REACT AT RUNTIME. The React-typed plugin contract (`EngineUiPlugin`, `EngineNodeProps`,
+ * `PropertyPanelSection`) is re-exported below as types only (`./contract.ts`).
  *
  * Nothing here is new. Adding an export to this file is a decision about the browser
  * boundary, not a convenience: if it is not pure, it does not belong.
@@ -110,3 +108,6 @@ export type { EngineParadigm, EngineStaticFacet } from '../definition.js';
 
 // --- errors (§14.1) — the facet registry rejects with UnknownEngineError (§16.0) ---
 export { EngineError, EngineFeatureUnsupportedError, UnknownEngineError } from '../errors.js';
+
+// --- the React-typed plugin contract (§16.1), types only ---
+export type * from './contract.js';

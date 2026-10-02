@@ -574,7 +574,8 @@ export function NoProjects({
                 >
                   {engine.targetVersions.map((version) => (
                     <option key={version} value={version}>
-                      {engine.displayName} {version}
+                      {/* "16" reads "PostgreSQL 16"; "MariaDB 11.4" already names its product. */}
+                      {/^\d/.test(version) ? `${engine.displayName} ${version}` : version}
                     </option>
                   ))}
                 </select>

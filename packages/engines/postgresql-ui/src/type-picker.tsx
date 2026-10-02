@@ -1,7 +1,7 @@
 import type { TypeParameterDescriptor, TypePickerOption } from '@schemaloom/engine-sdk/ui';
 import type { TypeRef } from '@schemaloom/schema-model';
 import { cn } from '@schemaloom/ui';
-import type { TypePickerProps } from './contract.js';
+import type { TypePickerProps } from '@schemaloom/engine-sdk/ui';
 
 const controlClass =
   'h-8 rounded-md border border-border bg-surface px-2 text-sm text-text disabled:opacity-50';

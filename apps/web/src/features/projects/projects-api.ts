@@ -68,6 +68,7 @@ export const EngineOptionSchema = z.object({
           section: z.string().optional(),
           showWhen: z.object({ field: z.string(), in: z.array(z.string()) }).optional(),
           secret: z.boolean().optional(),
+          insecureValues: z.array(z.string()).optional(),
         }) satisfies z.ZodType<ConnectionField>,
       )
       .default([]),

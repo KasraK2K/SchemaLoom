@@ -1,30 +1,19 @@
 /**
- * The React-typed engine UI contract — doc 03 §16.1.
+ * The React-typed engine UI contract — doc 03 §16.1. Types only.
  *
- * WHY IT LIVES HERE AND NOT IN `@schemaloom/engine-sdk/ui`, where §16 puts it: engine-sdk
- * depends on `@schemaloom/schema-model` and `zod`, nothing else (C10), and `apps/api`
- * resolves it. Typing `ComponentType` needs `react`, and the isolated pnpm linker means a
- * package cannot import what it does not declare. This file is that contract in exile: it
- * needs React types AND engine-sdk types, and under the current dependency graph exactly two
- * packages have both — `apps/web` and this one. Only this one is reachable from the other.
+ * It lives in `@schemaloom/engine-sdk/ui`, where §16 puts it, so that a second engine's UI
+ * package (roadmap 9) does not have to depend on the PostgreSQL one to get its types.
+ * engine-sdk takes `@types/react` as a DEV dependency and nothing from React at runtime:
+ * every import below is `import type`, which the build erases, so `apps/api` (which also
+ * resolves engine-sdk) gains no React.
  *
- * ponytail: contract-in-exile. Moving it to `@schemaloom/engine-sdk/ui` the day engine-sdk
- * gains `@types/react` is a file move plus a re-export here; no consumer changes, because
- * `apps/web` already imports it through its own `src/engines/contract.ts` barrel.
- *
- * NOTHING RUNTIME MAY BE ADDED TO THIS FILE. It is published as the `./contract` subpath so
- * that `apps/web` can import the plugin's shape without the plugin's chunk — which is the
- * whole point of §16.3's lazy registry.
+ * NOTHING RUNTIME MAY BE ADDED TO THIS FILE.
  */
-import type {
-  Diagnostic,
-  EngineCapabilities,
-  EngineId,
-  EngineStaticFacet,
-  LinkCheck,
-  ResolvedType,
-  TypePickerOption,
-} from '@schemaloom/engine-sdk/ui';
+import type { EngineCapabilities } from '../capabilities.js';
+import type { EngineStaticFacet } from '../definition.js';
+import type { Diagnostic, EngineId } from '../diagnostics.js';
+import type { LinkCheck } from '../links.js';
+import type { ResolvedType, TypePickerOption } from '../type-catalog.js';
 import type {
   Constraint,
   CustomType,

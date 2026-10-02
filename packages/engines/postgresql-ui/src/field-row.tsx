@@ -2,7 +2,7 @@ import type { ResolvedType } from '@schemaloom/engine-sdk/ui';
 import type { Field } from '@schemaloom/schema-model';
 import { cn } from '@schemaloom/ui';
 import type { ComponentType, ReactNode } from 'react';
-import type { FieldBadges } from './contract.js';
+import type { FieldBadges } from '@schemaloom/engine-sdk/ui';
 import { PostgresTypeBadge } from './type-badge.js';
 
 /** PK / FK / UNIQUE, in the order a reader scans them. The letters are not terminology: they

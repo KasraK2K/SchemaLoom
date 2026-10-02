@@ -17,3 +17,5 @@ import { engineFacets, engineUi } from './registry';
  */
 engineFacets.register('postgresql', () => import('@schemaloom/engine-postgresql-ui/facet'));
 engineUi.register('postgresql', () => import('@schemaloom/engine-postgresql-ui'));
+engineFacets.register('mysql', () => import('@schemaloom/engine-mysql-ui/facet'));
+engineUi.register('mysql', () => import('@schemaloom/engine-mysql-ui'));

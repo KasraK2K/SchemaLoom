@@ -16,6 +16,7 @@
     "@codemirror/view": "^6.36.0",
     "@hookform/resolvers": "^5.0.0",
     "@schemaloom/contracts": "workspace:*",
+    "@schemaloom/engine-mysql-ui": "workspace:*",
     "@schemaloom/engine-postgresql-ui": "workspace:*",
     "@schemaloom/engine-sdk": "workspace:*",
     "@schemaloom/schema-model": "workspace:*",

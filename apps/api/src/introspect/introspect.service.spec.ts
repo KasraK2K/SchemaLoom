@@ -76,6 +76,29 @@ describe('validateConnection', () => {
     const plain = { ...tunnel, ssh_auth: 'password', ssh_password: 'p', sslmode: 'disable' };
     expect(validateConnection(FIELDS, plain, false).sslmode).toBe('disable');
   });
+
+  it('refuses whatever value an engine declares insecure, whatever the field is called', () => {
+    // A MySQL-shaped field: core knows nothing about `ssl_mode` or `DISABLED`.
+    const fields = [
+      { id: 'host', label: 'Host', kind: 'text', required: true },
+      {
+        id: 'ssl_mode',
+        label: 'TLS',
+        kind: 'select',
+        required: true,
+        options: ['REQUIRED', 'VERIFY_IDENTITY', 'DISABLED'],
+        default: 'REQUIRED',
+        insecureValues: ['DISABLED'],
+      },
+    ] as const;
+    expect(
+      refusedField(() => validateConnection(fields, { host: 'h', ssl_mode: 'DISABLED' }, false)),
+    ).toBe('ssl_mode');
+    expect(validateConnection(fields, { host: 'h', ssl_mode: 'DISABLED' }, true).ssl_mode).toBe(
+      'DISABLED',
+    );
+    expect(validateConnection(fields, { host: 'h' }, false).ssl_mode).toBe('REQUIRED');
+  });
 });
 
 const ctx: SnapshotContext = {

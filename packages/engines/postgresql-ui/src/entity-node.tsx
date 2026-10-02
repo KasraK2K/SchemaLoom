@@ -1,6 +1,6 @@
 import { formatMessage } from '@schemaloom/engine-sdk/ui';
 import { ChevronDown, ChevronRight, cn } from '@schemaloom/ui';
-import type { EngineNodeProps } from './contract.js';
+import type { EngineNodeProps } from '@schemaloom/engine-sdk/ui';
 import { FieldRow } from './field-row.js';
 import { resolveIcon } from './icons.js';
 

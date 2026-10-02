@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@schemaloom/config": "workspace:*",
+    "@types/react": "catalog:",
     "eslint": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
