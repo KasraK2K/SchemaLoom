@@ -650,7 +650,7 @@ export function CanvasSurface({
         <MiniMap
           // Float: the inspector floats over the right edge, so the minimap stacks above
           // the toolbar on the left, clear of the floating dock.
-          className="overflow-hidden rounded-lg border border-border shadow-panel theme-float:right-auto! theme-float:left-0! theme-float:mb-16! theme-float:ml-[76px]!"
+          className="overflow-hidden rounded-lg border border-border shadow-panel theme-float:right-auto! theme-float:left-0! theme-float:mb-16! theme-float:ml-[66px]!"
           pannable
           zoomable
           nodeColor={minimapColor}
@@ -658,11 +658,11 @@ export function CanvasSurface({
         />
         <Panel
           position="top-left"
-          className="theme-float:mt-[calc(var(--sl-topbar-h)+24px)]! theme-float:ml-[76px]!"
+          className="theme-float:mt-[calc(var(--sl-topbar-h)+24px)]! theme-float:ml-[66px]!"
         >
           <CanvasSearch model={model} />
         </Panel>
-        <Panel position="bottom-left" className="theme-float:ml-[76px]!">
+        <Panel position="bottom-left" className="theme-float:ml-[66px]!">
           <CanvasToolbar
             actions={
               readOnly

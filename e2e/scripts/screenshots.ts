@@ -67,9 +67,9 @@ const open = async (button: string, field: string) => {
 await page.goto(`${WEB}/acme`);
 const existing = page.getByRole('link', { name: PROJECT });
 if ((await existing.count()) === 0) {
-  await open('Import', 'Target version');
+  // Target version is a picker now, and PostgreSQL 16 is its default.
+  await open('Import', 'Name');
   await page.getByLabel('Name', { exact: true }).fill(PROJECT);
-  await page.getByLabel('Target version').fill('16');
   await page.getByRole('textbox', { name: 'SQL' }).fill(SQL.trim());
   await page.getByRole('button', { name: 'Create and import' }).click();
   await page.waitForURL(/\/p\/[^/]+$/, { timeout: 60_000 });
@@ -80,7 +80,7 @@ await page.getByRole('link', { name: PROJECT }).first().click();
 await page.waitForURL(/\/p\/[^/]+$/);
 const projectUrl = page.url();
 await page.locator('.react-flow__node').first().waitFor();
-await page.getByRole('button', { name: 'Fit View' }).click();
+await page.getByRole('button', { name: 'Fit to view' }).click();
 await settle(page);
 await shot(page, 'canvas');
 

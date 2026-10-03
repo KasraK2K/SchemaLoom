@@ -29,7 +29,7 @@ export function SidebarFrame({ children }: { readonly children: ReactNode }) {
       aria-label="Primary"
       data-collapsed={collapsed}
       style={{ width: collapsed ? 48 : width }}
-      className="group/sidebar relative hidden shrink-0 flex-col border-r border-border bg-surface md:flex theme-float:absolute theme-float:top-[calc(var(--sl-topbar-h)+24px)] theme-float:left-3 theme-float:z-20 theme-float:w-[52px]! theme-float:rounded-xl theme-float:border theme-float:border-border theme-float:pb-2 theme-float:shadow-panel theme-float:backdrop-blur-xl"
+      className="group/sidebar relative hidden shrink-0 flex-col border-r border-border bg-surface md:flex theme-float:absolute theme-float:top-[calc(var(--sl-topbar-h)+24px)] theme-float:left-3 theme-float:z-20 theme-float:w-[42px]! theme-float:rounded-xl theme-float:border theme-float:border-border theme-float:shadow-panel theme-float:backdrop-blur-xl"
     >
       {!rail && (
         <button

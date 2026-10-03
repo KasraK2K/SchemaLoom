@@ -44,7 +44,7 @@ export function AppShell({
           className={cn(
             'min-w-0 flex-1 overflow-auto theme-float:absolute theme-float:inset-0',
             !fullBleed &&
-              'theme-float:pt-[calc(var(--sl-topbar-h)+24px)] theme-float:pl-[76px] theme-float:max-md:pl-0',
+              'theme-float:pt-[calc(var(--sl-topbar-h)+24px)] theme-float:pl-[66px] theme-float:max-md:pl-0',
           )}
         >
           {children}

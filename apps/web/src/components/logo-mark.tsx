@@ -1,5 +1,5 @@
-/** The SchemaLoom mark (woven grid), in jade since the 2026-10 redesign. Same drawing as
- *  `app/icon.svg` and `docs/brand/` (whose files are still indigo). */
+/** The SchemaLoom mark (woven grid), in jade since the 2026-10 redesign. Same drawing and
+ *  colours as `app/icon.svg` and `docs/brand/`. */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden="true">

@@ -31,13 +31,13 @@ export function Sidebar({ items, orgLabel }: { items: readonly NavItem[]; orgLab
             <span className="min-w-0 truncate text-sm font-medium text-text">{orgLabel}</span>
           </div>
         )}
-        <ul className="flex flex-col gap-0.5 p-2">
+        <ul className="flex flex-col gap-0.5 p-2 theme-float:p-1">
           {items.map((item) => (
             <li key={item.href}>
               <Link
                 href={item.href}
                 title={item.label}
-                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium text-text-muted transition-colors group-data-[collapsed=true]/sidebar:justify-center hover:bg-surface-hover hover:text-text"
+                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium text-text-muted transition-colors group-data-[collapsed=true]/sidebar:justify-center hover:bg-surface-hover hover:text-text theme-float:size-8 theme-float:p-0"
               >
                 <item.icon className="size-4 shrink-0" aria-hidden="true" />
                 <span className="truncate group-data-[collapsed=true]/sidebar:sr-only">
