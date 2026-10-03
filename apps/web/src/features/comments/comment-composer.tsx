@@ -8,6 +8,17 @@ import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion
 import { useRef, useState, type ReactNode } from 'react';
 import { mentionsIn, type MentionCandidate } from './comments-api';
 
+const COMPOSER_PROPS = {
+  attributes: {
+    // A contenteditable is not announced as an input without these.
+    role: 'textbox',
+    'aria-multiline': 'true',
+    'aria-label': 'Comment',
+    class:
+      'min-h-16 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-none',
+  },
+};
+
 interface Menu {
   readonly items: readonly MentionCandidate[];
   readonly index: number;
@@ -74,39 +85,34 @@ export function CommentComposer({
     return true;
   };
 
+  // Built once. useEditor diffs options by identity on every render and calls setOptions
+  // on any change; the callbacks below only touch refs and state setters.
+  const [extensions] = useState(() => [
+    StarterKit.configure({ heading: false, codeBlock: false, horizontalRule: false }),
+    Mention.configure({
+      HTMLAttributes: { class: 'rounded bg-accent-subtle px-1 text-accent-text' },
+      suggestion: {
+        items: ({ query }: { query: string }): MentionCandidate[] =>
+          candidatesRef.current
+            .filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
+            .slice(0, 8),
+        render: () => ({
+          onStart: open,
+          onUpdate: open,
+          onKeyDown,
+          onExit: () => {
+            setMenu(null);
+          },
+        }),
+      },
+    }),
+  ]);
+
   const editor = useEditor({
     immediatelyRender: false,
     content: initial ?? '',
-    extensions: [
-      StarterKit.configure({ heading: false, codeBlock: false, horizontalRule: false }),
-      Mention.configure({
-        HTMLAttributes: { class: 'rounded bg-accent-subtle px-1 text-accent-text' },
-        suggestion: {
-          items: ({ query }: { query: string }): MentionCandidate[] =>
-            candidatesRef.current
-              .filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
-              .slice(0, 8),
-          render: () => ({
-            onStart: open,
-            onUpdate: open,
-            onKeyDown,
-            onExit: () => {
-              setMenu(null);
-            },
-          }),
-        },
-      }),
-    ],
-    editorProps: {
-      attributes: {
-        // A contenteditable is not announced as an input without these.
-        role: 'textbox',
-        'aria-multiline': 'true',
-        'aria-label': 'Comment',
-        class:
-          'min-h-16 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-none',
-      },
-    },
+    extensions,
+    editorProps: COMPOSER_PROPS,
     onUpdate: ({ editor: e }) => {
       setDoc(e.getJSON());
     },

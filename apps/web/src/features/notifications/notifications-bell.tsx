@@ -18,6 +18,7 @@ import { io } from 'socket.io-client';
 import { clientEnv } from '@/env.client';
 import { useCanvasStore } from '@/features/canvas/store';
 import { relativeTime } from '@/features/projects/relative-time';
+import { reconnectOnRefusal } from '@/lib/api-client';
 import {
   entityOf,
   markAllRead,
@@ -44,10 +45,17 @@ export function NotificationsBell() {
       transports: ['websocket'],
       withCredentials: true,
     });
-    socket.on('notification:new', () => {
-      void queryClient.invalidateQueries({ queryKey: notificationsKey });
+    const stopReauth = reconnectOnRefusal(socket);
+    const invalidate = () => void queryClient.invalidateQueries({ queryKey: notificationsKey });
+    socket.on('notification:new', invalidate);
+    // Anything sent while we were disconnected was missed; the first connect needs nothing.
+    let connected = false;
+    socket.on('connect', () => {
+      if (connected) invalidate();
+      connected = true;
     });
     return () => {
+      stopReauth();
       socket.disconnect();
     };
   }, [queryClient]);

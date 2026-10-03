@@ -15,6 +15,7 @@ import { create } from 'zustand';
 import { clientEnv } from '@/env.client';
 import { commentsKey } from '@/features/comments/comments-api';
 import { accessQueryKey } from '@/features/sharing/sharing-api';
+import { reconnectOnRefusal } from '@/lib/api-client';
 import { irQueryKey } from './ir-query';
 import { useCanvasStore } from './store';
 
@@ -156,6 +157,7 @@ export function useRealtime(
       transports: ['websocket'],
       withCredentials: true,
     });
+    const stopReauth = reconnectOnRefusal(socket);
     const sendSelection = () => {
       socket.emit('presence:update', {
         selection: [...useCanvasStore.getState().selection],
@@ -188,6 +190,10 @@ export function useRealtime(
       void queryClient.invalidateQueries({ queryKey: commentsKey(projectId) });
     });
     socket.on('project:closed', gone);
+    // Peers who left while we were offline never send `left`; the resubscribe replays the rest.
+    socket.on('disconnect', () => {
+      usePresenceStore.getState().clear();
+    });
     // Phase 4 §3.1 — only sent when this reader can see the target; refetch its thread.
     socket.on('comments:changed', () => {
       void queryClient.invalidateQueries({ queryKey: commentsKey(projectId) });
@@ -205,6 +211,7 @@ export function useRealtime(
     }
 
     return () => {
+      stopReauth();
       unsubscribe?.();
       socket.disconnect();
       usePresenceStore.getState().clear();

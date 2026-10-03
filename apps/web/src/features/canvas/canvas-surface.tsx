@@ -20,6 +20,7 @@ import {
   type NodeChange,
   type NodeTypes,
 } from '@xyflow/react';
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NameDialog } from '@/components/name-dialog';
 import { useEngine, useEngineUi, useTerminology } from '@/engines';
@@ -37,7 +38,11 @@ import { EntityNode } from './entity-node';
 import { createGeometryAutosave, postGeometry } from './geometry';
 import { projectShellQueryOptions } from '@/features/change-requests/change-requests-api';
 import { getSavedConnection, savedConnectionKey } from '@/features/projects/saved-connection';
-import { ImportDialog } from './import-dialog';
+// Lazy and mounted only while open: it pulls in the connection form and AI describe, and
+// its saved-connection query would otherwise fire on every canvas open.
+const ImportDialog = dynamic(() => import('./import-dialog').then((m) => m.ImportDialog), {
+  ssr: false,
+});
 import {
   ENTITY_NODE_TYPE,
   LINK_EDGE_TYPE,
@@ -130,7 +135,19 @@ export function CanvasSurface({
   const [importFrom, setImportFrom] = useState<'sql' | 'database' | 'describe'>('sql');
 
   useEffect(() => {
-    setNodes(builtNodes);
+    // Carry `measured` over: a node without it loses its handle bounds, so React Flow
+    // re-mounts and re-measures every card (culling off) on each IR change. A card
+    // mid-drag keeps its position so a remote patch can't yank it from under the cursor.
+    setNodes((prev) => {
+      const old = new Map(prev.map((n) => [n.id, n]));
+      return builtNodes.map((n) => {
+        const p = old.get(n.id);
+        if (p?.measured === undefined) return n;
+        return p.dragging === true
+          ? { ...n, measured: p.measured, position: p.position }
+          : { ...n, measured: p.measured };
+      });
+    });
   }, [builtNodes, setNodes]);
   useEffect(() => {
     setEdges(builtEdges);
@@ -538,18 +555,20 @@ export function CanvasSurface({
         submitLabel="Create"
         onSubmit={(name) => createEntity(name, newEntityAt ?? { x: 0, y: 0 })}
       />
-      <ImportDialog
-        key={importFrom}
-        initialFrom={importFrom}
-        open={importing}
-        onOpenChange={setImporting}
-        projectId={projectId}
-        onImported={async () => {
-          // Imported entities arrive at the origin; let the placement effect unpile them.
-          laidOut.current = false;
-          await queryClient.invalidateQueries({ queryKey: irQueryKey(projectId) });
-        }}
-      />
+      {importing && (
+        <ImportDialog
+          key={importFrom}
+          initialFrom={importFrom}
+          open
+          onOpenChange={setImporting}
+          projectId={projectId}
+          onImported={async () => {
+            // Imported entities arrive at the origin; let the placement effect unpile them.
+            laidOut.current = false;
+            await queryClient.invalidateQueries({ queryKey: irQueryKey(projectId) });
+          }}
+        />
+      )}
     </>
   );
 

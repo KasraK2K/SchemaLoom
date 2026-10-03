@@ -23,6 +23,8 @@ const CreatedSchema = z.object({ id: z.string() });
 /** Doc 00 Q22: the API imports up to 5 MB inline; anything larger goes through its job. */
 const SYNC_IMPORT_MAX_BYTES = 5_000_000;
 const POLL_MS = 1_500;
+/** Ten minutes: an import still queued by then is stuck (worker gone), not slow. */
+const POLL_LIMIT = 400;
 const NEW_WORKSPACE = '__new';
 const NEW_PROJECT = '__new';
 
@@ -76,7 +78,7 @@ export async function importInto(
 /** Polls the import job until BullMQ reports it done. */
 async function pollImportJob(projectId: string, id: string): Promise<Imported> {
   const path = `/projects/${encodeURIComponent(projectId)}/import/jobs/${encodeURIComponent(id)}`;
-  for (;;) {
+  for (let i = 0; i < POLL_LIMIT; i++) {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
     const job = JobSchema.parse(await apiFetch<unknown>(path));
     if (job.state === 'completed') return ImportedSchema.parse(job.result);
@@ -84,6 +86,7 @@ async function pollImportJob(projectId: string, id: string): Promise<Imported> {
       throw new ApiError(422, 'import_failed', job.error ?? 'The import failed.');
     }
   }
+  throw new ApiError(504, 'import_timeout', 'The import is taking too long. Try again later.');
 }
 
 const IntrospectedSchema = z.object({

@@ -152,6 +152,37 @@ function abandonSession(): void {
   window.location.assign(`/login?expired=1&next=${encodeURIComponent(next)}`);
 }
 
+/**
+ * A socket.io middleware refusal (an expired `sl_access` on reconnect) is final: the client
+ * never retries it, so the socket would stay dead for the life of the tab. Refresh once and
+ * reconnect; a second refusal before any successful connect is left alone (not an auth
+ * problem we can fix). Returns a stop function: call it before `disconnect()` so a refresh
+ * that resolves after unmount can't revive the socket.
+ */
+export function reconnectOnRefusal(socket: {
+  readonly active: boolean;
+  connect(): unknown;
+  on(event: 'connect' | 'connect_error', listener: () => void): unknown;
+}): () => void {
+  let retried = false;
+  let stopped = false;
+  socket.on('connect', () => {
+    retried = false;
+  });
+  socket.on('connect_error', () => {
+    if (socket.active || retried) return; // socket.io retries transport errors itself
+    retried = true;
+    void refreshSession().then((ok) => {
+      if (stopped) return;
+      if (ok) socket.connect();
+      else abandonSession();
+    });
+  });
+  return () => {
+    stopped = true;
+  };
+}
+
 async function send(path: string, init: ApiRequestInit): Promise<Response> {
   const { body, text, headers, method = 'GET', ...rest } = init;
   const upperMethod = method.toUpperCase();

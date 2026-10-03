@@ -17,14 +17,25 @@ import {
   Loading,
   SkeletonRows,
 } from '@schemaloom/ui';
-import { useRef, useState, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
+import { useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { ResizeHandle, usePanelState, type PanelBounds } from '@/components/app-shell/panel';
-import { AiPanel } from '@/features/ai/ai-panel';
-import { CommentsPanel, CommentsTabCount } from '@/features/comments/comments-panel';
-import { DocsPanel } from '@/features/docs/docs-panel';
+import { CommentsTabCount } from '@/features/comments/comments-tab-count';
 import { EngineGate } from '@/features/project/engine-gate';
-import { QueriesPanel } from '@/features/queries/queries-panel';
 import { InspectorBody } from './inspector-body';
+
+// TipTap and CodeMirror live behind these tabs; Radix mounts a tab only when it's picked,
+// so they load on first open instead of with the canvas.
+const lazyTab = <P,>(load: () => Promise<ComponentType<P>>) =>
+  dynamic(load, { ssr: false, loading: () => <SkeletonRows rows={4} /> });
+const CommentsPanel = lazyTab(() =>
+  import('@/features/comments/comments-panel').then((m) => m.CommentsPanel),
+);
+const QueriesPanel = lazyTab(() =>
+  import('@/features/queries/queries-panel').then((m) => m.QueriesPanel),
+);
+const DocsPanel = lazyTab(() => import('@/features/docs/docs-panel').then((m) => m.DocsPanel));
+const AiPanel = lazyTab(() => import('@/features/ai/ai-panel').then((m) => m.AiPanel));
 
 const BOUNDS: PanelBounds = { defaultWidth: 320, min: 260, max: 720 };
 

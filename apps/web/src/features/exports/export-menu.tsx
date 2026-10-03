@@ -16,7 +16,6 @@ import { Fragment, useCallback, useState } from 'react';
 import { useEngine } from '@/engines';
 import { irQueryOptions } from '@/features/canvas/ir-query';
 import { EngineGate } from '@/features/project/engine-gate';
-import { renderCanvasImage } from './canvas-image';
 import {
   exportErrorMessage,
   runImageExport,
@@ -41,7 +40,11 @@ export function useExport(projectId: string) {
       setError(null);
       try {
         const url = isImage(format)
-          ? await runImageExport(projectId, format, await renderCanvasImage(format))
+          ? await runImageExport(
+              projectId,
+              format,
+              await (await import('./canvas-image')).renderCanvasImage(format),
+            )
           : await runServerExport(projectId, format, areaId);
         startDownload(url);
       } catch (caught) {

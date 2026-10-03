@@ -192,23 +192,28 @@ export async function streamMessage(
   if (reader === undefined) return;
   const decoder = new TextDecoder();
   const parser = createSseParser();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    for (const frame of parser.push(decoder.decode(value, { stream: true }))) {
-      const data: unknown = JSON.parse(frame.data);
-      if (frame.event === 'done') onEvent({ type: 'done', message: aiMessageSchema.parse(data) });
-      else if (frame.event === 'error')
-        onEvent({ type: 'error', code: z.object({ code: z.string() }).parse(data).code });
-      else if (frame.event === 'block-delta')
-        onEvent({
-          type: 'block-delta',
-          ...z.object({ tag: z.string(), text: z.string() }).parse(data),
-        });
-      else if (frame.event === 'block-open' || frame.event === 'block-close') {
-        onEvent({ type: frame.event, tag: z.object({ tag: z.string() }).parse(data).tag });
+  // A frame that fails to parse ends the loop; cancel so the server stops generating.
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const frame of parser.push(decoder.decode(value, { stream: true }))) {
+        const data: unknown = JSON.parse(frame.data);
+        if (frame.event === 'done') onEvent({ type: 'done', message: aiMessageSchema.parse(data) });
+        else if (frame.event === 'error')
+          onEvent({ type: 'error', code: z.object({ code: z.string() }).parse(data).code });
+        else if (frame.event === 'block-delta')
+          onEvent({
+            type: 'block-delta',
+            ...z.object({ tag: z.string(), text: z.string() }).parse(data),
+          });
+        else if (frame.event === 'block-open' || frame.event === 'block-close') {
+          onEvent({ type: frame.event, tag: z.object({ tag: z.string() }).parse(data).tag });
+        }
       }
     }
+  } finally {
+    void reader.cancel().catch(() => undefined);
   }
 }
 

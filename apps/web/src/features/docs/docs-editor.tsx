@@ -16,6 +16,18 @@ import {
   type DocView,
 } from './docs-api';
 
+// Module constants: useEditor diffs options by identity each render and calls setOptions.
+const DOC_EXTENSIONS = [StarterKit.configure({ link: { openOnClick: false } })];
+const DOC_EDITOR_PROPS = {
+  attributes: {
+    role: 'textbox',
+    'aria-multiline': 'true',
+    'aria-label': 'Documentation',
+    class:
+      'prose-sm min-h-24 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-none [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_pre]:rounded [&_pre]:bg-surface-sunken [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs',
+  },
+};
+
 /** Quiet time after the last keystroke before a save; blur saves at once. */
 const SAVE_DELAY_MS = 1500;
 
@@ -77,16 +89,8 @@ export function DocEditor({
     immediatelyRender: false,
     editable: !readOnly,
     content: doc.content,
-    extensions: [StarterKit.configure({ link: { openOnClick: false } })],
-    editorProps: {
-      attributes: {
-        role: 'textbox',
-        'aria-multiline': 'true',
-        'aria-label': 'Documentation',
-        class:
-          'prose-sm min-h-24 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-none [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_pre]:rounded [&_pre]:bg-surface-sunken [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs',
-      },
-    },
+    extensions: DOC_EXTENSIONS,
+    editorProps: DOC_EDITOR_PROPS,
     onUpdate: schedule,
     onBlur: flush,
   });
@@ -134,7 +138,8 @@ export function DocEditor({
   };
 
   useEffect(() => {
-    editor?.setEditable(!readOnly);
+    // `false`: the default emits `update`, which would schedule a save of an untouched doc.
+    editor?.setEditable(!readOnly, false);
   }, [editor, readOnly]);
 
   // A newer server copy: take it only when nothing local would be lost.
