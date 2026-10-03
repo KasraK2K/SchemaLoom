@@ -23,13 +23,9 @@ test.describe('workflow 16 — appearance themes', () => {
       await page.getByRole('button', { name: 'Appearance' }).click();
       const html = page.locator('html');
 
-      // Pointing at a theme shows it on the page; pointing away puts the saved one back.
+      // Pointing at a theme changes nothing; a click picks, with no Apply step.
       await page.getByRole('radio', { name: 'Float' }).hover();
-      await expect(html).toHaveAttribute('data-theme', 'float');
-      await page.mouse.move(5, 5);
       await expect(html).toHaveAttribute('data-theme', 'studio');
-
-      // A click picks: no Apply step.
       await page.getByRole('radio', { name: 'Blueprint' }).click();
       await page.getByRole('radio', { name: 'Olive' }).click();
       await page.getByRole('radio', { name: 'Dark' }).click();

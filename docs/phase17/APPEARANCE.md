@@ -3,14 +3,15 @@
 Status: **built** 2026-10-03. The owner approved the plan (four themes, the choice saved to
 the account, no org default yet) and the mockup the same day. Amended the same day at the
 owner's request: the themes were too alike, so each now differs in type, corners, cards,
-links and canvas, a colour also changes the greys, and the panel previews on hover.
+links and canvas, a colour also changes the greys, and a click applies at once. A hover
+preview was tried and removed: themes resize the shell, so the panel jumped under the
+pointer and re-rendered in a loop.
 
 ## What a user gets
 
 The **appearance button** in the top bar (the icon shows the mode) opens a panel docked on
-the right, with no backdrop. Pointing at (or focusing) a theme, a colour or a mode shows it
-on the whole app; moving away puts the saved look back. A click picks and saves it; there is
-no Apply step. A theme is a working style, not a palette:
+the right, with no backdrop, so the page shows the result. A click on a theme, a colour or a
+mode applies and saves it; there is no Apply step. A theme is a working style, not a palette:
 
 | Theme         | Feels like       | Type                                                  | Corners and controls                    | Table cards                              | Links          | Canvas                                               |
 | ------------- | ---------------- | ----------------------------------------------------- | --------------------------------------- | ---------------------------------------- | -------------- | ---------------------------------------------------- |
@@ -35,9 +36,6 @@ Behaviour, routes and permissions are the same in every theme.
   `data-theme` and `data-variant` on `<html>` from local storage, validated against the
   contract's table. `ThemeProvider` then adopts the account's choice (a plain fetch, so a
   signed-out page never redirects) and saves changes only for a signed-in user.
-- **Preview.** `ThemeProvider.previewAppearance` writes a look onto `<html>` and into
-  context (so React-drawn parts, the link paths and the rail, follow) without storing it;
-  `null` restores the saved look. A pick clears the preview.
 - **Tokens.** `packages/config/tailwind/themes.css` overrides `theme.css`'s semantic tokens
   per theme and mode (surfaces, text, borders, shadows, area tints, radius scale, fonts,
   density) and the accent tokens per variant. Every combination passes AA for text on its
@@ -47,8 +45,8 @@ Behaviour, routes and permissions are the same in every theme.
   headers, the canvas grid (two `Background`s, one hidden per theme) and Float's
   fit-to-view padding. CSS, not React state, so the first paint is already right.
 - **Fonts.** IBM Plex comes from `@fontsource`; a face downloads only when text uses it.
-- **Tests.** The contract's spec, the auth route table, and e2e workflow 16 (hover previews
-  and reverts, a click picks, see it applied, find it on the account and in a fresh
+- **Tests.** The contract's spec, the auth route table, and e2e workflow 16 (a click picks,
+  hovering changes nothing, see it applied, find it on the account and in a fresh
   browser; a wrong variant is a 400).
 
 ## Later

@@ -10,7 +10,7 @@ import {
   DialogTitle,
   cn,
 } from '@schemaloom/ui';
-import type { CSSProperties, FocusEvent } from 'react';
+import type { CSSProperties } from 'react';
 import { useTheme } from '@/components/theme-provider';
 import { THEME_INFO, variantsOf } from '@/lib/appearance';
 import type { Look, Theme } from '@/lib/theme';
@@ -19,9 +19,10 @@ const MODES: readonly Theme[] = ['light', 'dark', 'system'];
 const MODE_LABEL: Record<Theme, string> = { light: 'Light', dark: 'Dark', system: 'System' };
 
 /**
- * Pick a theme, its colour and the mode. Pointing at (or focusing) an option shows it on
- * the whole app; clicking picks and saves it. The panel docks to the right with no
- * backdrop, so the preview is the page itself, not a thumbnail.
+ * Pick a theme, its colour and the mode. A click applies and saves it at once; the panel
+ * docks to the right with no backdrop, so the page itself shows the result. No hover
+ * preview: a theme can resize the shell (Float's dock, Compact's rail), and previewing on
+ * pointer-over made the panel jump under the pointer and re-render in a loop.
  */
 export function AppearanceDialog({
   open,
@@ -30,50 +31,34 @@ export function AppearanceDialog({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }) {
-  const { saved, setAppearance, previewAppearance } = useTheme();
+  const { look, theme, setAppearance } = useTheme();
 
-  // A theme's own default colour, unless the saved one belongs to it.
-  const lookOf = (theme: AppearanceTheme): Look => ({
-    theme,
-    variant: saved.look.theme === theme ? saved.look.variant : (variantsOf(theme)[0] ?? ''),
+  // A theme's own default colour, unless the current one belongs to it.
+  const lookOf = (id: AppearanceTheme): Look => ({
+    theme: id,
+    variant: look.theme === id ? look.variant : (variantsOf(id)[0] ?? ''),
   });
-  const show = (look: Look, mode: Theme = saved.theme) => {
-    previewAppearance({ look, mode });
-  };
-  const endPreview = () => {
-    previewAppearance(null);
-  };
-  // Focus leaving the options (not moving between them) ends a keyboard preview.
-  const onBlur = (event: FocusEvent<HTMLDivElement>) => {
-    if (!event.currentTarget.contains(event.relatedTarget)) endPreview();
-  };
-  const close = (next: boolean) => {
-    if (!next) endPreview();
-    onOpenChange(next);
-  };
 
   return (
-    <Dialog open={open} onOpenChange={close}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-transparent"
         className="top-3 right-3 bottom-3 left-auto flex w-[22rem] max-w-[calc(100vw-1.5rem)] translate-x-0 translate-y-0 flex-col overflow-y-auto bg-surface-raised"
       >
         <DialogTitle>Appearance</DialogTitle>
         <DialogDescription>
-          Point at a theme or colour to see it here. Click to pick it.
+          Click a theme, colour or mode to apply it. A theme changes the layout, density and type,
+          not only the colour.
         </DialogDescription>
 
-        <div onPointerLeave={endPreview} onBlur={onBlur} className="mt-4 flex flex-col gap-3">
+        <div className="mt-4 flex flex-col gap-3">
           <div role="radiogroup" aria-label="Theme" className="flex flex-col gap-2">
             {APPEARANCE_THEME_IDS.map((id) => {
               const info = THEME_INFO[id];
-              const chosen = saved.look.theme === id;
+              const chosen = look.theme === id;
               return (
                 <div
                   key={id}
-                  onPointerOver={() => {
-                    show(lookOf(id));
-                  }}
                   className={cn(
                     'flex gap-3 rounded-lg border bg-surface p-2 transition-shadow',
                     chosen ? 'border-accent ring-[3px] ring-accent/20' : 'border-border',
@@ -84,11 +69,8 @@ export function AppearanceDialog({
                     role="radio"
                     aria-checked={chosen}
                     aria-label={info.label}
-                    onFocus={() => {
-                      show(lookOf(id));
-                    }}
                     onClick={() => {
-                      setAppearance(lookOf(id), saved.theme);
+                      setAppearance(lookOf(id), theme);
                     }}
                     className="flex min-w-0 flex-1 gap-3 rounded-md text-left"
                   >
@@ -105,7 +87,7 @@ export function AppearanceDialog({
                   >
                     {variantsOf(id).map((variant) => {
                       const v = info.variants[variant];
-                      const on = chosen && saved.look.variant === variant;
+                      const on = chosen && look.variant === variant;
                       return (
                         <button
                           key={variant}
@@ -114,15 +96,8 @@ export function AppearanceDialog({
                           aria-checked={on}
                           aria-label={v?.label ?? variant}
                           title={v?.label ?? variant}
-                          onPointerOver={(event) => {
-                            event.stopPropagation();
-                            show({ theme: id, variant });
-                          }}
-                          onFocus={() => {
-                            show({ theme: id, variant });
-                          }}
                           onClick={() => {
-                            setAppearance({ theme: id, variant }, saved.theme);
+                            setAppearance({ theme: id, variant }, theme);
                           }}
                           style={{ backgroundColor: v?.swatch }}
                           className={cn(
@@ -152,19 +127,13 @@ export function AppearanceDialog({
                   key={mode}
                   type="button"
                   role="radio"
-                  aria-checked={saved.theme === mode}
-                  onPointerOver={() => {
-                    show(saved.look, mode);
-                  }}
-                  onFocus={() => {
-                    show(saved.look, mode);
-                  }}
+                  aria-checked={theme === mode}
                   onClick={() => {
-                    setAppearance(saved.look, mode);
+                    setAppearance(look, mode);
                   }}
                   className={cn(
                     'rounded-md px-3 py-1 text-sm font-medium transition-colors',
-                    saved.theme === mode
+                    theme === mode
                       ? 'bg-surface-raised text-text shadow-panel'
                       : 'text-text-muted hover:text-text',
                   )}
@@ -180,7 +149,7 @@ export function AppearanceDialog({
           <Button
             size="sm"
             onClick={() => {
-              close(false);
+              onOpenChange(false);
             }}
           >
             Done
