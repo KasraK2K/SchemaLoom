@@ -19,7 +19,7 @@ interface NavItem {
 export function Sidebar({ items, orgLabel }: { items: readonly NavItem[]; orgLabel?: string }) {
   return (
     <SidebarFrame>
-      <ScrollArea className="h-full">
+      <ScrollArea className="h-full theme-float:h-auto">
         {orgLabel !== undefined && (
           <div className="mx-2 mt-1 flex items-center gap-2.5 rounded-lg border border-border bg-surface-raised px-2 py-1.5 group-data-[collapsed=true]/sidebar:hidden">
             <span

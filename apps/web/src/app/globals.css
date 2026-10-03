@@ -1,5 +1,15 @@
 @import 'tailwindcss';
 @import '@schemaloom/config/tailwind/theme.css';
+/* Appearance themes override the tokens above; unlayered, so they win over theme.css's
+   layered defaults without !important. */
+@import '@schemaloom/config/tailwind/themes.css';
+
+/* Structural differences a token cannot express ("this panel floats in Float"):
+   `theme-float:absolute` applies on the element when <html data-theme="float">. */
+@custom-variant theme-studio (&:where([data-theme='studio'], [data-theme='studio'] *));
+@custom-variant theme-blueprint (&:where([data-theme='blueprint'], [data-theme='blueprint'] *));
+@custom-variant theme-float (&:where([data-theme='float'], [data-theme='float'] *));
+@custom-variant theme-compact (&:where([data-theme='compact'], [data-theme='compact'] *));
 
 /**
  * Tailwind v4 scans the project it is built from. It does NOT follow a workspace
@@ -11,6 +21,7 @@
  */
 @source '../../../../packages/ui/src';
 @source '../../../../packages/engines/postgresql-ui/src';
+@source '../../../../packages/engines/mysql-ui/src';
 
 @layer base {
   html {
@@ -54,7 +65,10 @@
  */
 div.react-flow {
   --xy-background-color-default: var(--color-canvas);
-  --xy-background-pattern-color-default: var(--color-border);
+  /* The dots and lines variables, not `--xy-background-pattern-color-default`, which
+     React Flow 12 does not read. */
+  --xy-background-pattern-dots-color-default: var(--color-border);
+  --xy-background-pattern-lines-color-default: var(--color-border);
 
   --xy-edge-stroke-default: var(--color-border-strong);
   --xy-edge-stroke-selected-default: var(--color-accent);
@@ -81,6 +95,16 @@ div.react-flow {
   --xy-selection-border-default: 1px dotted var(--color-accent);
   --xy-node-boxshadow-selected-default: none;
   --xy-attribution-background-color-default: transparent;
+}
+
+/* Blueprint draws a ruled grid; at full border strength the lines would compete with the
+   tables. */
+[data-theme='blueprint'] div.react-flow {
+  --xy-background-pattern-lines-color-default: color-mix(
+    in srgb,
+    var(--color-border) 55%,
+    transparent
+  );
 }
 
 /**

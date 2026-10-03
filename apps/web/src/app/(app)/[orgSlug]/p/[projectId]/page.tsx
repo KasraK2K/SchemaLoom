@@ -45,6 +45,7 @@ export default async function ProjectCanvasPage({
           </>
         }
         rightPanel={<InspectorPanel projectId={projectId} />}
+        fullBleed
       >
         <CanvasClient projectId={projectId} />
       </AppShell>

@@ -23,8 +23,10 @@ function BadgeMarks({ badges }: { readonly badges: FieldBadges | undefined }): R
             'rounded px-1 font-mono text-[9.5px] leading-4 font-semibold',
             // One accent: the key that identifies the row is jade, the rest stay neutral.
             mark === 'PK'
-              ? 'bg-accent-subtle text-accent-text'
-              : 'bg-surface-sunken text-text-muted',
+              ? 'bg-accent-subtle text-accent-text theme-blueprint:border-accent'
+              : 'bg-surface-sunken text-text-muted theme-blueprint:border-border-strong',
+            // Blueprint: outlined, like a stamp on a drawing.
+            'theme-blueprint:rounded-none theme-blueprint:border theme-blueprint:bg-transparent',
           )}
         >
           {mark}
@@ -62,7 +64,7 @@ export function FieldRow({
   return (
     <li
       className={cn(
-        'relative flex items-center gap-2 px-2.5 py-[5px]',
+        'relative flex items-center gap-2 px-2.5 py-(--sl-row-py) theme-compact:px-2 theme-compact:font-mono',
         highlighted && 'bg-accent-subtle',
       )}
     >

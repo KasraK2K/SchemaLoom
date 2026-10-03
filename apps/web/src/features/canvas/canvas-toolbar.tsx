@@ -11,6 +11,7 @@ import {
   Upload,
 } from '@schemaloom/ui';
 import { useReactFlow, useViewport } from '@xyflow/react';
+import { fitPadding } from './fit-padding';
 
 /** One editing action. Absent = not offered here (read-only canvas, no import format…). */
 export interface ToolbarAction {
@@ -83,7 +84,7 @@ export function CanvasToolbar({
         variant="ghost"
         size="icon"
         aria-label="Fit to view"
-        onClick={() => void flow.fitView({ padding: 0.2, duration: 200 })}
+        onClick={() => void flow.fitView({ padding: fitPadding(), duration: 200 })}
         className="size-7 text-text-muted"
       >
         <Maximize className="size-3.5" aria-hidden="true" />

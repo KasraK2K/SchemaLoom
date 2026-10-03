@@ -65,6 +65,7 @@ const AUTHENTICATED_ROUTES = [
   'DELETE /api/auth/sessions/:familyId',
   'GET /api/auth/me',
   'GET /api/auth/sessions',
+  'PUT /api/auth/me/appearance',
   'POST /api/auth/2fa/confirm',
   'POST /api/auth/2fa/disable',
   'POST /api/auth/2fa/enrol',

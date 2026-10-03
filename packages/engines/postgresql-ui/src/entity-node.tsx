@@ -39,14 +39,18 @@ export function PostgresEntityNode({
     <div
       className={cn(
         'min-w-52 overflow-hidden rounded-lg border bg-surface-raised shadow-node transition-shadow',
-        selected ? 'border-accent ring-[3px] ring-accent/25' : 'border-border-strong',
+        // Blueprint and Compact draw a hairline ring, not a soft halo.
+        selected
+          ? 'border-accent ring-[3px] ring-accent/25 theme-blueprint:ring-1 theme-blueprint:ring-accent theme-compact:ring-1 theme-compact:ring-accent'
+          : 'border-border-strong',
       )}
     >
       {/* The area's colour tints the header band: the card says where it belongs without
           a stripe competing with the selection ring. */}
       <header
         className={cn(
-          'flex items-center gap-2 border-b border-border px-2.5 py-2',
+          // Blueprint: a spec box, its header closed by a double rule.
+          'flex items-center gap-2 border-b border-border px-2.5 py-(--sl-header-py) theme-blueprint:border-b-[3px] theme-blueprint:border-double theme-blueprint:border-border-strong',
           areaColor === null && 'bg-surface-sunken',
         )}
         style={areaColor === null ? undefined : { backgroundColor: areaColor }}
@@ -60,7 +64,9 @@ export function PostgresEntityNode({
           <Chevron className="size-3.5" />
         </button>
         <KindIcon className="size-3.5 text-text-muted" />
-        <span className="truncate text-[13px] font-semibold text-text">{entity.name}</span>
+        <span className="truncate text-[13px] font-semibold text-text theme-blueprint:font-mono theme-blueprint:text-[11px] theme-blueprint:tracking-[0.07em] theme-blueprint:uppercase theme-compact:text-xs">
+          {entity.name}
+        </span>
         {kind?.hasFields === false ? null : (
           <span className="ml-auto pl-2 font-mono text-[10.5px] text-text-subtle">
             {fields.length}
@@ -81,7 +87,7 @@ export function PostgresEntityNode({
           {formatMessage(engine.terminology, 'list.empty', 'field')}
         </p>
       ) : (
-        <ul className="divide-y divide-border/60">
+        <ul className="divide-y divide-border/60 theme-blueprint:divide-dashed">
           {fields.map((field) => (
             <FieldRow
               key={field.id}

@@ -12,7 +12,8 @@
     "./eslint/react": "./eslint/react.js",
     "./tsup": "./tsup/index.js",
     "./vitest": "./vitest/index.js",
-    "./tailwind/theme.css": "./tailwind/theme.css"
+    "./tailwind/theme.css": "./tailwind/theme.css",
+    "./tailwind/themes.css": "./tailwind/themes.css"
   },
   "files": [
     "eslint",

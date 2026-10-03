@@ -7,12 +7,14 @@ import {
   NotFoundException,
   Param,
   Post,
+  Put,
   Req,
   Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Appearance } from '@schemaloom/contracts';
 import { ApiCookieAuth, ApiExcludeEndpoint } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { parseCookieHeader } from '../common/cookies.middleware';
@@ -34,6 +36,7 @@ import {
   setUserSessionCookies,
 } from './cookies';
 import {
+  AppearanceDto,
   CodeDto,
   DisableTwoFactorDto,
   EmailOnlyDto,
@@ -257,6 +260,13 @@ export class AuthController {
   @Get('me')
   async me(@Req() req: Request): Promise<MeResponse> {
     return this.auth.me(userIdOf(req));
+  }
+
+  /** The caller's theme, colour variant and mode, so the choice follows them across devices. */
+  @Authenticated()
+  @Put('me/appearance')
+  async setAppearance(@Req() req: Request, @Body() dto: AppearanceDto): Promise<Appearance> {
+    return this.auth.setAppearance(userIdOf(req), dto);
   }
 
   /** Which OAuth buttons the login page draws. A provider with no credentials has no route. */

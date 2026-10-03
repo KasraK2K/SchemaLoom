@@ -81,3 +81,16 @@ export { MAX_FIELD_DEPTH } from '@schemaloom/schema-model';
 export { DEMO_PASSWORD, HIDDEN_FROM_FREELANCER, SEED, SEED_EMAILS } from './fixtures.js';
 
 export { aiMessageMetaSchema, selectionSchema, type AiMessageMeta, type Selection } from './ai.js';
+
+export {
+  APPEARANCE_MODES,
+  APPEARANCE_THEME_IDS,
+  APPEARANCE_THEMES,
+  DEFAULT_APPEARANCE,
+  appearanceInputSchema,
+  isAppearanceVariant,
+  readAppearance,
+  type Appearance,
+  type AppearanceMode,
+  type AppearanceTheme,
+} from './appearance.js';

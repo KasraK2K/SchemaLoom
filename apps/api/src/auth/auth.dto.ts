@@ -1,3 +1,4 @@
+import { appearanceInputSchema } from '@schemaloom/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -60,3 +61,5 @@ export const disableTwoFactorSchema = z
     message: 'code or password is required',
   });
 export class DisableTwoFactorDto extends createZodDto(disableTwoFactorSchema) {}
+
+export class AppearanceDto extends createZodDto(appearanceInputSchema) {}

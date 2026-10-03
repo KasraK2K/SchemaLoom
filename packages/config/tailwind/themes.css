@@ -1,0 +1,396 @@
+/**
+ * Appearance themes (owner-approved 2026-10-03). Each theme is a working style, not only a
+ * palette: it overrides the semantic tokens of `theme.css` (surfaces, text, borders,
+ * shadows, area tints), the radius scale, the fonts and the density, for light and dark.
+ * A colour variant then overrides only the accent tokens.
+ *
+ * Studio + Jade is the base `theme.css` itself, so it needs no block here.
+ *
+ * Selectors carry `:root` plus the theme attribute plus the mode class, which outranks the
+ * bare `.dark` of `theme.css` without `!important`. `<html>` gets `data-theme`,
+ * `data-variant` and `.light`/`.dark` from the inline script in layout.tsx before paint.
+ *
+ * Structural tokens (read through arbitrary values, e.g. `py-(--sl-row-py)`):
+ *   --sl-row-py      vertical padding of a table card's column row
+ *   --sl-header-py   vertical padding of a table card's header
+ *   --sl-topbar-h    height of the top bar
+ */
+
+:root {
+  --sl-row-py: 5px;
+  --sl-header-py: 8px;
+  --sl-topbar-h: 48px;
+}
+
+/* ═══════════════════════════════ Blueprint ═══════════════════════════════ */
+/* Technical drawing: IBM Plex, sharp corners, hairlines and no shadows, a ruled canvas. */
+
+:root[data-theme='blueprint'] {
+  --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 3px;
+  --sl-header-py: 7px;
+  --shadow-panel: none;
+  --shadow-node: none;
+  --color-area-1: transparent;
+  --color-area-2: transparent;
+  --color-area-3: transparent;
+  --color-area-4: transparent;
+  --color-area-5: transparent;
+  --color-area-6: transparent;
+  --color-area-7: transparent;
+  --color-area-8: transparent;
+}
+:root[data-theme='blueprint']:not(.dark) {
+  --color-canvas: #f6f8fb;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #eef2f7;
+  --color-surface-hover: #e5ebf3;
+  --color-border: #cad5e3;
+  --color-border-strong: #8ea4c2;
+  --color-text: #13233a;
+  --color-text-muted: #47607f;
+  --color-text-subtle: #62778f;
+  --shadow-popover: 0 8px 24px rgb(19 35 58 / 0.12);
+}
+:root[data-theme='blueprint'].dark {
+  --color-canvas: #0b1a2e;
+  --color-surface: #0e2038;
+  --color-surface-raised: #10243f;
+  --color-surface-sunken: #0b1a2e;
+  --color-surface-hover: #16304f;
+  --color-border: #22426a;
+  --color-border-strong: #3a6597;
+  --color-text: #e3edf8;
+  --color-text-muted: #a9bfd8;
+  --color-text-subtle: #7d9abb;
+  --shadow-popover: 0 10px 30px rgb(0 0 0 / 0.5);
+}
+
+/* ═════════════════════════════════ Float ═════════════════════════════════ */
+/* Canvas-first: frosted panels float over a full-bleed canvas with generous corners. */
+
+:root[data-theme='float'] {
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --sl-topbar-h: 52px;
+}
+:root[data-theme='float']:not(.dark) {
+  --color-canvas: #eef2f6;
+  --color-surface: rgb(255 255 255 / 0.8);
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: rgb(16 32 48 / 0.045);
+  --color-surface-hover: rgb(16 32 48 / 0.07);
+  --color-border: rgb(16 32 48 / 0.09);
+  --color-border-strong: rgb(16 32 48 / 0.2);
+  --color-text: #16212c;
+  --color-text-muted: #4f5d6b;
+  --color-text-subtle: #66737f;
+  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 16px 40px rgb(16 32 48 / 0.12);
+  --shadow-node: 0 1px 2px rgb(16 32 48 / 0.06), 0 8px 20px rgb(16 32 48 / 0.08);
+  --shadow-popover: 0 18px 48px rgb(16 32 48 / 0.18);
+  --color-area-1: rgb(26 111 155 / 0.1);
+  --color-area-2: rgb(110 90 200 / 0.1);
+  --color-area-3: rgb(220 150 40 / 0.12);
+  --color-area-4: rgb(220 70 80 / 0.1);
+  --color-area-5: rgb(60 160 110 / 0.1);
+  --color-area-6: rgb(60 90 210 / 0.1);
+  --color-area-7: rgb(240 110 30 / 0.1);
+  --color-area-8: rgb(210 60 150 / 0.1);
+}
+:root[data-theme='float'].dark {
+  --color-canvas: #0f1216;
+  --color-surface: rgb(24 28 34 / 0.8);
+  --color-surface-raised: #1a1f26;
+  --color-surface-sunken: rgb(255 255 255 / 0.04);
+  --color-surface-hover: rgb(255 255 255 / 0.07);
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-border-strong: rgb(255 255 255 / 0.17);
+  --color-text: #e8edf2;
+  --color-text-muted: #a7b1bd;
+  --color-text-subtle: #7d8996;
+  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 18px 48px rgb(0 0 0 / 0.5);
+  --shadow-node: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 26px rgb(0 0 0 / 0.45);
+  --shadow-popover: 0 20px 56px rgb(0 0 0 / 0.6);
+  --color-area-1: rgb(63 163 214 / 0.14);
+  --color-area-2: rgb(140 120 230 / 0.14);
+  --color-area-3: rgb(240 180 80 / 0.14);
+  --color-area-4: rgb(240 90 100 / 0.14);
+  --color-area-5: rgb(80 200 140 / 0.14);
+  --color-area-6: rgb(90 120 240 / 0.14);
+  --color-area-7: rgb(250 130 60 / 0.14);
+  --color-area-8: rgb(230 90 170 / 0.14);
+}
+/* Frosted panels need contrast without the blur too. */
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme='float']:not(.dark) {
+    --color-surface: #ffffff;
+  }
+  :root[data-theme='float'].dark {
+    --color-surface: #181c22;
+  }
+}
+
+/* ════════════════════════════════ Compact ════════════════════════════════ */
+/* Dense: a smaller root size scales every rem-based space and type down at once; flat,
+   square, no shadows, no area tints, no canvas grid. */
+
+:root[data-theme='compact'] {
+  font-size: 14px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --sl-row-py: 2px;
+  --sl-header-py: 4px;
+  --sl-topbar-h: 40px;
+  --shadow-panel: none;
+  --shadow-node: none;
+  --color-area-1: transparent;
+  --color-area-2: transparent;
+  --color-area-3: transparent;
+  --color-area-4: transparent;
+  --color-area-5: transparent;
+  --color-area-6: transparent;
+  --color-area-7: transparent;
+  --color-area-8: transparent;
+}
+:root[data-theme='compact']:not(.dark) {
+  --color-canvas: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f2f3f4;
+  --color-surface-hover: #eaecee;
+  --color-border: #dfe2e5;
+  --color-border-strong: #b4bac0;
+  --color-text: #15181b;
+  --color-text-muted: #4c545b;
+  --color-text-subtle: #67707a;
+  --shadow-popover: 0 8px 22px rgb(21 24 27 / 0.12);
+}
+:root[data-theme='compact'].dark {
+  --color-canvas: #0b0c0d;
+  --color-surface: #0f1112;
+  --color-surface-raised: #131517;
+  --color-surface-sunken: #0d0f10;
+  --color-surface-hover: #1a1d1f;
+  --color-border: #23272a;
+  --color-border-strong: #3a4045;
+  --color-text: #e4e7ea;
+  --color-text-muted: #a3aab0;
+  --color-text-subtle: #7b838a;
+  --shadow-popover: 0 10px 28px rgb(0 0 0 / 0.55);
+}
+
+/* ═════════════════════════════ Colour variants ═══════════════════════════ */
+/* Accent tokens only. Light fills are dark enough for white text (AA); dark fills are
+   bright and carry near-black text. */
+
+/* Studio. Jade is theme.css's own accent; only its text is a step darker here, so jade
+   text on a pale jade chip clears AA. */
+:root[data-theme='studio']:not(.dark) {
+  --color-accent-text: #1b7058;
+}
+:root[data-theme='studio'][data-variant='cobalt']:not(.dark) {
+  --color-accent: #0d74ce;
+  --color-accent-hover: #0b63b0;
+  --color-accent-text: #0b63b0;
+  --color-accent-subtle: #e6f4fe;
+  --color-accent-border: #8ec8f6;
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='studio'][data-variant='cobalt'].dark {
+  --color-accent: #3b9eff;
+  --color-accent-hover: #5eb1ef;
+  --color-accent-text: #70b8ff;
+  --color-accent-subtle: #0d2847;
+  --color-accent-border: #205d9e;
+  --color-on-accent: #06121f;
+}
+:root[data-theme='studio'][data-variant='amber']:not(.dark) {
+  --color-accent: #9a5b00;
+  --color-accent-hover: #804b00;
+  --color-accent-text: #9a5b00;
+  --color-accent-subtle: #fff7c2;
+  --color-accent-border: #f3d673;
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='studio'][data-variant='amber'].dark {
+  --color-accent: #ffc53d;
+  --color-accent-hover: #ffd60a;
+  --color-accent-text: #ffca16;
+  --color-accent-subtle: #302008;
+  --color-accent-border: #5c3d05;
+  --color-on-accent: #2a1a00;
+}
+:root[data-theme='studio'][data-variant='rose']:not(.dark) {
+  --color-accent: #cb1d63;
+  --color-accent-hover: #b0174f;
+  --color-accent-text: #cb1d63;
+  --color-accent-subtle: #ffe9f0;
+  --color-accent-border: #f3a8c3;
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='studio'][data-variant='rose'].dark {
+  --color-accent: #e93d82;
+  --color-accent-hover: #ee518a;
+  --color-accent-text: #ff92ad;
+  --color-accent-subtle: #3a0f22;
+  --color-accent-border: #7a1d42;
+  --color-on-accent: #1f0510;
+}
+
+/* Blueprint */
+:root[data-theme='blueprint']:not(.dark) {
+  --color-accent: #1d5fbf;
+  --color-accent-hover: #174d9c;
+  --color-accent-text: #1d5fbf;
+  --color-accent-subtle: #e3edfb;
+  --color-accent-border: #9cbbe6;
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='blueprint'].dark {
+  --color-accent: #5aa9ff;
+  --color-accent-hover: #7bbaff;
+  --color-accent-text: #8cc4ff;
+  --color-accent-subtle: #143a63;
+  --color-accent-border: #2b5d92;
+  --color-on-accent: #06162a;
+}
+:root[data-theme='blueprint'][data-variant='graphite']:not(.dark) {
+  --color-accent: #3d4b5c;
+  --color-accent-hover: #2f3a47;
+  --color-accent-text: #3d4b5c;
+  --color-accent-subtle: #e6eaef;
+  --color-accent-border: #a7b3c1;
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='blueprint'][data-variant='graphite'].dark {
+  --color-accent: #c2cfdd;
+  --color-accent-hover: #d5dfe9;
+  --color-accent-text: #d5dfe9;
+  --color-accent-subtle: #1c3352;
+  --color-accent-border: #4c6a8f;
+  --color-on-accent: #0b1a2e;
+}
+:root[data-theme='blueprint'][data-variant='olive']:not(.dark) {
+  --color-accent: #5b6b1f;
+  --color-accent-hover: #4a5818;
+  --color-accent-text: #5b6b1f;
+  --color-accent-subtle: #eef2dc;
+  --color-accent-border: #b9c48a;
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='blueprint'][data-variant='olive'].dark {
+  --color-accent: #a9c25a;
+  --color-accent-hover: #bcd273;
+  --color-accent-text: #c3d98a;
+  --color-accent-subtle: #1f2e1a;
+  --color-accent-border: #4f6230;
+  --color-on-accent: #111a03;
+}
+
+/* Float */
+:root[data-theme='float']:not(.dark) {
+  --color-accent: #1a6f9b;
+  --color-accent-hover: #155c80;
+  --color-accent-text: #1a6f9b;
+  --color-accent-subtle: rgb(26 111 155 / 0.12);
+  --color-accent-border: rgb(26 111 155 / 0.38);
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='float'].dark {
+  --color-accent: #3fa3d6;
+  --color-accent-hover: #5cb3e0;
+  --color-accent-text: #7cc6ec;
+  --color-accent-subtle: rgb(63 163 214 / 0.16);
+  --color-accent-border: rgb(63 163 214 / 0.42);
+  --color-on-accent: #06131c;
+}
+:root[data-theme='float'][data-variant='dusk']:not(.dark) {
+  --color-accent: #b9443a;
+  --color-accent-hover: #9e3930;
+  --color-accent-text: #b9443a;
+  --color-accent-subtle: rgb(226 109 90 / 0.13);
+  --color-accent-border: rgb(226 109 90 / 0.42);
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='float'][data-variant='dusk'].dark {
+  --color-accent: #f0806f;
+  --color-accent-hover: #f39486;
+  --color-accent-text: #f6a597;
+  --color-accent-subtle: rgb(240 128 111 / 0.15);
+  --color-accent-border: rgb(240 128 111 / 0.42);
+  --color-on-accent: #1d0904;
+}
+:root[data-theme='float'][data-variant='moss']:not(.dark) {
+  --color-accent: #4f7a3a;
+  --color-accent-hover: #416530;
+  --color-accent-text: #416530;
+  --color-accent-subtle: rgb(79 122 58 / 0.13);
+  --color-accent-border: rgb(79 122 58 / 0.42);
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='float'][data-variant='moss'].dark {
+  --color-accent: #8cc06e;
+  --color-accent-hover: #9ccb80;
+  --color-accent-text: #add792;
+  --color-accent-subtle: rgb(140 192 110 / 0.15);
+  --color-accent-border: rgb(140 192 110 / 0.42);
+  --color-on-accent: #0d1608;
+}
+
+/* Compact */
+:root[data-theme='compact']:not(.dark) {
+  --color-accent: #16843f;
+  --color-accent-hover: #11702f;
+  --color-accent-text: #11702f;
+  --color-accent-subtle: #e3f4e8;
+  --color-accent-border: #9fd6b0;
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='compact'].dark {
+  --color-accent: #3ddc84;
+  --color-accent-hover: #5fe59a;
+  --color-accent-text: #5ef09c;
+  --color-accent-subtle: #0f2a19;
+  --color-accent-border: #1f5a36;
+  --color-on-accent: #04140a;
+}
+:root[data-theme='compact'][data-variant='amber']:not(.dark) {
+  --color-accent: #9a5b00;
+  --color-accent-hover: #804b00;
+  --color-accent-text: #9a5b00;
+  --color-accent-subtle: #fff4d6;
+  --color-accent-border: #e8c56b;
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='compact'][data-variant='amber'].dark {
+  --color-accent: #f2b544;
+  --color-accent-hover: #f5c463;
+  --color-accent-text: #f7c768;
+  --color-accent-subtle: #2e2108;
+  --color-accent-border: #6b4c10;
+  --color-on-accent: #1f1300;
+}
+:root[data-theme='compact'][data-variant='ice']:not(.dark) {
+  --color-accent: #0b6e99;
+  --color-accent-hover: #095a7d;
+  --color-accent-text: #0b6e99;
+  --color-accent-subtle: #e2f3fb;
+  --color-accent-border: #8fcbe6;
+  --color-on-accent: #ffffff;
+}
+:root[data-theme='compact'][data-variant='ice'].dark {
+  --color-accent: #7fd4f5;
+  --color-accent-hover: #9bdef7;
+  --color-accent-text: #a4e1f8;
+  --color-accent-subtle: #0b2a36;
+  --color-accent-border: #22566b;
+  --color-on-accent: #04161e;
+}

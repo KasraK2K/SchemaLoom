@@ -65,7 +65,9 @@ export function ProjectTabs({
   return (
     <nav
       aria-label="Project views"
-      className="ml-1 flex items-center gap-0.5 rounded-lg border border-border bg-surface-sunken p-0.5"
+      // Studio and Float: a segmented control. Blueprint: drawing-sheet tabs, small caps
+      // underlined. Compact: plain text, the least chrome.
+      className="ml-1 flex items-center gap-0.5 rounded-lg border border-border bg-surface-sunken p-0.5 theme-blueprint:h-(--sl-topbar-h) theme-blueprint:gap-4 theme-blueprint:border-0 theme-blueprint:bg-transparent theme-blueprint:p-0 theme-compact:border-0 theme-compact:bg-transparent theme-compact:p-0"
     >
       {tabs.map((tab) => {
         // A request page sits under Changes, so that tab stays lit there.
@@ -77,9 +79,9 @@ export function ProjectTabs({
             href={tab.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+              'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors theme-blueprint:h-full theme-blueprint:rounded-none theme-blueprint:border-b-2 theme-blueprint:border-transparent theme-blueprint:px-0 theme-blueprint:py-0 theme-blueprint:text-[0.6875rem] theme-blueprint:tracking-[0.08em] theme-blueprint:uppercase',
               active
-                ? 'bg-surface-raised text-text shadow-panel'
+                ? 'bg-surface-raised text-text shadow-panel theme-blueprint:border-accent theme-blueprint:bg-transparent theme-compact:bg-surface-hover theme-compact:shadow-none'
                 : 'text-text-muted hover:text-text',
             )}
           >

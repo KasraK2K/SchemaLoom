@@ -235,7 +235,8 @@ export function ColumnRow({
   const resolved = facet.typeCatalog.resolve(typeDraft, ctx);
 
   return (
-    <li className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-raised p-2">
+    // Studio: soft cards. Blueprint and Compact: ruled rows. Float: wells without edges.
+    <li className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-raised p-2 theme-blueprint:rounded-none theme-blueprint:border-x-0 theme-blueprint:border-t-0 theme-blueprint:bg-transparent theme-blueprint:px-0 theme-float:border-transparent theme-float:bg-surface-sunken theme-compact:rounded-none theme-compact:border-x-0 theme-compact:border-t-0 theme-compact:bg-transparent theme-compact:px-0 theme-compact:py-1.5">
       <div className="flex items-center gap-1">
         <NameInput
           label={t.msg('action.rename', 'field')}

@@ -177,6 +177,9 @@ model User {
   /// argon2id hash. Null for users who only ever used OAuth or magic link.
   passwordHash      String?         @map("password_hash")
   theme             ThemePreference @default(system)
+  /// Appearance theme and colour variant (contracts' APPEARANCE_THEMES). `theme` above is the mode.
+  uiTheme           String          @default("studio") @map("ui_theme")
+  uiVariant         String          @default("jade") @map("ui_variant")
   /// TOTP shared secret, encrypted with the app key before it reaches the DB.
   totpSecret        String?         @map("totp_secret")
   totpConfirmedAt   DateTime?       @map("totp_confirmed_at") @db.Timestamptz(6)
@@ -217,7 +220,7 @@ model User {
   auditEvents           AuditLog[]
   savedConnections      ProjectConnection[]
   apiTokens             ApiToken[]
-  notifications        Notification[]        @relation("NotificationRecipient")
+  notifications         Notification[]        @relation("NotificationRecipient")
   notificationsCaused   Notification[]        @relation("NotificationActor")
   invitationsSent       Invitation[]          @relation("InvitationInvitedBy")
   invitationsAccepted   Invitation[]          @relation("InvitationAcceptedBy")
@@ -437,56 +440,56 @@ model Workspace {
 }
 
 model Project {
-  id                  String              @id @default(cuid())
-  organizationId      String              @map("organization_id")
-  workspaceId         String              @map("workspace_id")
-  name                String
-  slug                String
-  description         String?
+  id                    String              @id @default(cuid())
+  organizationId        String              @map("organization_id")
+  workspaceId           String              @map("workspace_id")
+  name                  String
+  slug                  String
+  description           String?
   /// EngineRegistry key, e.g. "postgresql". Never an enum: adding an engine must
   /// not require a migration.
-  engineId            String              @map("engine_id")
+  engineId              String              @map("engine_id")
   /// The TARGET DATABASE version ("16"), not the plugin version. Doc 03 §15, doc 04 §1.3.
-  engineVersion       String              @map("engine_version")
+  engineVersion         String              @map("engine_version")
   /// The ENGINE PLUGIN contract version the stored `engine_props` were written under
   /// (doc 03 §15, semver of `EngineDefinition.version`). A real column, not a settings key:
   /// `settings` is core-owned and validated by core's zod schema, and "find every project that
   /// needs attention after this deploy" must be an indexed query. `compareEngineVersion` reads
   /// it on open and on every write; a newer-than-engine or older-major value opens the project
   /// read-only.
-  enginePluginVersion String              @map("engine_plugin_version")
+  enginePluginVersion   String              @map("engine_plugin_version")
   /// Monotonic revision of the project's SCHEMA CONTENT, incremented once per transaction that
   /// writes or deletes any schema object (doc 03 §8.1). It is the engine-diagnostics cache key.
   /// It cannot be `max(object.version)`: a maximum does not move when a non-maximal object is
   /// edited and FALLS when the holder of the maximum is deleted, so a stale entry is served and
   /// then collides with an older one.
-  schemaRevision      BigInt              @default(0) @map("schema_revision")
+  schemaRevision        BigInt              @default(0) @map("schema_revision")
   /// projectSettings{Input,Stored}Schema — see section 7. AI toggles only, now that
   /// restrictedFieldMode is a real column and canvas preferences moved to the
   /// browser.
-  settings            Json                @default("{}")
+  settings              Json                @default("{}")
   /// Spec section 5: "masked or not at all (project setting)". A real column
   /// because VisibilityFilter reads it on every single request; a settings-JSON key
   /// would put a zod parse of the whole settings object on the hot path and on the
   /// security path (section 7).
-  restrictedFieldMode RestrictedFieldMode @default(mask) @map("restricted_field_mode")
+  restrictedFieldMode   RestrictedFieldMode @default(mask) @map("restricted_field_mode")
   /// Phase 10b (docs/phase10/PROTECTED-PROJECTS.md): schema writes only through a
   /// change-request merge. A real column because `SchemaWriter` reads it on every write.
-  requireChangeRequests Boolean @default(false) @map("require_change_requests")
+  requireChangeRequests Boolean             @default(false) @map("require_change_requests")
   /// Permission-cache generation for this project (doc 05 R19). Bumped by every
   /// grant write, share-link create/revoke, area create/delete, entity area move,
   /// isRestricted toggle, restrictedFieldMode change and soft-delete. Section 3.2.
-  permGeneration      Int                 @default(0) @map("perm_generation")
-  createdById         String?             @map("created_by_id")
+  permGeneration        Int                 @default(0) @map("perm_generation")
+  createdById           String?             @map("created_by_id")
   /// Phase 10: set on a change request's draft, a hidden copy of this project. Drafts
   /// are left out of every listing and resolve their permissions from the main project.
-  draftOfId           String?             @map("draft_of_id")
-  deletedAt           DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  draftOfId             String?             @map("draft_of_id")
+  deletedAt             DateTime?           @map("deleted_at") @db.Timestamptz(6)
   /// C7 for the project object itself (name, settings, engine version). Canvas
   /// geometry does NOT bump it — section 10.4.
-  version             Int                 @default(0)
-  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version               Int                 @default(0)
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   /// NoAction, made DEFERRABLE INITIALLY DEFERRED in 0002 — see section 8.6. The
@@ -525,7 +528,7 @@ model Project {
   notifications      Notification[]
   connection         ProjectConnection?
   apiTokens          ApiToken[]
-  changeRequests    ChangeRequest[]     @relation("ChangeRequestProject")
+  changeRequests     ChangeRequest[]     @relation("ChangeRequestProject")
   draftOfRequest     ChangeRequest?      @relation("ChangeRequestDraft")
 
   @@index([organizationId, deletedAt])

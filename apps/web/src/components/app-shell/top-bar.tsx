@@ -20,7 +20,7 @@ export function TopBar({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-3">
+    <header className="flex h-(--sl-topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-3 theme-float:absolute theme-float:inset-x-3 theme-float:top-3 theme-float:z-30 theme-float:rounded-xl theme-float:border theme-float:border-border theme-float:shadow-panel theme-float:backdrop-blur-xl">
       <Link
         href="/"
         className="flex shrink-0 items-center gap-2 rounded-md text-sm font-semibold tracking-tight text-text"

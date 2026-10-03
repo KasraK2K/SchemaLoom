@@ -7,6 +7,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { readAppearance, type Appearance } from '@schemaloom/contracts';
 import { VerificationPurpose } from '../generated/prisma/enums';
 import type { AppEnv } from '../config/env';
 import { MailService } from '../mail/mail.service';
@@ -76,6 +77,8 @@ export interface MeResponse {
   readonly name: string;
   readonly avatarUrl: string | null;
   readonly theme: string;
+  /** Theme, colour variant and mode, read back through the contract (defaults when unknown). */
+  readonly appearance: Appearance;
   readonly emailVerified: boolean;
   readonly twoFactorEnabled: boolean;
   readonly organizationId: string | null;
@@ -472,6 +475,8 @@ export class AuthService implements OnModuleInit {
         name: true,
         avatarUrl: true,
         theme: true,
+        uiTheme: true,
+        uiVariant: true,
         emailVerifiedAt: true,
         totpConfirmedAt: true,
       },
@@ -483,9 +488,23 @@ export class AuthService implements OnModuleInit {
       name: user.name,
       avatarUrl: user.avatarUrl,
       theme: user.theme,
+      appearance: readAppearance({
+        theme: user.uiTheme,
+        variant: user.uiVariant,
+        mode: user.theme,
+      }),
       emailVerified: user.emailVerifiedAt !== null,
       twoFactorEnabled: user.totpConfirmedAt !== null,
       organizationId: await this.resolveOrgId(user.id),
     };
+  }
+
+  /** The caller's appearance. Validated by the DTO; the mode is the existing `theme` column. */
+  async setAppearance(userId: string, appearance: Appearance): Promise<Appearance> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { uiTheme: appearance.theme, uiVariant: appearance.variant, theme: appearance.mode },
+    });
+    return appearance;
   }
 }

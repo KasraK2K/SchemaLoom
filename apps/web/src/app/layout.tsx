@@ -3,6 +3,12 @@ import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
+// Blueprint's fonts. `@font-face` only: a browser downloads a face when text uses it, so
+// these cost nothing until someone picks Blueprint.
+import '@fontsource-variable/ibm-plex-sans';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
+import '@fontsource/ibm-plex-mono/600.css';
 import './globals.css';
 
 export const metadata: Metadata = {

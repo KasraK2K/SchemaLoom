@@ -28,6 +28,7 @@ import { areaColors } from './area-color';
 import { CanvasMenu, type CanvasMenuItem, type CanvasMenuTarget } from './canvas-menu';
 import { CanvasSearch } from './canvas-search';
 import { CanvasToolbar } from './canvas-toolbar';
+import { fitPadding } from './fit-padding';
 import { cardinalityFor, checkConnection, explainCheck } from './connect';
 import { createLink } from './create-link';
 import { CrowFootDefs } from './crow-foot';
@@ -416,7 +417,7 @@ export function CanvasSurface({
   }, [measured, readOnly, flow, runLayout, recordMove, applyPositions]);
 
   const fitView = useCallback(() => {
-    void flow.fitView({ padding: 0.2 });
+    void flow.fitView({ padding: fitPadding() });
   }, [flow]);
 
   useCanvasShortcuts({
@@ -624,24 +625,44 @@ export function CanvasSurface({
         minZoom={0.05}
         maxZoom={2}
         fitView
+        fitViewOptions={{ padding: fitPadding(0.1) }}
         // Item 8: React Flow's own culling. 300 cards is ~4,500 field rows, and the ones
         // outside the viewport cost nothing if they are never mounted.
         onlyRenderVisibleElements
         // Deleting schema is an op with a version check, not a keystroke on a canvas.
         deleteKeyCode={null}
       >
-        <Background variant={BackgroundVariant.Dots} gap={GRID_SIZE} size={1} />
+        {/* The canvas grid is the theme's: dots (Studio, Float), ruled lines (Blueprint),
+            none (Compact). Switched in CSS, so the right one shows from the first paint. */}
+        <Background
+          id="dots"
+          variant={BackgroundVariant.Dots}
+          gap={GRID_SIZE}
+          size={1}
+          className="theme-blueprint:hidden theme-compact:hidden"
+        />
+        <Background
+          id="lines"
+          variant={BackgroundVariant.Lines}
+          gap={GRID_SIZE + 6}
+          className="hidden theme-blueprint:block"
+        />
         <MiniMap
-          className="overflow-hidden rounded-lg border border-border shadow-panel"
+          // Float: the inspector floats over the right edge, so the minimap stacks above
+          // the toolbar on the left, clear of the floating dock.
+          className="overflow-hidden rounded-lg border border-border shadow-panel theme-float:right-auto! theme-float:left-0! theme-float:mb-16! theme-float:ml-[76px]!"
           pannable
           zoomable
           nodeColor={minimapColor}
           style={{ backgroundColor: 'var(--color-surface-sunken)' }}
         />
-        <Panel position="top-left">
+        <Panel
+          position="top-left"
+          className="theme-float:mt-[calc(var(--sl-topbar-h)+24px)]! theme-float:ml-[76px]!"
+        >
           <CanvasSearch model={model} />
         </Panel>
-        <Panel position="bottom-left">
+        <Panel position="bottom-left" className="theme-float:ml-[76px]!">
           <CanvasToolbar
             actions={
               readOnly
