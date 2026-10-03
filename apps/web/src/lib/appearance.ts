@@ -14,7 +14,7 @@ export interface ThemeInfo {
 export const THEME_INFO: Readonly<Record<AppearanceTheme, ThemeInfo>> = {
   studio: {
     label: 'Studio',
-    summary: 'Soft, docked panels',
+    summary: 'Balanced and soft, docked panels',
     variants: {
       jade: { label: 'Jade', swatch: '#29a383' },
       cobalt: { label: 'Cobalt', swatch: '#3b9eff' },
@@ -24,7 +24,7 @@ export const THEME_INFO: Readonly<Record<AppearanceTheme, ThemeInfo>> = {
   },
   blueprint: {
     label: 'Blueprint',
-    summary: 'Sharp, ruled, technical',
+    summary: 'A drafting table: ruled, sharp, outlined',
     variants: {
       blue: { label: 'Blue', swatch: '#5aa9ff' },
       graphite: { label: 'Graphite', swatch: '#c2cfdd' },
@@ -33,7 +33,7 @@ export const THEME_INFO: Readonly<Record<AppearanceTheme, ThemeInfo>> = {
   },
   float: {
     label: 'Float',
-    summary: 'Canvas-first, floating panels',
+    summary: 'Airy glass panels over the canvas',
     variants: {
       mist: { label: 'Mist', swatch: '#3fa3d6' },
       dusk: { label: 'Dusk', swatch: '#f0806f' },
@@ -42,7 +42,7 @@ export const THEME_INFO: Readonly<Record<AppearanceTheme, ThemeInfo>> = {
   },
   compact: {
     label: 'Compact',
-    summary: 'Dense, flat, mono data',
+    summary: 'Dense and monospace, like a terminal',
     variants: {
       phosphor: { label: 'Phosphor', swatch: '#3ddc84' },
       amber: { label: 'Amber', swatch: '#f2b544' },

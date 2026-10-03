@@ -38,20 +38,23 @@ export function PostgresEntityNode({
   return (
     <div
       className={cn(
-        'min-w-52 overflow-hidden rounded-lg border bg-surface-raised shadow-node transition-shadow',
+        // Blueprint: an outline on the paper, no fill. Float: a borderless glass card.
+        'min-w-52 overflow-hidden rounded-lg border bg-surface-raised shadow-node transition-shadow theme-blueprint:bg-canvas',
         // Blueprint and Compact draw a hairline ring, not a soft halo.
         selected
           ? 'border-accent ring-[3px] ring-accent/25 theme-blueprint:ring-1 theme-blueprint:ring-accent theme-compact:ring-1 theme-compact:ring-accent'
-          : 'border-border-strong',
+          : 'border-border-strong theme-float:border-transparent',
       )}
     >
       {/* The area's colour tints the header band: the card says where it belongs without
           a stripe competing with the selection ring. */}
       <header
         className={cn(
-          // Blueprint: a spec box, its header closed by a double rule.
-          'flex items-center gap-2 border-b border-border px-2.5 py-(--sl-header-py) theme-blueprint:border-b-[3px] theme-blueprint:border-double theme-blueprint:border-border-strong',
-          areaColor === null && 'bg-surface-sunken',
+          // Blueprint: a spec box, its header closed by a double rule. Compact: no fill, a
+          // strong rule. Float: the tint alone separates the header.
+          'flex items-center gap-2 border-b border-border px-2.5 py-(--sl-header-py) theme-blueprint:border-b-[3px] theme-blueprint:border-double theme-blueprint:border-border-strong theme-float:border-transparent theme-compact:border-border-strong',
+          areaColor === null &&
+            'bg-surface-sunken theme-blueprint:bg-transparent theme-compact:bg-transparent',
         )}
         style={areaColor === null ? undefined : { backgroundColor: areaColor }}
       >
@@ -64,7 +67,7 @@ export function PostgresEntityNode({
           <Chevron className="size-3.5" />
         </button>
         <KindIcon className="size-3.5 text-text-muted" />
-        <span className="truncate text-[13px] font-semibold text-text theme-blueprint:font-mono theme-blueprint:text-[11px] theme-blueprint:tracking-[0.07em] theme-blueprint:uppercase theme-compact:text-xs">
+        <span className="truncate text-[13px] font-semibold text-text theme-blueprint:font-mono theme-blueprint:text-[11px] theme-blueprint:tracking-[0.07em] theme-blueprint:uppercase theme-compact:text-xs theme-compact:tracking-wider theme-compact:uppercase">
           {entity.name}
         </span>
         {kind?.hasFields === false ? null : (
@@ -87,7 +90,7 @@ export function PostgresEntityNode({
           {formatMessage(engine.terminology, 'list.empty', 'field')}
         </p>
       ) : (
-        <ul className="divide-y divide-border/60 theme-blueprint:divide-dashed">
+        <ul className="divide-y divide-border/60 theme-blueprint:divide-dashed theme-compact:divide-y-0">
           {fields.map((field) => (
             <FieldRow
               key={field.id}

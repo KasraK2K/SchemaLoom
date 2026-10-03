@@ -1,6 +1,13 @@
 'use client';
 
-import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react';
+import {
+  BaseEdge,
+  getBezierPath,
+  getSmoothStepPath,
+  getStraightPath,
+  type EdgeProps,
+} from '@xyflow/react';
+import { useTheme } from '@/components/theme-provider';
 import { markerUrl } from './crow-foot';
 import type { LinkEdge as LinkEdgeType } from './graph';
 import { useCanvasStore } from './store';
@@ -28,14 +35,17 @@ export function LinkEdge({
   data,
   selected,
 }: EdgeProps<LinkEdgeType>) {
-  const [path] = getBezierPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-  });
+  // The line is the theme's: right angles (Blueprint), straight (Compact), curves
+  // (Studio, and thicker in Float).
+  const { theme } = useTheme().look;
+  const ends = { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
+  const [path] =
+    theme === 'blueprint'
+      ? getSmoothStepPath({ ...ends, borderRadius: 0 })
+      : theme === 'compact'
+        ? getStraightPath(ends)
+        : getBezierPath(ends);
+  const width = theme === 'float' ? 2 : theme === 'compact' ? 1 : 1.5;
 
   // A link of the selected table lights up with it, so its connections can be followed.
   // A boolean slice: selecting another card re-renders only the edges whose answer changed.
@@ -54,7 +64,7 @@ export function LinkEdge({
       markerEnd={markerUrl(style?.targetMarker)}
       style={{
         stroke: lit ? 'var(--color-accent)' : 'var(--color-border-strong)',
-        strokeWidth: lit ? 2 : 1.5,
+        strokeWidth: lit ? width + 0.5 : width,
         // A documentation-only link is not a database constraint, and the canvas says so.
         strokeDasharray: style?.dashed === true ? '6 4' : undefined,
         opacity: restricted ? 0.4 : 1,

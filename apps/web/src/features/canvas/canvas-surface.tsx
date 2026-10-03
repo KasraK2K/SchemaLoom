@@ -632,19 +632,28 @@ export function CanvasSurface({
         // Deleting schema is an op with a version check, not a keystroke on a canvas.
         deleteKeyCode={null}
       >
-        {/* The canvas grid is the theme's: dots (Studio, Float), ruled lines (Blueprint),
-            none (Compact). Switched in CSS, so the right one shows from the first paint. */}
+        {/* The canvas grid is the theme's: dots (Studio), a minor and major ruled grid
+            (Blueprint), none (Float's gradient, Compact). Switched in CSS, so the right one
+            shows from the first paint. */}
         <Background
           id="dots"
           variant={BackgroundVariant.Dots}
           gap={GRID_SIZE}
           size={1}
-          className="theme-blueprint:hidden theme-compact:hidden"
+          className="theme-blueprint:hidden theme-float:hidden theme-compact:hidden"
         />
         <Background
           id="lines"
           variant={BackgroundVariant.Lines}
           gap={GRID_SIZE + 6}
+          className="hidden theme-blueprint:block"
+        />
+        <Background
+          id="major"
+          variant={BackgroundVariant.Lines}
+          gap={(GRID_SIZE + 6) * 5}
+          color="color-mix(in srgb, var(--color-border-strong) 45%, transparent)"
+          bgColor="transparent"
           className="hidden theme-blueprint:block"
         />
         <MiniMap

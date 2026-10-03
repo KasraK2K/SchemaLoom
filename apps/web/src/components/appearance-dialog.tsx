@@ -10,17 +10,18 @@ import {
   DialogTitle,
   cn,
 } from '@schemaloom/ui';
-import { useEffect, useState, type CSSProperties } from 'react';
+import type { CSSProperties, FocusEvent } from 'react';
 import { useTheme } from '@/components/theme-provider';
 import { THEME_INFO, variantsOf } from '@/lib/appearance';
-import type { Theme } from '@/lib/theme';
+import type { Look, Theme } from '@/lib/theme';
 
 const MODES: readonly Theme[] = ['light', 'dark', 'system'];
 const MODE_LABEL: Record<Theme, string> = { light: 'Light', dark: 'Dark', system: 'System' };
 
 /**
- * Pick a theme, its colour and the mode. Nothing changes until Apply, so a look can be
- * tried out in the previews without the app flickering under the dialog.
+ * Pick a theme, its colour and the mode. Pointing at (or focusing) an option shows it on
+ * the whole app; clicking picks and saves it. The panel docks to the right with no
+ * backdrop, so the preview is the page itself, not a thumbnail.
  */
 export function AppearanceDialog({
   open,
@@ -29,150 +30,160 @@ export function AppearanceDialog({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }) {
-  const { look, theme, setAppearance } = useTheme();
-  const [draftTheme, setDraftTheme] = useState<AppearanceTheme>(look.theme);
-  const [draftVariant, setDraftVariant] = useState(look.variant);
-  const [draftMode, setDraftMode] = useState<Theme>(theme);
+  const { saved, setAppearance, previewAppearance } = useTheme();
 
-  // Opening starts from what is applied now, not from the last unapplied draft.
-  useEffect(() => {
-    if (!open) return;
-    setDraftTheme(look.theme);
-    setDraftVariant(look.variant);
-    setDraftMode(theme);
-  }, [open, look, theme]);
-
-  const chooseTheme = (next: AppearanceTheme) => {
-    setDraftTheme(next);
-    // A theme's own default colour, unless the current one belongs to it.
-    if (!variantsOf(next).includes(draftVariant)) setDraftVariant(variantsOf(next)[0] ?? '');
+  // A theme's own default colour, unless the saved one belongs to it.
+  const lookOf = (theme: AppearanceTheme): Look => ({
+    theme,
+    variant: saved.look.theme === theme ? saved.look.variant : (variantsOf(theme)[0] ?? ''),
+  });
+  const show = (look: Look, mode: Theme = saved.theme) => {
+    previewAppearance({ look, mode });
+  };
+  const endPreview = () => {
+    previewAppearance(null);
+  };
+  // Focus leaving the options (not moving between them) ends a keyboard preview.
+  const onBlur = (event: FocusEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) endPreview();
+  };
+  const close = (next: boolean) => {
+    if (!next) endPreview();
+    onOpenChange(next);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+    <Dialog open={open} onOpenChange={close}>
+      <DialogContent
+        overlayClassName="bg-transparent"
+        className="top-3 right-3 bottom-3 left-auto flex w-[22rem] max-w-[calc(100vw-1.5rem)] translate-x-0 translate-y-0 flex-col overflow-y-auto bg-surface-raised"
+      >
         <DialogTitle>Appearance</DialogTitle>
         <DialogDescription>
-          A theme changes the layout, density and type, not only the colour. Your choice follows
-          your account.
+          Point at a theme or colour to see it here. Click to pick it.
         </DialogDescription>
 
-        <div
-          role="radiogroup"
-          aria-label="Theme"
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-        >
-          {APPEARANCE_THEME_IDS.map((id) => {
-            const info = THEME_INFO[id];
-            const chosen = draftTheme === id;
-            return (
-              <div
-                key={id}
-                className={cn(
-                  'flex flex-col gap-2 rounded-lg border bg-surface p-2 transition-shadow',
-                  chosen ? 'border-accent ring-[3px] ring-accent/20' : 'border-border',
-                )}
-              >
+        <div onPointerLeave={endPreview} onBlur={onBlur} className="mt-4 flex flex-col gap-3">
+          <div role="radiogroup" aria-label="Theme" className="flex flex-col gap-2">
+            {APPEARANCE_THEME_IDS.map((id) => {
+              const info = THEME_INFO[id];
+              const chosen = saved.look.theme === id;
+              return (
+                <div
+                  key={id}
+                  onPointerOver={() => {
+                    show(lookOf(id));
+                  }}
+                  className={cn(
+                    'flex gap-3 rounded-lg border bg-surface p-2 transition-shadow',
+                    chosen ? 'border-accent ring-[3px] ring-accent/20' : 'border-border',
+                  )}
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={chosen}
+                    aria-label={info.label}
+                    onFocus={() => {
+                      show(lookOf(id));
+                    }}
+                    onClick={() => {
+                      setAppearance(lookOf(id), saved.theme);
+                    }}
+                    className="flex min-w-0 flex-1 gap-3 rounded-md text-left"
+                  >
+                    <ThemePreview theme={id} accent={info.variants[lookOf(id).variant]?.swatch} />
+                    <span className="min-w-0 pt-0.5">
+                      <span className="block text-sm font-semibold text-text">{info.label}</span>
+                      <span className="block text-xs text-text-subtle">{info.summary}</span>
+                    </span>
+                  </button>
+                  <div
+                    role="radiogroup"
+                    aria-label={`${info.label} colour`}
+                    className="flex flex-col justify-center gap-1.5"
+                  >
+                    {variantsOf(id).map((variant) => {
+                      const v = info.variants[variant];
+                      const on = chosen && saved.look.variant === variant;
+                      return (
+                        <button
+                          key={variant}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          aria-label={v?.label ?? variant}
+                          title={v?.label ?? variant}
+                          onPointerOver={(event) => {
+                            event.stopPropagation();
+                            show({ theme: id, variant });
+                          }}
+                          onFocus={() => {
+                            show({ theme: id, variant });
+                          }}
+                          onClick={() => {
+                            setAppearance({ theme: id, variant }, saved.theme);
+                          }}
+                          style={{ backgroundColor: v?.swatch }}
+                          className={cn(
+                            'size-5 rounded-full border-2 border-surface transition-shadow',
+                            on
+                              ? 'shadow-[0_0_0_2px_var(--color-text)]'
+                              : 'shadow-[0_0_0_1px_var(--color-border-strong)]',
+                          )}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-text-muted">Mode</span>
+            <div
+              role="radiogroup"
+              aria-label="Mode"
+              className="inline-flex rounded-lg border border-border bg-surface-sunken p-0.5"
+            >
+              {MODES.map((mode) => (
                 <button
+                  key={mode}
                   type="button"
                   role="radio"
-                  aria-checked={chosen}
-                  aria-label={info.label}
-                  onClick={() => {
-                    chooseTheme(id);
+                  aria-checked={saved.theme === mode}
+                  onPointerOver={() => {
+                    show(saved.look, mode);
                   }}
-                  className="flex flex-col gap-2 rounded-md text-left"
+                  onFocus={() => {
+                    show(saved.look, mode);
+                  }}
+                  onClick={() => {
+                    setAppearance(saved.look, mode);
+                  }}
+                  className={cn(
+                    'rounded-md px-3 py-1 text-sm font-medium transition-colors',
+                    saved.theme === mode
+                      ? 'bg-surface-raised text-text shadow-panel'
+                      : 'text-text-muted hover:text-text',
+                  )}
                 >
-                  <ThemePreview
-                    theme={id}
-                    accent={
-                      info.variants[chosen ? draftVariant : (variantsOf(id)[0] ?? '')]?.swatch
-                    }
-                  />
-                  <span>
-                    <span className="block text-sm font-semibold text-text">{info.label}</span>
-                    <span className="block text-xs text-text-subtle">{info.summary}</span>
-                  </span>
+                  {MODE_LABEL[mode]}
                 </button>
-                <div role="radiogroup" aria-label={`${info.label} colour`} className="flex gap-1.5">
-                  {variantsOf(id).map((variant) => {
-                    const v = info.variants[variant];
-                    const on = chosen && draftVariant === variant;
-                    return (
-                      <button
-                        key={variant}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        aria-label={v?.label ?? variant}
-                        title={v?.label ?? variant}
-                        onClick={() => {
-                          setDraftTheme(id);
-                          setDraftVariant(variant);
-                        }}
-                        style={{ backgroundColor: v?.swatch }}
-                        className={cn(
-                          'size-5 rounded-full border-2 border-surface transition-shadow',
-                          on
-                            ? 'shadow-[0_0_0_2px_var(--color-text)]'
-                            : 'shadow-[0_0_0_1px_var(--color-border-strong)]',
-                        )}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-text-muted">Mode</span>
-          <div
-            role="radiogroup"
-            aria-label="Mode"
-            className="inline-flex rounded-lg border border-border bg-surface-sunken p-0.5"
-          >
-            {MODES.map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                role="radio"
-                aria-checked={draftMode === mode}
-                onClick={() => {
-                  setDraftMode(mode);
-                }}
-                className={cn(
-                  'rounded-md px-3 py-1 text-sm font-medium transition-colors',
-                  draftMode === mode
-                    ? 'bg-surface-raised text-text shadow-panel'
-                    : 'text-text-muted hover:text-text',
-                )}
-              >
-                {MODE_LABEL[mode]}
-              </button>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              onOpenChange(false);
-            }}
-          >
-            Cancel
-          </Button>
+        <DialogFooter className="mt-auto pt-5">
           <Button
             size="sm"
             onClick={() => {
-              setAppearance({ theme: draftTheme, variant: draftVariant }, draftMode);
-              onOpenChange(false);
+              close(false);
             }}
           >
-            Apply
+            Done
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -181,9 +192,9 @@ export function AppearanceDialog({
 }
 
 /**
- * A small drawing of each theme's layout: where its panels sit and how its tables look.
+ * A small drawing of each theme: where its panels sit, how its tables and lines look.
  * Fixed dark colours on purpose, so the four read as the same kind of picture whatever
- * theme the dialog itself is drawn in. Decorative: the label beside it names the theme.
+ * theme the panel itself is drawn in. Decorative: the label beside it names the theme.
  */
 function ThemePreview({
   theme,
@@ -196,96 +207,114 @@ function ThemePreview({
   const box = (style: CSSProperties) => (
     <span aria-hidden="true" className="absolute" style={style} />
   );
-  const frame = 'relative h-20 overflow-hidden rounded-md';
+  const frame = 'relative h-20 w-28 shrink-0 overflow-hidden rounded-md';
   if (theme === 'blueprint') {
+    // Outline-only tables, a right-angled link, a major/minor ruled grid.
+    const minor = 'rgb(120 170 230 / .12)';
+    const major = 'rgb(120 170 230 / .3)';
     return (
       <span
         className={frame}
         style={{
-          background:
-            '#0b1a2e linear-gradient(rgb(120 170 230 / .14) 1px, transparent 1px) 0 0 / 10px 10px, #0b1a2e linear-gradient(90deg, rgb(120 170 230 / .14) 1px, transparent 1px) 0 0 / 10px 10px',
+          background: `linear-gradient(${major} 1px, transparent 1px) 0 0 / 40px 40px, linear-gradient(90deg, ${major} 1px, transparent 1px) 0 0 / 40px 40px, linear-gradient(${minor} 1px, transparent 1px) 0 0 / 8px 8px, linear-gradient(90deg, ${minor} 1px, transparent 1px) 0 0 / 8px 8px, #0b1a2e`,
         }}
       >
-        {box({ left: 10, top: 12, width: 44, height: 28, border: '1px solid #3a6597' })}
-        {box({ left: 64, top: 36, width: 44, height: 32, border: `1px solid ${a}` })}
-        {box({
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: 30,
-          background: '#0e2038',
-          borderLeft: '1px solid #22426a',
-        })}
+        {box({ left: 8, top: 10, width: 34, height: 26, border: '1px solid #8db4e2' })}
+        {box({ left: 8, top: 16, width: 34, height: 1, background: '#8db4e2' })}
+        {box({ left: 42, top: 24, width: 14, height: 1, background: a })}
+        {box({ left: 56, top: 24, width: 1, height: 24, background: a })}
+        {box({ left: 56, top: 48, width: 10, height: 1, background: a })}
+        {box({ left: 66, top: 38, width: 34, height: 30, border: `1px solid ${a}` })}
+        {box({ left: 66, top: 44, width: 34, height: 1, background: a })}
       </span>
     );
   }
   if (theme === 'float') {
+    // Glass panels over a soft gradient: pill top bar, round dock, rounded cards.
     return (
       <span
         className={frame}
         style={{
-          background:
-            '#0f1216 radial-gradient(rgb(255 255 255 / .08) 1px, transparent 1px) 0 0 / 9px 9px',
+          background: `radial-gradient(circle at 20% 15%, ${a}55, transparent 55%), radial-gradient(circle at 90% 95%, ${a}33, transparent 50%), #10141a`,
         }}
       >
         {box({
           left: 5,
           top: 5,
           right: 5,
-          height: 11,
-          borderRadius: 6,
-          background: 'rgb(255 255 255 / .09)',
+          height: 10,
+          borderRadius: 999,
+          background: 'rgb(255 255 255 / .12)',
         })}
         {box({
           left: 5,
-          top: 22,
-          width: 12,
-          height: 34,
-          borderRadius: 5,
-          background: 'rgb(255 255 255 / .07)',
+          top: 21,
+          width: 10,
+          height: 10,
+          borderRadius: 999,
+          background: 'rgb(255 255 255 / .12)',
         })}
         {box({
-          left: 26,
-          top: 30,
+          left: 24,
+          top: 28,
           width: 40,
-          height: 28,
-          borderRadius: 8,
-          background: '#1a1f26',
-          border: `1px solid ${a}`,
+          height: 32,
+          borderRadius: 9,
+          background: '#1c222b',
+          boxShadow: '0 6px 14px rgb(0 0 0 / .5)',
+          overflow: 'hidden',
+          borderTop: `9px solid ${a}66`,
         })}
         {box({
           right: 5,
-          top: 22,
+          top: 21,
           bottom: 5,
           width: 30,
-          borderRadius: 7,
-          background: 'rgb(255 255 255 / .08)',
+          borderRadius: 9,
+          background: 'rgb(255 255 255 / .1)',
         })}
       </span>
     );
   }
   if (theme === 'compact') {
+    // Dense striped tables, straight links, thin chrome.
+    const rows = (left: number, top: number, count: number, edge: string) => (
+      <>
+        {box({ left, top, width: 32, height: count * 5 + 5, border: `1px solid ${edge}` })}
+        {Array.from({ length: count }, (_, i) =>
+          i % 2 === 1 ? (
+            <span
+              key={i}
+              aria-hidden="true"
+              className="absolute"
+              style={{
+                left: left + 1,
+                top: top + 5 + i * 5,
+                width: 30,
+                height: 5,
+                background: '#1a1d1f',
+              }}
+            />
+          ) : null,
+        )}
+      </>
+    );
     return (
       <span className={frame} style={{ background: '#0b0c0d' }}>
+        {box({ left: 0, top: 0, right: 0, height: 6, borderBottom: '1px solid #23272a' })}
+        {box({ left: 0, top: 6, bottom: 0, width: 8, borderRight: '1px solid #23272a' })}
+        {rows(14, 12, 8, '#3a4045')}
         {box({
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 10,
-          background: '#0f1112',
-          borderRight: '1px solid #23272a',
+          left: 46,
+          top: 30,
+          width: 20,
+          height: 1,
+          background: a,
+          transform: 'rotate(12deg)',
+          transformOrigin: 'left',
         })}
-        {box({ left: 16, top: 8, width: 36, height: 34, border: '1px solid #3a4045' })}
-        {box({ left: 58, top: 8, width: 36, height: 42, border: `1px solid ${a}` })}
-        {box({ left: 16, top: 48, width: 36, height: 24, border: '1px solid #3a4045' })}
-        {box({
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: 26,
-          background: '#0f1112',
-          borderLeft: '1px solid #23272a',
-        })}
+        {rows(66, 30, 7, a)}
+        {box({ right: 0, top: 6, bottom: 0, width: 8, borderLeft: '1px solid #23272a' })}
       </span>
     );
   }
@@ -298,23 +327,23 @@ function ThemePreview({
         left: 0,
         top: 0,
         bottom: 0,
-        width: 16,
+        width: 14,
         background: '#101211',
         borderRight: '1px solid #2e3130',
       })}
       {box({
-        left: 24,
+        left: 20,
         top: 12,
-        width: 40,
-        height: 28,
+        width: 34,
+        height: 26,
         borderRadius: 5,
         background: '#171918',
         border: '1px solid #444947',
       })}
       {box({
-        left: 72,
+        left: 52,
         top: 38,
-        width: 40,
+        width: 34,
         height: 30,
         borderRadius: 5,
         background: '#171918',
@@ -324,7 +353,7 @@ function ThemePreview({
         right: 0,
         top: 0,
         bottom: 0,
-        width: 30,
+        width: 22,
         background: '#101211',
         borderLeft: '1px solid #2e3130',
       })}

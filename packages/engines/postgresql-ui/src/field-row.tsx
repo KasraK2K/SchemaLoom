@@ -64,8 +64,9 @@ export function FieldRow({
   return (
     <li
       className={cn(
-        'relative flex items-center gap-2 px-2.5 py-(--sl-row-py) theme-compact:px-2 theme-compact:font-mono',
-        highlighted && 'bg-accent-subtle',
+        // Compact: striped rows instead of dividers.
+        'relative flex items-center gap-2 px-2.5 py-(--sl-row-py) theme-compact:px-2 theme-compact:font-mono theme-compact:even:bg-surface-hover',
+        highlighted && 'bg-accent-subtle!',
       )}
     >
       <FieldHandle fieldId={field.id} side="target" />

@@ -19,21 +19,29 @@ test.describe('workflow 16 — appearance themes', () => {
       await page.goto(`/${SEED.orgSlug}`);
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'studio');
 
-      // The top bar's appearance button (the mode icon) opens the dialog.
+      // The top bar's appearance button (the mode icon) opens the panel.
       await page.getByRole('button', { name: 'Appearance' }).click();
+      const html = page.locator('html');
+
+      // Pointing at a theme shows it on the page; pointing away puts the saved one back.
+      await page.getByRole('radio', { name: 'Float' }).hover();
+      await expect(html).toHaveAttribute('data-theme', 'float');
+      await page.mouse.move(5, 5);
+      await expect(html).toHaveAttribute('data-theme', 'studio');
+
+      // A click picks: no Apply step.
       await page.getByRole('radio', { name: 'Blueprint' }).click();
       await page.getByRole('radio', { name: 'Olive' }).click();
       await page.getByRole('radio', { name: 'Dark' }).click();
-      await page.getByRole('button', { name: 'Apply' }).click();
+      await page.getByRole('button', { name: 'Done' }).click();
 
-      const html = page.locator('html');
       await expect(html).toHaveAttribute('data-theme', 'blueprint');
       await expect(html).toHaveAttribute('data-variant', 'olive');
       await expect(html).toHaveClass(/dark/);
       // The theme changes more than colour: Blueprint's corners are sharp.
       await expect(page.getByRole('link', { name: 'Settings' })).toHaveCSS(
         'border-top-left-radius',
-        '2px',
+        '0px',
       );
 
       // Saved to the account, not only to this browser.

@@ -19,13 +19,17 @@ import {
 } from '@/lib/theme';
 
 interface ThemeContextValue {
-  /** The light/dark/system mode. */
+  /** The light/dark/system mode on screen (a preview while one is showing). */
   theme: Theme;
   setTheme: (theme: Theme) => void;
-  /** The appearance theme and colour variant. */
+  /** The appearance theme and colour variant on screen (a preview while one is showing). */
   look: Look;
+  /** What is chosen and saved, whatever is being previewed. */
+  saved: { readonly look: Look; readonly theme: Theme };
   /** Theme, variant and mode together, saved to the account as one value. */
   setAppearance: (look: Look, mode: Theme) => void;
+  /** Shows a look on the whole app without saving it; null goes back to the saved one. */
+  previewAppearance: (preview: { readonly look: Look; readonly mode: Theme } | null) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -72,8 +76,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // effect below. Reading localStorage during render would desync SSR and hydration.
   const [theme, setThemeState] = useState<Theme>('system');
   const [look, setLookState] = useState<Look>(DEFAULT_LOOK);
+  const [preview, setPreview] = useState<{ look: Look; mode: Theme } | null>(null);
   // Only a signed-in visitor's choice is saved to an account.
   const signedIn = useRef(false);
+  // What ending a preview goes back to, readable from a stable callback.
+  const savedRef = useRef({ look, mode: theme });
+  useEffect(() => {
+    savedRef.current = { look, mode: theme };
+  }, [look, theme]);
 
   useEffect(() => {
     setThemeState(readStoredTheme());
@@ -116,11 +126,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setAppearance = useCallback((nextLook: Look, nextMode: Theme) => {
     setLookState(nextLook);
     setThemeState(nextMode);
+    setPreview(null);
+    savedRef.current = { look: nextLook, mode: nextMode };
     applyLook(nextLook);
     applyTheme(nextMode);
     store(LOOK_STORAGE_KEY, JSON.stringify(nextLook));
     store(THEME_STORAGE_KEY, nextMode);
     if (signedIn.current) saveToAccount({ ...nextLook, mode: nextMode });
+  }, []);
+
+  // DOM only: the saved choice and storage stay as they are until a pick.
+  const previewAppearance = useCallback((next: { look: Look; mode: Theme } | null) => {
+    setPreview(next);
+    const shown = next ?? savedRef.current;
+    applyLook(shown.look);
+    applyTheme(shown.mode);
   }, []);
 
   const setTheme = useCallback(
@@ -130,5 +150,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [look, setAppearance],
   );
 
-  return <ThemeContext value={{ theme, setTheme, look, setAppearance }}>{children}</ThemeContext>;
+  return (
+    <ThemeContext
+      value={{
+        theme: preview?.mode ?? theme,
+        setTheme,
+        look: preview?.look ?? look,
+        saved: { look, theme },
+        setAppearance,
+        previewAppearance,
+      }}
+    >
+      {children}
+    </ThemeContext>
+  );
 }

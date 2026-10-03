@@ -1,19 +1,27 @@
 # Roadmap 17: Appearance themes
 
 Status: **built** 2026-10-03. The owner approved the plan (four themes, the choice saved to
-the account, no org default yet) and the mockup the same day.
+the account, no org default yet) and the mockup the same day. Amended the same day at the
+owner's request: the themes were too alike, so each now differs in type, corners, cards,
+links and canvas, a colour also changes the greys, and the panel previews on hover.
 
 ## What a user gets
 
-The **appearance button** in the top bar (the icon shows the mode) picks a theme, one of its colour variants, and the mode
-(light, dark, system). A theme is a working style, not a palette:
+The **appearance button** in the top bar (the icon shows the mode) opens a panel docked on
+the right, with no backdrop. Pointing at (or focusing) a theme, a colour or a mode shows it
+on the whole app; moving away puts the saved look back. A click picks and saves it; there is
+no Apply step. A theme is a working style, not a palette:
 
-| Theme         | Panels and canvas                                                                 | Type                    | Variants                  |
-| ------------- | --------------------------------------------------------------------------------- | ----------------------- | ------------------------- |
-| **Studio**    | Docked panels, 10px cards with area-tinted headers, dotted canvas                 | Geist                   | Jade, Cobalt, Amber, Rose |
-| **Blueprint** | Sharp 2px corners, hairlines and no shadows, ruled canvas, spec-box table headers | IBM Plex Sans and Mono  | Blue, Graphite, Olive     |
-| **Float**     | The bar, an icon dock and the inspector float, frosted, over a full-bleed canvas  | Geist                   | Mist, Dusk, Moss          |
-| **Compact**   | Shorter bar, icon rail, denser rows (root size 14px), flat, no canvas grid        | Geist, mono column data | Phosphor, Amber, Ice      |
+| Theme         | Feels like       | Type                                                  | Corners and controls                    | Table cards                              | Links          | Canvas                                               |
+| ------------- | ---------------- | ----------------------------------------------------- | --------------------------------------- | ---------------------------------------- | -------------- | ---------------------------------------------------- |
+| **Studio**    | Balanced         | Geist                                                 | Soft, segmented tabs                    | Filled, area-tinted header               | Curves         | Dots                                                 |
+| **Blueprint** | A drafting table | IBM Plex; mono capitals on buttons, tabs, table names | Square, outlined quiet buttons          | Outline on the paper, double-rule header | Right angles   | Minor and major ruled grid, blue paper in both modes |
+| **Float**     | An airy studio   | Geist at a 17px root                                  | Pills, 16px cards, floating glass shell | Borderless, shadowed, tinted header      | Thicker curves | No grid: a soft wash of the accent                   |
+| **Compact**   | A terminal       | Geist Mono everywhere, 13px root                      | Square, bracketed text tabs             | Striped rows, no header fill, capitals   | Straight       | Plain                                                |
+
+Colour also moves the greys: Studio swaps its neutral scale (sage with Jade, slate with
+Cobalt, sand with Amber, mauve with Rose); the other themes mix a few percent of the accent
+into canvas, sunken, hover and border greys.
 
 Behaviour, routes and permissions are the same in every theme.
 
@@ -27,6 +35,9 @@ Behaviour, routes and permissions are the same in every theme.
   `data-theme` and `data-variant` on `<html>` from local storage, validated against the
   contract's table. `ThemeProvider` then adopts the account's choice (a plain fetch, so a
   signed-out page never redirects) and saves changes only for a signed-in user.
+- **Preview.** `ThemeProvider.previewAppearance` writes a look onto `<html>` and into
+  context (so React-drawn parts, the link paths and the rail, follow) without storing it;
+  `null` restores the saved look. A pick clears the preview.
 - **Tokens.** `packages/config/tailwind/themes.css` overrides `theme.css`'s semantic tokens
   per theme and mode (surfaces, text, borders, shadows, area tints, radius scale, fonts,
   density) and the accent tokens per variant. Every combination passes AA for text on its
@@ -36,8 +47,9 @@ Behaviour, routes and permissions are the same in every theme.
   headers, the canvas grid (two `Background`s, one hidden per theme) and Float's
   fit-to-view padding. CSS, not React state, so the first paint is already right.
 - **Fonts.** IBM Plex comes from `@fontsource`; a face downloads only when text uses it.
-- **Tests.** The contract's spec, the auth route table, and e2e workflow 16 (pick a theme,
-  see it applied, find it on the account and in a fresh browser; a wrong variant is a 400).
+- **Tests.** The contract's spec, the auth route table, and e2e workflow 16 (hover previews
+  and reverts, a click picks, see it applied, find it on the account and in a fresh
+  browser; a wrong variant is a 400).
 
 ## Later
 

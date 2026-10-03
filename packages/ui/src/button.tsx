@@ -14,12 +14,15 @@ import { cn } from './cn.js';
  * them can forget it.
  */
 export const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-[color,background-color,border-color,transform] active:translate-y-px disabled:pointer-events-none disabled:opacity-50',
+  // Float: pills. Blueprint: square (its radius tokens are 0), mono capitals.
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-[color,background-color,border-color,transform] active:translate-y-px disabled:pointer-events-none disabled:opacity-50 theme-float:rounded-full theme-blueprint:font-mono theme-blueprint:text-[0.75rem] theme-blueprint:tracking-[0.06em] theme-blueprint:uppercase',
   {
     variants: {
       variant: {
         primary: 'bg-accent text-on-accent hover:bg-accent-hover',
-        secondary: 'bg-surface-sunken text-text hover:bg-surface-hover',
+        // Blueprint draws the quieter buttons as outlines.
+        secondary:
+          'bg-surface-sunken text-text hover:bg-surface-hover theme-blueprint:border theme-blueprint:border-border-strong theme-blueprint:bg-transparent',
         outline: 'border border-border bg-surface text-text hover:bg-surface-hover',
         ghost: 'text-text-muted hover:bg-surface-hover hover:text-text',
         danger: 'bg-danger text-on-accent hover:brightness-110',

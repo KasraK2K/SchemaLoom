@@ -107,6 +107,24 @@ div.react-flow {
   );
 }
 
+/* Float has no grid: a soft wash of the accent behind the floating panels, on the canvas
+   and on every other page. Fixed, so it does not slide with a scrolled list. */
+[data-theme='float'] body,
+[data-theme='float'] div.react-flow {
+  background-image:
+    radial-gradient(
+      ellipse at 12% 8%,
+      color-mix(in srgb, var(--color-accent) 16%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse at 92% 96%,
+      color-mix(in srgb, var(--color-accent) 10%, transparent),
+      transparent 50%
+    );
+  background-attachment: fixed;
+}
+
 /**
  * Connection handles. React Flow's default is a dark dot with a white border and no idea
  * the app has a theme. Unlayered and two classes deep so it outranks

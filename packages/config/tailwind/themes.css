@@ -6,6 +6,10 @@
  *
  * Studio + Jade is the base `theme.css` itself, so it needs no block here.
  *
+ * A colour variant also tints the neutrals, so changing colour changes the mood and not
+ * only the buttons: Studio swaps its raw grey scale (sage, slate, sand, mauve), the other
+ * themes mix a few percent of the accent into their canvas, sunken and border greys.
+ *
  * Selectors carry `:root` plus the theme attribute plus the mode class, which outranks the
  * bare `.dark` of `theme.css` without `!important`. `<html>` gets `data-theme`,
  * `data-variant` and `.light`/`.dark` from the inline script in layout.tsx before paint.
@@ -23,15 +27,16 @@
 }
 
 /* ═══════════════════════════════ Blueprint ═══════════════════════════════ */
-/* Technical drawing: IBM Plex, sharp corners, hairlines and no shadows, a ruled canvas. */
+/* A drafting table: IBM Plex with mono capitals for labels, square corners, outline-only
+   tables, right-angled links, a major/minor ruled grid on blue paper in both modes. */
 
 :root[data-theme='blueprint'] {
   --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --radius-sm: 1px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --radius-xl: 3px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
   --sl-header-py: 7px;
   --shadow-panel: none;
   --shadow-node: none;
@@ -45,25 +50,25 @@
   --color-area-8: transparent;
 }
 :root[data-theme='blueprint']:not(.dark) {
-  --color-canvas: #f6f8fb;
-  --color-surface: #ffffff;
-  --color-surface-raised: #ffffff;
-  --color-surface-sunken: #eef2f7;
-  --color-surface-hover: #e5ebf3;
-  --color-border: #cad5e3;
-  --color-border-strong: #8ea4c2;
-  --color-text: #13233a;
-  --color-text-muted: #47607f;
-  --color-text-subtle: #62778f;
+  --color-canvas: color-mix(in oklab, #e6eff9 92%, var(--color-accent));
+  --color-surface: #f4f8fd;
+  --color-surface-raised: #f8fbfe;
+  --color-surface-sunken: color-mix(in oklab, #e1eaf5 92%, var(--color-accent));
+  --color-surface-hover: color-mix(in oklab, #d6e2f1 90%, var(--color-accent));
+  --color-border: color-mix(in oklab, #b3c7df 85%, var(--color-accent));
+  --color-border-strong: #6c8cb5;
+  --color-text: #0f2440;
+  --color-text-muted: #3c587c;
+  --color-text-subtle: #536d8f;
   --shadow-popover: 0 8px 24px rgb(19 35 58 / 0.12);
 }
 :root[data-theme='blueprint'].dark {
-  --color-canvas: #0b1a2e;
-  --color-surface: #0e2038;
+  --color-canvas: color-mix(in oklab, #0a192d 92%, var(--color-accent));
+  --color-surface: #0d1f37;
   --color-surface-raised: #10243f;
-  --color-surface-sunken: #0b1a2e;
-  --color-surface-hover: #16304f;
-  --color-border: #22426a;
+  --color-surface-sunken: color-mix(in oklab, #0a192d 94%, var(--color-accent));
+  --color-surface-hover: color-mix(in oklab, #15304f 90%, var(--color-accent));
+  --color-border: color-mix(in oklab, #22426a 85%, var(--color-accent));
   --color-border-strong: #3a6597;
   --color-text: #e3edf8;
   --color-text-muted: #a9bfd8;
@@ -72,16 +77,20 @@
 }
 
 /* ═════════════════════════════════ Float ═════════════════════════════════ */
-/* Canvas-first: frosted panels float over a full-bleed canvas with generous corners. */
+/* Airy and canvas-first: a step larger type, frosted panels floating over a soft
+   accent-tinted gradient (no grid), pill buttons and tabs, big rounded cards. */
 
 :root[data-theme='float'] {
-  --radius-md: 8px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
-  --sl-topbar-h: 52px;
+  font-size: 17px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --sl-row-py: 6px;
+  --sl-header-py: 10px;
+  --sl-topbar-h: 56px;
 }
 :root[data-theme='float']:not(.dark) {
-  --color-canvas: #eef2f6;
+  --color-canvas: color-mix(in oklab, #eef2f6 92%, var(--color-accent));
   --color-surface: rgb(255 255 255 / 0.8);
   --color-surface-raised: #ffffff;
   --color-surface-sunken: rgb(16 32 48 / 0.045);
@@ -104,7 +113,7 @@
   --color-area-8: rgb(210 60 150 / 0.1);
 }
 :root[data-theme='float'].dark {
-  --color-canvas: #0f1216;
+  --color-canvas: color-mix(in oklab, #0f1216 92%, var(--color-accent));
   --color-surface: rgb(24 28 34 / 0.8);
   --color-surface-raised: #1a1f26;
   --color-surface-sunken: rgb(255 255 255 / 0.04);
@@ -137,15 +146,17 @@
 }
 
 /* ════════════════════════════════ Compact ════════════════════════════════ */
-/* Dense: a smaller root size scales every rem-based space and type down at once; flat,
-   square, no shadows, no area tints, no canvas grid. */
+/* A terminal: monospace everywhere, and a smaller root size scales every rem-based space
+   and type down at once; square, flat, no shadows, no area tints, no canvas grid,
+   striped table rows and straight links. */
 
 :root[data-theme='compact'] {
-  font-size: 14px;
-  --radius-sm: 2px;
-  --radius-md: 3px;
-  --radius-lg: 3px;
-  --radius-xl: 4px;
+  font-size: 13px;
+  --font-sans: var(--font-mono);
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
   --sl-row-py: 2px;
   --sl-header-py: 4px;
   --sl-topbar-h: 40px;
@@ -161,12 +172,12 @@
   --color-area-8: transparent;
 }
 :root[data-theme='compact']:not(.dark) {
-  --color-canvas: #fafafa;
+  --color-canvas: color-mix(in oklab, #f7f7f7 96%, var(--color-accent));
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-surface-sunken: #f2f3f4;
-  --color-surface-hover: #eaecee;
-  --color-border: #dfe2e5;
+  --color-surface-sunken: color-mix(in oklab, #f0f1f2 95%, var(--color-accent));
+  --color-surface-hover: color-mix(in oklab, #e7e9eb 93%, var(--color-accent));
+  --color-border: color-mix(in oklab, #dcdfe2 92%, var(--color-accent));
   --color-border-strong: #b4bac0;
   --color-text: #15181b;
   --color-text-muted: #4c545b;
@@ -174,12 +185,12 @@
   --shadow-popover: 0 8px 22px rgb(21 24 27 / 0.12);
 }
 :root[data-theme='compact'].dark {
-  --color-canvas: #0b0c0d;
-  --color-surface: #0f1112;
-  --color-surface-raised: #131517;
-  --color-surface-sunken: #0d0f10;
-  --color-surface-hover: #1a1d1f;
-  --color-border: #23272a;
+  --color-canvas: color-mix(in oklab, #090a0b 96%, var(--color-accent));
+  --color-surface: #0e1011;
+  --color-surface-raised: #121416;
+  --color-surface-sunken: color-mix(in oklab, #0c0e0f 95%, var(--color-accent));
+  --color-surface-hover: color-mix(in oklab, #181b1d 92%, var(--color-accent));
+  --color-border: color-mix(in oklab, #22262a 90%, var(--color-accent));
   --color-border-strong: #3a4045;
   --color-text: #e4e7ea;
   --color-text-muted: #a3aab0;
@@ -243,6 +254,81 @@
   --color-accent-subtle: #3a0f22;
   --color-accent-border: #7a1d42;
   --color-on-accent: #1f0510;
+}
+
+/* Studio's neutrals follow the colour: slate with Cobalt, sand with Amber, mauve with Rose
+   (Radix Colors). theme.css maps every surface, border and text token onto these steps. */
+:root[data-theme='studio'][data-variant='cobalt']:not(.dark) {
+  --sage-1: #fcfcfd;
+  --sage-2: #f9f9fb;
+  --sage-3: #f0f0f3;
+  --sage-4: #e8e8ec;
+  --sage-6: #d9d9e0;
+  --sage-8: #b9bbc6;
+  --sage-10: #80838d;
+  --sage-11: #60646c;
+  --sage-12: #1c2024;
+}
+:root[data-theme='studio'][data-variant='cobalt'].dark {
+  --sage-1: #111113;
+  --sage-2: #18191b;
+  --sage-3: #212225;
+  --sage-4: #272a2d;
+  --sage-5: #2e3135;
+  --sage-7: #43484e;
+  --sage-10: #777b84;
+  --sage-11: #b0b4ba;
+  --sage-12: #edeef0;
+  --color-canvas: #0b0c0e;
+  --color-surface-sunken: #141517;
+}
+:root[data-theme='studio'][data-variant='amber']:not(.dark) {
+  --sage-1: #fdfdfc;
+  --sage-2: #f9f9f8;
+  --sage-3: #f1f0ef;
+  --sage-4: #e9e8e6;
+  --sage-6: #dad9d6;
+  --sage-8: #bcbbb5;
+  --sage-10: #82827c;
+  --sage-11: #63635e;
+  --sage-12: #21201c;
+}
+:root[data-theme='studio'][data-variant='amber'].dark {
+  --sage-1: #111110;
+  --sage-2: #191918;
+  --sage-3: #222221;
+  --sage-4: #2a2a28;
+  --sage-5: #31312e;
+  --sage-7: #494844;
+  --sage-10: #7f7e77;
+  --sage-11: #b5b3ad;
+  --sage-12: #eeeeec;
+  --color-canvas: #0d0d0c;
+  --color-surface-sunken: #151514;
+}
+:root[data-theme='studio'][data-variant='rose']:not(.dark) {
+  --sage-1: #fdfcfd;
+  --sage-2: #faf9fb;
+  --sage-3: #f2eff3;
+  --sage-4: #eae7ec;
+  --sage-6: #dbd8e0;
+  --sage-8: #bcbac7;
+  --sage-10: #86848d;
+  --sage-11: #65636d;
+  --sage-12: #211f26;
+}
+:root[data-theme='studio'][data-variant='rose'].dark {
+  --sage-1: #121113;
+  --sage-2: #1a191b;
+  --sage-3: #232225;
+  --sage-4: #2b292d;
+  --sage-5: #323035;
+  --sage-7: #49474e;
+  --sage-10: #7c7a85;
+  --sage-11: #b5b2bc;
+  --sage-12: #eeeef0;
+  --color-canvas: #0d0c0e;
+  --color-surface-sunken: #161517;
 }
 
 /* Blueprint */
