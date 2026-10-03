@@ -5,7 +5,7 @@ the account, no org default yet) and the mockup the same day.
 
 ## What a user gets
 
-**Account menu → Appearance…** picks a theme, one of its colour variants, and the mode
+The **appearance button** in the top bar (the icon shows the mode) picks a theme, one of its colour variants, and the mode
 (light, dark, system). A theme is a working style, not a palette:
 
 | Theme         | Panels and canvas                                                                 | Type                    | Variants                  |

@@ -19,8 +19,8 @@ test.describe('workflow 16 — appearance themes', () => {
       await page.goto(`/${SEED.orgSlug}`);
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'studio');
 
-      await page.getByRole('button', { name: 'Account' }).click();
-      await page.getByRole('menuitem', { name: 'Appearance…' }).click();
+      // The top bar's appearance button (the mode icon) opens the dialog.
+      await page.getByRole('button', { name: 'Appearance' }).click();
       await page.getByRole('radio', { name: 'Blueprint' }).click();
       await page.getByRole('radio', { name: 'Olive' }).click();
       await page.getByRole('radio', { name: 'Dark' }).click();
