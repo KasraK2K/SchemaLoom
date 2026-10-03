@@ -1,6 +1,11 @@
 import type { PermissionAtom } from '@schemaloom/contracts';
 import { describe, expect, it, vi } from 'vitest';
-import { canOpenProject, type PermissionResolver, type ProjectPermissionMap } from '../access';
+import {
+  buildSkeleton,
+  canOpenProject,
+  type PermissionResolver,
+  type ProjectPermissionMap,
+} from '../access';
 import type { PrismaService } from '../prisma/prisma.service';
 import { OrganizationsService, slugify } from './organizations.service';
 
@@ -31,6 +36,12 @@ const mapOf = (
   ...over,
 });
 
+/** Project-wide atoms, as the resolver writes them: on the project and on every area. */
+const projectWide = (atoms: PermissionAtom[]): Partial<ProjectPermissionMap> => {
+  const set = new Set<PermissionAtom>(atoms);
+  return { projectAtoms: set, areaAtoms: new Map([['area_billing', set]]) };
+};
+
 interface Harness {
   readonly service: OrganizationsService;
   readonly orgMemberFindMany: ReturnType<typeof vi.fn>;
@@ -44,6 +55,7 @@ function harness(over: {
   membership?: unknown;
   projects?: unknown[];
   maps?: Map<string, ProjectPermissionMap>;
+  openRequests?: { projectId: string; _count: { _all: number } }[];
 }): Harness {
   const orgMemberFindMany = vi.fn().mockResolvedValue(over.members ?? []);
   const orgMemberFindFirst = vi.fn().mockResolvedValue(over.membership ?? null);
@@ -53,11 +65,25 @@ function harness(over: {
   const prisma = {
     orgMember: { findMany: orgMemberFindMany, findFirst: orgMemberFindFirst },
     project: { findMany: projectFindMany },
+    changeRequest: { groupBy: vi.fn().mockResolvedValue(over.openRequests ?? []) },
   } as unknown as PrismaService;
 
   const resolver = {
     resolveProjects,
     canOpenProject: (map: ProjectPermissionMap) => canOpenProject(map),
+    // Every project has two tables, one in the Billing area.
+    skeleton: () =>
+      Promise.resolve(
+        buildSkeleton(
+          1,
+          ['area_billing'],
+          [
+            { id: 'ent_a', areaId: null },
+            { id: 'ent_b', areaId: 'area_billing' },
+          ],
+          [],
+        ),
+      ),
   } as unknown as PermissionResolver;
 
   return {
@@ -98,10 +124,19 @@ describe('OrganizationsService.listForUser', () => {
 });
 
 describe('OrganizationsService.listProjects', () => {
+  const row = (id: string, name: string, at: number) => ({
+    id,
+    name,
+    engineId: 'postgresql',
+    engineVersion: '16',
+    updatedAt: new Date(at),
+    requireChangeRequests: false,
+    connection: { lastCheckStatus: 'drift' },
+  });
   const rows = [
-    { id: 'prj_open', name: 'Storefront', engineId: 'postgresql', updatedAt: new Date(2) },
-    { id: 'prj_closed', name: 'Payroll', engineId: 'postgresql', updatedAt: new Date(1) },
-    { id: 'prj_area', name: 'Billing', engineId: 'postgresql', updatedAt: new Date(0) },
+    row('prj_open', 'Storefront', 2),
+    row('prj_closed', 'Payroll', 1),
+    row('prj_area', 'Billing', 0),
   ];
 
   const maps = new Map<string, ProjectPermissionMap>([
@@ -109,7 +144,7 @@ describe('OrganizationsService.listProjects', () => {
       'prj_open',
       // `viewer` is {schema:view, export:run} — the whole closed set, not just the atom
       // that makes the project openable. `effectiveRole` never rounds a partial set up.
-      mapOf('prj_open', { projectAtoms: new Set<PermissionAtom>(['schema:view', 'export:run']) }),
+      mapOf('prj_open', projectWide(['schema:view', 'export:run'])),
     ],
     // No atoms anywhere: `canOpenProject` is false, so this row must not appear.
     ['prj_closed', mapOf('prj_closed')],
@@ -134,11 +169,41 @@ describe('OrganizationsService.listProjects', () => {
       id: 'prj_open',
       name: 'Storefront',
       engineId: 'postgresql',
+      engineVersion: '16',
       updatedAt: new Date(2).toISOString(),
       role: 'viewer',
+      requireChangeRequests: false,
+      tableCount: 2,
+      openChangeRequests: 0,
+      // A viewer is not a project-wide editor, so the drift check is not theirs to see.
+      driftStatus: null,
     });
     // Area-scoped access carries no project-level role label, and that is not "no access".
     expect(listed[1]?.role).toBeNull();
+  });
+
+  it('gives counts only to a complete viewer, and drift only to an editor (redesign)', async () => {
+    const editor = new Map<string, ProjectPermissionMap>([
+      ['prj_open', mapOf('prj_open', projectWide(['schema:view', 'schema:edit', 'export:run']))],
+      [
+        'prj_area',
+        mapOf('prj_area', {
+          areaAtoms: new Map<string, ReadonlySet<PermissionAtom>>([
+            ['area_billing', new Set<PermissionAtom>(['schema:view', 'schema:edit'])],
+          ]),
+        }),
+      ],
+    ]);
+    const h = harness({
+      membership: { organizationId: ORG },
+      projects: rows,
+      maps: editor,
+      openRequests: [{ projectId: 'prj_open', _count: { _all: 3 } }],
+    });
+    const [open, area] = await h.service.listProjects(USER, 'acme');
+    expect(open).toMatchObject({ tableCount: 2, openChangeRequests: 3, driftStatus: 'drift' });
+    // Sees one of two tables: no count that would reveal the hidden one.
+    expect(area).toMatchObject({ tableCount: null, openChangeRequests: null, driftStatus: null });
   });
 
   it('shows a guest (an accepted email invite) only the projects it was granted', async () => {

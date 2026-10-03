@@ -23,9 +23,21 @@ export interface ProjectSummary {
   readonly id: string;
   readonly name: string;
   readonly engineId: string;
+  readonly engineVersion: string;
   readonly updatedAt: string;
   /** `null` = access is area- or entity-scoped only (doc 05 §7.9). See `effectiveRole`. */
   readonly role: BuiltInResourceRole | null;
+  /** Phase 10b: schema changes only through change requests. */
+  readonly requireChangeRequests: boolean;
+  /**
+   * The project list's columns, for a caller with a complete view only (`null` otherwise):
+   * a partial viewer must not learn how many tables they cannot see, and change requests
+   * are a complete viewer's business (Phase 10 §3).
+   */
+  readonly tableCount: number | null;
+  readonly openChangeRequests: number | null;
+  /** Last scheduled drift check (6d), for project-wide editors only, like the connection. */
+  readonly driftStatus: 'in_sync' | 'drift' | 'failed' | null;
 }
 
 /**
@@ -69,8 +81,22 @@ export interface ProjectSummaryRow {
   readonly id: string;
   readonly name: string;
   readonly engineId: string;
+  readonly engineVersion: string;
   readonly updatedAt: Date;
+  readonly requireChangeRequests: boolean;
 }
+
+/** What only the project list adds to a summary (`OrganizationsService.listProjects`). */
+export type ProjectListExtras = Pick<
+  ProjectSummary,
+  'tableCount' | 'openChangeRequests' | 'driftStatus'
+>;
+
+const NO_EXTRAS: ProjectListExtras = {
+  tableCount: null,
+  openChangeRequests: null,
+  driftStatus: null,
+};
 
 export interface ProjectDetailRow extends ProjectSummaryRow {
   readonly engineVersion: string;
@@ -79,12 +105,19 @@ export interface ProjectDetailRow extends ProjectSummaryRow {
   readonly requireChangeRequests: boolean;
 }
 
-export const toSummary = (row: ProjectSummaryRow, map: ProjectPermissionMap): ProjectSummary => ({
+export const toSummary = (
+  row: ProjectSummaryRow,
+  map: ProjectPermissionMap,
+  extras: ProjectListExtras = NO_EXTRAS,
+): ProjectSummary => ({
   id: row.id,
   name: row.name,
   engineId: row.engineId,
+  engineVersion: row.engineVersion,
   updatedAt: row.updatedAt.toISOString(),
   role: effectiveRole(map.projectAtoms),
+  requireChangeRequests: row.requireChangeRequests,
+  ...extras,
 });
 
 export const toDetail = (

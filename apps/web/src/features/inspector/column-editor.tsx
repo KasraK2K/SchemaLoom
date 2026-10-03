@@ -28,7 +28,7 @@ import { ApiError } from '@/lib/api-client';
  */
 
 const inputClass =
-  'h-7 min-w-0 rounded-md border border-border bg-surface px-2 text-xs text-text disabled:opacity-50';
+  'h-8 min-w-0 rounded-md border border-border bg-surface px-2 text-xs text-text transition-colors hover:border-border-strong focus:border-accent-border disabled:opacity-50';
 
 /** Nest's default messages ("Conflict Exception") say nothing; the codes do. */
 function message(caught: unknown): string {
@@ -83,9 +83,12 @@ function NameInput({
   disabled,
   label,
   onCommit,
+  title = false,
 }: {
   readonly value: string;
   readonly version: number;
+  /** The entity's own name, set as the inspector's title rather than as a field. */
+  readonly title?: boolean;
   readonly disabled: boolean;
   readonly label: string;
   readonly onCommit: (next: string) => void;
@@ -105,7 +108,11 @@ function NameInput({
   return (
     <input
       aria-label={label}
-      className={`${inputClass} flex-1 font-mono`}
+      className={
+        title
+          ? 'h-9 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 text-[15px] font-semibold tracking-tight text-text transition-colors hover:border-border focus:border-accent-border disabled:opacity-50'
+          : `${inputClass} flex-1 font-mono`
+      }
       maxLength={255}
       disabled={disabled}
       value={draft}
@@ -228,7 +235,7 @@ export function ColumnRow({
   const resolved = facet.typeCatalog.resolve(typeDraft, ctx);
 
   return (
-    <li className="flex flex-col gap-1 rounded border border-border p-1.5">
+    <li className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-raised p-2">
       <div className="flex items-center gap-1">
         <NameInput
           label={t.msg('action.rename', 'field')}
@@ -362,6 +369,7 @@ export function EntityEditor({
         <div className="flex items-center gap-1">
           <NameInput
             label={t.msg('action.rename', 'entity')}
+            title
             value={entity.name}
             version={entity.version}
             disabled={entityOps.busy}
@@ -390,7 +398,10 @@ export function EntityEditor({
 
       {kind?.hasFields === false ? null : (
         <>
-          <h3 className="text-xs font-medium text-text-subtle">{t.term('field').other}</h3>
+          <h3 className="flex items-baseline gap-1.5 text-xs font-semibold text-text-muted">
+            {t.term('field').other}
+            <span className="font-mono font-normal text-text-subtle">{fields.length}</span>
+          </h3>
           <ul className="space-y-1.5">
             {fields.map((field) => (
               <ColumnRow

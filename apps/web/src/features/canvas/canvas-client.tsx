@@ -1,5 +1,7 @@
 'use client';
 
+import { Loading, Skeleton } from '@schemaloom/ui';
+
 import type { Id } from '@schemaloom/schema-model';
 import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
@@ -50,8 +52,25 @@ export function CanvasClient({
 
 function CanvasSkeleton() {
   return (
-    <div className="flex h-full items-center justify-center bg-canvas">
-      <span className="text-sm text-text-subtle">Loading the diagram…</span>
-    </div>
+    <Loading label="Loading the diagram…" className="relative h-full overflow-hidden bg-canvas">
+      {[
+        'left-[12%] top-[18%] h-36',
+        'left-[42%] top-[30%] h-44',
+        'left-[70%] top-[16%] h-32',
+        'left-[20%] top-[58%] h-28',
+      ].map((place) => (
+        <div
+          key={place}
+          className={`absolute w-52 overflow-hidden rounded-lg border border-border bg-surface-raised ${place}`}
+        >
+          <Skeleton className="h-9 rounded-none" />
+          <div className="flex flex-col gap-2.5 p-3">
+            <Skeleton className="h-2.5 w-3/4" />
+            <Skeleton className="h-2.5 w-1/2" />
+            <Skeleton className="h-2.5 w-2/3" />
+          </div>
+        </div>
+      ))}
+    </Loading>
   );
 }

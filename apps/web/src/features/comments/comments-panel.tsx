@@ -1,7 +1,7 @@
 'use client';
 
 import type { Id } from '@schemaloom/schema-model';
-import { Button } from '@schemaloom/ui';
+import { Button, Loading, SkeletonRows } from '@schemaloom/ui';
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import type { JSONContent } from '@tiptap/react';
 import { useState } from 'react';
@@ -97,7 +97,13 @@ function TargetComments({
     onSuccess: refresh,
   });
 
-  if (comments.isPending) return <p className="p-2 text-sm text-text-subtle">Loading…</p>;
+  if (comments.isPending) {
+    return (
+      <Loading className="p-2">
+        <SkeletonRows />
+      </Loading>
+    );
+  }
   if (comments.isError) {
     const gone = comments.error instanceof ApiError && comments.error.status === 404;
     return (

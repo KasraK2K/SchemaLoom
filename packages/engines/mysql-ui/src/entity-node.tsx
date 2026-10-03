@@ -38,22 +38,34 @@ export function MySqlEntityNode({
   return (
     <div
       className={cn(
-        'min-w-48 overflow-hidden rounded-lg border bg-surface shadow-sm',
-        selected ? 'border-accent ring-1 ring-accent' : 'border-border',
+        'min-w-52 overflow-hidden rounded-lg border bg-surface-raised shadow-node transition-shadow',
+        selected ? 'border-accent ring-[3px] ring-accent/25' : 'border-border-strong',
       )}
-      style={areaColor === null ? undefined : { borderTopColor: areaColor, borderTopWidth: 3 }}
     >
-      <header className="flex items-center gap-2 border-b border-border bg-surface-raised px-2 py-1.5">
+      {/* The area's colour tints the header band: the card says where it belongs without
+          a stripe competing with the selection ring. */}
+      <header
+        className={cn(
+          'flex items-center gap-2 border-b border-border px-2.5 py-2',
+          areaColor === null && 'bg-surface-sunken',
+        )}
+        style={areaColor === null ? undefined : { backgroundColor: areaColor }}
+      >
         <button
           type="button"
           onClick={onToggleCollapse}
           aria-expanded={!collapsed}
-          className="text-text-subtle"
+          className="rounded text-text-subtle hover:text-text"
         >
           <Chevron className="size-3.5" />
         </button>
-        <KindIcon className="size-4 text-text-subtle" />
-        <span className="truncate text-sm font-medium text-text">{entity.name}</span>
+        <KindIcon className="size-3.5 text-text-muted" />
+        <span className="truncate text-[13px] font-semibold text-text">{entity.name}</span>
+        {kind?.hasFields === false ? null : (
+          <span className="ml-auto pl-2 font-mono text-[10.5px] text-text-subtle">
+            {fields.length}
+          </span>
+        )}
         {entity.restricted === true ? (
           <span aria-label="Restricted" title="Restricted">
             &#128274;
@@ -69,7 +81,7 @@ export function MySqlEntityNode({
           {formatMessage(engine.terminology, 'list.empty', 'field')}
         </p>
       ) : (
-        <ul className="divide-y divide-border">
+        <ul className="divide-y divide-border/60">
           {fields.map((field) => (
             <FieldRow
               key={field.id}

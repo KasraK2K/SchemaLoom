@@ -32,6 +32,13 @@ export const ProjectSummarySchema = z.object({
   updatedAt: z.string(),
   /** `null` = access is area- or entity-scoped only (doc 05 §7.9). */
   role: resourceRoleSchema,
+  engineVersion: z.string().default(''),
+  requireChangeRequests: z.boolean().default(false),
+  /** `null` without a complete view of the project: the API will not count what you
+   *  cannot see. */
+  tableCount: z.number().nullable().default(null),
+  openChangeRequests: z.number().nullable().default(null),
+  driftStatus: z.enum(['in_sync', 'drift', 'failed']).nullable().default(null),
 });
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 

@@ -32,6 +32,11 @@ const STOREFRONT: ProjectSummary = {
   engineId: 'postgresql',
   updatedAt: '2026-09-25T10:00:00.000Z',
   role: 'viewer',
+  engineVersion: '16',
+  requireChangeRequests: false,
+  tableCount: 12,
+  openChangeRequests: 0,
+  driftStatus: null,
 };
 
 describe('<OrgList>', () => {
@@ -72,15 +77,41 @@ describe('<ProjectList>', () => {
     const html = renderToStaticMarkup(<ProjectList orgSlug="acme" projects={[STOREFRONT]} />);
     expect(html).toContain('href="/acme/p/prj_seed_demo_storefront1"');
     expect(html).toContain('Storefront');
-    expect(html).toContain('postgresql');
-    expect(html).toContain('viewer');
+    // No engine names passed: the id stands in, with the version.
+    expect(html).toContain('postgresql 16');
+    expect(html).toContain('Viewer');
+  });
+
+  it('names the engine, and shows the counts and chips the API gave', () => {
+    const html = renderToStaticMarkup(
+      <ProjectList
+        orgSlug="acme"
+        engineNames={{ postgresql: 'PostgreSQL' }}
+        projects={[
+          {
+            ...STOREFRONT,
+            openChangeRequests: 2,
+            requireChangeRequests: true,
+            driftStatus: 'drift',
+          },
+          // A partial viewer: the API counted nothing, so nothing is shown as a number.
+          { ...STOREFRONT, id: 'prj_2', tableCount: null, openChangeRequests: null },
+        ]}
+      />,
+    );
+    expect(html).toContain('PostgreSQL 16');
+    expect(html).toContain('2 open');
+    expect(html).toContain('Protected');
+    expect(html).toContain('Drift');
+    expect(html).toContain('>12<');
+    expect(html).toContain('>-<');
   });
 
   it('says "scoped" rather than nothing when access is area- or entity-scoped', () => {
     const html = renderToStaticMarkup(
       <ProjectList orgSlug="acme" projects={[{ ...STOREFRONT, role: null }]} />,
     );
-    expect(html).toContain('scoped');
+    expect(html).toContain('Scoped access');
   });
 
   it('renders the edit time as words against a machine-readable timestamp', () => {

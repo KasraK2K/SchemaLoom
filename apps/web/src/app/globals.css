@@ -19,6 +19,13 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Native checkboxes, radios and ranges in the accent rather than the browser's blue. */
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='range'] {
+    accent-color: var(--color-accent);
+  }
+
   body {
     background-color: var(--color-canvas);
     color: var(--color-text);

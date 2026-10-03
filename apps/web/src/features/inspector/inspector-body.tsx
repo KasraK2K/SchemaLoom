@@ -1,7 +1,7 @@
 'use client';
 
 import type { Entity, Field, Id, Link } from '@schemaloom/schema-model';
-import { TabsContent, X } from '@schemaloom/ui';
+import { Table2, TabsContent, X } from '@schemaloom/ui';
 import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useEngine, useEngineUi, useTerminology } from '@/engines';
@@ -59,7 +59,12 @@ export function InspectorBody({ projectId }: { readonly projectId: Id }) {
         ) : (
           <>
             {kindLabel === null ? null : (
-              <p className="px-2 text-xs text-text-subtle">{kindLabel}</p>
+              <p className="flex items-center gap-2 px-2 pt-1 text-xs font-medium text-text-subtle capitalize">
+                <span className="flex size-6 items-center justify-center rounded-md bg-accent-subtle text-accent-text">
+                  <Table2 className="size-3.5" aria-hidden="true" />
+                </span>
+                {kindLabel}
+              </p>
             )}
             {entity.restricted === true || readOnly ? (
               <EntityDetails entity={entity} kindLabel={kindLabel} fieldCount={fieldCount} />

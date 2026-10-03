@@ -8,6 +8,8 @@ import {
   DialogFooter,
   DialogTitle,
   cn,
+  Loading,
+  SkeletonRows,
 } from '@schemaloom/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -93,7 +95,9 @@ export function HistoryView({
           <DriftCheck projectId={projectId} />
         </EngineGate>
         {list.isPending ? (
-          <p className="text-xs text-text-subtle">Loading…</p>
+          <Loading>
+            <SkeletonRows rows={4} />
+          </Loading>
         ) : snapshots.length === 0 ? (
           <p className="text-xs text-text-muted">No snapshots yet.</p>
         ) : (

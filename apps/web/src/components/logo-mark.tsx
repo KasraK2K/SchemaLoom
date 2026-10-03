@@ -1,9 +1,10 @@
-/** The SchemaLoom mark (woven grid). Same drawing as `app/icon.svg` and `docs/brand/`. */
+/** The SchemaLoom mark (woven grid), in jade since the 2026-10 redesign. Same drawing as
+ *  `app/icon.svg` and `docs/brand/` (whose files are still indigo). */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
-      <rect width="64" height="64" rx="14" fill="#3E63DD" />
-      <g fill="#C6D4F9">
+      <rect width="64" height="64" rx="14" fill="#208368" />
+      <g fill="#ACDEC8">
         <rect x="10" y="18" width="44" height="8" rx="4" />
         <rect x="10" y="38" width="44" height="8" rx="4" />
       </g>
@@ -11,13 +12,13 @@ export function LogoMark({ className }: { className?: string }) {
         <rect x="18" y="10" width="8" height="44" rx="4" />
         <rect x="38" y="10" width="8" height="44" rx="4" />
       </g>
-      <g fill="#3E63DD">
+      <g fill="#208368">
         <rect x="38" y="15.5" width="8" height="2.5" />
         <rect x="38" y="26" width="8" height="2.5" />
         <rect x="18" y="35.5" width="8" height="2.5" />
         <rect x="18" y="46" width="8" height="2.5" />
       </g>
-      <g fill="#C6D4F9">
+      <g fill="#ACDEC8">
         <rect x="36" y="18" width="12" height="8" />
         <rect x="16" y="38" width="12" height="8" />
       </g>

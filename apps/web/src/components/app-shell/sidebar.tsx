@@ -21,9 +21,15 @@ export function Sidebar({ items, orgLabel }: { items: readonly NavItem[]; orgLab
     <SidebarFrame>
       <ScrollArea className="h-full">
         {orgLabel !== undefined && (
-          <p className="truncate border-b border-border px-3 py-2 text-xs font-medium tracking-wide text-text-subtle uppercase group-data-[collapsed=true]/sidebar:hidden">
-            {orgLabel}
-          </p>
+          <div className="mx-2 mt-1 flex items-center gap-2.5 rounded-lg border border-border bg-surface-raised px-2 py-1.5 group-data-[collapsed=true]/sidebar:hidden">
+            <span
+              aria-hidden="true"
+              className="flex size-6 shrink-0 items-center justify-center rounded-md bg-accent-subtle text-xs font-semibold text-accent-text"
+            >
+              {orgLabel.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="min-w-0 truncate text-sm font-medium text-text">{orgLabel}</span>
+          </div>
         )}
         <ul className="flex flex-col gap-0.5 p-2">
           {items.map((item) => (
@@ -31,7 +37,7 @@ export function Sidebar({ items, orgLabel }: { items: readonly NavItem[]; orgLab
               <Link
                 href={item.href}
                 title={item.label}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-muted transition-colors group-data-[collapsed=true]/sidebar:justify-center hover:bg-surface-hover hover:text-text"
+                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium text-text-muted transition-colors group-data-[collapsed=true]/sidebar:justify-center hover:bg-surface-hover hover:text-text"
               >
                 <item.icon className="size-4 shrink-0" aria-hidden="true" />
                 <span className="truncate group-data-[collapsed=true]/sidebar:sr-only">

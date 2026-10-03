@@ -1,12 +1,11 @@
 import { HydrationBoundary } from '@tanstack/react-query';
-import Link from 'next/link';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
 import { CanvasClient } from '@/features/canvas/canvas-client';
 import { dehydrateIr } from '@/features/canvas/ir-prefetch';
 import { ChangeRequestActions } from '@/features/change-requests/change-requests-view';
 import { ExportMenu } from '@/features/exports/export-menu';
-import { ProjectTabs } from '@/features/history/project-tabs';
+import { ProjectBreadcrumb } from '@/features/history/project-tabs';
 import { InspectorPanel } from '@/features/inspector/inspector-panel';
 import { ProjectSettingsDialog } from '@/features/project/project-settings-dialog';
 import { ProjectShareButton } from '@/features/sharing';
@@ -36,16 +35,7 @@ export default async function ProjectCanvasPage({
       <AppShell
         nav={orgNavItems(orgSlug)}
         orgLabel={orgSlug}
-        breadcrumb={
-          // A link, not text: this is the way back out of a project, and for a while it
-          // was the only screen in the app you could not navigate away from.
-          <span className="flex min-w-0 items-center gap-3">
-            <Link href={`/${orgSlug}`} className="truncate hover:text-text">
-              {orgSlug} / project
-            </Link>
-            <ProjectTabs orgSlug={orgSlug} projectId={projectId} />
-          </span>
-        }
+        breadcrumb={<ProjectBreadcrumb orgSlug={orgSlug} projectId={projectId} />}
         actions={
           <>
             <ChangeRequestActions orgSlug={orgSlug} projectId={projectId} />

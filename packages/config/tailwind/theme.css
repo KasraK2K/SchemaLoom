@@ -4,7 +4,7 @@
  *
  * Structure, and why:
  *
- *   1. RAW SCALES (--slate-*, --indigo-*, ...) are Radix Colors values, inlined rather
+ *   1. RAW SCALES (--sage-*, --jade-*, ...) are Radix Colors values, inlined rather
  *      than `@import`ed from @radix-ui/colors. Inlining keeps this file resolvable from
  *      any package without a CSS-side node_modules lookup, and it lets us ship only the
  *      six scales actually used instead of all thirty.
@@ -23,39 +23,42 @@
 
 @theme {
   /* ---- Typography ------------------------------------------------------- */
-  /* Inter for UI. JetBrains Mono for types, identifiers and SQL — anywhere a
-     character-for-character reading matters and l/1/I must not collide. */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Geist for UI, Geist Mono for types, identifiers and SQL: anywhere a
+     character-for-character reading matters and l/1/I must not collide. Self-hosted by
+     the `geist` package, which sets these two variables on <html> (layout.tsx). */
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
   --font-mono:
-    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
   /* ---- Raw scales: Radix Colors ----------------------------------------- */
-  /* Slate — neutral surfaces and text. */
-  --slate-1: #fcfcfd;
-  --slate-2: #f9f9fb;
-  --slate-3: #f0f0f3;
-  --slate-4: #e8e8ec;
-  --slate-5: #e0e1e6;
-  --slate-6: #d9d9e0;
-  --slate-7: #cdced6;
-  --slate-8: #b9bbc6;
-  --slate-9: #8b8d98;
-  --slate-10: #80838d;
-  --slate-11: #60646c;
-  --slate-12: #1c2024;
+  /* Sage: neutral surfaces and text, a grey with a trace of green that sits with jade. */
+  --sage-1: #fbfdfc;
+  --sage-2: #f7f9f8;
+  --sage-3: #eef1f0;
+  --sage-4: #e6e9e8;
+  --sage-5: #dfe2e0;
+  --sage-6: #d7dad9;
+  --sage-7: #cbcfcd;
+  --sage-8: #b8bcba;
+  --sage-9: #868e8b;
+  --sage-10: #7c8481;
+  --sage-11: #5f6563;
+  --sage-12: #1a211e;
 
-  /* Indigo — the single accent. */
-  --indigo-1: #fdfdfe;
-  --indigo-3: #f0f4ff;
-  --indigo-4: #e6edfe;
-  --indigo-5: #d9e2fc;
-  --indigo-6: #c6d4f9;
-  --indigo-7: #aec0f5;
-  --indigo-8: #8da4ef;
-  --indigo-9: #3e63dd;
-  --indigo-10: #3358d4;
-  --indigo-11: #3a5bc7;
-  --indigo-12: #1f2d5c;
+  /* Jade: the single accent (owner's choice, 2026-10-03). */
+  --jade-1: #fbfefd;
+  --jade-3: #e6f7ed;
+  --jade-4: #d6f1e3;
+  --jade-5: #c3e9d7;
+  --jade-6: #acdec8;
+  --jade-7: #8bceb6;
+  --jade-8: #56ba9f;
+  --jade-9: #29a383;
+  --jade-10: #26997b;
+  --jade-11: #208368;
+  --jade-12: #1d3b31;
 
   /* Red — destructive. Amber — warning. Green — success. Steps 3/9/11 only: the
      others are unused, and a token nothing reads is a token that rots. */
@@ -70,24 +73,28 @@
   --green-11: #218358;
 
   /* ---- Semantic tokens: light ------------------------------------------- */
-  --color-canvas: var(--slate-2);
+  --color-canvas: var(--sage-2);
   --color-surface: #ffffff;
-  --color-surface-raised: var(--slate-1);
-  --color-surface-sunken: var(--slate-3);
-  --color-surface-hover: var(--slate-4);
+  --color-surface-raised: var(--sage-1);
+  --color-surface-sunken: var(--sage-3);
+  --color-surface-hover: var(--sage-4);
 
-  --color-border: var(--slate-6);
-  --color-border-strong: var(--slate-8);
+  --color-border: var(--sage-6);
+  --color-border-strong: var(--sage-8);
 
-  --color-text: var(--slate-12);
-  --color-text-muted: var(--slate-11);
-  --color-text-subtle: var(--slate-10);
+  --color-text: var(--sage-12);
+  --color-text-muted: var(--sage-11);
+  --color-text-subtle: var(--sage-10);
 
-  --color-accent: var(--indigo-9);
-  --color-accent-hover: var(--indigo-10);
-  --color-accent-text: var(--indigo-11);
-  --color-accent-subtle: var(--indigo-3);
-  --color-accent-border: var(--indigo-7);
+  /* Jade 9 under white text is ~3:1, under AA. Light mode fills with step 11 instead;
+     dark mode keeps step 9 and puts near-black text on it (see .dark). */
+  --jade-solid: var(--jade-11);
+  --jade-solid-hover: #1b7058;
+  --color-accent: var(--jade-solid);
+  --color-accent-hover: var(--jade-solid-hover);
+  --color-accent-text: var(--jade-11);
+  --color-accent-subtle: var(--jade-3);
+  --color-accent-border: var(--jade-7);
   --color-on-accent: #ffffff;
 
   --color-danger: var(--red-9);
@@ -105,19 +112,23 @@
      that they stop being distinguishable at canvas zoom and a ninth area is better
      served by a label than by a colour nobody can name. Assigned round-robin by area
      index, so the same area keeps its colour across sessions without storing one. */
-  --color-area-1: #e6edfe;
-  --color-area-2: #e9f9ee;
+  --color-area-1: #e6f7ed;
+  --color-area-2: #e6f4fe;
   --color-area-3: #fff7c2;
   --color-area-4: #ffefef;
   --color-area-5: #f3e7fc;
-  --color-area-6: #e0f8f3;
+  --color-area-6: #e6edfe;
   --color-area-7: #ffe8d7;
   --color-area-8: #fee9f5;
 
   /* ---- Elevation and motion --------------------------------------------- */
-  --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 12px rgb(0 0 0 / 0.06);
-  --shadow-popover: 0 8px 28px rgb(0 0 0 / 0.12);
-  --shadow-node: 0 1px 2px rgb(0 0 0 / 0.06), 0 2px 6px rgb(0 0 0 / 0.04);
+  --shadow-panel: 0 1px 2px rgb(26 33 30 / 0.05), 0 6px 16px rgb(26 33 30 / 0.06);
+  --shadow-popover: 0 10px 32px rgb(26 33 30 / 0.14);
+  --shadow-node: 0 1px 2px rgb(26 33 30 / 0.06), 0 4px 10px rgb(26 33 30 / 0.05);
+
+  /* One radius rule: 6px controls (rounded-md), 10px panels and table cards (rounded-lg),
+     12px dialogs (rounded-xl). */
+  --radius-lg: 10px;
 
   /* Panels and popovers. Kept short — the canvas is a direct-manipulation surface and
      anything slower than this reads as lag rather than as polish. */
@@ -133,29 +144,29 @@
  */
 @layer base {
   .dark {
-    --slate-1: #111113;
-    --slate-2: #18191b;
-    --slate-3: #212225;
-    --slate-4: #272a2d;
-    --slate-5: #2e3135;
-    --slate-6: #363a3f;
-    --slate-7: #43484e;
-    --slate-8: #5a6169;
-    --slate-9: #696e77;
-    --slate-10: #777b84;
-    --slate-11: #b0b4ba;
-    --slate-12: #edeef0;
+    --sage-1: #101211;
+    --sage-2: #171918;
+    --sage-3: #202221;
+    --sage-4: #272a29;
+    --sage-5: #2e3130;
+    --sage-6: #373b39;
+    --sage-7: #444947;
+    --sage-8: #5b625f;
+    --sage-9: #63706b;
+    --sage-10: #717d79;
+    --sage-11: #adb5b2;
+    --sage-12: #eceeed;
 
-    --indigo-3: #182449;
-    --indigo-4: #1d2e62;
-    --indigo-5: #253974;
-    --indigo-6: #304384;
-    --indigo-7: #3a4f97;
-    --indigo-8: #435db1;
-    --indigo-9: #3e63dd;
-    --indigo-10: #5472e4;
-    --indigo-11: #9eb1ff;
-    --indigo-12: #d6e1ff;
+    --jade-3: #0f2e22;
+    --jade-4: #0b3b2c;
+    --jade-5: #114837;
+    --jade-6: #1b5745;
+    --jade-7: #246854;
+    --jade-8: #2a7e68;
+    --jade-9: #29a383;
+    --jade-10: #27b08b;
+    --jade-11: #1fd8a4;
+    --jade-12: #adf0d4;
 
     --red-3: #3b1219;
     --red-9: #e5484d;
@@ -170,24 +181,30 @@
     /* The three that are not just a scale swap. The canvas sits BELOW its panels in
        dark mode — the opposite of light — because a raised card reads as nearer, and
        on a dark ground that is what separates a table from the grid behind it. */
-    --color-canvas: var(--slate-1);
-    --color-surface: var(--slate-2);
-    --color-surface-raised: var(--slate-3);
-    --color-surface-sunken: var(--slate-1);
-    --color-on-accent: #ffffff;
+    --color-canvas: #0c0e0d;
+    --color-surface: var(--sage-1);
+    --color-surface-raised: var(--sage-2);
+    --color-surface-sunken: #141615;
+    /* A step lighter than light mode's: on near-black, step 6 lines read as a grid. */
+    --color-border: var(--sage-5);
+    --color-border-strong: var(--sage-7);
+    --jade-solid: var(--jade-9);
+    --jade-solid-hover: var(--jade-10);
+    --color-on-accent: #0b1410;
 
-    /* Area fills are near-black tints in dark mode: the light pastels above would
-       glow against the canvas and pull the eye away from the schema itself. */
-    --color-area-1: #1d2e62;
-    --color-area-2: #0f2e22;
-    --color-area-3: #302008;
-    --color-area-4: #3b1219;
-    --color-area-5: #2b1b45;
-    --color-area-6: #0d2d2a;
-    --color-area-7: #331e0b;
-    --color-area-8: #3b1a2e;
+    /* Area fills are faint tints of each hue in dark mode: the light pastels above would
+       glow against the canvas and pull the eye away from the schema itself. Area 1 is
+       the accent; the others keep eight hues apart. */
+    --color-area-1: color-mix(in srgb, #29a383 14%, var(--sage-2));
+    --color-area-2: color-mix(in srgb, #0090ff 14%, var(--sage-2));
+    --color-area-3: color-mix(in srgb, #ffc53d 14%, var(--sage-2));
+    --color-area-4: color-mix(in srgb, #e5484d 14%, var(--sage-2));
+    --color-area-5: color-mix(in srgb, #8e4ec6 14%, var(--sage-2));
+    --color-area-6: color-mix(in srgb, #3e63dd 14%, var(--sage-2));
+    --color-area-7: color-mix(in srgb, #f76b15 14%, var(--sage-2));
+    --color-area-8: color-mix(in srgb, #d6409f 14%, var(--sage-2));
 
-    --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.35);
+    --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.03), 0 8px 24px rgb(0 0 0 / 0.45);
     --shadow-popover: 0 8px 28px rgb(0 0 0 / 0.5);
     --shadow-node: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 6px rgb(0 0 0 / 0.25);
   }

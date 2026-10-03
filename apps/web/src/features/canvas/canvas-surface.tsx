@@ -3,12 +3,10 @@
 import '@xyflow/react/dist/style.css';
 
 import { createIndex, type Id, type Point, type SchemaModel } from '@schemaloom/schema-model';
-import { Button, FilePlus2, LayoutGrid, RefreshCw, Upload } from '@schemaloom/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Background,
   BackgroundVariant,
-  Controls,
   MiniMap,
   Panel,
   ReactFlow,
@@ -29,6 +27,7 @@ import { ApiError } from '@/lib/api-client';
 import { areaColors } from './area-color';
 import { CanvasMenu, type CanvasMenuItem, type CanvasMenuTarget } from './canvas-menu';
 import { CanvasSearch } from './canvas-search';
+import { CanvasToolbar } from './canvas-toolbar';
 import { cardinalityFor, checkConnection, explainCheck } from './connect';
 import { createLink } from './create-link';
 import { CrowFootDefs } from './crow-foot';
@@ -633,60 +632,55 @@ export function CanvasSurface({
       >
         <Background variant={BackgroundVariant.Dots} gap={GRID_SIZE} size={1} />
         <MiniMap
+          className="overflow-hidden rounded-lg border border-border shadow-panel"
           pannable
           zoomable
           nodeColor={minimapColor}
           style={{ backgroundColor: 'var(--color-surface-sunken)' }}
         />
-        <Controls showInteractive={false} />
         <Panel position="top-left">
           <CanvasSearch model={model} />
         </Panel>
-        {readOnly ? null : (
-          <Panel position="top-right" className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setNewEntityAt(viewportCentre());
-              }}
-            >
-              <FilePlus2 className="size-3.5" aria-hidden="true" />
-              {t.msg('action.add', 'entity')}
-            </Button>
-            {canImport ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setImportFrom('sql');
-                  setImporting(true);
-                }}
-              >
-                <Upload className="size-3.5" aria-hidden="true" />
-                Import SQL
-              </Button>
-            ) : null}
-            {canImport && savedConnection.data ? (
-              <Button
-                variant="outline"
-                size="sm"
-                title="Read the saved database connection and import what's new"
-                onClick={() => {
-                  setImportFrom('database');
-                  setImporting(true);
-                }}
-              >
-                <RefreshCw className="size-3.5" aria-hidden="true" />
-                Sync
-              </Button>
-            ) : null}
-            <Button variant="outline" size="sm" onClick={runLayout}>
-              <LayoutGrid className="size-3.5" aria-hidden="true" />
-              Auto-layout
-            </Button>
-          </Panel>
-        )}
+        <Panel position="bottom-left">
+          <CanvasToolbar
+            actions={
+              readOnly
+                ? {}
+                : {
+                    add: {
+                      label: t.msg('action.add', 'entity'),
+                      onSelect: () => {
+                        setNewEntityAt(viewportCentre());
+                      },
+                    },
+                    ...(canImport
+                      ? {
+                          import: {
+                            label: 'Import SQL',
+                            onSelect: () => {
+                              setImportFrom('sql');
+                              setImporting(true);
+                            },
+                          },
+                        }
+                      : {}),
+                    ...(canImport && savedConnection.data
+                      ? {
+                          sync: {
+                            label: 'Sync',
+                            title: "Read the saved database connection and import what's new",
+                            onSelect: () => {
+                              setImportFrom('database');
+                              setImporting(true);
+                            },
+                          },
+                        }
+                      : {}),
+                    layout: { label: 'Auto-layout', onSelect: runLayout },
+                  }
+            }
+          />
+        </Panel>
         {message === null ? null : (
           <Panel position="bottom-center">
             <button

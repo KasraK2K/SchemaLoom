@@ -3,6 +3,7 @@
 import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react';
 import { markerUrl } from './crow-foot';
 import type { LinkEdge as LinkEdgeType } from './graph';
+import { useCanvasStore } from './store';
 
 /**
  * One edge renderer for every link kind. It branches on the `LinkStyle` the engine
@@ -16,6 +17,8 @@ import type { LinkEdge as LinkEdgeType } from './graph';
  */
 export function LinkEdge({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -34,6 +37,12 @@ export function LinkEdge({
     targetPosition,
   });
 
+  // A link of the selected table lights up with it, so its connections can be followed.
+  // A boolean slice: selecting another card re-renders only the edges whose answer changed.
+  const touchesSelection = useCanvasStore(
+    (state) => state.selection.has(source) || state.selection.has(target),
+  );
+  const lit = selected === true || touchesSelection;
   const style = data?.style ?? null;
   const restricted = data?.link.restricted === true;
 
@@ -44,8 +53,8 @@ export function LinkEdge({
       markerStart={markerUrl(style?.sourceMarker)}
       markerEnd={markerUrl(style?.targetMarker)}
       style={{
-        stroke: selected === true ? 'var(--color-accent)' : 'var(--color-border-strong)',
-        strokeWidth: selected === true ? 2 : 1.5,
+        stroke: lit ? 'var(--color-accent)' : 'var(--color-border-strong)',
+        strokeWidth: lit ? 2 : 1.5,
         // A documentation-only link is not a database constraint, and the canvas says so.
         strokeDasharray: style?.dashed === true ? '6 4' : undefined,
         opacity: restricted ? 0.4 : 1,

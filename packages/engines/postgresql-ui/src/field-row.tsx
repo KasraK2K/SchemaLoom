@@ -19,7 +19,13 @@ function BadgeMarks({ badges }: { readonly badges: FieldBadges | undefined }): R
       {marks.map((mark) => (
         <span
           key={mark}
-          className="rounded bg-accent-subtle px-1 text-[10px] font-semibold text-accent-text"
+          className={cn(
+            'rounded px-1 font-mono text-[9.5px] leading-4 font-semibold',
+            // One accent: the key that identifies the row is jade, the rest stay neutral.
+            mark === 'PK'
+              ? 'bg-accent-subtle text-accent-text'
+              : 'bg-surface-sunken text-text-muted',
+          )}
         >
           {mark}
         </span>
@@ -56,7 +62,7 @@ export function FieldRow({
   return (
     <li
       className={cn(
-        'relative flex items-center gap-2 px-2 py-1',
+        'relative flex items-center gap-2 px-2.5 py-[5px]',
         highlighted && 'bg-accent-subtle',
       )}
     >

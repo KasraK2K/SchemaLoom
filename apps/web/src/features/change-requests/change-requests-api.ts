@@ -74,6 +74,7 @@ export type ChangeRequestDetail = z.infer<typeof detailSchema>;
 
 /** `GET /projects/:id`'s `draft` and Phase 10b's flag: all the canvas banner needs. */
 const shellSchema = z.object({
+  name: z.string(),
   requireChangeRequests: z.boolean().default(false),
   draft: z
     .object({
@@ -133,13 +134,17 @@ export const projectShellKey = (projectId: string): readonly unknown[] => [
   'shell',
 ];
 
-/** Whether this project is a draft (and of what), and whether it is protected (10b). */
+/** The project's name, whether it is a draft (and of what), and whether it is protected. */
 export function projectShellQueryOptions(projectId: string) {
   return queryOptions({
     queryKey: projectShellKey(projectId),
     queryFn: async () => {
       const shell = shellSchema.parse(await apiFetch<unknown>(`/projects/${enc(projectId)}`));
-      return { draft: shell.draft ?? null, requireChangeRequests: shell.requireChangeRequests };
+      return {
+        name: shell.name,
+        draft: shell.draft ?? null,
+        requireChangeRequests: shell.requireChangeRequests,
+      };
     },
     retry: false,
     staleTime: 60_000,

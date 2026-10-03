@@ -261,6 +261,7 @@ export function NoProjects({
   workspaces = [],
   canManageWorkspaces = false,
   importTargets = [],
+  compact = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -270,6 +271,8 @@ export function NoProjects({
   canManageWorkspaces?: boolean;
   /** Existing projects the caller may edit, offered as import targets. */
   importTargets?: readonly ProjectSummary[];
+  /** Under an existing project list: one row of small tiles instead of the teaching cards. */
+  compact?: boolean;
 }) {
   const [mode, setMode] = useState<Mode | null>(null);
   const [target, setTarget] = useState(NEW_PROJECT);
@@ -361,19 +364,33 @@ export function NoProjects({
 
   if (mode === null) {
     return (
-      <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+      <ul className={compact ? 'grid gap-2 sm:grid-cols-2' : 'mt-6 grid gap-3 sm:grid-cols-2'}>
         {STARTING_POINTS.map((point) => (
           <li
             key={point.title}
-            className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 shadow-panel"
+            className={
+              compact
+                ? 'flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5'
+                : 'flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 shadow-panel'
+            }
           >
-            <point.icon className="size-5 text-accent-text" aria-hidden="true" />
-            <h2 className="text-sm font-medium text-text">{point.title}</h2>
-            <p className="text-sm text-text-muted">{point.body}</p>
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent-subtle text-accent-text">
+              <point.icon className="size-4" aria-hidden="true" />
+            </span>
+            <h2
+              className={
+                compact
+                  ? 'min-w-0 flex-1 truncate text-sm font-medium text-text'
+                  : 'text-sm font-medium text-text'
+              }
+            >
+              {point.title}
+            </h2>
+            {!compact && <p className="text-sm text-text-muted">{point.body}</p>}
             <Button
               variant="outline"
               size="sm"
-              className="mt-auto self-start"
+              className={compact ? 'shrink-0' : 'mt-auto self-start'}
               disabled={
                 engines.length === 0 ||
                 (point.mode === 'import' && !canImport) ||

@@ -8,6 +8,9 @@ import {
   DialogFooter,
   DialogTitle,
   cn,
+  Loading,
+  Skeleton,
+  SkeletonRows,
 } from '@schemaloom/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -171,7 +174,7 @@ function ProposeChangeButton({
   return (
     <>
       <Button
-        variant="ghost"
+        variant="primary"
         size="sm"
         disabled={propose.isPending}
         onClick={() => {
@@ -389,7 +392,15 @@ export function ChangesView({
   if (list.error !== null) {
     return <p className="p-6 text-sm text-danger-text">{errorText(list.error)}</p>;
   }
-  if (list.data === undefined) return <p className="p-6 text-xs text-text-subtle">Loading…</p>;
+  if (list.data === undefined) {
+    return (
+      <Loading className="flex flex-col gap-2 p-4">
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-10" />
+        ))}
+      </Loading>
+    );
+  }
   if (list.data.length === 0) {
     return (
       <div className="p-6">
@@ -455,7 +466,15 @@ export function ChangeRequestView({
     );
   }
   const r = request.data;
-  if (r === undefined) return <p className="p-6 text-xs text-text-subtle">Loading…</p>;
+  if (r === undefined) {
+    return (
+      <Loading className="flex flex-col gap-4 p-4">
+        <Skeleton className="h-6 w-1/3" />
+        <Skeleton className="h-16" />
+        <SkeletonRows rows={4} />
+      </Loading>
+    );
+  }
   const entityName = (id: string): string | null => ir.data?.objects.entity[id]?.name ?? null;
   // What the merge would carry: schema entries, plus the moves it applies (Phase 10c §4).
   // A move main made too stays main's, so it is cosmetic here and carried by nothing.

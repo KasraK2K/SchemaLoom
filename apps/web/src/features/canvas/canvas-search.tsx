@@ -31,7 +31,7 @@ export function CanvasSearch({ model }: { readonly model: SchemaModel }) {
   };
 
   return (
-    <div className="relative w-64">
+    <div className="relative w-72">
       <Search
         className="pointer-events-none absolute top-2 left-2 size-3.5 text-text-subtle"
         aria-hidden="true"
@@ -58,7 +58,7 @@ export function CanvasSearch({ model }: { readonly model: SchemaModel }) {
           else return;
           e.preventDefault();
         }}
-        className="h-8 w-full rounded-md border border-border bg-surface pr-2 pl-7 text-xs text-text shadow-panel placeholder:text-text-subtle"
+        className="h-8 w-full rounded-md border border-border bg-surface-raised pr-2 pl-7 text-sm text-text shadow-panel placeholder:text-text-subtle"
       />
       {hits.length === 0 ? null : (
         <ul

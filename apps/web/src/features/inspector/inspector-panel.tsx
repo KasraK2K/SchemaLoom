@@ -14,6 +14,8 @@ import {
   TabsList,
   TabsTrigger,
   type LucideIcon,
+  Loading,
+  SkeletonRows,
 } from '@schemaloom/ui';
 import { useRef, useState, type ReactNode } from 'react';
 import { ResizeHandle, usePanelState, type PanelBounds } from '@/components/app-shell/panel';
@@ -71,7 +73,11 @@ export function InspectorPanel({ projectId }: { readonly projectId: Id }) {
         <div className="flex h-full flex-col overflow-auto p-2">
           <EngineGate
             projectId={projectId}
-            fallback={<p className="p-2 text-sm text-text-subtle">Loading…</p>}
+            fallback={
+              <Loading className="p-2">
+                <SkeletonRows rows={4} />
+              </Loading>
+            }
           >
             <InspectorBody projectId={projectId} />
             <TabsContent value="comments" className="overflow-auto">

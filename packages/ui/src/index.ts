@@ -33,6 +33,7 @@ export {
 } from './dropdown-menu.js';
 export { Popover, PopoverAnchor, PopoverClose, PopoverContent, PopoverTrigger } from './popover.js';
 export { ScrollArea, ScrollBar } from './scroll-area.js';
+export { Loading, Skeleton, SkeletonRows } from './skeleton.js';
 export {
   Select,
   SelectContent,

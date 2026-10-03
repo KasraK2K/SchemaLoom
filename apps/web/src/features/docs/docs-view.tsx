@@ -1,5 +1,6 @@
 'use client';
 
+import { Loading, SkeletonRows } from '@schemaloom/ui';
 import {
   createIndex,
   type Entity,
@@ -47,7 +48,11 @@ export function DocsView({
     );
   }
   if (ir.data === undefined || docs.data === undefined) {
-    return <p className="p-4 text-sm text-text-subtle">Loading…</p>;
+    return (
+      <Loading className="p-4">
+        <SkeletonRows rows={5} />
+      </Loading>
+    );
   }
   return <Loaded projectId={projectId} model={ir.data} docs={docs.data} actions={actions} />;
 }

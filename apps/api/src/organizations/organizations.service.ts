@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { PermissionResolver, type Subject } from '../access';
+import { PermissionResolver, hasCompleteView, type Subject } from '../access';
 import { PrismaService } from '../prisma/prisma.service';
 import { toSummary, type ProjectSummary } from '../projects';
 import type { OrganizationSummary, WorkspaceSummary } from './organizations.types';
@@ -109,7 +109,15 @@ export class OrganizationsService {
     const rows = await this.prisma.project.findMany({
       // Phase 10: a change request's draft is opened from its request, never listed.
       where: { organizationId: member.organizationId, deletedAt: null, draftOfId: null },
-      select: { id: true, name: true, engineId: true, updatedAt: true },
+      select: {
+        id: true,
+        name: true,
+        engineId: true,
+        engineVersion: true,
+        updatedAt: true,
+        requireChangeRequests: true,
+        connection: { select: { lastCheckStatus: true } },
+      },
       orderBy: { updatedAt: 'desc' },
     });
     if (rows.length === 0) return [];
@@ -119,11 +127,43 @@ export class OrganizationsService {
       subject,
       rows.map((row) => row.id),
     );
-
-    return rows.flatMap((row) => {
+    const open = rows.flatMap((row) => {
       const map = maps.get(row.id);
-      if (map === undefined || !this.resolver.canOpenProject(map)) return [];
-      return [toSummary(row, map)];
+      return map !== undefined && this.resolver.canOpenProject(map) ? [{ row, map }] : [];
+    });
+
+    // The list's columns need a complete view (ProjectSummary). Skeletons are cached per
+    // project generation, so this is a cache read per listed project, not a resolve.
+    const skeletons = await Promise.all(open.map(({ row }) => this.resolver.skeleton(row.id)));
+    const complete = new Set(
+      open.flatMap(({ row, map }, i) => {
+        const skel = skeletons[i];
+        return skel !== undefined && hasCompleteView(map, skel) ? [row.id] : [];
+      }),
+    );
+    const requests =
+      complete.size === 0
+        ? []
+        : await this.prisma.changeRequest.groupBy({
+            by: ['projectId'],
+            where: { projectId: { in: [...complete] }, status: 'open' },
+            _count: { _all: true },
+          });
+    const openRequests = new Map(requests.map((r) => [r.projectId, r._count._all]));
+
+    return open.map(({ row, map }, i) => {
+      const full = complete.has(row.id);
+      const status = row.connection?.lastCheckStatus;
+      return toSummary(row, map, {
+        tableCount: full ? (skeletons[i]?.entities.length ?? null) : null,
+        openChangeRequests: full ? (openRequests.get(row.id) ?? 0) : null,
+        driftStatus:
+          full &&
+          map.projectAtoms.has('schema:edit') &&
+          (status === 'in_sync' || status === 'drift' || status === 'failed')
+            ? status
+            : null,
+      });
     });
   }
 

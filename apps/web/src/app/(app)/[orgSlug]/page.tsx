@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
+import { WaitingOnYou } from '@/features/notifications/waiting-on-you';
 import {
   NoProjects,
   ProjectList,
@@ -37,6 +38,7 @@ export default async function OrgProjectsPage({
 
   const org = orgs.find((candidate) => candidate.slug === orgSlug);
   if (org === undefined) notFound();
+  const engineNames = Object.fromEntries(engines.map((e) => [e.id, e.displayName]));
 
   return (
     <AppShell
@@ -44,37 +46,56 @@ export default async function OrgProjectsPage({
       orgLabel={org.name}
       breadcrumb={<span className="truncate">{org.name}</span>}
     >
-      <div className="mx-auto max-w-3xl p-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-text">Projects</h1>
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-8">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-text">Projects</h1>
+            <p className="mt-1 text-sm text-text-muted">
+              {projects.length > 0
+                ? 'Everything in this organisation you have access to.'
+                : org.orgRole === 'guest'
+                  ? 'Nothing here you can open yet.'
+                  : 'No projects yet. Pick a way to start.'}
+            </p>
+          </div>
           {org.orgRole !== 'guest' && (
             <Link
               href={`/${orgSlug}/settings/members`}
-              className="text-sm text-text-muted hover:text-text"
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text hover:bg-surface-hover"
             >
               Settings
             </Link>
           )}
+        </header>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            {projects.length > 0 && (
+              <ProjectList orgSlug={orgSlug} projects={projects} engineNames={engineNames} />
+            )}
+            {/* Doc 05 §3.2: a guest cannot create projects; the API would refuse anyway. */}
+            {org.orgRole !== 'guest' && (
+              <section aria-label="Start a project">
+                {projects.length > 0 && (
+                  <h2 className="mb-2 text-sm font-semibold text-text">Start a new project</h2>
+                )}
+                <NoProjects
+                  orgId={org.id}
+                  orgSlug={orgSlug}
+                  engines={engines}
+                  workspaces={workspaces}
+                  canManageWorkspaces={org.orgRole === 'owner' || org.orgRole === 'admin'}
+                  importTargets={projects.filter(
+                    (p) => p.role === 'editor' || p.role === 'manager',
+                  )}
+                  compact={projects.length > 0}
+                />
+              </section>
+            )}
+          </div>
+          <aside className="flex flex-col gap-4">
+            <WaitingOnYou />
+          </aside>
         </div>
-        <p className="mt-1 text-sm text-text-muted">
-          {projects.length > 0
-            ? 'Everything in this organisation you have access to.'
-            : org.orgRole === 'guest'
-              ? 'Nothing here you can open yet.'
-              : 'No projects yet. Pick a way to start.'}
-        </p>
-        {projects.length > 0 && <ProjectList orgSlug={orgSlug} projects={projects} />}
-        {/* Doc 05 §3.2: a guest cannot create projects; the API would refuse anyway. */}
-        {org.orgRole !== 'guest' && (
-          <NoProjects
-            orgId={org.id}
-            orgSlug={orgSlug}
-            engines={engines}
-            workspaces={workspaces}
-            canManageWorkspaces={org.orgRole === 'owner' || org.orgRole === 'admin'}
-            importTargets={projects.filter((p) => p.role === 'editor' || p.role === 'manager')}
-          />
-        )}
       </div>
     </AppShell>
   );

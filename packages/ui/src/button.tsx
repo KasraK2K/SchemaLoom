@@ -14,7 +14,7 @@ import { cn } from './cn.js';
  * them can forget it.
  */
 export const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-[color,background-color,border-color,transform] active:translate-y-px disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
