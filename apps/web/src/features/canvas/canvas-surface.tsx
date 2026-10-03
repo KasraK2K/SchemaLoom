@@ -631,6 +631,9 @@ export function CanvasSurface({
         onlyRenderVisibleElements
         // Deleting schema is an op with a version check, not a keystroke on a canvas.
         deleteKeyCode={null}
+        // No "React Flow" link in the corner (owner's call). React Flow is MIT; the
+        // attribution is a request, not a licence term.
+        proOptions={{ hideAttribution: true }}
       >
         {/* The canvas grid is the theme's: dots (Studio), a minor and major ruled grid
             (Blueprint), none (Float's gradient, Compact). Switched in CSS, so the right one
