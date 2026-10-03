@@ -22,6 +22,7 @@ export interface IrObject {
 export interface IrEntity extends IrObject {
   readonly areaId: string | null;
   readonly namespaceId: string;
+  readonly position: { readonly x: number; readonly y: number };
 }
 
 export interface IrField extends IrObject {

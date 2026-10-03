@@ -1661,6 +1661,8 @@ model ExportJob {
 // =====================================================================================
 
 enum ChangeRequestStatus {
+  /// Phase 10c: forked, not submitted yet; private to its author.
+  draft
   open
   merged
   closed

@@ -45,6 +45,7 @@ describe('ChangeRequestsController route markers', () => {
       'POST /api/change-requests/:id/merge',
       'POST /api/change-requests/:id/reopen',
       'POST /api/change-requests/:id/reviews',
+      'POST /api/change-requests/:id/submit',
       'POST /api/change-requests/:id/update-from-main',
       'POST /api/projects/:projectId/change-requests',
     ]);
@@ -64,6 +65,7 @@ describe('ChangeRequestsController route markers', () => {
     });
     expect(table['GET /api/change-requests/:id']).toEqual([AUTHENTICATED_META]);
     expect(table['DELETE /api/change-requests/:id']).toEqual([AUTHENTICATED_META]);
+    expect(table['POST /api/change-requests/:id/submit']).toEqual([AUTHENTICATED_META]);
   });
 
   it('exposes nothing to a share-link subject (R21)', () => {

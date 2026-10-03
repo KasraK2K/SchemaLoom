@@ -26,13 +26,18 @@ import { MigrationQueryDto } from './snapshots.dto';
 import type { MigrationView } from './snapshots.service';
 import { snapshotContext } from './snapshots.controller';
 
-export const createChangeRequestSchema = z
+/** Phase 10c: what a submitted request carries. */
+export const submitChangeRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
     description: z.string().max(10_000).optional(),
     reviewerIds: z.array(z.string().min(1).max(64)).max(20).optional(),
   })
   .strict();
+export class SubmitChangeRequestDto extends createZodDto(submitChangeRequestSchema) {}
+
+/** Without a title the fork is an unsubmitted draft, named later by `submit` (Phase 10c). */
+export const createChangeRequestSchema = submitChangeRequestSchema.partial({ title: true });
 export class CreateChangeRequestDto extends createZodDto(createChangeRequestSchema) {}
 
 export const reviewChangeRequestSchema = z
@@ -60,7 +65,11 @@ export class MergeChangeRequestDto extends createZodDto(mergeChangeRequestSchema
 export class ChangeRequestsController {
   constructor(private readonly requests: ChangeRequestsService) {}
 
-  @ApiOperation({ summary: 'Propose a change: copies the project into a hidden draft' })
+  @ApiOperation({
+    summary:
+      'Propose a change: copies the project into a hidden draft. Without a title, returns ' +
+      "the caller's unsubmitted draft when there is one",
+  })
   @RequirePermission('comment:create', { project: 'projectId' })
   @Post('projects/:projectId/change-requests')
   create(
@@ -120,6 +129,18 @@ export class ChangeRequestsController {
     @Body() body: MergeChangeRequestDto,
   ): Promise<ChangeRequestSummary> {
     return this.requests.merge(subjectOf(req), id, body.expectedDraftRevision);
+  }
+
+  @ApiOperation({ summary: 'Submit an unsubmitted draft for review, with its title' })
+  @Authenticated()
+  @HttpCode(200)
+  @Post('change-requests/:id/submit')
+  submit(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: SubmitChangeRequestDto,
+  ): Promise<ChangeRequestSummary> {
+    return this.requests.submit(subjectOf(req), id, body);
   }
 
   @ApiOperation({ summary: "Bring the project's changes since the start into the draft" })

@@ -1,7 +1,7 @@
 # SchemaLoom roadmap
 
 This is the single list of what is built, what comes next, and in what order. It is for human
-contributors and AI agents alike. Last updated 2026-10-02.
+contributors and AI agents alike. Last updated 2026-10-03.
 
 ## How this file works
 
@@ -53,6 +53,7 @@ a reason to come back every week, then reach more databases and teams.
 | 9d  | MySQL / MariaDB: query validation, AI assistant     | `built`  | `docs/phase9/DESIGN.md` §4, §6       | Parity with PostgreSQL for saved queries and the assistant.                                                    |
 | 10  | Schema change requests (propose → review → merge)   | `built`  | `docs/phase10/DESIGN.md`             | PR-style review for schema edits, on top of comments, history and migrations. What teams pay for.              |
 | 10b | Protected projects: changes only via requests       | `built`  | `docs/phase10/PROTECTED-PROJECTS.md` | Makes review mandatory where it matters. Without it, anyone with edit access skips the request.                |
+| 10c | Propose first, name on submit; protected = locked   | `built`  | `docs/phase10/PROPOSE-FIRST.md`      | Edit first, explain after. A protected project offers no edits at all, layout included; merges carry moves.    |
 | 11  | CLI + CI: `schemaloom pull`, `diff --fail-on-drift` | `built`  | `docs/phase11/DESIGN.md`             | Puts SchemaLoom in the deploy pipeline. Reuses 6b's drift endpoint with an API token.                          |
 | 12  | First-run experience: sample projects, templates    | `built`  | `docs/phase12/DESIGN.md`             | A new user currently lands on an empty canvas.                                                                 |
 | 13  | SQLite engine                                       | `idea`   | —                                    | Cheap second or third engine, popular with indie developers.                                                   |

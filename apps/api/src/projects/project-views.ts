@@ -61,7 +61,7 @@ export interface DraftOf {
   readonly projectId: string;
   readonly changeRequestId: string;
   readonly title: string;
-  readonly status: 'open' | 'merged' | 'closed';
+  readonly status: 'draft' | 'open' | 'merged' | 'closed';
 }
 
 /** Exactly the columns `toSummary` reads. A Prisma row satisfies it structurally. */

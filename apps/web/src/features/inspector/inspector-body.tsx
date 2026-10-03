@@ -2,10 +2,11 @@
 
 import type { Entity, Field, Id, Link } from '@schemaloom/schema-model';
 import { TabsContent, X } from '@schemaloom/ui';
-import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useEngine, useEngineUi, useTerminology } from '@/engines';
 import { irQueryOptions } from '@/features/canvas/ir-query';
+import { projectShellQueryOptions } from '@/features/change-requests/change-requests-api';
 import { deleteLinkOp, postOps } from '@/features/canvas/schema-ops';
 import { ColumnRow, EntityEditor } from './column-editor';
 import { useCanvasStore } from '@/features/canvas/store';
@@ -26,6 +27,10 @@ export function InspectorBody({ projectId }: { readonly projectId: Id }) {
   const t = useTerminology();
   const selection = useCanvasStore((state) => state.selection);
   const selectedFieldId = useCanvasStore((state) => state.selectedFieldId);
+  // Phase 10c §1: a protected project shows details, not editors, for everyone. Read-only
+  // until the shell answers, as the canvas is.
+  const shell = useQuery(projectShellQueryOptions(projectId));
+  const readOnly = !shell.isError && shell.data?.requireChangeRequests !== false;
 
   const only = selection.size === 1 ? [...selection][0] : undefined;
   const entity = only === undefined ? undefined : model.objects.entity[only];
@@ -56,7 +61,7 @@ export function InspectorBody({ projectId }: { readonly projectId: Id }) {
             {kindLabel === null ? null : (
               <p className="px-2 text-xs text-text-subtle">{kindLabel}</p>
             )}
-            {entity.restricted === true ? (
+            {entity.restricted === true || readOnly ? (
               <EntityDetails entity={entity} kindLabel={kindLabel} fieldCount={fieldCount} />
             ) : (
               <EntityEditor projectId={projectId} model={model} entity={entity} />
@@ -68,7 +73,10 @@ export function InspectorBody({ projectId }: { readonly projectId: Id }) {
       <TabsContent value="field" className="space-y-2 overflow-auto text-sm">
         {field === undefined ? (
           <Empty text={t.msg('inspector.noSelection', 'field')} />
-        ) : entity === undefined || field.restricted === true || entity.restricted === true ? (
+        ) : entity === undefined ||
+          field.restricted === true ||
+          entity.restricted === true ||
+          readOnly ? (
           <FieldDetails field={field} />
         ) : (
           <ul className="p-2">
@@ -88,6 +96,7 @@ export function InspectorBody({ projectId }: { readonly projectId: Id }) {
                 projectId={projectId}
                 link={link}
                 entities={model.objects.entity}
+                readOnly={readOnly}
               />
             ))}
           </ul>
@@ -152,10 +161,12 @@ function LinkRow({
   projectId,
   link,
   entities,
+  readOnly,
 }: {
   readonly projectId: Id;
   readonly link: Link;
   readonly entities: Readonly<Record<Id, Entity>>;
+  readonly readOnly: boolean;
 }) {
   const t = useTerminology();
   const queryClient = useQueryClient();
@@ -178,7 +189,7 @@ function LinkRow({
         <span className="font-mono">{name(link.to.entityId)}</span>
         {failed ? <span className="pl-1 text-danger-text">not deleted</span> : null}
       </span>
-      {touchesStub ? null : (
+      {touchesStub || readOnly ? null : (
         <button
           type="button"
           aria-label={t.msg('action.delete', 'link')}

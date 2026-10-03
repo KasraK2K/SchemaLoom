@@ -26,10 +26,12 @@ import {
   type ProjectPermissionMap,
   type Subject,
 } from '../access';
-import type { ChangeRequest, ChangeRequestReview } from '../generated/prisma/client';
+import { Prisma, type ChangeRequest, type ChangeRequestReview } from '../generated/prisma/client';
 import { NotificationsService } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
-import { SchemaWriter } from '../schema';
+import { GeometryWriter, SchemaWriter } from '../schema';
+import { MAX_OPS_PER_BATCH } from '../schema/ops';
+import type { SchemaDb } from '../schema/row-read';
 import { freshIds, invertIds, remapIds, type IdMap } from './change-request-ids';
 import { writeAutoSnapshot } from './auto-snapshot';
 import {
@@ -53,6 +55,13 @@ import {
 type User = Extract<Subject, { kind: 'user' }>;
 
 export interface CreateChangeRequestInput {
+  /** Phase 10c: without a title the request is an unsubmitted draft (`submit` names it). */
+  readonly title?: string;
+  readonly description?: string;
+  readonly reviewerIds?: readonly string[];
+}
+
+export interface SubmitChangeRequestInput {
   readonly title: string;
   readonly description?: string;
   readonly reviewerIds?: readonly string[];
@@ -90,7 +99,13 @@ export interface ConflictView extends MergeConflict {
 
 /** Why Merge is disabled, first reason wins. `null` when the caller may merge now. */
 export type MergeBlocker =
-  'not_open' | 'no_changes' | 'conflicts' | 'changes_requested' | 'needs_approval' | 'forbidden';
+  | 'not_submitted'
+  | 'not_open'
+  | 'no_changes'
+  | 'conflicts'
+  | 'changes_requested'
+  | 'needs_approval'
+  | 'forbidden';
 
 export interface ChangeRequestDetail extends ChangeRequestSummary {
   /** The base → draft diff, in main-project ids. */
@@ -101,6 +116,8 @@ export interface ChangeRequestDetail extends ChangeRequestSummary {
   readonly draftRevision: string;
   readonly mergeBlockedBy: MergeBlocker | null;
   readonly canReview: boolean;
+  /** Tables the draft moved; a merge moves them in the project too (Phase 10c §4). */
+  readonly moved: number;
   /** Close and reopen. Update from main is the author's alone. */
   readonly canManage: boolean;
   /** `canManage`, and nobody has reviewed it yet: delete removes the request and its draft. */
@@ -144,6 +161,7 @@ export class ChangeRequestsService {
     private readonly resolver: PermissionResolver,
     private readonly filter: VisibilityFilter,
     private readonly writer: SchemaWriter,
+    private readonly geometry: GeometryWriter,
     private readonly snapshots: SnapshotsService,
     private readonly notifications: NotificationsService,
   ) {}
@@ -176,17 +194,24 @@ export class ChangeRequestsService {
       throw new ForbiddenException({ code: 'change_request_full_view_required' });
     }
 
+    // Phase 10c §2: proposing again opens the unsubmitted draft the caller already has.
+    const title = input.title?.trim() ?? '';
+    if (title === '') {
+      const existing = await this.unsubmitted(main.id, user.userId);
+      if (existing !== null) return existing;
+    }
+
     const project = await loadLiveProject(this.prisma, ctx.projectId);
     const toDraft = freshIds(project.live, {}, randomUUID);
     const defaultNs = Object.values(project.live.objects.namespace).find((n) => n.isDefault);
     const reviewerIds = [...new Set(input.reviewerIds ?? [])].filter((id) => id !== user.userId);
 
-    const row = await this.prisma.$transaction(async (tx) => {
+    const fork = this.prisma.$transaction(async (tx) => {
       const draft = await tx.project.create({
         data: {
           organizationId: main.organizationId,
           workspaceId: main.workspaceId,
-          name: `${main.name}: ${input.title}`,
+          name: draftName(main.name, title),
           slug: `draft-${randomUUID()}`,
           engineId: main.engineId,
           // The main project's versions, not the engine's: a draft of a read-only project
@@ -217,8 +242,9 @@ export class ChangeRequestsService {
           projectId: main.id,
           draftProjectId: draft.id,
           authorId: user.userId,
-          title: input.title,
+          title,
           description: input.description ?? '',
+          status: title === '' ? 'draft' : 'open',
           baseIr: snapshotBlob(project.live),
           idMap: invertIds(toDraft),
           reviewerIds,
@@ -226,6 +252,18 @@ export class ChangeRequestsService {
         include: ROW_INCLUDE,
       });
     });
+    let row: Row;
+    try {
+      row = await fork;
+    } catch (error) {
+      // Two clicks raced: `change_requests_one_draft_uq` kept one draft, so open that one.
+      const existing =
+        title === '' && isUniqueViolation(error)
+          ? await this.unsubmitted(main.id, user.userId)
+          : null;
+      if (existing !== null) return existing;
+      throw error;
+    }
 
     try {
       await this.writeDraft(user, row.draftProjectId, (live) =>
@@ -236,14 +274,46 @@ export class ChangeRequestsService {
       await this.prisma.project.delete({ where: { id: row.draftProjectId } });
       throw error;
     }
-    await this.notify(
-      row,
-      row.reviewerIds,
-      user.userId,
-      'change_request.review_requested',
-      'You were asked to review a change request',
-    );
+    if (row.status === 'open') await this.notifyReviewers(row, row.reviewerIds, user.userId);
     return summary(row, await this.draftRevision(row.draftProjectId));
+  }
+
+  /**
+   * Phase 10c §2 — name an unsubmitted draft and open it for review. Conditional on the
+   * status, so a double click submits once; reviewers are notified as create did.
+   */
+  async submit(
+    subject: Subject,
+    id: string,
+    input: SubmitChangeRequestInput,
+  ): Promise<ChangeRequestSummary> {
+    const { row } = await this.readable(subject, id);
+    const user = asUser(subject);
+    if (row.authorId !== user.userId) {
+      throw new ForbiddenException({ code: 'change_request_author_only' });
+    }
+    const title = input.title.trim();
+    if (title === '') throw new BadRequestException({ code: 'change_request_title_required' });
+    const reviewerIds = [...new Set(input.reviewerIds ?? [])].filter((r) => r !== user.userId);
+    await this.prisma.$transaction(async (tx) => {
+      const flipped = await tx.changeRequest.updateMany({
+        where: { id: row.id, status: 'draft' },
+        data: { status: 'open', title, description: input.description ?? '', reviewerIds },
+      });
+      if (flipped.count !== 1) {
+        throw new ConflictException({ code: 'change_request_not_draft', status: row.status });
+      }
+      const main = await tx.project.findUniqueOrThrow({
+        where: { id: row.projectId },
+        select: { name: true },
+      });
+      await tx.project.update({
+        where: { id: row.draftProjectId },
+        data: { name: draftName(main.name, title) },
+      });
+    });
+    await this.notifyReviewers(row, reviewerIds, user.userId);
+    return this.summaryOf(row.id);
   }
 
   // ── read ───────────────────────────────────────────────────────────────────────────
@@ -251,7 +321,11 @@ export class ChangeRequestsService {
   async list(ctx: SnapshotContext): Promise<ChangeRequestSummary[]> {
     if (ctx.subject.kind !== 'user' || !hasCompleteView(ctx.map, ctx.skel)) return [];
     const rows = await this.prisma.changeRequest.findMany({
-      where: { projectId: ctx.projectId },
+      // Someone else's unsubmitted draft is theirs alone (Phase 10c §2).
+      where: {
+        projectId: ctx.projectId,
+        OR: [{ status: { not: 'draft' } }, { authorId: ctx.subject.userId }],
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
       include: ROW_INCLUDE,
@@ -280,8 +354,9 @@ export class ChangeRequestsService {
       conflicts: state.conflicts,
       draftRevision: state.draft.schemaRevision.toString(),
       mergeBlockedBy: blocker(row, state, canEditMain || canEditSomeArea(map)),
+      moved: state.moves.length,
       canReview: row.status === 'open' && !isAuthor && canEditMain,
-      canManage: row.status !== 'merged' && (isAuthor || canEditMain),
+      canManage: (row.status === 'open' || row.status === 'closed') && (isAuthor || canEditMain),
       canDelete: row.status !== 'merged' && (isAuthor || canEditMain) && row.reviews.length === 0,
       isAuthor,
     };
@@ -363,8 +438,8 @@ export class ChangeRequestsService {
     }
 
     const { merged } = threeWay(state.base, state.main.live, state.theirs);
-    const batch = planMerge(state.main.live, asLive(merged), row.title);
-    if (batch === null) {
+    const batch = state.taken === 0 ? null : planMerge(state.main.live, asLive(merged), row.title);
+    if (batch === null && state.moves.length === 0) {
       throw new ConflictException({ code: 'change_request_not_mergeable', reason: 'no_changes' });
     }
 
@@ -373,39 +448,53 @@ export class ChangeRequestsService {
     await this.assertRevision(row.projectId, state.main.schemaRevision);
     const skel = await this.resolver.skeleton(row.projectId);
     const now = new Date();
-    try {
-      await this.writer.apply(batch, {
-        projectId: row.projectId,
-        origin: 'merge',
-        actorUserId: user.userId,
-        map,
-        skel,
-        redacted: this.filter.redactWith(state.main.raw, user, row.projectId, map, skel),
-        beforeWrite: async (tx) => {
-          const flipped = await tx.changeRequest.updateMany({
-            where: { id: row.id, status: 'open' },
-            data: { status: 'merged', mergedAt: now, mergedById: user.userId },
-          });
-          if (flipped.count !== 1) {
-            throw new ConflictException({ code: 'change_request_changed' });
-          }
-          await writeAutoSnapshot(tx, {
-            projectId: row.projectId,
-            kind: 'auto',
-            name: `Before merging "${row.title}"`,
-            live: state.main.live,
-            enginePluginVersion: state.main.enginePluginVersion,
-            createdById: user.userId,
-            now,
-          });
-        },
+    const markMerged = async (tx: SchemaDb): Promise<void> => {
+      const flipped = await tx.changeRequest.updateMany({
+        where: { id: row.id, status: 'open' },
+        data: { status: 'merged', mergedAt: now, mergedById: user.userId },
       });
+      if (flipped.count !== 1) {
+        throw new ConflictException({ code: 'change_request_changed' });
+      }
+      await writeAutoSnapshot(tx, {
+        projectId: row.projectId,
+        kind: 'auto',
+        name: `Before merging "${row.title}"`,
+        live: state.main.live,
+        enginePluginVersion: state.main.enginePluginVersion,
+        createdById: user.userId,
+        now,
+      });
+    };
+    try {
+      if (batch === null) {
+        // Phase 10c §4: a request that only moves tables has no schema batch to ride on.
+        await this.prisma.$transaction(markMerged);
+      } else {
+        await this.writer.apply(batch, {
+          projectId: row.projectId,
+          origin: 'merge',
+          actorUserId: user.userId,
+          map,
+          skel,
+          redacted: this.filter.redactWith(state.main.raw, user, row.projectId, map, skel),
+          beforeWrite: markMerged,
+        });
+      }
     } catch (error) {
       if (error instanceof ConflictException && codeOf(error) !== 'change_request_changed') {
         // A version conflict: main moved under us. Reloading the page shows the new state.
         throw new ConflictException({ code: 'change_request_conflict', conflicts: [] });
       }
       throw error;
+    }
+    // Phase 10c §4: the draft's moves, through the geometry path so open canvases see them.
+    // After the schema write, not inside it: layout is last-write-wins and never conflicts.
+    for (let i = 0; i < state.moves.length; i += MAX_OPS_PER_BATCH) {
+      await this.geometry.apply(
+        { batchId: randomUUID(), entities: state.moves.slice(i, i + MAX_OPS_PER_BATCH) },
+        { projectId: row.projectId, origin: 'merge', actorUserId: user.userId, map, skel },
+      );
     }
     await this.notify(
       row,
@@ -428,7 +517,8 @@ export class ChangeRequestsService {
   async updateFromMain(subject: Subject, id: string): Promise<UpdateFromMainResult> {
     const { row } = await this.readable(subject, id);
     const user = asUser(subject);
-    assertOpen(row);
+    // An unsubmitted draft can be brought up to date too (Phase 10c §2).
+    if (row.status !== 'draft') assertOpen(row);
     if (row.authorId !== user.userId) {
       throw new ForbiddenException({ code: 'change_request_author_only' });
     }
@@ -529,6 +619,32 @@ export class ChangeRequestsService {
 
   // ── shared ─────────────────────────────────────────────────────────────────────────
 
+  private notifyReviewers(
+    row: { readonly id: string; readonly projectId: string },
+    reviewerIds: readonly string[],
+    actorUserId: string,
+  ): Promise<void> {
+    return this.notify(
+      row,
+      reviewerIds,
+      actorUserId,
+      'change_request.review_requested',
+      'You were asked to review a change request',
+    );
+  }
+
+  /** The caller's unsubmitted request on this project, if any (at most one, by index). */
+  private async unsubmitted(
+    projectId: string,
+    authorId: string,
+  ): Promise<ChangeRequestSummary | null> {
+    const row = await this.prisma.changeRequest.findFirst({
+      where: { projectId, authorId, status: 'draft' },
+      include: ROW_INCLUDE,
+    });
+    return row === null ? null : summary(row, await this.draftRevision(row.draftProjectId));
+  }
+
   /**
    * Phase 10 §7. Recipients are re-checked at send time (doc 05 L17): only someone with a
    * complete view of the main project can open the request, so no one else gets a row.
@@ -600,6 +716,7 @@ export class ChangeRequestsService {
       theirs,
       restrictedFieldMode,
       taken: merge.taken,
+      moves: layoutMoves(base, main.live, theirs),
       conflicts: named(merge.conflicts, [main.live, theirs, base]),
     };
   }
@@ -642,6 +759,10 @@ export class ChangeRequestsService {
       this.resolver.skeleton(row.projectId),
     ]);
     if (!hasCompleteView(map, skel)) throw notFound('change_request', id);
+    // Phase 10c §2: an unsubmitted draft is its author's alone.
+    if (row.status === 'draft' && row.authorId !== subject.userId) {
+      throw notFound('change_request', id);
+    }
     return { row, map };
   }
 
@@ -771,13 +892,16 @@ interface MergeState {
   readonly restrictedFieldMode: ProjectPermissionMap['restrictedFieldMode'];
   /** Objects the merge takes from the draft. */
   readonly taken: number;
+  /** Existing tables the draft moved and main didn't (Phase 10c §4). */
+  readonly moves: readonly TableMove[];
   readonly conflicts: readonly ConflictView[];
 }
 
 /** §3/§4 — first reason wins, in the order the page explains them. */
 function blocker(row: Row, state: MergeState, mayWrite: boolean): MergeBlocker | null {
+  if (row.status === 'draft') return 'not_submitted';
   if (row.status !== 'open') return 'not_open';
-  if (state.taken === 0) return 'no_changes';
+  if (state.taken === 0 && state.moves.length === 0) return 'no_changes';
   if (state.conflicts.length > 0) return 'conflicts';
   const latest = new Map<string, Row['reviews'][number]>();
   for (const r of row.reviews) if (r.reviewerId !== null) latest.set(r.reviewerId, r);
@@ -852,3 +976,47 @@ function asUser(subject: Subject): User {
 
 const notFound = (resourceType: string, id: string): NotFoundException =>
   new NotFoundException({ code: 'not_found', resourceType, id });
+
+const draftName = (projectName: string, title: string): string =>
+  `${projectName}: ${title === '' ? 'draft' : title}`;
+
+const isUniqueViolation = (error: unknown): boolean =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+
+interface TableMove {
+  readonly id: string;
+  readonly position: { readonly x: number; readonly y: number };
+  readonly width?: number;
+  readonly height?: number;
+}
+
+/**
+ * Phase 10c §4 — the draft's layout, carried by the merge: every table both sides still
+ * have whose geometry the draft changed since the base. Where main moved it too (only an
+ * unprotected project can), main's stays: layout is never a conflict. A table the draft
+ * created brings its position along already, through the create.
+ */
+export function layoutMoves(
+  base: SchemaModel,
+  main: SchemaModel,
+  theirs: SchemaModel,
+): TableMove[] {
+  const geometry = (e: SchemaModel['objects']['entity'][string] | undefined) =>
+    e === undefined
+      ? undefined
+      : JSON.stringify([e.position.x, e.position.y, e.width ?? null, e.height ?? null]);
+  const moves: TableMove[] = [];
+  for (const [id, draft] of Object.entries(theirs.objects.entity)) {
+    const was = geometry(base.objects.entity[id]);
+    const now = main.objects.entity[id];
+    if (was === undefined || now === undefined) continue;
+    if (geometry(draft) === was || geometry(now) !== was) continue;
+    moves.push({
+      id,
+      position: { x: draft.position.x, y: draft.position.y },
+      ...(draft.width === undefined ? {} : { width: draft.width }),
+      ...(draft.height === undefined ? {} : { height: draft.height }),
+    });
+  }
+  return moves;
+}

@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { GeometryBatch, SchemaOperationResult } from './ops';
 import { postImages } from './post-images';
 import type { SchemaDb } from './row-read';
-import { SchemaCommits, type WriteContext } from './schema-writer.service';
+import { SchemaCommits, assertUnprotected, type WriteContext } from './schema-writer.service';
 
 /**
  * Doc 04 §8.11 — canvas geometry, THE ONE WRITE THAT IS NOT AN OP.
@@ -39,7 +39,7 @@ export class GeometryWriter {
 
   async apply(
     batch: GeometryBatch,
-    ctx: Omit<WriteContext, 'redacted' | 'origin'>,
+    ctx: Omit<WriteContext, 'redacted'>,
   ): Promise<SchemaOperationResult> {
     const ids = [...new Set(batch.entities.map((e) => e.id))];
     const refs: ResourceRef[] = ids.map((id) => ({ type: 'entity', id }));
@@ -53,11 +53,13 @@ export class GeometryWriter {
   private async run(
     tx: SchemaDb,
     batch: GeometryBatch,
-    ctx: Omit<WriteContext, 'redacted' | 'origin'>,
+    ctx: Omit<WriteContext, 'redacted'>,
     ids: readonly Id[],
   ): Promise<SchemaOperationResult> {
     const { projectId } = ctx;
     await this.gate.checkWrite(tx, projectId);
+    // Phase 10c §4: on a protected project layout changes only through a merge too.
+    await assertUnprotected(tx, projectId, ctx.origin);
 
     await Promise.all(
       batch.entities.map((e) =>

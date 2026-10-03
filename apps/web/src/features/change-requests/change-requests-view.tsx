@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { irQueryOptions } from '@/features/canvas/ir-query';
+import { isCosmeticOnly } from '@/features/history/history-api';
 import { DiffBody, PlanBody } from '@/features/history/history-view';
 import { relativeTime } from '@/features/projects/relative-time';
 import { ApiError } from '@/lib/api-client';
@@ -26,10 +27,12 @@ import {
   changeRequestsQueryOptions,
   deleteChangeRequest,
   mergeChange,
+  projectShellKey,
   projectShellQueryOptions,
   proposeChange,
   reviewChange,
   setOpen,
+  submitChange,
   updateFromMain,
   type ChangeRequestConflict,
   type ChangeRequestDetail,
@@ -52,10 +55,10 @@ function StatusChip({ status }: { readonly status: ChangeRequestSummary['status'
         'rounded px-1.5 py-0.5 text-[10px] uppercase',
         status === 'open' && 'bg-accent-subtle text-accent',
         status === 'merged' && 'bg-success-subtle text-success-text',
-        status === 'closed' && 'bg-surface-sunken text-text-muted',
+        (status === 'closed' || status === 'draft') && 'bg-surface-sunken text-text-muted',
       )}
     >
-      {status}
+      {status === 'draft' ? 'not submitted' : status}
     </span>
   );
 }
@@ -64,8 +67,8 @@ function StatusChip({ status }: { readonly status: ChangeRequestSummary['status'
 
 /**
  * Phase 10 §1 — "Propose a change" in the canvas header, and on a draft the banner that
- * says what it is. The API decides who may propose (a complete view, §3); a refusal is
- * shown in the dialog rather than guessed here.
+ * says what it is. Phase 10c: proposing opens a draft straight away; the title comes on
+ * "Submit changes". The API decides who may propose (a complete view, §3).
  */
 export function ChangeRequestActions({
   orgSlug,
@@ -79,7 +82,7 @@ export function ChangeRequestActions({
   if (shell.data.draft === null) {
     const propose = <ProposeChangeButton orgSlug={orgSlug} projectId={projectId} />;
     if (!shell.data.requireChangeRequests) return propose;
-    // Phase 10b §1: say it before anyone tries an edit that the api will refuse.
+    // Phase 10b §1: say it before anyone tries an edit.
     return (
       <span
         role="status"
@@ -94,6 +97,32 @@ export function ChangeRequestActions({
     );
   }
   const { projectId: mainId, changeRequestId, title, status } = shell.data.draft;
+  if (status === 'draft') {
+    return (
+      <span
+        role="status"
+        className="flex items-center gap-2 rounded border border-accent-border bg-accent-subtle px-2 py-0.5 text-xs text-text"
+      >
+        <span className="min-w-0 truncate">
+          <span className="font-medium">Your draft</span>
+          <span className="hidden 2xl:inline"> · not submitted yet</span>
+        </span>
+        <SubmitChangesButton
+          orgSlug={orgSlug}
+          projectId={mainId}
+          requestId={changeRequestId}
+          draftProjectId={projectId}
+        />
+        <DiscardDraftButton orgSlug={orgSlug} projectId={mainId} requestId={changeRequestId} />
+        <Link
+          href={projectHref(orgSlug, mainId)}
+          className="shrink-0 whitespace-nowrap text-accent hover:underline"
+        >
+          Back to project
+        </Link>
+      </span>
+    );
+  }
   return (
     <span
       role="status"
@@ -119,6 +148,7 @@ export function ChangeRequestActions({
   );
 }
 
+/** Opens the caller's unsubmitted draft, forking one first if there is none (Phase 10c). */
 function ProposeChangeButton({
   orgSlug,
   projectId,
@@ -128,19 +158,14 @@ function ProposeChangeButton({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [open, setOpenDialog] = useState(false);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  // Other people's unsubmitted drafts never reach this list, so a `draft` here is ours.
+  const list = useQuery(changeRequestsQueryOptions(projectId));
+  const mine = list.data?.find((r) => r.status === 'draft');
   const propose = useMutation({
-    mutationFn: () =>
-      proposeChange(projectId, {
-        title: title.trim(),
-        ...(description.trim() === '' ? {} : { description: description.trim() }),
-      }),
-    onSuccess: async (created) => {
+    mutationFn: () => proposeChange(projectId),
+    onSuccess: async (draft) => {
       await queryClient.invalidateQueries({ queryKey: changeRequestsKey(projectId) });
-      setOpenDialog(false);
-      router.push(projectHref(orgSlug, created.draftProjectId));
+      router.push(projectHref(orgSlug, draft.draftProjectId));
     },
   });
   return (
@@ -148,30 +173,90 @@ function ProposeChangeButton({
       <Button
         variant="ghost"
         size="sm"
+        disabled={propose.isPending}
+        onClick={() => {
+          if (mine === undefined) propose.mutate();
+          else router.push(projectHref(orgSlug, mine.draftProjectId));
+        }}
+      >
+        {propose.isPending
+          ? 'Copying the project…'
+          : mine === undefined
+            ? 'Propose a change'
+            : 'Continue your draft'}
+      </Button>
+      {propose.error !== null && (
+        <span role="alert" className="text-xs text-danger-text">
+          {propose.error instanceof ApiError && propose.error.status === 403
+            ? 'Proposing a change needs access to every table and column in the project.'
+            : errorText(propose.error)}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** Phase 10c §1.4 — name the change and open it for review. */
+function SubmitChangesButton({
+  orgSlug,
+  projectId,
+  requestId,
+  draftProjectId,
+}: {
+  readonly orgSlug: string;
+  readonly projectId: string;
+  readonly requestId: string;
+  readonly draftProjectId: string;
+}) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [open, setOpenDialog] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const submit = useMutation({
+    mutationFn: () =>
+      submitChange(requestId, {
+        title: title.trim(),
+        ...(description.trim() === '' ? {} : { description: description.trim() }),
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: projectShellKey(draftProjectId) }),
+        queryClient.invalidateQueries({ queryKey: changeRequestsKey(projectId) }),
+        queryClient.invalidateQueries({ queryKey: changeRequestKey(requestId) }),
+      ]);
+      setOpenDialog(false);
+      router.push(requestHref(orgSlug, projectId, requestId));
+    },
+  });
+  return (
+    <>
+      <Button
+        size="sm"
         onClick={() => {
           setOpenDialog(true);
         }}
       >
-        Propose a change
+        Submit changes
       </Button>
       <Dialog
         open={open}
         onOpenChange={(next) => {
-          if (!propose.isPending) setOpenDialog(next);
+          if (!submit.isPending) setOpenDialog(next);
         }}
       >
         <DialogContent>
-          <DialogTitle>Propose a change</DialogTitle>
+          <DialogTitle>Submit changes</DialogTitle>
           <DialogDescription>
-            You get a draft copy of this project to edit. Others review the diff and the migration
-            SQL, and an editor merges it. Nothing changes in the project until then.
+            Name the change so reviewers know what it is. They review the diff and the migration
+            SQL, and an editor merges it. You can keep editing the draft after submitting.
           </DialogDescription>
           <form
-            id="propose-change"
+            id="submit-change"
             className="flex flex-col gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              propose.mutate();
+              submit.mutate();
             }}
           >
             <input
@@ -196,11 +281,9 @@ function ProposeChangeButton({
               className="rounded border border-border bg-surface px-2 py-1 text-sm text-text"
             />
           </form>
-          {propose.error !== null && (
+          {submit.error !== null && (
             <p role="alert" className="text-xs text-danger-text">
-              {propose.error instanceof ApiError && propose.error.status === 403
-                ? 'Proposing a change needs access to every table and column in the project.'
-                : errorText(propose.error)}
+              {errorText(submit.error)}
             </p>
           )}
           <DialogFooter>
@@ -215,15 +298,80 @@ function ProposeChangeButton({
             </Button>
             <Button
               type="submit"
-              form="propose-change"
+              form="submit-change"
               size="sm"
-              disabled={propose.isPending || title.trim() === ''}
+              disabled={submit.isPending || title.trim() === ''}
             >
-              {propose.isPending ? 'Copying the project…' : 'Create draft'}
+              {submit.isPending ? 'Submitting…' : 'Submit for review'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+/** Phase 10c — throw the unsubmitted draft away (the request's delete), after a confirm. */
+function DiscardDraftButton({
+  orgSlug,
+  projectId,
+  requestId,
+}: {
+  readonly orgSlug: string;
+  readonly projectId: string;
+  readonly requestId: string;
+}) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const discard = useMutation({
+    mutationFn: () => deleteChangeRequest(requestId),
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: changeRequestKey(requestId) });
+      await queryClient.invalidateQueries({ queryKey: changeRequestsKey(projectId) });
+      router.push(projectHref(orgSlug, projectId));
+    },
+  });
+  if (!confirming) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          setConfirming(true);
+        }}
+      >
+        Discard
+      </Button>
+    );
+  }
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={discard.isPending}
+        onClick={() => {
+          discard.mutate();
+        }}
+      >
+        {discard.isPending ? 'Discarding…' : 'Discard the draft'}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={discard.isPending}
+        onClick={() => {
+          setConfirming(false);
+        }}
+      >
+        Keep
+      </Button>
+      {discard.error !== null && (
+        <span role="alert" className="text-danger-text">
+          {errorText(discard.error)}
+        </span>
+      )}
     </>
   );
 }
@@ -255,25 +403,30 @@ export function ChangesView({
   }
   return (
     <ul className="flex flex-col gap-1 p-4">
-      {list.data.map((r) => {
-        const approvals = r.reviews.filter((v) => v.current && v.verdict === 'approved').length;
-        return (
-          <li key={r.id}>
-            <Link
-              href={requestHref(orgSlug, projectId, r.id)}
-              className="flex items-center gap-3 rounded px-3 py-2 hover:bg-surface-hover"
-            >
-              <StatusChip status={r.status} />
-              <span className="min-w-0 flex-1 truncate text-sm text-text">{r.title}</span>
-              <span className="text-xs text-text-subtle">
-                {r.author?.name ?? 'Someone'} · {relativeTime(r.createdAt)}
-                {r.status === 'open' &&
-                  ` · ${String(approvals)} approval${approvals === 1 ? '' : 's'}`}
-              </span>
-            </Link>
-          </li>
-        );
-      })}
+      {/* Phase 10c: the caller's unsubmitted draft (only theirs reaches the list) first. */}
+      {[...list.data]
+        .sort((a, b) => Number(b.status === 'draft') - Number(a.status === 'draft'))
+        .map((r) => {
+          const approvals = r.reviews.filter((v) => v.current && v.verdict === 'approved').length;
+          return (
+            <li key={r.id}>
+              <Link
+                href={requestHref(orgSlug, projectId, r.id)}
+                className="flex items-center gap-3 rounded px-3 py-2 hover:bg-surface-hover"
+              >
+                <StatusChip status={r.status} />
+                <span className="min-w-0 flex-1 truncate text-sm text-text">
+                  {r.status === 'draft' ? 'Your draft' : r.title}
+                </span>
+                <span className="text-xs text-text-subtle">
+                  {r.author?.name ?? 'Someone'} · {relativeTime(r.createdAt)}
+                  {r.status === 'open' &&
+                    ` · ${String(approvals)} approval${approvals === 1 ? '' : 's'}`}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
     </ul>
   );
 }
@@ -304,6 +457,9 @@ export function ChangeRequestView({
   const r = request.data;
   if (r === undefined) return <p className="p-6 text-xs text-text-subtle">Loading…</p>;
   const entityName = (id: string): string | null => ir.data?.objects.entity[id]?.name ?? null;
+  // What the merge would carry: schema entries, plus the moves it applies (Phase 10c §4).
+  // A move main made too stays main's, so it is cosmetic here and carried by nothing.
+  const changeCount = r.changes.entries.filter((e) => !isCosmeticOnly(e)).length + r.moved;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto p-4">
@@ -316,7 +472,7 @@ export function ChangeRequestView({
         </Link>
         <h1 className="flex items-center gap-2 text-base font-medium text-text">
           <StatusChip status={r.status} />
-          {r.title}
+          {r.status === 'draft' ? 'Your draft' : r.title}
         </h1>
         <p className="text-xs text-text-subtle">
           {r.author?.name ?? 'Someone'} proposed this {relativeTime(r.createdAt)} ·{' '}
@@ -339,7 +495,7 @@ export function ChangeRequestView({
       <nav className="flex gap-1 border-b border-border" aria-label="Request views">
         {(
           [
-            ['changes', `Changes (${String(r.changes.entries.length)})`],
+            ['changes', `Changes (${String(changeCount)})`],
             ['sql', 'Migration SQL'],
           ] as const
         ).map(([id, label]) => (
@@ -359,14 +515,14 @@ export function ChangeRequestView({
           </button>
         ))}
       </nav>
-      {tab === 'changes' && r.changes.entries.length === 0 ? (
+      {tab === 'changes' && changeCount === 0 ? (
         <div role="note" className="flex flex-col gap-1 rounded border border-border p-3 text-sm">
           <p className="font-medium text-text">Nothing has changed in the draft yet.</p>
           <p className="text-xs text-text-muted">
             This request shows only edits made in its draft: the canvas with the “Draft for change
             request” banner. Edits made on the project itself are not part of it.
           </p>
-          {r.status === 'open' && (
+          {(r.status === 'open' || r.status === 'draft') && (
             <Link
               href={projectHref(orgSlug, r.draftProjectId)}
               className="text-xs text-accent hover:underline"
@@ -376,7 +532,15 @@ export function ChangeRequestView({
           )}
         </div>
       ) : tab === 'changes' ? (
-        <DiffBody diff={r.changes} hideCosmetic entityName={entityName} canvasHref={() => null} />
+        <>
+          {r.moved > 0 && (
+            <p className="text-xs text-text-muted">
+              {r.moved} table{r.moved === 1 ? '' : 's'} moved on the canvas. Merging moves{' '}
+              {r.moved === 1 ? 'it' : 'them'} in the project too.
+            </p>
+          )}
+          <DiffBody diff={r.changes} hideCosmetic entityName={entityName} canvasHref={() => null} />
+        </>
       ) : (
         <Migration requestId={r.id} title={r.title} />
       )}
@@ -472,7 +636,15 @@ function MergeBar({
             {merge.isPending ? 'Merging…' : 'Merge into the project'}
           </Button>
         )}
-        {r.status === 'open' && r.isAuthor && (
+        {r.status === 'draft' && r.isAuthor && (
+          <SubmitChangesButton
+            orgSlug={orgSlug}
+            projectId={r.projectId}
+            requestId={r.id}
+            draftProjectId={r.draftProjectId}
+          />
+        )}
+        {(r.status === 'open' || r.status === 'draft') && r.isAuthor && (
           <Button
             size="sm"
             variant="outline"

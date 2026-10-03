@@ -107,7 +107,7 @@ export class SchemaController {
     @Body() batch: SchemaGeometryDto,
   ): Promise<SchemaOperationResult> {
     const { map, skel, actorUserId } = await this.access(req, projectId);
-    return this.geometry.apply(batch, { projectId, actorUserId, map, skel });
+    return this.geometry.apply(batch, { projectId, origin: 'edit', actorUserId, map, skel });
   }
 
   /**

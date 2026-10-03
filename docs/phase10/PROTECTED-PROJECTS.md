@@ -2,6 +2,10 @@
 
 Status: **built 2026-10-01** (approved the same day with every default in §7). Roadmap row 10b.
 
+**Amended 2026-10-03 by `PROPOSE-FIRST.md` (10c):** a protected project is now read-only for
+layout too (Q6 reversed: moves go through a change request, and the merge carries them), and
+the inspector shows details instead of editors.
+
 **As built**, with these adjustments:
 
 - **Its own route**, `PATCH /projects/:projectId/require-change-requests` with

@@ -339,6 +339,7 @@ export class PermissionResolver {
         row.draftOpen &&
         row.draftAuthorId !== null &&
         row.draftAuthorId === subject.userId,
+      unsubmitted: row.draftUnsubmitted,
       restrictedFieldMode: row.restrictedFieldMode,
     });
   }
@@ -465,7 +466,8 @@ export class PermissionResolver {
              p.draft_of_id                 AS "draftOfId",
              parent.draft_of_id IS NOT NULL AS "draftOfDraft",
              cr.author_id                  AS "draftAuthorId",
-             COALESCE(cr.status = 'open', false) AS "draftOpen"
+             COALESCE(cr.status IN ('open', 'draft'), false) AS "draftOpen",
+             COALESCE(cr.status = 'draft', false) AS "draftUnsubmitted"
         FROM projects p
         JOIN organizations o ON o.id = p.organization_id AND o.deleted_at IS NULL
         LEFT JOIN users u ON u.id = ${userId}::text
@@ -485,6 +487,7 @@ export class PermissionResolver {
         draftOfDraft: r.draftOfDraft === true,
         draftAuthorId: r.draftAuthorId ?? null,
         draftOpen: r.draftOpen === true,
+        draftUnsubmitted: r.draftUnsubmitted === true,
       });
     }
     return out;
@@ -893,6 +896,7 @@ interface RawProjectRow {
   draftOfDraft?: boolean | null;
   draftAuthorId?: string | null;
   draftOpen?: boolean | null;
+  draftUnsubmitted?: boolean | null;
 }
 
 export interface ProjectRow extends Generations {
@@ -904,8 +908,10 @@ export interface ProjectRow extends Generations {
   /** A draft of a draft is never created; if one exists it resolves to nothing. */
   readonly draftOfDraft: boolean;
   readonly draftAuthorId: string | null;
-  /** The request is `open`, so its author may still edit the draft. */
+  /** The request is `open` or not submitted yet, so its author may still edit the draft. */
   readonly draftOpen: boolean;
+  /** Phase 10c: not submitted yet, so the draft is its author's alone. */
+  readonly draftUnsubmitted: boolean;
 }
 
 interface OrgMembership {

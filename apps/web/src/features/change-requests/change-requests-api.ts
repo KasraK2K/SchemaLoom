@@ -8,6 +8,9 @@ import { apiFetch } from '@/lib/api-client';
  * Every response is parsed: it is a network payload.
  */
 
+/** Phase 10c: `draft` is forked but not submitted yet, and only its author ever sees it. */
+const STATUSES = ['draft', 'open', 'merged', 'closed'] as const;
+
 const person = z.object({ id: z.string(), name: z.string() }).nullable();
 
 const reviewSchema = z.object({
@@ -26,7 +29,7 @@ export const summarySchema = z.object({
   draftProjectId: z.string(),
   title: z.string(),
   description: z.string(),
-  status: z.enum(['open', 'merged', 'closed']),
+  status: z.enum(STATUSES),
   author: person,
   reviewerIds: z.array(z.string()),
   reviews: z.array(reviewSchema),
@@ -46,6 +49,7 @@ const conflictSchema = z.object({
 export type ChangeRequestConflict = z.infer<typeof conflictSchema>;
 
 export const MERGE_BLOCKERS = [
+  'not_submitted',
   'not_open',
   'no_changes',
   'conflicts',
@@ -57,6 +61,8 @@ export const MERGE_BLOCKERS = [
 export const detailSchema = summarySchema.extend({
   changes: diffSchema,
   conflicts: z.array(conflictSchema),
+  /** Tables the draft moved; a merge moves them in the project too (Phase 10c §4). */
+  moved: z.number().default(0),
   draftRevision: z.string(),
   mergeBlockedBy: z.enum(MERGE_BLOCKERS).nullable(),
   canReview: z.boolean(),
@@ -74,7 +80,7 @@ const shellSchema = z.object({
       projectId: z.string(),
       changeRequestId: z.string(),
       title: z.string(),
-      status: z.enum(['open', 'merged', 'closed']),
+      status: z.enum(STATUSES),
     })
     .nullable()
     .optional(),
@@ -140,15 +146,26 @@ export function projectShellQueryOptions(projectId: string) {
   });
 }
 
+/** Phase 10c: no title opens the caller's unsubmitted draft, forking one if needed. */
 export async function proposeChange(
   projectId: string,
-  body: { title: string; description?: string },
+  body: { title?: string; description?: string } = {},
 ): Promise<ChangeRequestSummary> {
   return summarySchema.parse(
     await apiFetch<unknown>(`/projects/${enc(projectId)}/change-requests`, {
       method: 'POST',
       body,
     }),
+  );
+}
+
+/** Phase 10c: name an unsubmitted draft and open it for review. */
+export async function submitChange(
+  id: string,
+  body: { title: string; description?: string },
+): Promise<ChangeRequestSummary> {
+  return summarySchema.parse(
+    await apiFetch<unknown>(`/change-requests/${enc(id)}/submit`, { method: 'POST', body }),
   );
 }
 
@@ -192,6 +209,7 @@ export async function deleteChangeRequest(id: string): Promise<void> {
 
 /** What the page says instead of a disabled Merge button with no reason. */
 export const BLOCKER_TEXT: Readonly<Record<(typeof MERGE_BLOCKERS)[number], string>> = {
+  not_submitted: 'Not submitted yet. Submit the changes to ask for a review.',
   not_open: 'This request is not open.',
   no_changes: 'The draft has no changes to merge yet.',
   conflicts: 'The project changed the same objects. Update from main first.',

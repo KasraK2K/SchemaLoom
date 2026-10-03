@@ -278,6 +278,8 @@ export interface DraftMapInput {
   readonly subject: Subject;
   /** The author of an OPEN request. A merged request's draft is read-only for everyone. */
   readonly canEdit: boolean;
+  /** Phase 10c: the request is not submitted yet, so only its author (`canEdit`) sees it. */
+  readonly unsubmitted?: boolean;
   readonly restrictedFieldMode: RestrictedFieldMode;
 }
 
@@ -289,7 +291,11 @@ export interface DraftMapInput {
  */
 export function draftMap(input: DraftMapInput): ProjectPermissionMap {
   const { parentMap, subject, draftSkel } = input;
-  if (subject.kind !== 'user' || !hasCompleteView(parentMap, input.parentSkel)) {
+  if (
+    subject.kind !== 'user' ||
+    !hasCompleteView(parentMap, input.parentSkel) ||
+    (input.unsubmitted === true && !input.canEdit)
+  ) {
     return emptyMap(input.draftProjectId, subject);
   }
   const atoms = new Set(input.canEdit ? DRAFT_AUTHOR_ATOMS : DRAFT_REVIEW_ATOMS);

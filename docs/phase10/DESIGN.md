@@ -17,6 +17,10 @@ it now open a "does not exist" page. The request page also says plainly when the
 no changes yet, with a link to it, because editing the project instead of the draft is the
 easy mistake.
 
+**Amended 2026-10-03 by `PROPOSE-FIRST.md` (10c):** **Propose a change** opens the draft at
+once and the title comes on **Submit changes**; until then the request is `draft`, private to
+its author. A merge now carries the draft's table moves (Q5 reversed).
+
 A change request is the pull request of a schema: someone proposes edits in a draft, others
 review the diff and the migration SQL, and an editor merges it into the project. It sits on
 top of what already exists: the canvas, SchemaWriter, history diffs, the migration generator,

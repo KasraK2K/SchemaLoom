@@ -1,7 +1,8 @@
+import { type HttpException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { PermissionResolver, ProjectPermissionMap, ProjectSkeleton } from '../access';
 import { fakePrisma } from './fake-prisma';
-import { PROJECT, baseStore, entityRow } from './fixture';
+import { PROJECT, baseStore, entityRow, projectRow } from './fixture';
 import { GeometryWriter } from './geometry.service';
 import { SchemaCommits } from './schema-writer.service';
 import { GeometryBatchSchema } from './ops';
@@ -33,13 +34,14 @@ describe('GeometryWriter', () => {
 
   const context = {
     projectId: PROJECT,
+    origin: 'edit' as const,
     actorUserId: 'usr_ana',
     map: {} as ProjectPermissionMap,
     skel: {} as ProjectSkeleton,
   };
 
-  const build = () => {
-    const prisma = fakePrisma(store);
+  const build = (world = store) => {
+    const prisma = fakePrisma(world);
     const assertAll = vi.fn();
     const writer = new GeometryWriter(
       prisma.client,
@@ -62,6 +64,25 @@ describe('GeometryWriter', () => {
     }
     expect(prisma.store.entity?.[0]?.version).toBe(7);
     expect(prisma.store.entity?.[1]?.version).toBe(2);
+  });
+
+  // Phase 10c §4: layout on a protected project changes only through a merge.
+  describe('on a protected project', () => {
+    const locked = () => ({ ...store, project: [projectRow({ requireChangeRequests: true })] });
+
+    it('refuses a move with 423 project_protected, writing nothing', async () => {
+      const { prisma, writer } = build(locked());
+      const error = await writer.apply(batch, context).catch((e: unknown) => e);
+      expect((error as HttpException).getStatus()).toBe(423);
+      expect((error as HttpException).getResponse()).toEqual({ code: 'project_protected' });
+      expect(prisma.callsTo('entity', 'updateMany')).toHaveLength(0);
+    });
+
+    it("lets a merge's moves through", async () => {
+      const { prisma, writer } = build(locked());
+      await writer.apply(batch, { ...context, origin: 'merge' });
+      expect(prisma.store.entity?.[0]).toMatchObject({ positionX: 120, positionY: 40 });
+    });
   });
 
   it('writes the geometry it was given, scoped to the project', async () => {

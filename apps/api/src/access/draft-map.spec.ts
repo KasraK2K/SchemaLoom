@@ -27,7 +27,12 @@ const withAtoms = (atoms: Iterable<string>): ProjectPermissionMap => {
   return { ...full, orgRole: 'member', projectAtoms: set, areaAtoms: new Map([['ar_bill', set]]) };
 };
 
-const draft = (parentMap: ProjectPermissionMap, canEdit: boolean, subject: Subject = ANA) =>
+const draft = (
+  parentMap: ProjectPermissionMap,
+  canEdit: boolean,
+  subject: Subject = ANA,
+  unsubmitted = false,
+) =>
   draftMap({
     draftProjectId: 'prj_draft',
     draftSkel: DRAFT_SKEL,
@@ -35,6 +40,7 @@ const draft = (parentMap: ProjectPermissionMap, canEdit: boolean, subject: Subje
     parentSkel: MAIN_SKEL,
     subject,
     canEdit,
+    unsubmitted,
     restrictedFieldMode: 'mask',
   });
 
@@ -46,6 +52,13 @@ describe('draftMap', () => {
     expect(map.projectAtoms.has('sharing:manage')).toBe(false);
     expect(map.areaAtoms.get('ar_draft')).toBe(map.projectAtoms);
     expect(map.validUntil).toBe(full.validUntil);
+  });
+
+  it('hides an unsubmitted draft from everyone but its author (Phase 10c)', () => {
+    expect(draft(full, false, ANA, true).projectAtoms).toBe(EMPTY_ATOMS);
+    expect([...draft(full, true, ANA, true).projectAtoms].sort()).toEqual(
+      [...DRAFT_AUTHOR_ATOMS, 'ai:use'].sort(),
+    );
   });
 
   it('gives any other complete viewer review atoms only', () => {

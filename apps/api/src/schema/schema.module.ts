@@ -18,6 +18,6 @@ import { SchemaCommits, SchemaWriter } from './schema-writer.service';
 @Module({
   controllers: [SchemaController],
   providers: [SchemaLoader, SchemaWriter, GeometryWriter, SchemaCommits],
-  exports: [SchemaLoader, SchemaWriter, SchemaCommits],
+  exports: [SchemaLoader, SchemaWriter, GeometryWriter, SchemaCommits],
 })
 export class SchemaModule {}

@@ -84,7 +84,7 @@ interface Move {
 export function CanvasSurface({
   projectId,
   model,
-  readOnly = false,
+  readOnly: shareLink = false,
 }: {
   readonly projectId: Id;
   readonly model: SchemaModel;
@@ -100,9 +100,12 @@ export function CanvasSurface({
   const flow = useReactFlow<EntityNodeType, LinkEdgeType>();
   const queryClient = useQueryClient();
   const t = useTerminology();
-  // Phase 10b: on a protected project the schema is read-only, but layout is not (§2).
-  const shell = useQuery({ ...projectShellQueryOptions(projectId), enabled: !readOnly });
-  const locked = readOnly || shell.data?.requireChangeRequests === true;
+  // Phase 10c §1: a protected project is read-only for everyone, layout included. Its
+  // changes, moves too, arrive through a change request's merge.
+  const shell = useQuery({ ...projectShellQueryOptions(projectId), enabled: !shareLink });
+  // Read-only until the shell says otherwise, so the first placement below can't fire on a
+  // protected project before we know it is one.
+  const readOnly = shareLink || (!shell.isError && shell.data?.requireChangeRequests !== false);
 
   const select = useCanvasStore((state) => state.select);
   const clearSelection = useCanvasStore((state) => state.clearSelection);
@@ -443,7 +446,7 @@ export function CanvasSurface({
         link.restricted === true ||
         model.objects.entity[link.from.entityId]?.restricted === true ||
         model.objects.entity[link.to.entityId]?.restricted === true;
-      return locked
+      return readOnly
         ? []
         : [
             {
@@ -459,7 +462,7 @@ export function CanvasSurface({
     if (entityId === null) {
       const at = menu === null ? null : flow.screenToFlowPosition({ x: menu.x, y: menu.y });
       return [
-        ...(locked
+        ...(readOnly
           ? []
           : [
               {
@@ -509,7 +512,7 @@ export function CanvasSurface({
     toggleCollapse,
     flow,
     readOnly,
-    locked,
+    readOnly,
     model,
     t,
     facet,
@@ -522,9 +525,9 @@ export function CanvasSurface({
   const savedConnection = useQuery({
     queryKey: savedConnectionKey(projectId),
     queryFn: () => getSavedConnection(projectId),
-    enabled: canImport && !locked && facet.capabilities.connectionFields.length > 0,
+    enabled: canImport && !readOnly && facet.capabilities.connectionFields.length > 0,
   });
-  const dialogs = locked ? null : (
+  const dialogs = readOnly ? null : (
     <>
       <NameDialog
         open={newEntityAt !== null}
@@ -551,11 +554,13 @@ export function CanvasSurface({
   );
 
   if (nodes.length === 0) {
-    return locked ? (
+    return readOnly ? (
       <div className="flex h-full items-center justify-center text-sm text-text-subtle">
-        {readOnly
+        {shareLink
           ? 'Nothing is shared here yet.'
-          : 'This project is protected. Propose a change to add tables.'}
+          : shell.data === undefined
+            ? null
+            : 'This project is protected. Propose a change to add tables.'}
       </div>
     ) : (
       <>
@@ -596,7 +601,7 @@ export function CanvasSurface({
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         nodesDraggable={!readOnly}
-        nodesConnectable={!locked}
+        nodesConnectable={!readOnly}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
@@ -639,19 +644,17 @@ export function CanvasSurface({
         </Panel>
         {readOnly ? null : (
           <Panel position="top-right" className="flex gap-2">
-            {locked ? null : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setNewEntityAt(viewportCentre());
-                }}
-              >
-                <FilePlus2 className="size-3.5" aria-hidden="true" />
-                {t.msg('action.add', 'entity')}
-              </Button>
-            )}
-            {canImport && !locked ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setNewEntityAt(viewportCentre());
+              }}
+            >
+              <FilePlus2 className="size-3.5" aria-hidden="true" />
+              {t.msg('action.add', 'entity')}
+            </Button>
+            {canImport ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -664,7 +667,7 @@ export function CanvasSurface({
                 Import SQL
               </Button>
             ) : null}
-            {canImport && !locked && savedConnection.data ? (
+            {canImport && savedConnection.data ? (
               <Button
                 variant="outline"
                 size="sm"

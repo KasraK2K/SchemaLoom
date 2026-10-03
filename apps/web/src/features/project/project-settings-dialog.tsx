@@ -158,8 +158,8 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
                 Require change requests
               </label>
               <p className="text-xs text-text-muted">
-                Schema changes are only possible by merging a reviewed change request: no direct
-                edits, imports, syncs or restores, for anyone. Layout, comments and docs stay
+                Changes are only possible by merging a reviewed change request: no direct edits,
+                moved tables, imports, syncs or restores, for anyone. Comments and docs stay
                 editable. People with access to only some areas can’t propose changes, so they lose
                 editing.
               </p>

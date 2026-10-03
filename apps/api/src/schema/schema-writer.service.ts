@@ -496,7 +496,7 @@ const raceConflict = (type: IrObjectType, id: Id, expectedVersion: number): Conf
  * Phase 10b §2 — read inside the write's transaction, so turning protection on applies to
  * the next write. A protected project takes schema only from a change-request merge.
  */
-async function assertUnprotected(
+export async function assertUnprotected(
   tx: SchemaDb,
   projectId: Id,
   origin: WriteOrigin,

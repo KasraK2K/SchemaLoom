@@ -368,18 +368,40 @@ test.describe('workflow 11 — propose, review, merge', () => {
     await olivia.api.post(`/api/change-requests/${reviewed.id}/close`, { headers: write(olivia) });
   });
 
-  test('in the browser: propose from the canvas, land on the draft, open the request', async ({
+  test('in the browser: propose, continue the draft, submit it with a title (Phase 10c)', async ({
     browser,
   }) => {
     const page = await signedInPage(browser, SEED_EMAILS.owner);
     await page.goto(`/${SEED.orgSlug}/p/${projectId}`);
+    // No dialog: the draft opens at once, and the name comes on submit.
     await page.getByRole('button', { name: 'Propose a change' }).click();
-    await page.getByLabel('Title').fill('Rename clients');
-    await page.getByRole('button', { name: 'Create draft' }).click();
+    const draftBanner = page.getByRole('status').filter({ hasText: 'Your draft' });
+    await expect(draftBanner.getByRole('button', { name: 'Submit changes' })).toBeVisible({
+      timeout: 30_000,
+    });
+    expect(page.url()).not.toContain(projectId);
+    const draftUrl = page.url();
+    await page.screenshot({ path: 'test-results/cr-unsubmitted-draft.png' });
 
+    // Proposing again opens the same draft.
+    await draftBanner.getByRole('link', { name: 'Back to project' }).click();
+    await page.getByRole('button', { name: 'Continue your draft' }).click();
+    await expect(draftBanner).toBeVisible({ timeout: 30_000 });
+    expect(page.url()).toBe(draftUrl);
+
+    await draftBanner.getByRole('button', { name: 'Submit changes' }).click();
+    await page.getByLabel('Title').fill('Rename clients');
+    await page.getByLabel('Description (optional)').fill('Clients are customers now.');
+    await page.getByRole('button', { name: 'Submit for review' }).click();
+    await expect(page.getByRole('heading', { name: 'Rename clients' })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText('Clients are customers now.')).toBeVisible();
+
+    // The draft's banner is the submitted one now.
+    await page.goto(draftUrl);
     const banner = page.getByRole('status').filter({ hasText: 'Draft for' });
     await expect(banner).toContainText('Rename clients', { timeout: 30_000 });
-    expect(page.url()).not.toContain(projectId);
     await page.screenshot({ path: 'test-results/cr-draft-canvas.png' });
 
     await banner.getByRole('link', { name: 'View request' }).click();
@@ -476,21 +498,23 @@ test.describe('workflow 11 — propose, review, merge', () => {
         }),
       );
 
-      // Layout and comments still work (§1, Q6).
-      const moved = await olivia.api.post(`/api/projects/${projectId}/schema/geometry`, {
-        headers: write(olivia),
-        data: {
-          batchId: `bat_e2e_geo_${String(Date.now())}`,
-          entities: [{ id: target?.id, position: { x: 40, y: 40 } }],
-        },
-      });
-      expect(moved.status(), await moved.text()).toBeLessThan(300);
+      // Phase 10c §4: layout too, so moving a table is refused.
+      const move = (project: string, x: number) =>
+        olivia.api.post(`/api/projects/${project}/schema/geometry`, {
+          headers: write(olivia),
+          data: {
+            batchId: `bat_e2e_geo_${String(Date.now())}_${String(x)}`,
+            entities: [{ id: target?.id, position: { x, y: 40 } }],
+          },
+        });
+      await refused(await move(projectId, 40));
 
-      // The canvas says so, hides the schema actions, and keeps layout.
+      // The canvas says so, and offers no edits at all, auto-layout included.
       const page = await signedInPage(browser, SEED_EMAILS.owner);
       await page.goto(`/${SEED.orgSlug}/p/${projectId}`);
       await expect(page.getByRole('status').filter({ hasText: 'Protected' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Auto-layout' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Propose a change' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Auto-layout' })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Import SQL' })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Propose a change' })).toBeVisible();
       await page.screenshot({ path: 'test-results/protected-canvas.png' });
@@ -499,14 +523,54 @@ test.describe('workflow 11 — propose, review, merge', () => {
       await page.screenshot({ path: 'test-results/protected-settings.png' });
       await page.close();
 
-      // The way in: propose, edit the draft, approve, merge.
+      // The way in (Phase 10c): propose with no title, edit and move in the draft, submit.
       const created = await olivia.api.post(`/api/projects/${projectId}/change-requests`, {
+        headers: write(olivia),
+        data: {},
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      const request = (await created.json()) as {
+        id: string;
+        draftProjectId: string;
+        status: string;
+      };
+      expect(request.status).toBe('draft');
+      // Unsubmitted is private: another editor neither sees nor opens it.
+      expect((await adam.api.get(`/api/change-requests/${request.id}`)).status()).toBe(404);
+      expect((await adam.api.get(`/api/projects/${request.draftProjectId}/ir`)).status()).toBe(404);
+      const adamsList = await adam.api.get(`/api/projects/${projectId}/change-requests`);
+      expect(((await adamsList.json()) as { id: string }[]).map((r) => r.id)).not.toContain(
+        request.id,
+      );
+      // Proposing again returns the same draft.
+      const again = await olivia.api.post(`/api/projects/${projectId}/change-requests`, {
+        headers: write(olivia),
+        data: {},
+      });
+      expect(((await again.json()) as { id: string }).id).toBe(request.id);
+
+      await renameIn(olivia, request.draftProjectId, name, `${name}_v2`);
+      const draftTarget = Object.values(
+        (await fetchIr(olivia, request.draftProjectId)).objects.entity,
+      ).find((e) => e.name === `${name}_v2`);
+      const movedInDraft = await olivia.api.post(
+        `/api/projects/${request.draftProjectId}/schema/geometry`,
+        {
+          headers: write(olivia),
+          data: {
+            batchId: `bat_e2e_geo_draft_${String(Date.now())}`,
+            entities: [{ id: draftTarget?.id, position: { x: 777, y: 333 } }],
+          },
+        },
+      );
+      expect(movedInDraft.status(), await movedInDraft.text()).toBeLessThan(300);
+      const submitted = await olivia.api.post(`/api/change-requests/${request.id}/submit`, {
         headers: write(olivia),
         data: { title: 'Rename under protection' },
       });
-      expect(created.status(), await created.text()).toBe(201);
-      const request = (await created.json()) as { id: string; draftProjectId: string };
-      await renameIn(olivia, request.draftProjectId, name, `${name}_v2`);
+      expect(submitted.status(), await submitted.text()).toBe(200);
+      expect(((await submitted.json()) as { status: string }).status).toBe('open');
+      expect((await adam.api.get(`/api/change-requests/${request.id}`)).status()).toBe(200);
       const approved = await adam.api.post(`/api/change-requests/${request.id}/reviews`, {
         headers: write(adam),
         data: { verdict: 'approved' },
@@ -520,7 +584,10 @@ test.describe('workflow 11 — propose, review, merge', () => {
         data: { expectedDraftRevision: detail.draftRevision },
       });
       expect(merged.status(), await merged.text()).toBeLessThan(300);
-      expect(entityNames(await fetchIr(olivia, projectId))).toContain(`${name}_v2`);
+      const after = await fetchIr(olivia, projectId);
+      expect(entityNames(after)).toContain(`${name}_v2`);
+      // The merge carried the draft's move (Phase 10c §4).
+      expect(after.objects.entity[target?.id ?? '']?.position).toEqual({ x: 777, y: 333 });
     } finally {
       expect((await protect(false)).status()).toBe(200);
     }
