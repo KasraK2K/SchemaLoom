@@ -1,8 +1,9 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { EngineRegistry } from '@schemaloom/engine-sdk';
 import { describe, expect, it, vi } from 'vitest';
-import type { PermissionResolver } from '../access';
+import type { PermissionResolver, VisibilityFilter } from '../access';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { SchemaLoader } from '../schema';
 import type { StorageService } from '../storage';
 import { EXPORT_DOWNLOAD_TTL_SEC, ExportsService, IMAGE_EXPORT_MAX_BYTES } from './exports.service';
 import type { JobsService } from './jobs.service';
@@ -90,6 +91,8 @@ function harness(
     storage as unknown as StorageService,
     resolver,
     registry,
+    {} as SchemaLoader,
+    {} as VisibilityFilter,
   );
   return { service, rows, enqueueExport, storage };
 }

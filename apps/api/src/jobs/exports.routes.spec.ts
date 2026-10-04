@@ -35,13 +35,21 @@ describe('ExportsController route markers', () => {
   const routes = sweep();
   const table = Object.fromEntries(routes.map((r) => [`${r.method} ${r.path}`, r.markers]));
 
-  it('serves exactly the four export routes', () => {
+  it('serves exactly the five export routes', () => {
     expect(Object.keys(table).sort()).toEqual([
       'GET /api/exports/:id',
       'POST /api/areas/:areaId/exports',
       'POST /api/exports/:id/complete',
       'POST /api/projects/:projectId/exports',
+      'POST /api/projects/:projectId/orm-code',
     ]);
+  });
+
+  it('gates the Models pane on export:run at the project (Phase 18 Q2)', () => {
+    const ormCode = (ExportsController.prototype as unknown as Record<string, object>).ormCode;
+    expect(Reflect.getMetadata(PERM_META, ormCode ?? {}) as unknown).toMatchObject({
+      atom: 'export:run',
+    });
   });
 
   it('passes the boot sweep with one marker each', () => {

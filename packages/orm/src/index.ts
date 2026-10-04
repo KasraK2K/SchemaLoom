@@ -9,6 +9,7 @@ export * from './dialect.js';
 export { compare } from './util.js';
 export { importPrisma, scanBlocks, type PrismaBlock } from './import-prisma.js';
 export { planModels, type OrmPlan } from './plan.js';
+export { ORM_AI_GUIDANCE, subsetModel } from './subset.js';
 export { defaultValue, prismaName, prismaString } from './prisma.js';
 
 /** Phase 8 — one ORM export for an engine's dialect. */

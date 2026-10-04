@@ -10,11 +10,12 @@ import type { Id, IrObjectRef, RedactedModel } from './ir.js';
  * prompt and the per-mode instructions — everything that has to know the engine's nouns.
  */
 
-export type AiMode = 'query' | 'explain' | 'draft-docs' | 'draft-schema';
+export type AiMode = 'query' | 'explain' | 'code' | 'draft-docs' | 'draft-schema';
 
 export const AI_MODES = [
   'query',
   'explain',
+  'code',
   'draft-docs',
   'draft-schema',
 ] as const satisfies readonly AiMode[];
@@ -65,6 +66,16 @@ export type AiParsedOutput =
       readonly parseWarnings: readonly string[];
     }
   | {
+      /** Phase 18 — ORM code, plus the same query in the engine's SQL (`query`), which core
+       *  validates so the stored message's touched ids come from the validator (L25). */
+      readonly mode: 'code';
+      readonly code: string | null;
+      readonly query: string | null;
+      readonly explanation: string;
+      readonly assumptions: readonly string[];
+      readonly parseWarnings: readonly string[];
+    }
+  | {
       readonly mode: 'draft-docs';
       readonly suggestions: readonly AiDocSuggestion[];
       readonly parseWarnings: readonly string[];
@@ -86,6 +97,33 @@ export interface AiProfile {
   parseOutput(text: string, mode: AiMode): AiParsedOutput;
   /** optional; defaults to defaultJoinPaths (§13.4) */
   suggestJoinPaths?(input: JoinPathInput): readonly JoinPathSuggestion[];
+}
+
+/**
+ * Phase 18 — code mode's output instructions, the same for every engine but the name of its
+ * SQL. Core appends the chosen ORM's own guidance and puts the model code in `<models>`.
+ */
+export function codeModeInstructions(sqlDialect: string): string {
+  return [
+    'The user wants code for their ORM. <models> holds this schema as that ORM’s model code;',
+    'use only the classes, tables and fields named there.',
+    'Answer with these blocks, in this order, and nothing outside them:',
+    '<code>',
+    'the code, no markdown fence',
+    '</code>',
+    '<query>',
+    `the same query as one ${sqlDialect} statement, no markdown fence`,
+    '</query>',
+    '<explanation>',
+    'one or two sentences on what the code does',
+    '</explanation>',
+    '<assumptions>',
+    '- one line per assumption',
+    '</assumptions>',
+    'If the code reads or writes no single query (a seed script, a repository), put the main',
+    'query it runs in <query>, or omit <query>. If the request cannot be done with the listed',
+    'schema, omit <code> and <query> and say why in <explanation>.',
+  ].join('\n');
 }
 
 /** The defaults core passes when a caller does not choose (§13 `maxDocChars`). */
@@ -286,7 +324,8 @@ export function parseAiOutput(
   }
 
   let query = first('query');
-  if (query === null && blocks.length === 0) {
+  // A bare fence in code mode is the ORM code, never the SQL.
+  if (query === null && blocks.length === 0 && mode !== 'code') {
     query = firstFencedBlock(safeText, options.fenceLanguages);
     if (query !== null) warnings.push('accepted a bare fenced block as the query');
   }
@@ -298,6 +337,18 @@ export function parseAiOutput(
     explanation = blocks.length === 0 && query === null ? safeText.trim() : '';
   }
   const assumptions = bulletList(first('assumptions') ?? '');
+  if (mode === 'code') {
+    const code = first('code');
+    if (code === null) warnings.push('no <code> block in the response');
+    return {
+      mode,
+      code: code === '' ? null : code,
+      query,
+      explanation,
+      assumptions,
+      parseWarnings: warnings,
+    };
+  }
   return { mode, query, explanation, assumptions, parseWarnings: warnings };
 }
 

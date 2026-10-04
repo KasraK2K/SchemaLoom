@@ -13,6 +13,7 @@ const metadataSchema = z.object({
   usedEntityIds: z.array(z.string()),
   suggestedEntityIds: z.array(z.string()),
   finishReason: z.string().nullable(),
+  orm: z.enum(['prisma', 'drizzle', 'typeorm', 'django']).nullable().default(null),
 });
 
 export const aiMessageSchema = z.object({
@@ -21,6 +22,8 @@ export const aiMessageSchema = z.object({
   ordinal: z.number(),
   content: z.string(),
   queryText: z.string().nullable(),
+  /** Phase 18 — a code-mode answer's ORM code */
+  code: z.string().nullable().default(null),
   explanation: z.string(),
   metadata: metadataSchema,
   createdAt: z.string(),
@@ -55,7 +58,33 @@ export const docDraftSchema = z.object({
 });
 export type DocDraft = z.infer<typeof docDraftSchema>;
 
-export type AiMode = 'query' | 'explain';
+export type AiMode = 'query' | 'explain' | 'code';
+
+/** Phase 18 — the ORMs Code mode writes for; the engine's export formats say which apply. */
+export const ORMS = [
+  { id: 'prisma', label: 'Prisma', language: 'TypeScript' },
+  { id: 'drizzle', label: 'Drizzle', language: 'TypeScript' },
+  { id: 'typeorm', label: 'TypeORM', language: 'TypeScript' },
+  { id: 'django', label: 'Django', language: 'Python' },
+] as const;
+export type OrmId = (typeof ORMS)[number]['id'];
+
+const ormCodeSchema = z.object({ text: z.string(), incomplete: z.boolean() });
+
+/** The Models pane: the thread's selection as one ORM's model code (`export:run`). */
+export function ormCodeQueryOptions(projectId: string, orm: OrmId, entityIds: readonly string[]) {
+  return queryOptions({
+    queryKey: ['orm-code', projectId, orm, [...entityIds].sort()],
+    queryFn: async () =>
+      ormCodeSchema.parse(
+        await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/orm-code`, {
+          method: 'POST',
+          body: { orm, entityIds },
+        }),
+      ),
+    retry: false,
+  });
+}
 
 export const aiThreadsKey = (projectId: string): readonly unknown[] => [
   'project',
@@ -179,7 +208,7 @@ export type StreamEvent =
  *  throw an `ApiError` before any event, exactly like `apiFetch`. */
 export async function streamMessage(
   threadId: string,
-  body: { content: string; mode: AiMode },
+  body: { content: string; mode: AiMode; orm?: OrmId },
   onEvent: (event: StreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {

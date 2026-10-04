@@ -1,5 +1,6 @@
 import {
   approxTokens,
+  codeModeInstructions,
   parseAiOutput,
   type AiContextOptions,
   type AiMode,
@@ -391,6 +392,7 @@ export const OUTPUT_INSTRUCTIONS: Readonly<Record<AiMode, string>> = {
     'corrected statement in <query>, otherwise repeat the query unchanged there.',
     QUERY_BLOCKS,
   ].join('\n'),
+  code: codeModeInstructions('MySQL'),
   'draft-docs': [
     'Draft documentation for each target the user lists. For each one emit a block:',
     '<doc>',

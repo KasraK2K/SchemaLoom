@@ -18,11 +18,14 @@ import {
   createThread,
   docDraftsKey,
   docDraftsQueryOptions,
+  ORMS,
+  ormCodeQueryOptions,
   queueDocDrafts,
   reviewDocDraft,
   streamMessage,
   type AiMessage,
   type AiMode,
+  type OrmId,
 } from './ai-api';
 
 /**
@@ -121,8 +124,97 @@ interface Live {
   readonly query: string;
   readonly explanation: string;
   readonly assumptions: string;
+  readonly code: string;
 }
-const NO_LIVE: Live = { query: '', explanation: '', assumptions: '' };
+const NO_LIVE: Live = { query: '', explanation: '', assumptions: '', code: '' };
+const LIVE_TAGS = new Set<string>(['query', 'explanation', 'assumptions', 'code']);
+
+const MODES: readonly { readonly id: AiMode; readonly label: string }[] = [
+  { id: 'query', label: 'Ask' },
+  { id: 'explain', label: 'Explain' },
+  { id: 'code', label: 'Code' },
+];
+
+/** Phase 18 Q4 — the last ORM picked, per browser; storage can be missing or refuse. */
+const ORM_KEY = 'schemaloom.ai.orm';
+
+function useRememberedOrm(available: readonly OrmId[]): [OrmId | null, (orm: OrmId) => void] {
+  const [orm, setOrm] = useState<OrmId | null>(available[0] ?? null);
+  useEffect(() => {
+    try {
+      const saved = available.find((o) => o === window.localStorage.getItem(ORM_KEY));
+      if (saved !== undefined) setOrm(saved);
+    } catch {
+      // private window or blocked storage: keep the first ORM
+    }
+  }, [available]);
+  const choose = (next: OrmId) => {
+    setOrm(next);
+    try {
+      window.localStorage.setItem(ORM_KEY, next);
+    } catch {
+      // not remembered, which is fine
+    }
+  };
+  return [orm, choose];
+}
+
+function CodeBlock({ text, label }: { readonly text: string; readonly label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="relative">
+      <pre
+        aria-label={label}
+        className="max-h-72 overflow-auto rounded-md border border-border bg-surface p-2 font-mono text-[11px]"
+      >
+        {text}
+      </pre>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="absolute top-1 right-1"
+        onClick={() => {
+          void navigator.clipboard.writeText(text).then(() => {
+            setCopied(true);
+          });
+        }}
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </Button>
+    </div>
+  );
+}
+
+/** Phase 18 §2.1 — the exporter's model code for the thread's tables; no AI call. Without
+ *  `export:run` the route refuses and the pane simply isn't there. */
+function ModelsPane({
+  projectId,
+  orm,
+  entityIds,
+}: {
+  readonly projectId: string;
+  readonly orm: OrmId;
+  readonly entityIds: readonly string[];
+}) {
+  const models = useQuery(ormCodeQueryOptions(projectId, orm, entityIds));
+  if (models.error !== null) return null;
+  const label = ORMS.find((o) => o.id === orm)?.label ?? orm;
+  return (
+    <details open className="flex flex-col gap-1 text-xs">
+      <summary className="cursor-pointer text-text-muted">Models ({label})</summary>
+      {models.data === undefined ? (
+        <p className="text-text-subtle">Loading…</p>
+      ) : (
+        <>
+          <CodeBlock text={models.data.text} label={`${label} models`} />
+          {models.data.incomplete && (
+            <p className="text-text-muted">Some objects are not included because of your access.</p>
+          )}
+        </>
+      )}
+    </details>
+  );
+}
 
 function ThreadView({
   projectId,
@@ -135,6 +227,12 @@ function ThreadView({
 }) {
   const queryClient = useQueryClient();
   const thread = useQuery(aiThreadQueryOptions(threadId));
+  const exportFormats = useEngine().capabilities.exportFormats;
+  const orms = useMemo(
+    () => ORMS.filter((o) => exportFormats.some((f) => f.id === o.id)).map((o) => o.id),
+    [exportFormats],
+  );
+  const [orm, setOrm] = useRememberedOrm(orms);
   const [mode, setMode] = useState<AiMode>('query');
   const [content, setContent] = useState('');
   const [live, setLive] = useState<Live | null>(null);
@@ -149,13 +247,10 @@ function ThreadView({
     try {
       await streamMessage(
         threadId,
-        { content, mode },
+        mode === 'code' && orm !== null ? { content, mode, orm } : { content, mode },
         (event) => {
-          if (
-            event.type === 'block-delta' &&
-            (event.tag === 'query' || event.tag === 'explanation' || event.tag === 'assumptions')
-          ) {
-            const tag = event.tag;
+          if (event.type === 'block-delta' && LIVE_TAGS.has(event.tag)) {
+            const tag = event.tag as keyof Live;
             setLive((prev) => ({
               ...(prev ?? NO_LIVE),
               [tag]: (prev ?? NO_LIVE)[tag] + event.text,
@@ -210,12 +305,17 @@ function ThreadView({
       {live !== null && (
         <div aria-live="polite" className="flex flex-col gap-1 text-xs">
           {live.explanation !== '' && <p>{live.explanation.trim()}</p>}
-          {live.query !== '' && (
+          {live.code !== '' && (
+            <pre className="overflow-auto rounded-md border border-border bg-surface p-2 font-mono">
+              {live.code.trim()}
+            </pre>
+          )}
+          {live.query !== '' && live.code === '' && (
             <pre className="overflow-auto rounded-md border border-border bg-surface p-2 font-mono">
               {live.query.trim()}
             </pre>
           )}
-          {live.query === '' && live.explanation === '' && (
+          {live.query === '' && live.explanation === '' && live.code === '' && (
             <p className="text-text-subtle">Thinking…</p>
           )}
         </div>
@@ -232,27 +332,58 @@ function ThreadView({
           void send();
         }}
       >
-        <div role="radiogroup" aria-label="Mode" className="flex gap-1">
-          {(['query', 'explain'] as const).map((m) => (
-            <Button
-              key={m}
-              type="button"
-              size="sm"
-              variant={mode === m ? 'primary' : 'ghost'}
-              role="radio"
-              aria-checked={mode === m}
-              onClick={() => {
-                setMode(m);
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="radiogroup" aria-label="Mode" className="flex gap-1">
+            {(orms.length > 0 ? MODES : MODES.filter((m) => m.id !== 'code')).map((m) => (
+              <Button
+                key={m.id}
+                type="button"
+                size="sm"
+                variant={mode === m.id ? 'primary' : 'ghost'}
+                role="radio"
+                aria-checked={mode === m.id}
+                onClick={() => {
+                  setMode(m.id);
+                }}
+              >
+                {m.label}
+              </Button>
+            ))}
+          </div>
+          {mode === 'code' && orm !== null && (
+            <select
+              aria-label="ORM"
+              value={orm}
+              onChange={(e) => {
+                setOrm(e.target.value as OrmId);
               }}
+              className="rounded-md border border-border bg-surface px-1 py-0.5 text-xs text-text"
             >
-              {m === 'query' ? 'Ask' : 'Explain'}
-            </Button>
-          ))}
+              {ORMS.filter((o) => orms.includes(o.id)).map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
+        {mode === 'code' && orm !== null && thread.data !== undefined && (
+          <ModelsPane projectId={projectId} orm={orm} entityIds={thread.data.selection.entityIds} />
+        )}
         <textarea
-          aria-label={mode === 'query' ? 'Question' : 'Query to explain'}
+          aria-label={
+            mode === 'query'
+              ? 'Question'
+              : mode === 'code'
+                ? 'What the code should do'
+                : 'Query to explain'
+          }
           placeholder={
-            mode === 'query' ? 'Ask about the selected tables…' : 'Paste a query to explain…'
+            mode === 'query'
+              ? 'Ask about the selected tables…'
+              : mode === 'code'
+                ? 'Orders over $100 with their customer’s email…'
+                : 'Paste a query to explain…'
           }
           rows={mode === 'query' ? 3 : 6}
           value={content}
@@ -313,7 +444,21 @@ function AssistantMessage({
       {message.metadata.finishReason === 'refusal' && (
         <p className="text-text-muted">The assistant declined this request.</p>
       )}
-      {query !== null && <SqlEditor value={query} onChange={() => undefined} marks={marks} />}
+      {message.code !== null && (
+        <CodeBlock
+          text={message.code}
+          label={`${ORMS.find((o) => o.id === message.metadata.orm)?.label ?? 'ORM'} code`}
+        />
+      )}
+      {query !== null &&
+        (message.metadata.orm === null ? (
+          <SqlEditor value={query} onChange={() => undefined} marks={marks} />
+        ) : (
+          <details>
+            <summary className="cursor-pointer text-text-muted">Show SQL</summary>
+            <SqlEditor value={query} onChange={() => undefined} marks={marks} />
+          </details>
+        ))}
       <ValidationNotes validation={validation.data ?? null} />
       {assumptions.length > 0 && (
         <ul className="list-disc pl-4 text-text-muted" aria-label="Assumptions">

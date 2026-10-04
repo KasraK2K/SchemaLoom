@@ -1,7 +1,21 @@
 # Phase 18: the AI writes ORM code
 
-Status: **approved 2026-10-04** with every default in the open-questions table. New roadmap row 18. Needs row 8's ORM layer (`docs/phase8/DESIGN.md`), because the model code comes from
-it.
+Status: **approved 2026-10-04** with every default in the open-questions table, and **built**
+the same day. Roadmap row 18. Needs row 8's ORM layer (`docs/phase8/DESIGN.md`), because the
+model code comes from it.
+
+**As built**, where it differs from the text below:
+
+- `renderOrmCode` (`apps/api/src/jobs/orm-code.ts`) is the one renderer the Models pane route
+  and the AI context share. The route lives on the exports controller, beside the other
+  `export:run` routes.
+- Code mode's block instructions are the same for every engine but the SQL dialect's name, so
+  they're one SDK function, `codeModeInstructions(dialect)`, rather than per-engine text.
+- The thread's selection is the Models pane's selection, so the pane matches what the AI was
+  given.
+- The code is shown in a plain monospace block with Copy; there's no syntax highlighting yet.
+- The workflow 3 e2e step was not added: the dev api is invite-only, so it couldn't be run
+  here. The service spec covers the turn with the real engine, its redaction and L25.
 
 Decided with the owner before writing (2026-10-04): **both kinds of code**. Model code (the
 Prisma, Drizzle, TypeORM or Django definitions) comes from the exporters, so it is exact and

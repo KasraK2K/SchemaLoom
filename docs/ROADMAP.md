@@ -61,7 +61,7 @@ a reason to come back every week, then reach more databases and teams.
 | 15  | Remaining Phase 3 login paths (magic link, TOTP…)                             | `parked`   | `docs/phase1/00-OVERVIEW.md` Q28     | Cut on purpose in Q28. Additive when needed.                                                                    |
 | 16  | Invite-only sign-up + org member invites                                      | `built`    | `docs/phase16/DESIGN.md`             | A self-hosted install should not let strangers in. The first account is the owner; everyone else is invited.    |
 | 17  | Appearance themes (Studio, Blueprint, Float, Compact)                         | `built`    | `docs/phase17/APPEARANCE.md`         | People work differently: four layouts, densities and type styles, each with colour variants, saved per account. |
-| 18  | AI writes ORM code (model code + queries in Prisma, Drizzle, TypeORM, Django) | `approved` | `docs/phase18/AI-CODE.md`            | Teams work in their ORM, not in SQL. The answer they can paste straight into their code.                        |
+| 18  | AI writes ORM code (model code + queries in Prisma, Drizzle, TypeORM, Django) | `built`    | `docs/phase18/AI-CODE.md`            | Teams work in their ORM, not in SQL. The answer they can paste straight into their code.                        |
 
 **6a/6b verified (2026-09-30)** with pg_dump 18.6 in Docker: the api image builds, the engine's
 live spec and workflow 10 pass. That run found pg_dump 17.6+'s `\restrict` lines, which the

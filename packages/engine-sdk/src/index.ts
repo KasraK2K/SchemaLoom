@@ -227,6 +227,7 @@ export {
   defaultJoinPaths,
   firstFencedBlock,
   parseAiOutput,
+  codeModeInstructions,
   parseTaggedOutput,
   type AiContextOptions,
   type AiDocSuggestion,

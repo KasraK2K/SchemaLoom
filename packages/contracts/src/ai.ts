@@ -29,6 +29,8 @@ export const aiMessageMetaSchema = z
     /** Visible-but-unselected entities the join path needs. */
     suggestedEntityIds: z.array(z.string()).max(50).default([]),
     finishReason: z.string().max(50).nullable().default(null),
+    /** Phase 18 — the ORM a code-mode answer is written for; null for Ask and Explain. */
+    orm: z.enum(['prisma', 'drizzle', 'typeorm', 'django']).nullable().default(null),
   })
   .strict();
 export type AiMessageMeta = z.infer<typeof aiMessageMetaSchema>;

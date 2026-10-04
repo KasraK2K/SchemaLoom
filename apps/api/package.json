@@ -36,6 +36,7 @@
     "@schemaloom/engine-mysql": "workspace:*",
     "@schemaloom/engine-postgresql": "workspace:*",
     "@schemaloom/engine-sdk": "workspace:*",
+    "@schemaloom/orm": "workspace:*",
     "@schemaloom/schema-model": "workspace:*",
     "argon2": "^0.44.0",
     "bullmq": "^5.34.0",

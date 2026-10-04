@@ -8,10 +8,17 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import type { EngineRegistry } from '@schemaloom/engine-sdk';
-import { PermissionResolver, canOpenProject, type Subject } from '../access';
+import {
+  PermissionResolver,
+  VisibilityFilter,
+  canOpenProject,
+  isCompleteView,
+  type Subject,
+} from '../access';
 import { ENGINE_REGISTRY } from '../engines';
 import type { ExportJob } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { SchemaLoader } from '../schema';
 import { PRESIGN_PUT_TTL_SEC, StorageService } from '../storage';
 import { EXPORT_ARTIFACT_TTL_MS } from './export.processor';
 import {
@@ -21,6 +28,7 @@ import {
   exportObjectKey,
 } from './export-render';
 import { JobsService } from './jobs.service';
+import { renderOrmCode } from './orm-code';
 import type { ExportDdlOptions } from './queues';
 
 /** Phase 8 §1 — the name each ORM's own tooling gives the file; everything else is `schema`. */
@@ -80,7 +88,42 @@ export class ExportsService {
     private readonly storage: StorageService,
     private readonly resolver: PermissionResolver,
     @Inject(ENGINE_REGISTRY) private readonly registry: EngineRegistry,
+    private readonly loader: SchemaLoader,
+    private readonly visibility: VisibilityFilter,
   ) {}
+
+  /**
+   * Phase 18 §2.1 — the AI panel's Models pane: a selection's model code in one ORM, rendered
+   * on the request from the caller's redacted view. The route's guard checked `export:run`;
+   * an id the caller can't see is simply not in the output (no oracle).
+   */
+  async ormCode(
+    subject: Subject,
+    projectId: string,
+    input: { readonly orm: string; readonly entityIds: readonly string[] },
+  ): Promise<{ readonly text: string; readonly incomplete: boolean }> {
+    const [map, skel] = await Promise.all([
+      this.resolver.resolveProject(subject, projectId),
+      this.resolver.skeleton(projectId),
+    ]);
+    const model = this.visibility.redactWith(
+      await this.loader.load(projectId),
+      subject,
+      projectId,
+      map,
+      skel,
+    );
+    const engine = this.registry.get(model.engineId);
+    const { text, incomplete } = await renderOrmCode(
+      engine,
+      model,
+      input.orm,
+      input.entityIds,
+      true,
+    );
+    const partial = !isCompleteView(this.visibility.contextFrom(subject, projectId, map, skel));
+    return { text, incomplete: incomplete || (partial && input.entityIds.length === 0) };
+  }
 
   /**
    * `areaId` is set by `POST /areas/:id/exports`, whose guard already checked `export:run`

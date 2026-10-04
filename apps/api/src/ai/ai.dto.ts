@@ -10,10 +10,17 @@ export const createThreadSchema = z.object({
 });
 export class CreateThreadDto extends createZodDto(createThreadSchema) {}
 
-export const postMessageSchema = z.object({
-  content: z.string().trim().min(1).max(20_000),
-  mode: z.enum(['query', 'explain']),
-});
+export const postMessageSchema = z
+  .object({
+    content: z.string().trim().min(1).max(20_000),
+    mode: z.enum(['query', 'explain', 'code']),
+    /** Phase 18 — code mode's ORM; the service checks the engine exports it. */
+    orm: z.enum(['prisma', 'drizzle', 'typeorm', 'django']).optional(),
+  })
+  .refine((b) => (b.mode === 'code') === (b.orm !== undefined), {
+    message: 'orm is required in code mode and only there',
+    path: ['orm'],
+  });
 export class PostMessageDto extends createZodDto(postMessageSchema) {}
 
 export const docDraftsSchema = z.object({

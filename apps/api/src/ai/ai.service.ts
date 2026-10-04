@@ -23,6 +23,7 @@ import {
   type RedactedModel,
   type VisibilityContext,
 } from '@schemaloom/schema-model';
+import { ORM_AI_GUIDANCE, type OrmId } from '@schemaloom/orm';
 import type { Redis } from 'ioredis';
 import {
   PermissionResolver,
@@ -38,6 +39,7 @@ import type { AiMessage, AiThread, DocDraft, Prisma } from '../generated/prisma/
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_RATELIMIT } from '../redis/redis.tokens';
 import { identifiersResolved } from '../saved-queries/saved-queries.service';
+import { renderOrmCode } from '../jobs/orm-code';
 import { SchemaLoader } from '../schema';
 import { AiProvider, type AiResult } from './ai.provider';
 
@@ -86,6 +88,8 @@ export interface AiMessageView {
   readonly ordinal: number;
   readonly content: string;
   readonly queryText: string | null;
+  /** Phase 18 — a code-mode answer's ORM code; null otherwise */
+  readonly code: string | null;
   /** parsed from an assistant message's blocks; '' for a user message */
   readonly explanation: string;
   readonly metadata: AiMessageMeta;
@@ -130,7 +134,9 @@ export interface PreparedTurn {
   readonly view: CallerView;
   readonly thread: AiThread;
   readonly history: readonly AiMessage[];
-  readonly mode: 'query' | 'explain';
+  readonly mode: 'query' | 'explain' | 'code';
+  /** Phase 18 — code mode's ORM, checked against the engine's export formats */
+  readonly orm: OrmId | null;
   readonly userContent: string;
   /** explain mode: the query the user supplied, validated for the user row's touched ids */
   readonly explainQuery: string | null;
@@ -216,10 +222,18 @@ export class AiService {
   async prepareTurn(
     subject: Subject,
     threadId: string,
-    body: { content: string; mode: 'query' | 'explain' },
+    body: { content: string; mode: 'query' | 'explain' | 'code'; orm?: OrmId | undefined },
   ): Promise<PreparedTurn> {
     const { thread, view, messages } = await this.visibleThread(subject, threadId);
     const profile = this.profileFor(view);
+    const orm = body.mode === 'code' ? (body.orm ?? null) : null;
+    const engine = this.registry.tryGet(view.redacted.engineId);
+    if (
+      body.mode === 'code' &&
+      (orm === null || engine?.capabilities.exportFormats.some((f) => f.id === orm) !== true)
+    ) {
+      throw new BadRequestException({ code: 'ai_orm_unsupported', orm });
+    }
     const selection = selectionOf(thread);
     const contextEntityIds = this.contextEntities(view, selection.entityIds, { strict: false });
     if (selection.entityIds.length > 0 && contextEntityIds.length === 0) {
@@ -240,6 +254,7 @@ export class AiService {
       thread,
       history: messages,
       mode: body.mode,
+      orm,
       userContent,
       explainQuery,
       contextEntityIds,
@@ -258,11 +273,27 @@ export class AiService {
       selectedEntityIds: selectionOf(thread).entityIds.length === 0 ? [] : turn.contextEntityIds,
       includeDocs: view.includeDocs,
     });
-    const prefix = `${profile.buildSystemPrompt({
+    let prefix = `${profile.buildSystemPrompt({
       projectName: view.projectName,
       serverVersion: view.redacted.engineVersion || null,
       mode: turn.mode,
     })}\n\n<schema>\n${context.text}\n</schema>`;
+    let instructions = profile.outputInstructions[turn.mode];
+    if (turn.orm !== null) {
+      // Phase 18 §2.2 — the Models pane's text for the same selection, from the same redacted
+      // view, so the AI writes against real class and field names.
+      const engine = this.registry.tryGet(view.redacted.engineId);
+      if (engine === undefined) throw new BadRequestException({ code: 'ai_orm_unsupported' });
+      const models = await renderOrmCode(
+        engine,
+        view.redacted,
+        turn.orm,
+        selectionOf(thread).entityIds.length === 0 ? [] : turn.contextEntityIds,
+        view.includeDocs,
+      );
+      prefix += `\n\n<models orm="${turn.orm}">\n${models.text}\n</models>`;
+      instructions = `${instructions}\n${ORM_AI_GUIDANCE[turn.orm]}`;
+    }
 
     // The user row first, with the ids its own text touches (an explained query is SQL too).
     const userCheck = turn.explainQuery === null ? null : await this.check(view, turn.explainQuery);
@@ -283,7 +314,7 @@ export class AiService {
     const result: AiResult = await this.provider.stream(
       {
         prefix,
-        instructions: profile.outputInstructions[turn.mode],
+        instructions,
         messages: [
           ...turn.history
             .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim() !== '')
@@ -301,10 +332,11 @@ export class AiService {
 
     const refused = result.stopReason === 'refusal';
     const parsed = profile.parseOutput(result.text, turn.mode);
-    const query =
-      !refused && (parsed.mode === 'query' || parsed.mode === 'explain') ? parsed.query : null;
-    const assumptions =
-      parsed.mode === 'query' || parsed.mode === 'explain' ? parsed.assumptions : [];
+    const answered = parsed.mode === 'query' || parsed.mode === 'explain' || parsed.mode === 'code';
+    // Code mode: `query` is the SQL twin. It is validated like Ask's, so L25's touched ids still
+    // come from the validator, plus the context's entities below.
+    const query = !refused && answered ? parsed.query : null;
+    const assumptions = answered ? parsed.assumptions : [];
     const checked = query === null ? null : await this.check(view, query);
     const used = checked?.touchedEntityIds ?? [];
     const selected = new Set(turn.contextEntityIds);
@@ -319,6 +351,7 @@ export class AiService {
         .filter((id) => !selected.has(id))
         .slice(0, 50),
       finishReason: result.stopReason?.slice(0, 50) ?? null,
+      orm: turn.orm,
     });
     const content =
       refused && result.text.trim() === ''
@@ -805,9 +838,10 @@ function threadView(thread: AiThread): AiThreadView {
 
 function messageView(message: AiMessage, profile: AiProfile | undefined): AiMessageView {
   const meta = aiMessageMetaSchema.safeParse(message.metadata ?? {});
+  const metadata = meta.success ? meta.data : aiMessageMetaSchema.parse({});
   const parsed =
     message.role === 'assistant' && profile !== undefined
-      ? profile.parseOutput(message.content, 'query')
+      ? profile.parseOutput(message.content, metadata.orm === null ? 'query' : 'code')
       : null;
   return {
     id: message.id,
@@ -815,11 +849,13 @@ function messageView(message: AiMessage, profile: AiProfile | undefined): AiMess
     ordinal: message.ordinal,
     content: message.content,
     queryText: message.queryText,
+    code: parsed?.mode === 'code' ? parsed.code : null,
     explanation:
-      parsed !== null && (parsed.mode === 'query' || parsed.mode === 'explain')
+      parsed !== null &&
+      (parsed.mode === 'query' || parsed.mode === 'explain' || parsed.mode === 'code')
         ? parsed.explanation
         : '',
-    metadata: meta.success ? meta.data : aiMessageMetaSchema.parse({}),
+    metadata,
     createdAt: message.createdAt,
   };
 }

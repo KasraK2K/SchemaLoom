@@ -32,6 +32,13 @@ export const createExportSchema = z.object({
 });
 export class CreateExportDto extends createZodDto(createExportSchema) {}
 
+/** Phase 18 §2.1 — the Models pane: one ORM, the selected tables (none = all visible). */
+export const ormCodeSchema = z.object({
+  orm: z.enum(['prisma', 'drizzle', 'typeorm', 'django']),
+  entityIds: z.array(z.string().min(1).max(64)).max(500),
+});
+export class OrmCodeDto extends createZodDto(ormCodeSchema) {}
+
 /**
  * Doc 05 §2.2 `export:run`: `POST /projects/:id/exports` (or `/areas/:id/exports`, Q29),
  * `GET /exports/:id` (own jobs only), plus `POST /exports/:id/complete` for the browser-rendered images. The id-addressed
@@ -52,6 +59,18 @@ export class ExportsController {
     @Body() body: CreateExportDto,
   ): Promise<ExportJobView> {
     return this.exports.create(user(req), projectId, body);
+  }
+
+  @ApiOperation({ summary: "A selection's model code in one ORM (the AI panel's Models pane)" })
+  @RequirePermission('export:run', { project: 'projectId' })
+  @Post('projects/:projectId/orm-code')
+  @HttpCode(200)
+  ormCode(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: OrmCodeDto,
+  ): Promise<{ readonly text: string; readonly incomplete: boolean }> {
+    return this.exports.ormCode(user(req), projectId, body);
   }
 
   /** Q29 — the same, cut to one area, for a subject whose grant is on the area. */

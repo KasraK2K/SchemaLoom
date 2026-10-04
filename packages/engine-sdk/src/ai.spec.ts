@@ -78,6 +78,32 @@ describe('parseAiOutput', () => {
     });
   });
 
+  it('reads code mode: the ORM code and its SQL twin (Phase 18)', () => {
+    const out = parseAiOutput(
+      [
+        '<code>',
+        'await db.select().from(orders).where(gt(orders.total, 100));',
+        '</code>',
+        '<query>SELECT * FROM orders WHERE total > 100</query>',
+        '<explanation>Big orders.</explanation>',
+        '<assumptions>- totals in cents</assumptions>',
+      ].join('\n'),
+      'code',
+      OPTIONS,
+    );
+    expect(out).toEqual({
+      mode: 'code',
+      code: 'await db.select().from(orders).where(gt(orders.total, 100));',
+      query: 'SELECT * FROM orders WHERE total > 100',
+      explanation: 'Big orders.',
+      assumptions: ['totals in cents'],
+      parseWarnings: [],
+    });
+    // A bare fence is never taken as the SQL in code mode: it would be the ORM code.
+    const bare = parseAiOutput('```ts\nfoo()\n```', 'code', OPTIONS);
+    expect(bare.mode === 'code' && bare.query).toBeNull();
+  });
+
   it('accepts a bare ```sql block with a warning', () => {
     const out = parseAiOutput('Try:\n```sql\nSELECT 1\n```\n', 'query', OPTIONS);
     expect(out.mode === 'query' && out.query).toBe('SELECT 1');

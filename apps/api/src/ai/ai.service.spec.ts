@@ -138,7 +138,12 @@ function harness(
   const resolver = resolverFor(opts.view ?? MARCH);
   const engine = ENGINE_MANIFEST[0];
   const registry = {
-    tryGet: () => ({ aiProfile: engine?.aiProfile, queryValidator: validator }),
+    tryGet: () => ({
+      aiProfile: engine?.aiProfile,
+      queryValidator: validator,
+      exporter: engine?.exporter,
+      capabilities: engine?.capabilities,
+    }),
   } as unknown as EngineRegistry;
   let count = opts.counter ?? 0;
   const redis = {
@@ -312,6 +317,74 @@ describe('AiService turns', () => {
     expect(events[0]).toBe('block-open');
     expect(events.at(-1)).toBe('block-close');
     expect(events.filter((e) => e === 'block-open')).toHaveLength(3);
+  });
+
+  it('code mode (Phase 18): models in the context, the SQL twin validated, L25 ids kept', async () => {
+    const answer = [
+      '<code>',
+      'await db.select({ name: entEmp.fldEmpName }).from(entEmp);',
+      '</code>',
+      '<query>',
+      'SELECT fld_emp_name FROM ent_emp',
+      '</query>',
+      '<explanation>',
+      'Names.',
+      '</explanation>',
+    ].join('\n');
+    const { provider, requests } = providerStub(answer);
+    const { service, prisma } = harness({
+      view: APRIL,
+      provider,
+      seed: { aiThread: [threadRow()] },
+    });
+    const turn = await service.prepareTurn(ANA, 'thr_1', {
+      content: 'employee names',
+      mode: 'code',
+      orm: 'drizzle',
+    });
+    const stored = await service.runTurn(turn, () => undefined);
+
+    const prefix = requests[0]?.prefix ?? '';
+    expect(prefix).toContain('<models orm="drizzle">');
+    expect(prefix).toContain("pgTable(\n  'ent_emp'");
+    // The models come from the same redacted view: nothing hidden, no masked field.
+    expect(prefix).not.toContain('ent_prod');
+    expect(prefix).not.toContain('fld_sal');
+    expect(requests[0]?.instructions).toContain('The ORM is Drizzle.');
+
+    expect(stored).toMatchObject({
+      code: 'await db.select({ name: entEmp.fldEmpName }).from(entEmp);',
+      queryText: 'SELECT fld_emp_name FROM ent_emp',
+      explanation: 'Names.',
+    });
+    expect(stored.metadata.orm).toBe('drizzle');
+    expect(prisma.store.aiMessage?.[1]).toMatchObject({
+      touchedEntityIds: ['ent_emp'],
+      touchedFieldIds: ['fld_emp_name'],
+    });
+    // Read back from the store, the message is still a code answer.
+    const reread = await service.getThread(ANA, 'thr_1');
+    expect(reread.messages[1]?.code).toBe(stored.code);
+  });
+
+  it('code mode with no SQL twin still records every entity the AI was shown', async () => {
+    const { provider } = providerStub('<code>\nfoo()\n</code>\n<explanation>x</explanation>');
+    const { service, prisma } = harness({ provider, seed: { aiThread: [threadRow()] } });
+    const turn = await service.prepareTurn(ANA, 'thr_1', {
+      content: 'x',
+      mode: 'code',
+      orm: 'prisma',
+    });
+    await service.runTurn(turn, () => undefined);
+    const touched = prisma.store.aiMessage?.[1]?.touchedEntityIds as string[] | undefined;
+    expect([...(touched ?? [])].sort()).toEqual(['ent_emp', 'ent_prod']);
+  });
+
+  it('code mode refuses an ORM the engine does not export', async () => {
+    const { service } = harness({ seed: { aiThread: [threadRow()] } });
+    await expect(
+      service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'code' }),
+    ).rejects.toMatchObject({ status: 400, response: { code: 'ai_orm_unsupported' } });
   });
 
   it('429 ai_rate_limited with retryAfter past the per-user window', async () => {
