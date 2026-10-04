@@ -150,8 +150,20 @@ export function extractReferences(
   const owner = owningEntityId(object);
   const refs = new RefSet();
   for (const expression of expressions) {
-    for (const chain of expression.match(CHAIN_RE) ?? []) {
-      resolveChain(index, owner, partsOf(chain), refs);
+    const chains = (expression.match(CHAIN_RE) ?? []).map(partsOf);
+    // A view's `SELECT salary FROM emp` names `emp.salary` without saying so: an unqualified
+    // name is also a column of every table the same expression names (superset rule). Missing
+    // it let a viewer barred from `emp.salary` read a view body that names it.
+    const named = chains.flatMap((parts) =>
+      parts.flatMap((p) => index.entitiesByName.get(p) ?? []),
+    );
+    for (const parts of chains) {
+      resolveChain(index, owner, parts, refs);
+      const [only] = parts;
+      if (parts.length !== 1 || only === undefined) continue;
+      for (const entityId of named) {
+        refs.addAll('field', index.fieldsByEntity.get(entityId)?.get(only));
+      }
     }
   }
   return refs.sorted();

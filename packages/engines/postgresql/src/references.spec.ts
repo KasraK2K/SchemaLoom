@@ -222,3 +222,15 @@ describe('the result is a set, ordered', () => {
     expect(keys).toEqual([...keys].sort());
   });
 });
+
+describe('a view naming columns without their table', () => {
+  it('reports them as columns of the tables it reads, so a hidden one blanks the body', () => {
+    const view = table({
+      id: 'v1',
+      name: 'payroll',
+      kind: 'view',
+      engineProps: { viewDefinition: 'SELECT id, salary FROM employees' },
+    });
+    expect(ids(refsOf(view, 'entity'), 'field')).toEqual(expect.arrayContaining(['f1', 'f2']));
+  });
+});
