@@ -62,7 +62,10 @@ function join(parts: readonly string[]): string {
 }
 
 /** The project is "this project"; everything else is called by its name. */
-export function resourcePhrase(node: Pick<ResourceNode, 'type' | 'name'>): string {
+export function resourcePhrase(
+  node: Pick<ResourceNode, 'name'> & { type: ResourceNode['type'] | 'workspace' },
+): string {
+  if (node.type === 'workspace') return `the workspace ${node.name}`;
   return node.type === 'project' ? 'this project' : node.name;
 }
 

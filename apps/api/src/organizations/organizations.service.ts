@@ -173,9 +173,38 @@ export class OrganizationsService {
    */
   async listWorkspaces(userId: string, orgSlug: string): Promise<WorkspaceSummary[]> {
     const member = await this.membership(userId, orgSlug);
-    if (member === null || member.role === 'guest') return [];
+    if (member === null) return [];
+    // Roadmap 19: a guest sees only the workspaces they (or a group of theirs) hold a live
+    // grant on; everyone else sees them all, as before.
+    const now = new Date();
+    const guestScope =
+      member.role === 'guest'
+        ? {
+            grants: {
+              some: {
+                OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+                AND: {
+                  OR: [
+                    { principalType: 'user' as const, principalId: userId },
+                    {
+                      principalType: 'group' as const,
+                      principalId: {
+                        in: (
+                          await this.prisma.groupMember.findMany({
+                            where: { userId, group: { organizationId: member.organizationId } },
+                            select: { groupId: true },
+                          })
+                        ).map((g) => g.groupId),
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          }
+        : {};
     return this.prisma.workspace.findMany({
-      where: { organizationId: member.organizationId },
+      where: { organizationId: member.organizationId, ...guestScope },
       select: WORKSPACE,
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
     });

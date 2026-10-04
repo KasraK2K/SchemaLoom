@@ -288,6 +288,7 @@ describe('OrganizationsService.create', () => {
 
 describe('OrganizationsService workspaces', () => {
   const service = (role: string | null) => {
+    const findMany = vi.fn().mockResolvedValue([{ id: 'ws_0', name: 'General', slug: 'general' }]);
     const create = vi.fn(({ data }: { data: { name: string; position: number } }) =>
       Promise.resolve({ id: 'ws_1', name: data.name, slug: 'x', position: data.position }),
     );
@@ -295,19 +296,32 @@ describe('OrganizationsService workspaces', () => {
       orgMember: {
         findFirst: vi.fn().mockResolvedValue(role === null ? null : { organizationId: ORG, role }),
       },
+      groupMember: { findMany: vi.fn().mockResolvedValue([{ groupId: 'grp_1' }]) },
       workspace: {
-        findMany: vi.fn().mockResolvedValue([{ id: 'ws_0', name: 'General', slug: 'general' }]),
+        findMany,
         findFirst: vi.fn().mockResolvedValue({ position: 0 }),
         create,
       },
     } as unknown as PrismaService;
-    return { svc: new OrganizationsService(prisma, {} as PermissionResolver), create };
+    return { svc: new OrganizationsService(prisma, {} as PermissionResolver), create, findMany };
   };
 
-  it('lists for members, and answers [] to guests and non-members', async () => {
+  it('lists for members, and answers [] to non-members', async () => {
     expect(await service('member').svc.listWorkspaces(USER, 'acme')).toHaveLength(1);
-    expect(await service('guest').svc.listWorkspaces(USER, 'acme')).toEqual([]);
     expect(await service(null).svc.listWorkspaces(USER, 'acme')).toEqual([]);
+  });
+
+  it('shows a guest only the workspaces they or their groups hold a grant on (roadmap 19)', async () => {
+    const guest = service('guest');
+    await guest.svc.listWorkspaces(USER, 'acme');
+    const where = (guest.findMany.mock.calls[0]?.[0] as { where: Record<string, unknown> }).where;
+    expect(JSON.stringify(where.grants)).toContain(`"principalId":"${USER}"`);
+    expect(JSON.stringify(where.grants)).toContain('"in":["grp_1"]');
+    const member = service('member');
+    await member.svc.listWorkspaces(USER, 'acme');
+    expect((member.findMany.mock.calls[0]?.[0] as { where: object }).where).not.toHaveProperty(
+      'grants',
+    );
   });
 
   it('lets only owners and admins create, appended after the last workspace', async () => {

@@ -72,6 +72,20 @@ describe('nearestGrants — R15, per principal', () => {
     );
   });
 
+  it('a workspace grant is the broadest level: a project grant of the same principal wins (roadmap 19)', () => {
+    const fromWorkspace = {
+      ...grant(ANA, PROJECT, 'editor'),
+      id: 'wg_1',
+      resourceType: 'workspace' as const,
+      resourceId: 'ws_data',
+      resourceName: 'Data',
+    };
+    const chain = ancestorChain(RESOURCES, INVOICES);
+    expect(nearestGrants([fromWorkspace], chain)).toEqual([fromWorkspace]);
+    const narrowed = entry(ANA, [fromWorkspace, grant(ANA, PROJECT, 'viewer')]);
+    expect(effectiveAtomsAt(narrowed, chain).has('schema:edit')).toBe(false);
+  });
+
   it('ignores grants on resources outside the chain', () => {
     const ana = entry(ANA, [grant(ANA, INVOICES, 'manager')]);
     expect(nearestGrants(ana.grants, ancestorChain(RESOURCES, BILLING))).toEqual([]);

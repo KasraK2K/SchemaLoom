@@ -63,3 +63,14 @@ export const auditQuerySchema = z.object({
   before: z.string().min(1).max(128).optional(),
 });
 export class AuditQueryDto extends createZodDto(auditQuerySchema) {}
+
+/** Roadmap 19 — a grant on a whole workspace. Users and groups only. */
+export const workspaceGrantSchema = z.object({
+  principalKind: z.enum(['user', 'group']),
+  principalId: z.string().trim().min(1).max(64),
+  roleKey: z.string().min(1).max(64),
+  canUseAi: z.boolean(),
+  canViewRestricted: z.boolean(),
+  expiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
+});
+export class WorkspaceGrantDto extends createZodDto(workspaceGrantSchema) {}

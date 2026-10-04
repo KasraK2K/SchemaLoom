@@ -96,6 +96,8 @@ export class GroupsService {
         select: { id: true, projectId: true, resourceType: true, resourceId: true, roleId: true },
       });
       await tx.accessGrant.deleteMany({ where });
+      // Roadmap 19: its workspace grants go with it.
+      await tx.workspaceGrant.deleteMany({ where });
       await tx.userGroup.delete({ where: { id: groupId } });
       await bumpOrg(tx, organizationId);
       await audit(tx, organizationId, userId, 'group.deleted', groupId, {

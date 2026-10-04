@@ -25,6 +25,25 @@ export function resourceNounFor(terminology: Terminology): ResourceNoun {
   };
 }
 
+/** A grant's level as the Why list says it: a workspace grant (roadmap 19) by name. */
+export function grantLevelLabel(
+  noun: ResourceNoun,
+  grant: {
+    readonly resourceType: ResourceNode['type'] | 'workspace';
+    readonly resourceId: string;
+    readonly resourceName: string;
+  },
+): string {
+  return grant.resourceType === 'workspace'
+    ? `Workspace: ${grant.resourceName}`
+    : resourceOptionLabel(noun, {
+        type: grant.resourceType,
+        id: grant.resourceId,
+        name: grant.resourceName,
+        parentId: null,
+      });
+}
+
 /** "Project", "Area: Billing", "Table: orders" — the label a scope picker shows. */
 export function resourceOptionLabel(noun: ResourceNoun, node: ResourceNode): string {
   return node.type === 'project' ? noun('project') : `${noun(node.type)}: ${node.name}`;

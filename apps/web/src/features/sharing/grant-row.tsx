@@ -11,7 +11,7 @@ import {
   type RoleOption,
   type ToggleAtom,
 } from './model';
-import { resourceOptionLabel, type ResourceNoun } from './resource-noun';
+import { grantLevelLabel, type ResourceNoun } from './resource-noun';
 
 /**
  * One person (or group, or pending invite) in the "Who has access" list.
@@ -140,12 +140,7 @@ export function GrantRow({
             lockedNote={
               inheritedFrom === undefined
                 ? null
-                : `inherited from ${resourceOptionLabel(noun, {
-                    type: inheritedFrom.resourceType,
-                    id: inheritedFrom.resourceId,
-                    name: inheritedFrom.resourceName,
-                    parentId: null,
-                  })}`
+                : `inherited from ${grantLevelLabel(noun, inheritedFrom)}`
             }
             readOnly={readOnly}
             onToggle={onToggle}
@@ -168,13 +163,7 @@ export function GrantRow({
           <ul className="mt-1 space-y-0.5 pl-3">
             {entry.grants.map((grant) => (
               <li key={`${grant.id}-${grant.resourceId}`}>
-                {grant.roleName} on{' '}
-                {resourceOptionLabel(noun, {
-                  type: grant.resourceType,
-                  id: grant.resourceId,
-                  name: grant.resourceName,
-                  parentId: null,
-                })}
+                {grant.roleName} on {grantLevelLabel(noun, grant)}
                 {grant.principal.kind === 'group' && ` via the group ${grant.principal.label}`}
                 {grant.resourceId === deciding?.resourceId && ' — deciding level'}
               </li>

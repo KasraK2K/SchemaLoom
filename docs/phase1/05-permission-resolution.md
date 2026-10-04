@@ -734,6 +734,7 @@ project P  →  [project P]
 
 - **Organization** is not in the chain. The org role is applied before grants (R13) and is not a
   grantable resource.
+- _Amended 2026-10-04 (roadmap 19, `docs/phase19/DESIGN.md`): a workspace IS now grantable, through `workspace_grants`, as the level above the project in R15 (nearest level wins, per principal). The text below is the Phase 1 position._
 - **Workspace** is not in the chain and not grantable (fixed by C5). A workspace is an
   organisational container for listing; "share the whole workspace" is expressed as N project
   grants. Flagged in §14 Q2.

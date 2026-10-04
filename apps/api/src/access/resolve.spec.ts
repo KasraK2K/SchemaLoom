@@ -43,6 +43,8 @@ import type {
  *   └── (no area)           ent_aud
  */
 const PROJECT = 'prj_shop';
+/** Roadmap 19: prj_shop's workspace. */
+const WORKSPACE = 'ws_shop';
 const SKEL = buildSkeleton(
   7,
   ['ar_bill', 'ar_cat'],
@@ -98,6 +100,7 @@ interface ResolveOpts {
   restrictedFieldMode?: RestrictedFieldMode;
   nowMs?: number;
   onDroppedGrant?: (reason: DroppedGrantReason, grant: LiveGrant) => void;
+  workspaceId?: string | null;
 }
 
 /**
@@ -115,6 +118,7 @@ function resolve(opts: ResolveOpts = {}): ProjectPermissionMap {
   const grants = opts.grants ?? [];
   return computeProjectMap({
     projectId: PROJECT,
+    workspaceId: opts.workspaceId === undefined ? WORKSPACE : opts.workspaceId,
     subject,
     orgRole,
     principals: opts.principals ?? [...new Set(grants.map((g) => g.principalKey))],
@@ -701,5 +705,78 @@ describe('R7 — modifier booleans are additive only', () => {
     });
     expect(map.projectAtoms.has('ai:use')).toBe(true);
     expect(map.projectAtoms.has('field:viewRestricted')).toBe(true);
+  });
+});
+
+describe('roadmap 19 — a workspace grant is the level above the project (R15)', () => {
+  const onWorkspace = (
+    principal: PrincipalKey,
+    role: BuiltInResourceRole,
+    opts: GrantOpts & { workspaceId?: string } = {},
+  ): LiveGrant => ({
+    ...grant(principal, project(), role, opts),
+    resourceType: 'workspace',
+    resourceId: opts.workspaceId ?? WORKSPACE,
+  });
+
+  it('alone, it reaches every project, area and entity of the workspace', () => {
+    const map = resolve({ grants: [onWorkspace('user:ana', 'viewer')] });
+    expect(canOpenProject(map)).toBe(true);
+    expect(sorted(at(map, project()))).toEqual(sorted(BUILT_IN_ROLES.viewer));
+    expect(sorted(at(map, entity('ent_aud')))).toEqual(sorted(BUILT_IN_ROLES.viewer));
+    expect(sorted(at(map, entity('ent_inv')))).toEqual(sorted(BUILT_IN_ROLES.viewer));
+  });
+
+  it('a project grant for the same principal replaces it, including narrowing it', () => {
+    const map = resolve({
+      grants: [onWorkspace('user:ana', 'editor'), grant('user:ana', project(), 'viewer')],
+    });
+    expect(at(map, project()).has('schema:edit')).toBe(false);
+    expect(sorted(at(map, project()))).toEqual(sorted(BUILT_IN_ROLES.viewer));
+  });
+
+  it('a project grant widens it the same way', () => {
+    const map = resolve({
+      grants: [onWorkspace('user:ana', 'viewer'), grant('user:ana', project(), 'editor')],
+    });
+    expect(at(map, project()).has('schema:edit')).toBe(true);
+  });
+
+  it('an area grant still decides inside its area', () => {
+    const map = resolve({
+      grants: [onWorkspace('user:ana', 'editor'), grant('user:ana', area('ar_cat'), 'viewer')],
+    });
+    expect(at(map, entity('ent_prod')).has('schema:edit')).toBe(false);
+    expect(at(map, entity('ent_inv')).has('schema:edit')).toBe(true);
+  });
+
+  it('unions across principals (R16): a group’s workspace grant adds to a narrower personal grant', () => {
+    const map = resolve({
+      principals: ['user:ana', 'group:analysts'],
+      grants: [grant('user:ana', project(), 'viewer'), onWorkspace('group:analysts', 'editor')],
+    });
+    expect(at(map, project()).has('schema:edit')).toBe(true);
+  });
+
+  it('a guest never gets sharing:manage from it (R9)', () => {
+    const map = resolve({ orgRole: 'guest', grants: [onWorkspace('user:ana', 'manager')] });
+    expect(at(map, project()).has('sharing:manage')).toBe(false);
+    expect(at(map, project()).has('schema:edit')).toBe(true);
+  });
+
+  it('a grant on another workspace is dropped, never applied', () => {
+    const dropped: DroppedGrantReason[] = [];
+    const map = resolve({
+      grants: [onWorkspace('user:ana', 'editor', { workspaceId: 'ws_other' })],
+      onDroppedGrant: (reason) => dropped.push(reason),
+    });
+    expect(canOpenProject(map)).toBe(false);
+    expect(dropped).toEqual(['grant_workspace_mismatch']);
+  });
+
+  it('its expiry bounds the map like any grant (R12.1)', () => {
+    const expiresAt = new Date(NOW + 60_000);
+    const map = resolve({ grants: [onWorkspace('user:ana', 'viewer', { expiresAt })] });
+    expect(map.validUntil).toBe(expiresAt.getTime());
   });
 });

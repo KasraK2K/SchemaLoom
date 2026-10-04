@@ -200,7 +200,9 @@ export class RolesService {
     const role = await this.customRole(organizationId, roleId);
 
     await this.prisma.$transaction(async (tx) => {
-      const grants = await tx.accessGrant.count({ where: { roleId } });
+      const grants =
+        (await tx.accessGrant.count({ where: { roleId } })) +
+        (await tx.workspaceGrant.count({ where: { roleId } }));
       if (grants > 0)
         throw new ConflictException({ code: 'role_in_use', grants, remedy: 'archive' });
       await tx.role.delete({ where: { id: roleId } });

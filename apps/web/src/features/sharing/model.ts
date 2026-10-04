@@ -62,7 +62,8 @@ export type RoleOption = z.infer<typeof roleOptionSchema>;
 export const contributingGrantSchema = z.object({
   id: z.string(),
   principal: principalRefSchema,
-  resourceType: resourceTypeSchema,
+  /** `workspace`: inherited from the project's workspace (roadmap 19); changed there, not here. */
+  resourceType: z.union([resourceTypeSchema, z.literal('workspace')]),
   resourceId: z.string(),
   resourceName: z.string(),
   roleKey: z.string(),

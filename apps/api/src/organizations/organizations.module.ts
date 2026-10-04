@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MailModule } from '../mail/mail.module';
 import { AuditLogService } from './audit-log.service';
+import { WorkspaceGrantsService } from './workspace-grants.service';
 import { GroupsService } from './groups.service';
 import { MemberInvitesService } from './member-invites.service';
 import { MembersService } from './members.service';
@@ -24,6 +25,7 @@ import { RolesService } from './roles.service';
     GroupsService,
     MemberInvitesService,
     AuditLogService,
+    WorkspaceGrantsService,
   ],
   exports: [OrganizationsService],
 })

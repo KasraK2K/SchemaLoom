@@ -69,6 +69,7 @@ function harness(over: { orgRole?: string; grantCount?: number; role?: unknown }
       delete: vi.fn().mockResolvedValue({}),
     },
     accessGrant: { count: vi.fn().mockResolvedValue(over.grantCount ?? 0) },
+    workspaceGrant: { count: vi.fn().mockResolvedValue(0) },
     organization: { update: vi.fn().mockResolvedValue({}) },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
   };

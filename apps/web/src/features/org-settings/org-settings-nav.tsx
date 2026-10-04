@@ -9,7 +9,7 @@ export function OrgSettingsNav({
 }: {
   readonly orgSlug: string;
   readonly orgRole: OrgRole;
-  readonly current: 'members' | 'groups' | 'roles' | 'audit-log' | 'sso';
+  readonly current: 'members' | 'groups' | 'workspaces' | 'roles' | 'audit-log' | 'sso';
 }) {
   const tabs = [
     { key: 'members', label: 'Members' },
@@ -20,7 +20,12 @@ export function OrgSettingsNav({
           { key: 'audit-log', label: 'Audit log' },
         ]
       : []),
-    ...(orgRole === 'owner' ? [{ key: 'sso', label: 'Single sign-on' }] : []),
+    ...(orgRole === 'owner'
+      ? [
+          { key: 'workspaces', label: 'Workspaces' },
+          { key: 'sso', label: 'Single sign-on' },
+        ]
+      : []),
   ] as const;
   return (
     <nav

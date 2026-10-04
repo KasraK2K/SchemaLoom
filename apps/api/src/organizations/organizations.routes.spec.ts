@@ -53,6 +53,7 @@ describe('OrganizationsController route markers', () => {
       'DELETE /api/organizations/:orgSlug/invitations/:invitationId',
       'DELETE /api/organizations/:orgSlug/members/:userId',
       'DELETE /api/organizations/:orgSlug/roles/:roleId',
+      'DELETE /api/organizations/:orgSlug/workspace-grants/:grantId',
       'GET /api/organizations',
       'GET /api/organizations/:orgSlug/audit-log',
       'GET /api/organizations/:orgSlug/audit-log.csv',
@@ -62,6 +63,7 @@ describe('OrganizationsController route markers', () => {
       'GET /api/organizations/:orgSlug/projects',
       'GET /api/organizations/:orgSlug/roles',
       'GET /api/organizations/:orgSlug/workspaces',
+      'GET /api/organizations/:orgSlug/workspaces/:workspaceId/grants',
       'PATCH /api/organizations/:orgSlug/groups/:groupId',
       'PATCH /api/organizations/:orgSlug/members/:userId',
       'PATCH /api/organizations/:orgSlug/roles/:roleId',
@@ -72,6 +74,7 @@ describe('OrganizationsController route markers', () => {
       'POST /api/organizations/:orgSlug/invitations/:invitationId/resend',
       'POST /api/organizations/:orgSlug/roles',
       'POST /api/organizations/:orgSlug/workspaces',
+      'POST /api/organizations/:orgSlug/workspaces/:workspaceId/grants',
     ]);
   });
 

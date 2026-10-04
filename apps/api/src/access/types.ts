@@ -49,7 +49,8 @@ export type ResourceRef =
 /** One row of the hot query (§7.5), already joined to its role. */
 export interface LiveGrant {
   readonly id: string;
-  readonly resourceType: 'project' | 'area' | 'entity';
+  /** `workspace`: a `workspace_grants` row (roadmap 19), the level above the project. */
+  readonly resourceType: 'workspace' | 'project' | 'area' | 'entity';
   readonly resourceId: string;
   readonly principalKey: PrincipalKey;
   /** `roles.atoms`. Stored as `String[]`, so unknown values are possible and are dropped. */
@@ -103,6 +104,9 @@ export interface ProjectPermissionMap {
 
 /** §7.15 — why `indexGrants` threw a row away. Each one means a delete path is missing. */
 export type DroppedGrantReason =
-  'grant_project_mismatch' | 'grant_dangling_area' | 'grant_dangling_entity';
+  | 'grant_workspace_mismatch'
+  | 'grant_project_mismatch'
+  | 'grant_dangling_area'
+  | 'grant_dangling_entity';
 
 export type { AtomSet, OrgRole, PermissionAtom, RestrictedFieldMode };

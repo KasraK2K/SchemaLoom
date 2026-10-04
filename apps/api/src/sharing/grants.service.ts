@@ -43,7 +43,8 @@ interface ResourceNode {
 interface ContributingGrant {
   id: string;
   principal: PrincipalRef;
-  resourceType: ResourceType;
+  /** `workspace`: inherited from the project's workspace (roadmap 19), managed there. */
+  resourceType: ResourceType | 'workspace';
   resourceId: string;
   resourceName: string;
   roleKey: string;
@@ -475,7 +476,7 @@ export class GrantsService {
     managed: readonly ResourceNode[],
   ): Promise<AccessEntry[]> {
     const names = new Map(managed.map((r) => [`${r.type}:${r.id}`, r.name]));
-    const grants = (
+    const projectGrants = (
       await this.prisma.accessGrant.findMany({
         where: {
           projectId,
@@ -488,6 +489,26 @@ export class GrantsService {
         orderBy: { createdAt: 'asc' },
       })
     ).filter((g) => names.has(`${g.resourceType}:${g.resourceId}`));
+
+    // Roadmap 19: grants on the project's workspace reach every resource here, as the level
+    // above the project. They're listed so the dialog's R15 preview is right; they are
+    // changed in the workspace's Share dialog, not here.
+    const { workspace } = await this.prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { workspace: { select: { id: true, name: true } } },
+    });
+    names.set(`workspace:${workspace.id}`, workspace.name);
+    const inherited = (
+      await this.prisma.workspaceGrant.findMany({
+        where: {
+          workspaceId: workspace.id,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        include: { role: { select: { key: true, name: true, atoms: true } } },
+        orderBy: { createdAt: 'asc' },
+      })
+    ).map((g) => ({ ...g, resourceType: 'workspace' as const, resourceId: workspace.id }));
+    const grants = [...projectGrants, ...inherited];
 
     const { organizationId } = await this.projectOrg(projectId);
     const groupIds = [

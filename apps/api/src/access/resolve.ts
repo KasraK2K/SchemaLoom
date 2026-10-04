@@ -148,6 +148,8 @@ export function ancestorChain(
 // ---------------------------------------------------------------------------------------
 
 export interface PrincipalGrants {
+  /** Roadmap 19: this principal's grant on the project's workspace, if any. */
+  workspace?: AtomSet;
   /** Materialised atoms of this principal's project-level grant, if any. */
   project?: AtomSet;
   readonly area: Map<string, AtomSet>;
@@ -168,11 +170,16 @@ export function indexGrants(
   projectId: string,
   skel: ProjectSkeleton,
   onDropped?: (reason: DroppedGrantReason, grant: LiveGrant) => void,
+  workspaceId: string | null = null,
 ): Map<PrincipalKey, PrincipalGrants> {
   const areaIds = new Set(skel.areaIds);
   const out = new Map<PrincipalKey, PrincipalGrants>();
 
   for (const g of grants) {
+    if (g.resourceType === 'workspace' && g.resourceId !== workspaceId) {
+      onDropped?.('grant_workspace_mismatch', g);
+      continue;
+    }
     if (g.resourceType === 'project' && g.resourceId !== projectId) {
       onDropped?.('grant_project_mismatch', g);
       continue;
@@ -192,7 +199,9 @@ export function indexGrants(
       out.set(g.principalKey, slot);
     }
     const atoms = materialise(g);
-    if (g.resourceType === 'project') {
+    if (g.resourceType === 'workspace') {
+      slot.workspace = slot.workspace ? unionAll([slot.workspace, atoms]) : atoms;
+    } else if (g.resourceType === 'project') {
       slot.project = slot.project ? unionAll([slot.project, atoms]) : atoms;
     } else {
       const level = g.resourceType === 'area' ? slot.area : slot.entity;
@@ -333,6 +342,8 @@ export function emptyMap(projectId: string, subject: Subject): ProjectPermission
 
 export interface ComputeInput {
   readonly projectId: string;
+  /** Roadmap 19: the project's workspace, whose grants sit above the project's. */
+  readonly workspaceId?: string | null;
   readonly subject: Subject;
   /** null for a share-link subject. Never `owner`: R13 short-circuits earlier. */
   readonly orgRole: OrgRole | null;
@@ -352,14 +363,16 @@ interface Cascade {
 
 /**
  * R15 — per-principal NEAREST-LEVEL-WINS. For ONE principal, walk entity -> area ->
- * project and stop at the first level carrying a live grant; that level decides this
+ * project -> workspace and stop at the first level carrying a live grant; that level decides this
  * principal's contribution ENTIRELY. Broader levels are discarded, not unioned.
  *
  * Expressed here as a downward fill rather than an upward walk, which is the same thing
  * evaluated once per level instead of once per (entity, level) pair.
  */
 function cascadeFor(g: PrincipalGrants, skel: ProjectSkeleton): Cascade {
-  const pProject = g.project ?? EMPTY_ATOMS;
+  // Roadmap 19: the workspace is the level above the project. Nearest wins, so a project
+  // grant replaces this principal's workspace grant entirely (and may narrow it).
+  const pProject = g.project ?? g.workspace ?? EMPTY_ATOMS;
 
   const pArea = new Map<string, AtomSet>();
   for (const areaId of skel.areaIds) {
@@ -404,7 +417,13 @@ export function computeProjectMap(input: ComputeInput): ProjectPermissionMap {
   const { skeleton: skel, subject, nowMs } = input;
 
   // ---- step 3: index by principal and level; §7.15 drops bad rows here -----------------
-  const byPrincipal = indexGrants(input.grants, input.projectId, skel, input.onDroppedGrant);
+  const byPrincipal = indexGrants(
+    input.grants,
+    input.projectId,
+    skel,
+    input.onDroppedGrant,
+    input.workspaceId ?? null,
+  );
 
   // ---- step 4: per-principal cascade (R15) --------------------------------------------
   const perPrincipal: Cascade[] = [];

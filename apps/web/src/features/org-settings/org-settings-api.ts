@@ -78,3 +78,29 @@ export async function listSsoConnections(orgSlug: string): Promise<SsoConnection
     await serverFetch<unknown>(`${org(orgSlug)}/sso-connections`),
   );
 }
+
+/** `GET /organizations/:slug/workspaces/:id/grants` — `workspace-grants.service.ts` (roadmap 19). */
+export const WorkspaceGrantSchema = z.object({
+  id: z.string(),
+  principalKind: z.enum(['user', 'group']),
+  principalId: z.string(),
+  principalName: z.string(),
+  principalEmail: z.string().nullable(),
+  roleKey: z.string(),
+  roleName: z.string(),
+  canUseAi: z.boolean(),
+  canViewRestricted: z.boolean(),
+  expiresAt: z.string().nullable(),
+});
+export type WorkspaceGrant = z.infer<typeof WorkspaceGrantSchema>;
+
+export async function listWorkspaceGrants(
+  orgSlug: string,
+  workspaceId: string,
+): Promise<WorkspaceGrant[]> {
+  return WorkspaceGrantSchema.array().parse(
+    await serverFetch<unknown>(
+      `${org(orgSlug)}/workspaces/${encodeURIComponent(workspaceId)}/grants`,
+    ),
+  );
+}

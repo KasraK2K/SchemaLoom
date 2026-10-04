@@ -209,6 +209,7 @@ model User {
   snapshots             Snapshot[]
   shareLinks            ShareLink[]
   grantsIssued          AccessGrant[]
+  workspaceGrantsIssued WorkspaceGrant[]
   docDraftsCreated      DocDraft[]            @relation("DocDraftCreatedBy")
   docDraftsReviewed     DocDraft[]            @relation("DocDraftReviewedBy")
   exportJobs            ExportJob[]
@@ -358,16 +359,17 @@ model Organization {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  members        OrgMember[]
-  groups         UserGroup[]
-  workspaces     Workspace[]
-  projects       Project[]
-  roles          Role[]
-  accessGrants   AccessGrant[]
-  invitations    Invitation[]
-  auditLogs      AuditLog[]
-  notifications  Notification[]
-  ssoConnections SsoConnection[]
+  members         OrgMember[]
+  groups          UserGroup[]
+  workspaces      Workspace[]
+  projects        Project[]
+  roles           Role[]
+  accessGrants    AccessGrant[]
+  invitations     Invitation[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  ssoConnections  SsoConnection[]
+  workspaceGrants WorkspaceGrant[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -432,8 +434,9 @@ model Workspace {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   projects     Project[]
+  grants       WorkspaceGrant[]
 
   @@unique([organizationId, slug])
   @@index([organizationId, position])
@@ -1306,9 +1309,10 @@ model Role {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  grants         AccessGrant[]
-  accessRequests AccessRequest[] @relation("AccessRequestRequestedRole")
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  grants          AccessGrant[]
+  workspaceGrants WorkspaceGrant[]
+  accessRequests  AccessRequest[]  @relation("AccessRequestRequestedRole")
 
   @@index([organizationId])
   @@map("roles")
@@ -1770,4 +1774,37 @@ model SsoConnection {
 
   @@index([organizationId])
   @@map("sso_connections")
+}
+
+/// Roadmap 19 (`docs/phase19/DESIGN.md`) — a grant on a whole workspace: every project in it,
+/// including projects created later. The level above `project` in R15 (nearest level wins,
+/// per principal). Kept apart from `access_grants`, whose rows all belong to one project.
+/// Users and groups only (a CHECK): no share links, no pending email invites. Created by
+/// org owners only; every write bumps `organizations.perm_generation`.
+model WorkspaceGrant {
+  id                String        @id @default(cuid())
+  organizationId    String        @map("organization_id")
+  workspaceId       String        @map("workspace_id")
+  principalType     PrincipalType @map("principal_type")
+  principalId       String        @map("principal_id")
+  roleId            String        @map("role_id")
+  canUseAi          Boolean       @default(false) @map("can_use_ai")
+  canViewRestricted Boolean       @default(false) @map("can_view_restricted")
+  note              String?
+  createdById       String?       @map("created_by_id")
+  /// Enforced in SQL on every resolve, as for `access_grants`.
+  expiresAt         DateTime?     @map("expires_at") @db.Timestamptz(6)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  /// NoAction + DEFERRABLE INITIALLY DEFERRED, as `access_grants.role_id` (§8.6).
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: NoAction)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, principalType, principalId])
+  @@index([principalType, principalId])
+  @@index([roleId])
+  @@map("workspace_grants")
 }

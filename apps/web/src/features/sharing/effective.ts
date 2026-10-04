@@ -82,7 +82,8 @@ export function nearestGrants(
   const depthOf = new Map(chain.map((node, index) => [node.id, index]));
   const best = new Map<string, { depth: number; grants: ContributingGrant[] }>();
   for (const grant of grants) {
-    const depth = depthOf.get(grant.resourceId);
+    // Roadmap 19: a workspace grant is broader than every node of the chain.
+    const depth = grant.resourceType === 'workspace' ? chain.length : depthOf.get(grant.resourceId);
     if (depth === undefined) continue;
     const key = principalKeyOf(grant.principal);
     const hit = best.get(key);

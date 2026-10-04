@@ -18,6 +18,7 @@ import { Authenticated } from '../access';
 import { getPrincipal } from '../auth';
 import type { ProjectSummary } from '../projects';
 import { AuditLogService, auditFilters, type AuditRow } from './audit-log.service';
+import { WorkspaceGrantsService, type WorkspaceGrantView } from './workspace-grants.service';
 import { GroupsService, type GroupView } from './groups.service';
 import { MemberInvitesService, type PendingInvite } from './member-invites.service';
 import { MembersService, type MemberView } from './members.service';
@@ -32,6 +33,7 @@ import {
   UpdateGroupDto,
   UpdateMemberDto,
   UpdateRoleDto,
+  WorkspaceGrantDto,
 } from './organizations.dto';
 import { OrganizationsService } from './organizations.service';
 import type { OrganizationSummary, WorkspaceSummary } from './organizations.types';
@@ -47,6 +49,7 @@ export class OrganizationsController {
     private readonly groups: GroupsService,
     private readonly invites: MemberInvitesService,
     private readonly audit: AuditLogService,
+    private readonly workspaceGrants: WorkspaceGrantsService,
   ) {}
 
   /**
@@ -187,6 +190,45 @@ export class OrganizationsController {
    * routes; `AuditLogService` admits owners and admins, and an admin reads only org-level
    * rows and rows of projects they can open (R13).
    */
+  /**
+   * Roadmap 19 — grants on a whole workspace. Same marker and membership-first rule as the
+   * other org routes; `WorkspaceGrantsService` admits org owners only.
+   */
+  @ApiOperation({ summary: 'Grants on a workspace (owner)' })
+  @Authenticated()
+  @Get(':orgSlug/workspaces/:workspaceId/grants')
+  listWorkspaceGrants(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('workspaceId') workspaceId: string,
+  ): Promise<WorkspaceGrantView[]> {
+    return this.workspaceGrants.list(this.userId(req), orgSlug, workspaceId);
+  }
+
+  @ApiOperation({ summary: 'Grant a user or group a role on every project in a workspace (owner)' })
+  @Authenticated()
+  @Post(':orgSlug/workspaces/:workspaceId/grants')
+  upsertWorkspaceGrant(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('workspaceId') workspaceId: string,
+    @Body() dto: WorkspaceGrantDto,
+  ): Promise<WorkspaceGrantView> {
+    return this.workspaceGrants.upsert(this.userId(req), orgSlug, workspaceId, dto);
+  }
+
+  @ApiOperation({ summary: 'Remove a workspace grant (owner)' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete(':orgSlug/workspace-grants/:grantId')
+  async removeWorkspaceGrant(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('grantId') grantId: string,
+  ): Promise<void> {
+    await this.workspaceGrants.remove(this.userId(req), orgSlug, grantId);
+  }
+
   @ApiOperation({ summary: 'Audit log, newest first (owner or admin)' })
   @Authenticated()
   @Get(':orgSlug/audit-log')

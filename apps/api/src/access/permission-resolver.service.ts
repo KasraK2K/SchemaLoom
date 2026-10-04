@@ -248,7 +248,10 @@ export class PermissionResolver {
     if (ref.type === 'project' && ref.id !== projectId) return out;
 
     const chain = ancestorChain(projectId, ref, skel);
-    const grants = await this.grantsOnChain(projectId, chain);
+    const grants = [
+      ...(await this.grantsOnChain(projectId, chain)),
+      ...(await this.workspaceGrants(row.workspaceId ?? null, null, new Date())),
+    ];
 
     // R15 evaluated for everyone at once: for each principal the most specific chain level
     // carrying a grant decides, entirely. R5's downward union then adds `sharing:manage`
@@ -257,8 +260,11 @@ export class PermissionResolver {
     const byPrincipal = new Map<PrincipalKey, AtomSet>();
     for (const p of new Set(grants.map((g) => g.principalKey))) {
       const mine = grants.filter((g) => g.principalKey === p);
+      // Roadmap 19: the workspace is broader than every level of the chain.
       const levelOf = (g: LiveGrant): number =>
-        chain.findIndex((c) => c.type === g.resourceType && c.id === g.resourceId);
+        g.resourceType === 'workspace'
+          ? chain.length
+          : chain.findIndex((c) => c.type === g.resourceType && c.id === g.resourceId);
       const deciding = Math.min(...mine.map(levelOf).filter((i) => i >= 0));
       if (!Number.isFinite(deciding)) continue;
       let atoms = unionAll(mine.filter((g) => levelOf(g) === deciding).map((g) => materialise(g)));
@@ -414,10 +420,17 @@ export class PermissionResolver {
     }
 
     // ---- step 3: one data read ---------------------------------------------------------
-    const grants = await this.liveGrants(row.projectId, principals, now, linkExpiresAt);
+    const grants = await this.liveGrants(
+      row.projectId,
+      row.workspaceId ?? null,
+      principals,
+      now,
+      linkExpiresAt,
+    );
 
     const map = computeProjectMap({
       projectId: row.projectId,
+      workspaceId: row.workspaceId ?? null,
       subject,
       orgRole,
       principals,
@@ -459,6 +472,7 @@ export class PermissionResolver {
     const rows = await this.prisma.$queryRaw<RawProjectRow[]>`
       SELECT p.id                          AS "projectId",
              p.organization_id             AS "organizationId",
+             p.workspace_id                AS "workspaceId",
              p.restricted_field_mode::text AS "restrictedFieldMode",
              p.perm_generation             AS "pg",
              o.perm_generation             AS "og",
@@ -479,6 +493,7 @@ export class PermissionResolver {
       out.set(r.projectId, {
         projectId: r.projectId,
         organizationId: r.organizationId,
+        workspaceId: r.workspaceId ?? null,
         restrictedFieldMode: r.restrictedFieldMode === 'hide' ? 'hide' : 'mask',
         pg: Number(r.pg),
         og: Number(r.og),
@@ -496,11 +511,13 @@ export class PermissionResolver {
   /** §7.5's hot query. One indexed scan per principal, on `(projectId, principal)`. */
   private async liveGrants(
     projectId: string,
+    workspaceId: string | null,
     principals: readonly PrincipalKey[],
     now: Date,
     linkExpiresAt: Date | null,
   ): Promise<LiveGrant[]> {
     if (principals.length === 0) return [];
+    const workspace = await this.workspaceGrants(workspaceId, principals, now);
     const rows = await this.prisma.accessGrant.findMany({
       where: {
         projectId,
@@ -524,7 +541,64 @@ export class PermissionResolver {
     // keeps `grant.organizationId` equal to the project's). A `group` principal is live
     // iff the subject is a current member — which is where the group ids came from. A
     // `share_link` principal is the subject, already checked, its expiry passed in.
-    return rows.flatMap((r) => toLiveGrant(r, linkExpiresAt));
+    return [...workspace, ...rows.flatMap((r) => toLiveGrant(r, linkExpiresAt))];
+  }
+
+  /**
+   * Roadmap 19 — the principals' live grants on the project's workspace, as `LiveGrant`s of
+   * type `workspace`. Users and groups only (a share link is never granted a workspace), and
+   * the same SQL expiry predicate as `access_grants` (R12.1). `principals: null` reads every
+   * principal's, for the inverse resolver.
+   */
+  private async workspaceGrants(
+    workspaceId: string | null,
+    principals: readonly PrincipalKey[] | null,
+    now: Date,
+  ): Promise<LiveGrant[]> {
+    if (workspaceId === null) return [];
+    const people = principals?.filter((p) => !p.startsWith('share_link:'));
+    if (people?.length === 0) return [];
+    const rows = await this.prisma.workspaceGrant.findMany({
+      where: {
+        workspaceId,
+        ...(people === undefined
+          ? {}
+          : {
+              OR: people.map((p) => {
+                const { kind, id } = splitPrincipalKey(p);
+                return { principalType: kind, principalId: id };
+              }),
+            }),
+        AND: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      },
+      select: {
+        id: true,
+        principalType: true,
+        principalId: true,
+        canUseAi: true,
+        canViewRestricted: true,
+        expiresAt: true,
+        role: { select: { atoms: true } },
+      },
+      orderBy: { id: 'asc' },
+    });
+    return rows.flatMap((r) =>
+      r.principalType === 'user' || r.principalType === 'group'
+        ? [
+            {
+              id: r.id,
+              resourceType: 'workspace' as const,
+              resourceId: workspaceId,
+              principalKey: principalKey(r.principalType, r.principalId),
+              atoms: r.role.atoms,
+              canUseAi: r.canUseAi,
+              canViewRestricted: r.canViewRestricted,
+              expiresAt: r.expiresAt,
+              linkExpiresAt: null,
+            },
+          ]
+        : [],
+    );
   }
 
   /** §7.7 query 1 — every live grant anywhere on one 1-3 element ancestor chain. */
@@ -888,6 +962,7 @@ const generationUserId = (s: Subject): string | null => (s.kind === 'user' ? s.u
 interface RawProjectRow {
   projectId: string;
   organizationId: string;
+  workspaceId?: string | null;
   restrictedFieldMode: string;
   pg: number | bigint;
   og: number | bigint;
@@ -902,6 +977,8 @@ interface RawProjectRow {
 export interface ProjectRow extends Generations {
   readonly projectId: string;
   readonly organizationId: string;
+  /** Roadmap 19: whose `workspace_grants` apply. Optional so hand-built rows in specs stay valid. */
+  readonly workspaceId?: string | null;
   readonly restrictedFieldMode: RestrictedFieldMode;
   /** Phase 10: the main project, when this row is a change request's draft. */
   readonly draftOfId: string | null;
