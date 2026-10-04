@@ -320,6 +320,14 @@ line per project it changes and exits non-zero if any project failed:
 docker compose run --rm api node dist/engine-upgrade.cli.js --all
 ```
 
+Upgrading from a release before 2026-10-04, also run this once. It records which columns
+each default, CHECK and view names, so viewers with partial access see the expressions they
+are allowed to see:
+
+```bash
+docker compose run --rm api node dist/refs-backfill.cli.js
+```
+
 ## 10. Backups
 
 The data lives in three Docker volumes. Postgres is the one that matters most. A nightly dump

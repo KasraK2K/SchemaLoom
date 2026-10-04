@@ -123,6 +123,17 @@ model Tag {
     expect(Object.keys(model.objects.entity)).toEqual([]);
   });
 
+  it('reads pasted models without a datasource as the project’s database', async () => {
+    const { report, model } = await importPrisma(
+      'model A {\n  id Int @id\n  b  String @db.VarChar(20)\n}\n',
+    );
+    expect(report.countsByStatus.failed).toBe(0);
+    expect(Object.values(model.objects.entity).map((e) => e.name)).toEqual(['A']);
+    // Prisma still checks native types against that provider.
+    const mysqlOnly = await importPrisma('model A {\n  id Int @id\n  b String @db.TinyText\n}\n');
+    expect(mysqlOnly.report.statements[0]?.reason).toMatch(/^Prisma rejected the file/);
+  });
+
   it("reports a file Prisma rejects with Prisma's reason", async () => {
     const { report } = await importPrisma(
       'datasource db {\n  provider = "postgresql"\n  url = env("X")\n}\nmodel A {\n  id Nope @id\n}\n',

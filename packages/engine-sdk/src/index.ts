@@ -248,7 +248,12 @@ export {
 export type { ProjectTemplate, ProjectTemplateSummary } from './templates.js';
 
 // --- the engine itself (§3) ---
-export type { EngineDefinition, EngineParadigm, EngineStaticFacet } from './definition.js';
+export type {
+  EngineDefinition,
+  EngineParadigm,
+  EngineStaticFacet,
+  ViewColumns,
+} from './definition.js';
 
 // --- registry (§14) ---
 export {

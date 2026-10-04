@@ -248,11 +248,19 @@ export async function importPrisma(
 
   const prepared = prepareForParser(source, blocks);
   const datasource = blocks.find((b) => b.keyword === 'datasource');
+  // Pasted models alone (no datasource) are for the project's own database; Prisma still
+  // checks every `@db.` type against that provider.
   const provider =
-    datasource === undefined ? undefined : /\bprovider\s*=\s*"([^"]*)"/.exec(datasource.text)?.[1];
+    datasource === undefined
+      ? dialect.prismaProvider
+      : /\bprovider\s*=\s*"([^"]*)"/.exec(datasource.text)?.[1];
+  const parsed =
+    datasource === undefined
+      ? `${prepared.text}\ndatasource db {\n  provider = "${dialect.prismaProvider}"\n  url      = env("DATABASE_URL")\n}\n`
+      : prepared.text;
   let datamodel: Datamodel | null = null;
   if (provider === undefined) {
-    fail('The file has no datasource block, so its database is unknown.');
+    fail('The datasource block has no provider, so its database is unknown.');
   } else if (
     provider !== dialect.prismaProvider &&
     !(provider === 'postgres' && dialect.prismaProvider === 'postgresql')
@@ -262,7 +270,7 @@ export async function importPrisma(
     );
   } else {
     try {
-      const out = (await loadWasm()).get_dmmf(JSON.stringify({ prismaSchema: prepared.text }));
+      const out = (await loadWasm()).get_dmmf(JSON.stringify({ prismaSchema: parsed }));
       datamodel = withoutSyntheticKeys((JSON.parse(out) as { datamodel: Datamodel }).datamodel);
     } catch (error) {
       fail(`Prisma rejected the file: ${prismaError(error)}`);

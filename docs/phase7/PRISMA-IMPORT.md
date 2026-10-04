@@ -40,7 +40,9 @@ only for new objects and objects with no doc yet, and only when the caller has `
 
 **The file's `provider` must match the project's engine.** `postgresql` imports into a
 PostgreSQL project, `mysql` into MySQL/MariaDB, `sqlite` into SQLite. Anything else is refused
-with a plain reason ("This file is for MySQL; the project is PostgreSQL").
+with a plain reason ("This file is for MySQL; the project is PostgreSQL"). Models pasted with
+no `datasource` block are read as the project's own database (found by e2e workflow 17; they
+used to fail as "database unknown").
 
 ## 2. How it works
 

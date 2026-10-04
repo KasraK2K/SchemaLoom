@@ -42,6 +42,35 @@ describe('sameViewBody', () => {
     for (const [a, b] of differ) expect(await sameViewBody(a ?? '', b ?? '')).toBe(false);
   });
 
+  it('matches a join written without qualifiers, given the columns of each table', async () => {
+    const columns = (t: string) =>
+      ({ orders: ['id', 'total', 'customer_id'], customers: ['id', 'name'] })[t];
+    const written = 'select total, name from orders o join customers c on c.id = customer_id';
+    const printed =
+      'select `o`.`total` AS `total`,`c`.`name` AS `name` from (`orders` `o` join `customers` `c` on((`c`.`id` = `o`.`customer_id`)))';
+    expect(await sameViewBody(written, printed, columns)).toBe(true);
+    // Without the columns, or when a table is unknown, nothing is guessed.
+    expect(await sameViewBody(written, printed)).toBe(false);
+    expect(
+      await sameViewBody(written, printed, (t) => (t === 'orders' ? ['total'] : undefined)),
+    ).toBe(false);
+    // A column both tables have is not resolved, and the qualifier still matters.
+    expect(
+      await sameViewBody(
+        'select id from orders o join customers c on c.id = o.customer_id',
+        'select `c`.`id` AS `id` from (`orders` `o` join `customers` `c` on((`c`.`id` = `o`.`customer_id`)))',
+        columns,
+      ),
+    ).toBe(false);
+    expect(
+      await sameViewBody(
+        'select c.name from orders o join customers c on c.id = o.customer_id',
+        'select `o`.`name` AS `name` from (`orders` `o` join `customers` `c` on((`c`.`id` = `o`.`customer_id`)))',
+        columns,
+      ),
+    ).toBe(false);
+  });
+
   it('is false when a side does not parse', async () => {
     expect(await sameViewBody('select id from orders', 'select id from')).toBe(false);
   });

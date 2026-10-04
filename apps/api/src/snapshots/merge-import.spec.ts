@@ -60,6 +60,34 @@ describe('drift against an unchanged database', () => {
     expect(await drift(() => Promise.resolve(false))).toHaveLength(1);
     expect(await drift(() => Promise.resolve(true))).toEqual([]);
   });
+
+  it('tells the engine each relation’s columns in the database read', async () => {
+    const store = baseStore({
+      entity: [
+        entityRow('ent_orders', { name: 'Orders' }),
+        entityRow('ent_v', { name: 'v', kind: 'view', engineProps: { viewDefinition: 'a' } }),
+      ],
+      field: [
+        fieldRow('fld_id', 'ent_orders', { name: 'id', position: 0 }),
+        fieldRow('fld_total', 'ent_orders', { name: 'total', position: 1 }),
+      ],
+    });
+    const live = await liveFrom(store);
+    const read = await importedFrom(store);
+    (read.objects.entity as Record<string, { engineProps: object }>).i_ent_v = {
+      ...read.objects.entity.i_ent_v!,
+      engineProps: { viewDefinition: 'b' },
+    };
+    const database = withDesignOnly(mergeImport(live, read).imported, live);
+    let seen: ((relation: string) => readonly string[] | undefined) | undefined;
+    await withSameViewBodies(database, live, (_a, _b, columns) => {
+      seen = columns;
+      return Promise.resolve(false);
+    });
+
+    expect(seen?.('orders')).toEqual(['id', 'total']);
+    expect(seen?.('missing')).toBeUndefined();
+  });
 });
 
 describe('mergeImport', () => {

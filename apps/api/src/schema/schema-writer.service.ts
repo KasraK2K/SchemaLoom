@@ -29,6 +29,7 @@ import {
 } from './ops';
 import { postImages } from './post-images';
 import { assertEngineProps } from './props-validation';
+import { refreshRefs } from './refs';
 import type { SchemaDb } from './row-read';
 import { createRow, replaceChildren, updateRow } from './row-write';
 import { requirementsOf } from './requirements';
@@ -223,6 +224,15 @@ export class SchemaWriter {
           for (const id of moved) touched.push({ type: 'field', id });
           break;
         }
+      }
+    }
+
+    // Doc 03 §3.1: persist the engine's refs, or VisibilityFilter has nothing to blank by.
+    // A move only reorders fields, which no expression depends on.
+    if (engine !== null && ops.some((op) => op.op !== 'move')) {
+      const seen = new Set(touched.map((t) => `${t.type}:${t.id}`));
+      for (const ref of await refreshRefs(tx, projectId, engine)) {
+        if (!seen.has(`${ref.type}:${ref.id}`)) touched.push(ref);
       }
     }
 

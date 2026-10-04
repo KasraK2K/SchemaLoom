@@ -77,11 +77,22 @@ OpenSSH bastion.
 
 Small fixes that don't need a design doc. Pick one up freely.
 
+- Built 2026-10-04: `refs` (doc 03 §3.1) are persisted. Every write recomputes them for the
+  project (`src/schema/refs.ts`); before this no write stored them, so VisibilityFilter
+  blanked every default, CHECK and view body for partial viewers and couldn't badge an index
+  or constraint name mentioning a hidden column. Existing installs run
+  `node dist/refs-backfill.cli.js` once (`docs/deploy.md`).
+- Built 2026-10-04: e2e workflow 17 covers rows 8, 7b, 18 and 13 (ORM exports, Prisma import,
+  model code, `.db` upload in the browser). It found that models pasted without a
+  `datasource` block failed to import; they now read as the project's own database. The AI
+  panel's Code mode still has no e2e (it needs an AI key).
+
 - Built 2026-10-04: a view's text no longer reads as drift. Servers re-print a view body
   (pg_dump adds casts and `public.`, MySQL qualifies and aliases every column, MariaDB drops
   parentheses), so drift asks the engine (`EngineDefinition.sameViewBody`) whether two bodies
-  parse to the same query once those spellings are undone. Still reads as changed: a
-  multi-table view written with unqualified columns, which the server qualifies.
+  parse to the same query once those spellings are undone. A join written with unqualified
+  columns matches too: drift passes the database's columns, so each bare name is owned by the
+  one joined table that has it (a name two tables share is left alone).
 - Built 2026-10-02 with 9b: drift no longer reports SchemaLoom-only attributes (docs, PII and
   restricted flags, areas) or store defaults (`customTypeId: null`, `asc` index columns) as
   changes, for every engine. Found by reading a live MariaDB. The PostgreSQL importer leaves

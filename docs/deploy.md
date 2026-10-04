@@ -73,6 +73,10 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
   it before it ages out: `SELECT * FROM audit_log WHERE organization_id = '<org id>'`.
 - **Engine major bumps:** projects on an older engine major are read-only (writes answer 423) until an operator runs `node dist/engine-upgrade.cli.js --all` in the api image. Each
   project converts in one transaction or not at all.
+- **Expression refs (once, upgrading from before 2026-10-04):** run
+  `node dist/refs-backfill.cli.js` in the api image. Older rows have no `refs`, so partial
+  viewers see every default, CHECK and view body blanked, and an index or constraint name that
+  mentions a hidden column isn't badged. Safe to re-run; new writes keep refs current.
 - **Replicas:** run **one**. Realtime is single-node (phase4 DESIGN) and the BullMQ
   workers are in-process (Q30).
 

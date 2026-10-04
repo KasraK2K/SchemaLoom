@@ -51,6 +51,28 @@ describe('sameViewBody', () => {
     ).toBe(false);
   });
 
+  it('matches a join written without qualifiers, given the columns of each table', async () => {
+    const columns = (t: string) =>
+      ({ orders: ['id', 'total', 'customer_id'], customers: ['id', 'name'] })[t];
+    const written = 'select total, name from orders o join customers c on c.id = customer_id';
+    const printed =
+      'SELECT o.total,\n    c.name\n   FROM (public.orders o\n     JOIN public.customers c ON ((c.id = o.customer_id)));';
+    expect(await sameViewBody(written, printed, columns)).toBe(true);
+    // Without the columns, or when a table is unknown, nothing is guessed.
+    expect(await sameViewBody(written, printed)).toBe(false);
+    expect(
+      await sameViewBody(written, printed, (t) => (t === 'orders' ? ['total'] : undefined)),
+    ).toBe(false);
+    // The qualifier still matters.
+    expect(
+      await sameViewBody(
+        'select c.name from orders o join customers c on c.id = o.customer_id',
+        'SELECT o.name FROM (public.orders o JOIN public.customers c ON ((c.id = o.customer_id)));',
+        columns,
+      ),
+    ).toBe(false);
+  });
+
   it('is false when a side does not parse', async () => {
     expect(await sameViewBody('select id from orders', 'select id from')).toBe(false);
   });

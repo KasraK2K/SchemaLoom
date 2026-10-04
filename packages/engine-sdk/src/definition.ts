@@ -23,6 +23,9 @@ export type EngineParadigm = 'relational' | 'document' | 'key-value' | 'wide-col
  * entry. `EngineDefinition extends EngineStaticFacet`, so there is one object at runtime on the
  * server and no duplicated data.
  */
+/** Drift — a relation's column names in the database read; undefined when it isn't there. */
+export type ViewColumns = (relation: string) => readonly string[] | undefined;
+
 export interface EngineStaticFacet {
   readonly id: EngineId;
   /** 'PostgreSQL' */
@@ -86,8 +89,10 @@ export interface EngineDefinition extends EngineStaticFacet {
   /** Drift — whether two view bodies are the same query in different spellings (a server
    *  re-prints the body it was given: parentheses, casts, qualification). Engine-specific
    *  and lossy on purpose, so only drift uses it; false whenever either side won't parse.
-   *  Absent: drift compares the text. */
-  readonly sameViewBody?: (a: string, b: string) => Promise<boolean>;
+   *  Absent: drift compares the text. `columns` names a relation's columns in the database
+   *  read, so a join's unqualified column can be matched to the table the server qualifies it
+   *  with; undefined for a relation it doesn't know. */
+  readonly sameViewBody?: (a: string, b: string, columns?: ViewColumns) => Promise<boolean>;
   /** §11.2 — phase-gated; presence must equal `features.migrations` */
   readonly migrationGenerator?: MigrationGenerator;
   /** Phase 2 — `QueryValidator` (§12). Presence must equal `features.queryValidation`. */

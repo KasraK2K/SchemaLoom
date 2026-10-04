@@ -549,3 +549,56 @@ describe('SchemaWriter — saved-query invalidation (doc 02 SavedQuery)', () => 
     expect(resets(prisma)).toHaveLength(1);
   });
 });
+
+describe('SchemaWriter — refs (doc 03 §3.1)', () => {
+  // A view naming `ent_orders.fld_total`, and an engine that says so.
+  const store = () =>
+    baseStore({
+      ...world(),
+      entity: [
+        entityRow('ent_orders', { version: 2 }),
+        entityRow('ent_users'),
+        entityRow('ent_v', { kind: 'view', engineProps: { viewDefinition: 'select fld_total' } }),
+      ],
+    });
+  const engine = {
+    extractReferences: (object: { id: string }) =>
+      object.id === 'ent_v'
+        ? [
+            { type: 'entity', id: 'ent_orders' },
+            { type: 'field', id: 'fld_total' },
+          ]
+        : [],
+  };
+  const gate = { checkWrite: () => Promise.resolve(engine) } as unknown as EngineGate;
+
+  it('persists the engine’s refs after a write and sends the object that changed', async () => {
+    const s = store();
+    const { prisma, context } = harness(s);
+    const writer = new SchemaWriter(prisma.client, resolver().service, new SchemaCommits(), gate);
+
+    const result = await writer.apply(
+      batch([
+        { op: 'update', type: 'entity', id: 'ent_users', expectedVersion: 0, patch: { name: 'u' } },
+      ]),
+      await context(),
+    );
+
+    const view = prisma.store.entity?.find((r) => r.id === 'ent_v');
+    expect(view?.refs).toEqual({ entityIds: ['ent_orders'], fieldIds: ['fld_total'] });
+    expect(view?.version).toBe(0);
+    expect(Object.keys(result.changed.entity ?? {}).sort()).toEqual(['ent_users', 'ent_v']);
+
+    // Already current: the next write leaves it alone.
+    await writer.apply(
+      batch([
+        { op: 'update', type: 'entity', id: 'ent_users', expectedVersion: 1, patch: { name: 'w' } },
+      ]),
+      await context(),
+    );
+    const writes = prisma
+      .callsTo('entity', 'updateMany')
+      .filter((c) => (c.args as { data?: { refs?: unknown } }).data?.refs !== undefined);
+    expect(writes).toHaveLength(1);
+  });
+});

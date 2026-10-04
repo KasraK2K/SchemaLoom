@@ -1,3 +1,4 @@
+import type { EngineDefinition } from '@schemaloom/engine-sdk';
 import {
   IR_OBJECT_TYPES,
   logicalKey,
@@ -183,15 +184,26 @@ export function withDesignOnly(database: SchemaModel, design: SchemaModel): Sche
 export async function withSameViewBodies(
   database: SchemaModel,
   design: SchemaModel,
-  same: ((a: string, b: string) => Promise<boolean>) | undefined,
+  same: EngineDefinition['sameViewBody'],
 ): Promise<SchemaModel> {
   if (same === undefined) return database;
+  // The database read's columns per relation, so a join's unqualified column can be matched
+  // to the table the server qualified it with. Names are compared without case.
+  // ponytail: keyed by name alone, so same-named tables in two schemas pool their columns; a
+  // column then owned twice stays unresolved (reads as drift, the safe side).
+  const byRelation = new Map<string, string[]>();
+  for (const e of Object.values(database.objects.entity)) byRelation.set(e.name.toLowerCase(), []);
+  for (const f of Object.values(database.objects.field)) {
+    const owner = database.objects.entity[f.entityId];
+    if (owner !== undefined) byRelation.get(owner.name.toLowerCase())?.push(f.name);
+  }
+  const columns = (relation: string) => byRelation.get(relation.toLowerCase());
   const entity = { ...database.objects.entity };
   for (const [id, view] of Object.entries(entity)) {
     const theirs = view.engineProps.viewDefinition;
     const ours = design.objects.entity[id]?.engineProps.viewDefinition;
     if (typeof theirs !== 'string' || typeof ours !== 'string' || theirs === ours) continue;
-    if (await same(theirs, ours)) {
+    if (await same(theirs, ours, columns)) {
       entity[id] = { ...view, engineProps: { ...view.engineProps, viewDefinition: ours } };
     }
   }

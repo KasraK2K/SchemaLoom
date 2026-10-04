@@ -16,7 +16,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
-    "engines:upgrade": "node dist/engine-upgrade.cli.js"
+    "engines:upgrade": "node dist/engine-upgrade.cli.js",
+    "refs:backfill": "node dist/refs-backfill.cli.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
