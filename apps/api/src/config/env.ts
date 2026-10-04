@@ -111,6 +111,18 @@ export const envSchema = z
       z.stringbool().default(false),
     ),
     PG_DUMP_PATH: optionalStr,
+    // Roadmap 20 §1: who runs the BullMQ workers and schedulers. `all` (default) is one
+    // process doing everything; `api` serves HTTP and WebSocket only; `worker` runs only the
+    // jobs (`node dist/worker.js`). A split needs the realtime bus, so jobs' events reach
+    // the browsers held by the api processes.
+    PROCESS_ROLE: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.enum(['all', 'api', 'worker']).default('all'),
+    ),
+    REALTIME_BUS: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.enum(['local', 'redis']).default('local'),
+    ),
     // Phase 13 §5: an uploaded database file (SQLite), read for its schema only. Q4.
     INTROSPECT_UPLOAD_MAX_BYTES: z.preprocess(
       (v) => (v === '' ? undefined : v),
@@ -118,6 +130,14 @@ export const envSchema = z
     ),
   })
   .superRefine((env, ctx) => {
+    if (env.PROCESS_ROLE !== 'all' && env.REALTIME_BUS !== 'redis') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['REALTIME_BUS'],
+        message:
+          'must be redis when PROCESS_ROLE is api or worker: jobs run in another process and their events reach browsers through Redis',
+      });
+    }
     // §11.4: a mail provider is required. Boot fails if neither Mailgun nor SMTP is set.
     if (Boolean(env.MAILGUN_API_KEY) !== Boolean(env.MAILGUN_DOMAIN)) {
       ctx.addIssue({

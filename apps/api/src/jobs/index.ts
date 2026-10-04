@@ -6,6 +6,7 @@
  * call `ExportProcessor.run` directly, "exports go through the queue" stops being true.
  */
 export { BULL_CONNECTION, JobsModule } from './jobs.module';
+export { runsJobs } from './jobs.runtime';
 export { JobsService, JOB_QUEUES, DEFAULT_JOB_OPTIONS, type JobQueues } from './jobs.service';
 export {
   JOB_EMAIL_SEND,

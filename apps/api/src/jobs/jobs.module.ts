@@ -1,6 +1,8 @@
 import { Module, type Provider } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Queue, Worker, type Job } from 'bullmq';
 import type { Redis } from 'ioredis';
+import type { AppEnv } from '../config/env';
 import { MailModule } from '../mail/mail.module';
 import { REDIS_QUEUE } from '../redis/redis.tokens';
 import { SchemaModule } from '../schema';
@@ -16,7 +18,7 @@ import { ImportJobsController } from './import-jobs.controller';
 import { ImportProcessor } from './import.processor';
 import { AuditRetentionProcessor } from './audit-retention.processor';
 import { JOB_QUEUES, JobsService, type JobQueues } from './jobs.service';
-import { JOB_WORKERS, JobsRuntime, type Closable } from './jobs.runtime';
+import { JOB_WORKERS, JobsRuntime, runsJobs, type Closable } from './jobs.runtime';
 import {
   QUEUE_EMAIL,
   QUEUE_EXPORT,
@@ -63,6 +65,7 @@ const queuesProvider: Provider = {
 const workersProvider: Provider = {
   provide: JOB_WORKERS,
   inject: [
+    ConfigService,
     BULL_CONNECTION,
     ExportProcessor,
     EmailProcessor,
@@ -71,37 +74,42 @@ const workersProvider: Provider = {
     AuditRetentionProcessor,
   ],
   useFactory: (
+    config: ConfigService<AppEnv, true>,
     bull: BullConnection,
     exporter: ExportProcessor,
     mailer: EmailProcessor,
     validator: ValidateProcessor,
     importer: ImportProcessor,
     retention: AuditRetentionProcessor,
-  ): Closable[] => [
-    new Worker<ExportJobData, ExportJobResult>(
-      QUEUE_EXPORT,
-      (job: Job<ExportJobData>) => exporter.run(job.data),
-      bull,
-    ),
-    new Worker<EmailJobData, void>(
-      QUEUE_EMAIL,
-      (job: Job<EmailJobData>) => mailer.run(job.data),
-      bull,
-    ),
-    new Worker<ValidateJobData>(
-      QUEUE_VALIDATE,
-      async (job: Job<ValidateJobData>) => {
-        await validator.run(job.data);
-      },
-      bull,
-    ),
-    new Worker<ImportJobData, ImportJobResult>(
-      QUEUE_IMPORT,
-      (job: Job<ImportJobData>) => importer.run(job.data),
-      bull,
-    ),
-    new Worker(QUEUE_MAINTENANCE, () => retention.run(), bull),
-  ],
+  ): Closable[] =>
+    // Roadmap 20 §1: an `api` process only enqueues; a `worker` process runs these.
+    !runsJobs(config)
+      ? []
+      : [
+          new Worker<ExportJobData, ExportJobResult>(
+            QUEUE_EXPORT,
+            (job: Job<ExportJobData>) => exporter.run(job.data),
+            bull,
+          ),
+          new Worker<EmailJobData, void>(
+            QUEUE_EMAIL,
+            (job: Job<EmailJobData>) => mailer.run(job.data),
+            bull,
+          ),
+          new Worker<ValidateJobData>(
+            QUEUE_VALIDATE,
+            async (job: Job<ValidateJobData>) => {
+              await validator.run(job.data);
+            },
+            bull,
+          ),
+          new Worker<ImportJobData, ImportJobResult>(
+            QUEUE_IMPORT,
+            (job: Job<ImportJobData>) => importer.run(job.data),
+            bull,
+          ),
+          new Worker(QUEUE_MAINTENANCE, () => retention.run(), bull),
+        ],
 };
 
 /**

@@ -85,8 +85,15 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
   `node dist/refs-backfill.cli.js` in the api image. Older rows have no `refs`, so partial
   viewers see every default, CHECK and view body blanked, and an index or constraint name that
   mentions a hidden column isn't badged. Safe to re-run; new writes keep refs current.
-- **Replicas:** run **one**. Realtime is single-node (phase4 DESIGN) and the BullMQ
-  workers are in-process (Q30).
+- **Replicas and a separate worker (roadmap 20):** by default (`PROCESS_ROLE=all`,
+  `REALTIME_BUS=local`) run **one** api: it serves HTTP and WebSocket and runs every BullMQ
+  worker. To scale out, set `REALTIME_BUS=redis` on every process (realtime events then go
+  through Redis pub/sub, so each api replica pushes them to its own sockets), run the api with
+  `PROCESS_ROLE=api` (as many replicas as you like; Socket.IO runs WebSocket-only, so the proxy
+  needs no sticky sessions), and run one or more
+  workers from the same image with `PROCESS_ROLE=worker` and `node dist/worker.js` (no port, no
+  `/healthz`). `docker compose --profile split up -d` starts one. The api refuses to boot with a
+  split role and `REALTIME_BUS=local`.
 
 ### Environment
 

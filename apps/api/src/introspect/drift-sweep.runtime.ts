@@ -5,8 +5,10 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Queue, Worker } from 'bullmq';
-import { BULL_CONNECTION, DEFAULT_JOB_OPTIONS, type BullConnection } from '../jobs';
+import type { AppEnv } from '../config/env';
+import { BULL_CONNECTION, DEFAULT_JOB_OPTIONS, runsJobs, type BullConnection } from '../jobs';
 import { DriftCheckService } from './drift-check.service';
 
 export const QUEUE_DRIFT = 'drift';
@@ -30,9 +32,12 @@ export class DriftSweepRuntime implements OnApplicationBootstrap, OnModuleDestro
   constructor(
     @Inject(BULL_CONNECTION) private readonly bull: BullConnection,
     private readonly drift: DriftCheckService,
+    private readonly config: ConfigService<AppEnv, true>,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
+    // Roadmap 20 §1: the schedule and its worker live in the worker process.
+    if (!runsJobs(this.config)) return;
     this.queue = new Queue(QUEUE_DRIFT, this.bull);
     await this.queue.upsertJobScheduler(
       JOB_DRIFT_SWEEP,

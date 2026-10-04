@@ -5,9 +5,19 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { AppEnv } from '../config/env';
 import { AUDIT_RETENTION_CRON } from './audit-retention.processor';
 import { DEFAULT_JOB_OPTIONS, JOB_QUEUES, type JobQueues } from './jobs.service';
 import { JOB_AUDIT_RETENTION } from './queues';
+
+/**
+ * Roadmap 20 §1 — whether this process runs BullMQ workers and schedulers. Every place that
+ * starts one asks this; an `api` process only enqueues.
+ */
+export function runsJobs(config: ConfigService<AppEnv, true>): boolean {
+  return config.get('PROCESS_ROLE', { infer: true }) !== 'api';
+}
 
 /** The token for the workers this process runs. */
 export const JOB_WORKERS = Symbol('JOB_WORKERS');
@@ -42,6 +52,7 @@ export class JobsRuntime implements OnApplicationBootstrap, OnModuleDestroy {
   constructor(
     @Inject(JOB_WORKERS) private readonly workers: readonly Closable[],
     @Inject(JOB_QUEUES) private readonly queues: JobQueues,
+    private readonly config: ConfigService<AppEnv, true>,
   ) {}
 
   /**
@@ -49,6 +60,7 @@ export class JobsRuntime implements OnApplicationBootstrap, OnModuleDestroy {
    * id, so every boot and every replica converges on the one schedule instead of adding one.
    */
   async onApplicationBootstrap(): Promise<void> {
+    if (!runsJobs(this.config)) return;
     await this.queues.maintenance.upsertJobScheduler(
       JOB_AUDIT_RETENTION,
       { pattern: AUDIT_RETENTION_CRON, tz: 'UTC' },

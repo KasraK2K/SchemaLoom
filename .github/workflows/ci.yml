@@ -11,6 +11,11 @@ concurrency:
 
 env:
   TURBO_TELEMETRY_DISABLED: 1
+  # Roadmap 20 §2 (Phase 1 Q33): Turborepo remote cache (Vercel Remote Cache). Without the
+  # secret (forks, a fresh repo) turbo runs uncached as before; a cache miss or an
+  # unreachable cache never fails a build. A self-hosted cache also needs TURBO_API here.
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 # The `e2e` job from doc 01 §8.3 is deliberately absent until build-order step 22
 # creates `apps/web` and the `e2e` package. A job that is red from the first push

@@ -1,8 +1,14 @@
+import type { ConfigService } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
+import type { AppEnv } from '../config/env';
 import type { JobQueues } from './jobs.service';
 import { JobsRuntime, type Closable } from './jobs.runtime';
 import { AUDIT_RETENTION_CRON } from './audit-retention.processor';
 import { JOB_AUDIT_RETENTION, QUEUE_EMAIL, QUEUE_EXPORT, QUEUE_VALIDATE } from './queues';
+
+/** Roadmap 20 §1: the process role; `all` unless a test says otherwise. */
+const role = (r: 'all' | 'api' | 'worker' = 'all') =>
+  ({ get: () => r }) as unknown as ConfigService<AppEnv, true>;
 
 type CloseSpy = ReturnType<typeof vi.fn<() => Promise<void>>>;
 
@@ -39,6 +45,7 @@ describe('graceful shutdown', () => {
     await new JobsRuntime(
       workers.map((w) => w.closable),
       q.queues,
+      role(),
     ).onModuleDestroy();
 
     for (const w of workers) expect(w.close).toHaveBeenCalledTimes(1);
@@ -53,7 +60,11 @@ describe('graceful shutdown', () => {
     // allSettled, not all: one worker that will not close must not strand the other two
     // with a live blocking read against a connection the app is about to quit.
     await expect(
-      new JobsRuntime([stuck.closable, ...rest.map((w) => w.closable)], q.queues).onModuleDestroy(),
+      new JobsRuntime(
+        [stuck.closable, ...rest.map((w) => w.closable)],
+        q.queues,
+        role(),
+      ).onModuleDestroy(),
     ).resolves.toBeUndefined();
 
     for (const w of rest) expect(w.close).toHaveBeenCalledTimes(1);
@@ -70,7 +81,7 @@ describe('graceful shutdown', () => {
       return Promise.resolve();
     });
 
-    await new JobsRuntime([w.closable], q.queues).onModuleDestroy();
+    await new JobsRuntime([w.closable], q.queues, role()).onModuleDestroy();
 
     expect(order).toEqual(['worker', 'queue', 'queue', 'queue', 'queue', 'queue']);
   });
@@ -81,7 +92,7 @@ describe('the audit-retention schedule (doc 00 Q10)', () => {
     const upsertJobScheduler = vi.fn().mockResolvedValue(undefined);
     const queues = { maintenance: { upsertJobScheduler } } as unknown as JobQueues;
 
-    const runtime = new JobsRuntime([], queues);
+    const runtime = new JobsRuntime([], queues, role());
     await runtime.onApplicationBootstrap();
     await runtime.onApplicationBootstrap();
 
@@ -91,5 +102,16 @@ describe('the audit-retention schedule (doc 00 Q10)', () => {
       expect(repeat).toEqual({ pattern: AUDIT_RETENTION_CRON, tz: 'UTC' });
       expect(template).toMatchObject({ name: JOB_AUDIT_RETENTION });
     }
+  });
+});
+
+describe('process roles (roadmap 20 §1)', () => {
+  it('an api process schedules nothing: the worker process owns the schedule', async () => {
+    const upsertJobScheduler = vi.fn().mockResolvedValue(undefined);
+    const queues = { maintenance: { upsertJobScheduler } } as unknown as JobQueues;
+    await new JobsRuntime([], queues, role('api')).onApplicationBootstrap();
+    expect(upsertJobScheduler).not.toHaveBeenCalled();
+    await new JobsRuntime([], queues, role('worker')).onApplicationBootstrap();
+    expect(upsertJobScheduler).toHaveBeenCalledOnce();
   });
 });

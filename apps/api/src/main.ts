@@ -37,6 +37,9 @@ async function bootstrap(): Promise<void> {
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
 
   const config = app.get<ConfigService<AppEnv, true>>(ConfigService);
+  // Roadmap 20 §1: the worker role has its own entry, with no HTTP server at all.
+  if (config.get('PROCESS_ROLE', { infer: true }) === 'worker')
+    throw new Error('PROCESS_ROLE=worker runs dist/worker.js, not dist/main.js');
   // Phase 13 §5 — an uploaded database file arrives as `application/octet-stream`.
   app.useBodyParser('raw', {
     limit: config.get('INTROSPECT_UPLOAD_MAX_BYTES', { infer: true }),

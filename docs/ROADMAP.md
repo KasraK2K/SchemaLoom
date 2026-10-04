@@ -63,6 +63,7 @@ a reason to come back every week, then reach more databases and teams.
 | 17  | Appearance themes (Studio, Blueprint, Float, Compact)                         | `built` | `docs/phase17/APPEARANCE.md`         | People work differently: four layouts, densities and type styles, each with colour variants, saved per account.  |
 | 18  | AI writes ORM code (model code + queries in Prisma, Drizzle, TypeORM, Django) | `built` | `docs/phase18/AI-CODE.md`            | Teams work in their ORM, not in SQL. The answer they can paste straight into their code.                         |
 | 19  | Workspace-level sharing                                                       | `built` | `docs/phase19/DESIGN.md`             | One grant covers every project in a workspace, including later ones. Reverses Phase 1 Q1 at the owner's request. |
+| 20  | Ops: worker process, realtime over Redis, CI cache, row 15 e2e                | `built` | `docs/phase20/DESIGN.md`             | The unscheduled Phase 1 leftovers (worker split, Q33, Q32) and tests for the login paths.                        |
 
 **6a/6b verified (2026-09-30)** with pg_dump 18.6 in Docker: the api image builds, the engine's
 live spec and workflow 10 pass. That run found pg_dump 17.6+'s `\restrict` lines, which the

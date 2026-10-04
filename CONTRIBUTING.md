@@ -6,6 +6,18 @@ Contributions are welcome: bug reports, fixes, features, and docs.
 2. Fork, branch, and open a pull request.
 3. Run `pnpm typecheck && pnpm lint && pnpm test` before you push.
 
+## CI remote cache (maintainers)
+
+CI shares Turborepo's build cache when the repository has it set up, which skips any task
+whose inputs haven't changed since a previous run (roadmap 20). Once per repository:
+
+1. Create a token at vercel.com → Account Settings → Tokens, and note the team's slug.
+2. In GitHub → Settings → Secrets and variables → Actions, add the secret `TURBO_TOKEN` and
+   the variable `TURBO_TEAM`.
+
+Without them CI runs uncached, as before. Locally, `pnpm exec turbo login && pnpm exec turbo
+link` uses the same cache.
+
 ## License of contributions
 
 SchemaLoom is licensed under the PolyForm Noncommercial License 1.0.0 with the

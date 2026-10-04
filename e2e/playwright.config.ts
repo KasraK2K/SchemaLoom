@@ -52,6 +52,10 @@ export default defineConfig({
         // The SDK reads ANTHROPIC_BASE_URL; process env wins over the root .env's real key.
         ANTHROPIC_API_KEY: 'e2e-fake',
         ANTHROPIC_BASE_URL: FAKE_ANTHROPIC_URL,
+        // Mail goes to Mailpit (SMTP_URL), never the real Mailgun account in the root .env.
+        // Blank counts as unset (`env.ts`); workflow 19 reads the sign-in link from Mailpit.
+        MAILGUN_API_KEY: '',
+        MAILGUN_DOMAIN: '',
       },
     },
     {

@@ -1,7 +1,9 @@
 import { Inject, Injectable, Module, type OnModuleDestroy, type Provider } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Queue, Worker, type Job } from 'bullmq';
+import type { AppEnv } from '../config/env';
 import { DocsModule } from '../docs';
-import { BULL_CONNECTION, JobsModule, type BullConnection } from '../jobs';
+import { BULL_CONNECTION, JobsModule, runsJobs, type BullConnection } from '../jobs';
 import { SchemaModule } from '../schema';
 import { AiController } from './ai.controller';
 import { AiProvider } from './ai.provider';
@@ -20,22 +22,26 @@ const queueProvider: Provider = {
  */
 @Injectable()
 class DocDraftWorker implements OnModuleDestroy {
-  private readonly worker: Worker<DocDraftJobData>;
+  private readonly worker: Worker<DocDraftJobData> | null;
 
   constructor(
     ai: AiService,
     @Inject(BULL_CONNECTION) bull: BullConnection,
     @Inject(AI_DOC_DRAFTS) private readonly queue: Queue,
+    config: ConfigService<AppEnv, true>,
   ) {
-    this.worker = new Worker<DocDraftJobData>(
-      AI_DOC_DRAFTS_QUEUE,
-      (job: Job<DocDraftJobData>) => ai.runDocDraftJob(job.data, job.id ?? null),
-      bull,
-    );
+    // Roadmap 20 §1: an `api` process only enqueues drafts.
+    this.worker = runsJobs(config)
+      ? new Worker<DocDraftJobData>(
+          AI_DOC_DRAFTS_QUEUE,
+          (job: Job<DocDraftJobData>) => ai.runDocDraftJob(job.data, job.id ?? null),
+          bull,
+        )
+      : null;
   }
 
   async onModuleDestroy(): Promise<void> {
-    await Promise.allSettled([this.worker.close(), this.queue.close()]);
+    await Promise.allSettled([this.worker?.close(), this.queue.close()]);
   }
 }
 

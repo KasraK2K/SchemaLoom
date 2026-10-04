@@ -69,6 +69,9 @@ services:
       MP_MAX_MESSAGES: 500
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      # No reverse-DNS lookup of each client: under Docker Desktop it held every SMTP greeting
+      # for 8 seconds, so each sign-up, invite and sign-in link took 8 s locally.
+      MP_SMTP_DISABLE_RDNS: 1
     ports:
       - '${MAILPIT_SMTP_PORT:-1025}:1025'
       - '${MAILPIT_UI_PORT:-8025}:8025'
@@ -163,6 +166,29 @@ services:
     environment:
       <<: *app-env
       PORT: '3001'
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  # Roadmap 20 §1: jobs in their own process (long exports or imports no longer share the
+  # api's event loop). Opt-in:  docker compose --profile split up -d
+  # and set PROCESS_ROLE=api and REALTIME_BUS=redis for the api in .env.
+  worker:
+    build: { context: ., dockerfile: apps/api/Dockerfile, network: host }
+    profiles: ['split']
+    restart: unless-stopped
+    command: ['node', 'dist/worker.js']
+    env_file: .env
+    environment:
+      <<: *app-env
+      PROCESS_ROLE: worker
+      REALTIME_BUS: redis
+    # No HTTP server, so the image's /healthz check doesn't apply.
+    healthcheck: { disable: true }
     depends_on:
       migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
