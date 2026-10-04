@@ -27,8 +27,7 @@
      character-for-character reading matters and l/1/I must not collide. Self-hosted by
      the `geist` package, which sets these two variables on <html> (layout.tsx). */
   --font-sans:
-    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    sans-serif;
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono:
     var(--font-geist-mono), ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 

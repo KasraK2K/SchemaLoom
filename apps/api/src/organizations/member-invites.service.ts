@@ -116,7 +116,9 @@ export class MemberInvitesService {
         },
         select: INVITE,
       });
-      await audit(tx, organizationId, actorId, 'org_invitation.resent', id, { email: invite.email });
+      await audit(tx, organizationId, actorId, 'org_invitation.resent', id, {
+        email: invite.email,
+      });
       return saved;
     });
     await this.send(actorId, organizationId, invite.email, token);

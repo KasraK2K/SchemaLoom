@@ -68,9 +68,9 @@ describe('SignupPolicy (docs/phase16/DESIGN.md §1)', () => {
   });
 
   it('invite mode admits a proven address with a live invite (magic link, OAuth)', async () => {
-    expect(await attempt(policy('invite', { users: 1, invited: true }), { emailProven: true })).toBe(
-      false,
-    );
+    expect(
+      await attempt(policy('invite', { users: 1, invited: true }), { emailProven: true }),
+    ).toBe(false);
     await expect(
       attempt(policy('invite', { users: 1, invited: false }), { emailProven: true }),
     ).rejects.toMatchObject({ status: 403 });

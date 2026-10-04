@@ -17,9 +17,7 @@ function harness(opts: { actor?: OrgRole | null; member?: boolean; pending?: Org
   const actor = opts.actor === undefined ? 'owner' : opts.actor;
   const pending = opts.pending === undefined ? 'member' : opts.pending;
   const invitation = {
-    findFirst: vi.fn(() =>
-      Promise.resolve(pending === null ? null : { ...ROW, orgRole: pending }),
-    ),
+    findFirst: vi.fn(() => Promise.resolve(pending === null ? null : { ...ROW, orgRole: pending })),
     findMany: vi.fn(() => Promise.resolve([ROW])),
     create: vi.fn(({ data }: { data: object }) => Promise.resolve({ ...ROW, ...data })),
     update: vi.fn(({ data }: { data: object }) => Promise.resolve({ ...ROW, ...data })),
@@ -81,9 +79,9 @@ describe('MemberInvitesService (docs/phase16/DESIGN.md §2)', () => {
     await expect(
       harness({ actor: 'member' }).invites.create('usr_actor', 'acme', 'x@y.io', 'member'),
     ).rejects.toMatchObject({ status: 403 });
-    await expect(
-      harness({ actor: null }).invites.list('usr_actor', 'acme'),
-    ).rejects.toMatchObject({ status: 404 });
+    await expect(harness({ actor: null }).invites.list('usr_actor', 'acme')).rejects.toMatchObject({
+      status: 404,
+    });
     // An admin cannot resend or revoke an owner invite an owner made either.
     await expect(
       harness({ actor: 'admin', pending: 'owner' }).invites.revoke('usr_actor', 'acme', 'inv_1'),
