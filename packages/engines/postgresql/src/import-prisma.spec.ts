@@ -95,7 +95,7 @@ model Tag {
     expect(report.statements.map((s) => [s.kind, s.status])).toEqual([
       ['datasource', 'ignored'],
       ['generator', 'ignored'],
-      ['model', 'partial'],
+      ['model', 'applied'],
       ['model', 'applied'],
     ]);
     expect(report.statements[2]?.reason).toContain('cuid() on “id” is filled in by Prisma Client');
@@ -132,6 +132,29 @@ model Tag {
     // Prisma still checks native types against that provider.
     const mysqlOnly = await importPrisma('model A {\n  id Int @id\n  b String @db.TinyText\n}\n');
     expect(mysqlOnly.report.statements[0]?.reason).toMatch(/^Prisma rejected the file/);
+  });
+
+  it('reads a Prisma 7 datasource, which has no url', async () => {
+    const { report, model } = await importPrisma(
+      'generator client {\n  provider = "prisma-client"\n}\ndatasource db {\n  provider = "postgresql"\n}\nmodel A {\n  id Int @id\n}\n',
+    );
+    expect(report.countsByStatus.failed).toBe(0);
+    expect(Object.values(model.objects.entity).map((e) => e.name)).toEqual(['A']);
+  });
+
+  it('reads a default type written with its @db attribute', async () => {
+    const { report, model } = await importPrisma(
+      'model A {\n  id Int @id @db.Integer\n  a String @db.Text\n  b Bytes @db.ByteA\n  c Float @db.DoublePrecision\n  d Json @db.JsonB\n  e BigInt @db.BigInt\n}\n',
+    );
+    expect(report.countsByStatus.partial).toBe(0);
+    expect(Object.values(model.objects.field).map((f) => f.type.name)).toEqual([
+      'integer',
+      'text',
+      'bytea',
+      'double precision',
+      'jsonb',
+      'bigint',
+    ]);
   });
 
   it("reports a file Prisma rejects with Prisma's reason", async () => {

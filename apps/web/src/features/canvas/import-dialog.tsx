@@ -19,6 +19,7 @@ import {
   fetchTemplate,
   importInto,
   importIntrospected,
+  importSourceName,
   introspectPreview,
   listTemplates,
   previewImport,
@@ -207,7 +208,7 @@ export function ImportDialog({
             ? 'Import from a database'
             : detected === 'prisma'
               ? 'Import a Prisma schema'
-              : 'Import SQL'}
+              : `Import ${importSourceName(formats)}`}
         </DialogTitle>
         <DialogDescription>
           Adds what the project does not have yet. Existing objects are left unchanged, except for
@@ -335,7 +336,7 @@ export function ImportDialog({
               <div role="group" aria-label="Import from" className="flex gap-1">
                 {(
                   [
-                    ['sql', 'SQL'],
+                    ['sql', importSourceName(formats)],
                     ['database', 'From a database'],
                   ] as const
                 ).map(([value, text]) => (
@@ -393,7 +394,7 @@ export function ImportDialog({
                   required
                   autoFocus={initialFrom !== 'describe'}
                   rows={12}
-                  aria-label="SQL"
+                  aria-label={importSourceName(formats)}
                   value={source}
                   onChange={(e) => {
                     setSource(e.target.value);

@@ -69,6 +69,11 @@ export function detectImportFormat(
   return /^\s*(datasource|generator|model)\s+\w+\s*\{/m.test(source) ? 'prisma' : undefined;
 }
 
+/** What an import accepts, for labels: "SQL or Prisma" when the engine reads Prisma. */
+export function importSourceName(formats: readonly { readonly id: string }[]): string {
+  return formats.some((f) => f.id === 'prisma') ? 'SQL or Prisma' : 'SQL';
+}
+
 export async function importInto(
   projectId: string,
   source: string,
@@ -244,8 +249,8 @@ const STARTING_POINTS = [
   {
     mode: 'import',
     icon: Upload,
-    title: 'Import SQL',
-    body: 'Paste a dump or a migration file and start from the schema you already run.',
+    title: 'Import SQL or Prisma',
+    body: 'Paste a SQL dump, a migration or a schema.prisma and start from the schema you already run.',
     action: 'Import',
   },
   {
@@ -535,7 +540,7 @@ export function NoProjects({
             ? 'Read a database'
             : mode === 'template'
               ? 'Start from a template'
-              : 'Import SQL'}
+              : `Import ${importSourceName(engine?.importFormats ?? [])}`}
       </h2>
       {fromTemplate && engine !== undefined && (
         <label className="flex flex-col gap-1 text-sm text-text">
@@ -682,7 +687,7 @@ export function NoProjects({
       {mode === 'import' && (
         <>
           <label className="flex flex-col gap-1 text-sm text-text">
-            SQL
+            {importSourceName(engine?.importFormats ?? [])}
             <textarea
               required
               rows={10}

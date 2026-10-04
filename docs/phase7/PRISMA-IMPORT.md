@@ -13,6 +13,13 @@ Builds on the shared ORM layer (`docs/phase8/DESIGN.md` §2.1).
   then read with the engine's own parser. Report ranges still point into the original file.
 - **A relation's `map:` name** isn't in the parser's output either; it's read from the field's
   line in the block.
+- **A datasource with no `url`** (Prisma 7 moved it to `prisma.config.ts`) gets a placeholder
+  `url` before parsing, since the pinned 6.19 parser still requires one (found 2026-10-05).
+- **`cuid()`/`uuid()`/`nanoid()` defaults and `@updatedAt`** are reported `applied` with a note,
+  not `partial` (changed 2026-10-05): the database never had them, so the schema lost nothing,
+  and a clean file shouldn't read as a failed import.
+- **A scalar's default type written out** (`String @db.Text`, `Bytes @db.ByteA`) matches the
+  type table by name, since the table has no native for those (found 2026-10-05).
 - **Prisma's own notes** in `///` comments ("does not contain a valid unique identifier",
   anything linking to pris.ly) are not imported as docs.
 - **MySQL's FULLTEXT** round-trips: the Prisma export now writes `@@fulltext` (which

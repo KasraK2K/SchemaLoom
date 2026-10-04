@@ -254,10 +254,13 @@ export async function importPrisma(
     datasource === undefined
       ? dialect.prismaProvider
       : /\bprovider\s*=\s*"([^"]*)"/.exec(datasource.text)?.[1];
+  // Prisma 7 moved `url` to prisma.config.ts; the pinned 6.19 parser still requires one.
   const parsed =
     datasource === undefined
       ? `${prepared.text}\ndatasource db {\n  provider = "${dialect.prismaProvider}"\n  url      = env("DATABASE_URL")\n}\n`
-      : prepared.text;
+      : /\burl\s*=/.test(datasource.text)
+        ? prepared.text
+        : prepared.text.replace(/\bdatasource\s+\w+\s*\{/, '$&\n  url = env("DATABASE_URL")');
   let datamodel: Datamodel | null = null;
   if (provider === undefined) {
     fail('The datasource block has no provider, so its database is unknown.');
@@ -300,13 +303,20 @@ export async function importPrisma(
 
     const blockOf = (keyword: string, name: string) =>
       blocks.find((b) => b.keyword === keyword && b.name === name);
-    const report = (block: PrismaBlock | undefined, ref: IrObjectRef | null, reason?: string) => {
+    // A `note` keeps the statement `applied`: it explains something the database never had
+    // (Prisma Client fills `@updatedAt` and `cuid()`), so nothing in the schema was lost.
+    const report = (
+      block: PrismaBlock | undefined,
+      ref: IrObjectRef | null,
+      reason?: string,
+      note = false,
+    ) => {
       const o = block === undefined ? undefined : outcome.get(block);
       if (o === undefined) return;
       if (ref !== null) o.produced.push(ref);
       if (reason !== undefined && !o.reasons.includes(reason)) {
         o.reasons.push(reason);
-        if (o.status === 'applied') o.status = 'partial';
+        if (!note && o.status === 'applied') o.status = 'partial';
       }
     };
 
@@ -389,6 +399,7 @@ export async function importPrisma(
               block,
               null,
               `${value.name}() on “${f.name}” is filled in by Prisma Client, not the database`,
+              true,
             );
           } else {
             report(block, null, `the default of “${f.name}” is not a database default`);
@@ -413,6 +424,7 @@ export async function importPrisma(
             block,
             null,
             `@updatedAt on “${f.name}” is filled in by Prisma Client, not the database`,
+            true,
           );
         }
         const fid = ctx.newId();
@@ -483,9 +495,18 @@ export async function importPrisma(
       const native = f.nativeType ?? null;
       if (native !== null) {
         const [nativeName, rawArgs] = native;
-        const id = Object.entries(dialect.types).find(
+        // The table has no native for a scalar's default type (`@db.Text`, `@db.ByteA`): the
+        // export leaves it out, so match the entry by its own name instead.
+        const entries = Object.entries(dialect.types);
+        const id = (entries.find(
           ([, t]) => t.prisma?.scalar === f.type && t.prisma.native === nativeName,
-        )?.[0];
+        ) ??
+          entries.find(
+            ([key, t]) =>
+              t.prisma?.scalar === f.type &&
+              t.prisma.native === undefined &&
+              key.replace(/\s/g, '') === nativeName.toLowerCase(),
+          ))?.[0];
         if (id === undefined) return null;
         const args = rawArgs.map((a) => (/^\d+$/.test(a) ? Number(a) : a));
         return reader.type(id, args.length > 0 ? args : undefined, dims);
@@ -788,7 +809,7 @@ export async function importPrisma(
     };
     countsByStatus[o.status] += 1;
     const range = rangeOf(source, block.start, block.end);
-    const reason = o.status === 'applied' ? null : o.reasons.join('; ');
+    const reason = o.reasons.length === 0 ? null : o.reasons.join('; ');
     if (o.status === 'failed') {
       diagnostics.push({
         code: reader.importFailedCode,

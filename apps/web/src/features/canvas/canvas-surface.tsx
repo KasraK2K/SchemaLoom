@@ -37,6 +37,7 @@ import { CanvasEmptyState } from './empty-state';
 import { EntityNode } from './entity-node';
 import { createGeometryAutosave, postGeometry } from './geometry';
 import { projectShellQueryOptions } from '@/features/change-requests/change-requests-api';
+import { importSourceName } from '@/features/projects/create-project';
 import { getSavedConnection, savedConnectionKey } from '@/features/projects/saved-connection';
 // Lazy and mounted only while open: it pulls in the connection form and AI describe, and
 // its saved-connection query would otherwise fire on every canvas open.
@@ -494,7 +495,7 @@ export function CanvasSurface({
                 : [
                     {
                       id: 'import',
-                      label: 'Import SQL',
+                      label: `Import ${importSourceName(facet.capabilities.importFormats)}`,
                       onSelect: () => {
                         setImportFrom('sql');
                         setImporting(true);
@@ -708,7 +709,7 @@ export function CanvasSurface({
                     ...(canImport
                       ? {
                           import: {
-                            label: 'Import SQL',
+                            label: `Import ${importSourceName(facet.capabilities.importFormats)}`,
                             onSelect: () => {
                               setImportFrom('sql');
                               setImporting(true);

@@ -11,8 +11,8 @@ const STARTING_POINTS = [
   {
     id: 'import',
     icon: Upload,
-    title: 'Import SQL',
-    body: 'Paste a dump or a migration file, or load a template. Every object keeps its engine properties.',
+    title: 'Import SQL or Prisma',
+    body: 'Paste a SQL dump, a migration or a schema.prisma, or load a template. Every object keeps its engine properties.',
     action: 'Import',
   },
   {
