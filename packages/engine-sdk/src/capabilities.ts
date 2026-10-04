@@ -149,6 +149,14 @@ export interface ExportFormatDescriptor {
   readonly supportsDrops: boolean;
 }
 
+/** Phase 7b — `schema.prisma` read by `@schemaloom/orm` for any engine with a dialect. */
+export const PRISMA_IMPORT_FORMAT: ImportFormatDescriptor = {
+  id: 'prisma',
+  displayName: 'Prisma schema',
+  fileExtensions: ['.prisma'],
+  maxBytes: 10_000_000,
+};
+
 /** Phase 8 — the ORM formats `@schemaloom/orm` writes for any engine with a dialect. Data, so
  *  an engine's capabilities (browser-safe) can list them without loading the writers. */
 export const ORM_EXPORT_FORMATS: readonly ExportFormatDescriptor[] = [

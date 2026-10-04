@@ -15,6 +15,7 @@ import { useEngine } from '@/engines';
 import { DescribeSchema } from '@/features/ai/describe-schema';
 import { SshHostKeyNote, hasConnectionForm } from '@/features/projects/connection-form';
 import {
+  detectImportFormat,
   fetchTemplate,
   importInto,
   importIntrospected,
@@ -58,7 +59,7 @@ export function ImportDialog({
   readonly initialFrom?: 'sql' | 'database' | 'describe';
 }) {
   const facet = useEngine();
-  const format = facet.capabilities.importFormats[0];
+  const formats = facet.capabilities.importFormats;
   const connectionFields = facet.capabilities.connectionFields;
   const [from, setFrom] = useState<'sql' | 'database'>(
     initialFrom === 'database' ? 'database' : 'sql',
@@ -77,6 +78,8 @@ export function ImportDialog({
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [sshHostKey, setSshHostKey] = useState<string | undefined>(undefined);
   const [source, setSource] = useState('');
+  // Phase 7b — a pasted or chosen `schema.prisma` is read as one.
+  const detected = detectImportFormat(source, formats);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Imported | null>(null);
@@ -111,7 +114,7 @@ export function ImportDialog({
   const run = async (renames: readonly ConfirmedRename[], introspected = sourceId) => {
     const imported =
       introspected === null
-        ? await importInto(projectId, source, renames)
+        ? await importInto(projectId, source, renames, detected)
         : await importIntrospected(projectId, introspected, renames);
     await onImported();
     setResult(imported);
@@ -135,7 +138,7 @@ export function ImportDialog({
           await run([], read.sourceId);
           return;
         }
-        const preview = await previewImport(projectId, source);
+        const preview = await previewImport(projectId, source, detected);
         if (preview !== null && preview.renameCandidates.length > 0) {
           setCandidates(preview.renameCandidates);
           return;
@@ -195,7 +198,13 @@ export function ImportDialog({
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-w-2xl">
-        <DialogTitle>{from === 'database' ? 'Import from a database' : 'Import SQL'}</DialogTitle>
+        <DialogTitle>
+          {from === 'database'
+            ? 'Import from a database'
+            : detected === 'prisma'
+              ? 'Import a Prisma schema'
+              : 'Import SQL'}
+        </DialogTitle>
         <DialogDescription>
           Adds what the project does not have yet. Existing objects are left unchanged, except for
           renames you confirm.
@@ -391,7 +400,7 @@ export function ImportDialog({
                   …or choose a file
                   <input
                     type="file"
-                    accept={format?.fileExtensions.join(',')}
+                    accept={formats.flatMap((f) => f.fileExtensions).join(',')}
                     onChange={(e) => {
                       void e.target.files?.[0]?.text().then(setSource);
                     }}

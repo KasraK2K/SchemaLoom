@@ -7,6 +7,7 @@ import { buildTypeormExport } from './typeorm.js';
 
 export * from './dialect.js';
 export { compare } from './util.js';
+export { importPrisma, scanBlocks, type PrismaBlock } from './import-prisma.js';
 export { planModels, type OrmPlan } from './plan.js';
 export { defaultValue, prismaName, prismaString } from './prisma.js';
 

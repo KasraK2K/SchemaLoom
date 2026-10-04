@@ -210,7 +210,7 @@ export function snapshotContext(req: Request, projectId: string): SnapshotContex
 export class ImportController {
   constructor(private readonly snapshots: SnapshotsService) {}
 
-  @ApiOperation({ summary: 'Import SQL DDL, adding what the project does not have yet' })
+  @ApiOperation({ summary: 'Import SQL DDL or a Prisma schema, adding what the project lacks' })
   @RequirePermission('schema:edit', { project: 'projectId' })
   @Post()
   importSource(
@@ -223,6 +223,7 @@ export class ImportController {
       body.source,
       undefined,
       body.renames,
+      body.format,
     );
   }
 
@@ -237,6 +238,11 @@ export class ImportController {
     @Param('projectId') projectId: string,
     @Body() body: ImportPreviewDto,
   ): Promise<ImportPreview> {
-    return this.snapshots.preview(snapshotContext(req, projectId), body.source);
+    return this.snapshots.preview(
+      snapshotContext(req, projectId),
+      body.source,
+      undefined,
+      body.format,
+    );
   }
 }

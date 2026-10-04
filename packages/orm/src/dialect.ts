@@ -1,4 +1,12 @@
-import type { Field, Id, Index, IrObjectRef, SchemaModel } from '@schemaloom/engine-sdk';
+import type {
+  EngineProps,
+  Field,
+  Id,
+  Index,
+  IrObjectRef,
+  SchemaModel,
+  TypeRef,
+} from '@schemaloom/engine-sdk';
 
 /**
  * Phase 8 §2 — what an engine hands the ORM layer. Everything else (names, keys, relations,
@@ -67,7 +75,43 @@ export interface OrmEnum {
   readonly target: IrObjectRef;
 }
 
+/** Phase 7b — what reading a `schema.prisma` back needs from an engine. */
+export interface PrismaImportDialect {
+  readonly engineId: string;
+  /** the engine's `CODE.importStatementFailed` */
+  readonly importFailedCode: string;
+  /** used when the import options name none */
+  readonly defaultNamespace: string;
+  /** the type Prisma creates for a scalar with no `@db.*`: an `OrmDialect.types` key */
+  readonly defaults: Readonly<
+    Record<string, { readonly id: string; readonly args?: readonly (string | number)[] }>
+  >;
+  /** an enum is its own type (PostgreSQL), inline on the column (MySQL), or TEXT + CHECK */
+  readonly enums: 'type' | 'inline' | 'check';
+  /** Prisma 6 gives an implicit many-to-many table a primary key on PostgreSQL only */
+  readonly implicitManyToManyKey: 'primaryKey' | 'unique';
+  /** the IR type for a `types` key and its arguments (`int unsigned` → `int` + `unsigned`) */
+  type(
+    id: string,
+    args: readonly (string | number)[] | undefined,
+    dimensions: number,
+  ): { type: TypeRef; props: EngineProps };
+  /** `Unsupported("…")`'s text as an engine type, or null */
+  parseType(text: string): TypeRef | null;
+  /** `@default(autoincrement())`: PostgreSQL's serial, MySQL's AUTO_INCREMENT */
+  autoIncrement(type: TypeRef, props: EngineProps): { type: TypeRef; props: EngineProps };
+  /** a key column's copy without auto-increment, for an implicit many-to-many table */
+  plainType(type: TypeRef): TypeRef;
+  plainColumnProps(props: EngineProps): EngineProps;
+  /** Prisma's name for a primary key the file doesn't name */
+  primaryKeyName(table: string): string;
+  /** Prisma's index `type:` (`Gin`), or `fulltext`, as the engine's index kind */
+  indexKind(algorithm: string | undefined): string;
+  quote(name: string): string;
+}
+
 export interface OrmDialect {
+  readonly prismaImport: PrismaImportDialect;
   readonly prismaProvider: 'postgresql' | 'mysql' | 'sqlite';
   /** `drizzle-orm/<core>`, and the prefix of its builders (`pgTable`, `mysqlEnum`) */
   readonly drizzle: {

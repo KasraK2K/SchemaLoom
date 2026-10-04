@@ -98,6 +98,7 @@ export {
   type CapabilitiesInput,
   SSH_TUNNEL_FIELDS,
   ORM_EXPORT_FORMATS,
+  PRISMA_IMPORT_FORMAT,
   isSecretField,
   type ConnectionField,
   visibleFields,

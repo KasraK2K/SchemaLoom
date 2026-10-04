@@ -55,15 +55,33 @@ type Skipped = Imported['report']['statements'];
  * Up to 5 MB inline; above that the source is queued as `text/plain` and the job polled
  * until BullMQ reports it done. Both paths answer the same `{ report, existing }`.
  */
+/**
+ * Phase 7b — `prisma` when the source is a Prisma schema and the engine reads one, else
+ * undefined (the engine's first format, SQL). A Prisma file starts its blocks with
+ * `datasource`, `generator` or `model`, which no SQL statement does.
+ */
+export function detectImportFormat(
+  source: string,
+  formats: readonly { readonly id: string }[],
+): string | undefined {
+  if (!formats.some((f) => f.id === 'prisma')) return undefined;
+  return /^\s*(datasource|generator|model)\s+\w+\s*\{/m.test(source) ? 'prisma' : undefined;
+}
+
 export async function importInto(
   projectId: string,
   source: string,
   renames: readonly ConfirmedRename[] = [],
+  format?: string,
 ): Promise<Imported> {
   const base = `/projects/${encodeURIComponent(projectId)}/import`;
-  if (new Blob([source]).size <= SYNC_IMPORT_MAX_BYTES) {
+  // The queued path takes SQL only; a Prisma schema is never near its size.
+  if (format !== undefined || new Blob([source]).size <= SYNC_IMPORT_MAX_BYTES) {
     return ImportedSchema.parse(
-      await apiFetch<unknown>(base, { method: 'POST', body: { source, renames } }),
+      await apiFetch<unknown>(base, {
+        method: 'POST',
+        body: { source, renames, ...(format === undefined ? {} : { format }) },
+      }),
     );
   }
   // The queued body is the raw SQL, so confirmed renames ride as a query parameter.
@@ -168,12 +186,13 @@ export type ImportPreview = z.infer<typeof PreviewSchema>;
 export async function previewImport(
   projectId: string,
   source: string,
+  format?: string,
 ): Promise<ImportPreview | null> {
-  if (new Blob([source]).size > SYNC_IMPORT_MAX_BYTES) return null;
+  if (format === undefined && new Blob([source]).size > SYNC_IMPORT_MAX_BYTES) return null;
   return PreviewSchema.parse(
     await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/import/preview`, {
       method: 'POST',
-      body: { source },
+      body: { source, ...(format === undefined ? {} : { format }) },
     }),
   );
 }
@@ -313,7 +332,6 @@ export function NoProjects({
   } | null>(null);
 
   const engine = engines.find((candidate) => candidate.id === engineId);
-  const importFormat = engine?.importFormats[0];
   const canImport = engines.some((candidate) => candidate.importFormats.length > 0);
   const canRead = engines.some((candidate) => candidate.connectionFields.length > 0);
   const hasTemplates = engines.some((candidate) => candidate.templates.length > 0);
@@ -470,10 +488,14 @@ export function NoProjects({
                 id,
                 (await introspectPreview(id, await databaseSource(id))).sourceId,
               )
-            : await importInto(
-                id,
-                fromTemplate ? await fetchTemplate(engineId, templateId) : source,
-              );
+            : fromTemplate
+              ? await importInto(id, await fetchTemplate(engineId, templateId))
+              : await importInto(
+                  id,
+                  source,
+                  [],
+                  detectImportFormat(source, engine?.importFormats ?? []),
+                );
         // `ignored` is SET, COMMENT, GRANT…: nothing the schema lost, so it isn't a loss.
         const notApplied = report.statements.filter(
           (s) => s.status !== 'applied' && s.status !== 'ignored',
@@ -667,7 +689,7 @@ export function NoProjects({
             …or choose a file
             <input
               type="file"
-              accept={importFormat?.fileExtensions.join(',')}
+              accept={engine?.importFormats.flatMap((f) => f.fileExtensions).join(',')}
               onChange={(e) => {
                 void e.target.files?.[0]?.text().then(setSource);
               }}

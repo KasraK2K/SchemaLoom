@@ -1,5 +1,6 @@
 import {
   ORM_EXPORT_FORMATS,
+  PRISMA_IMPORT_FORMAT,
   SSH_TUNNEL_FIELDS,
   defineCapabilities,
   type ConstraintKindDescriptor,
@@ -186,6 +187,8 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
       fileExtensions: ['.sql', '.ddl'],
       maxBytes: 10_000_000,
     },
+    // Phase 7b — read by `@schemaloom/orm`; `ddl` stays first, the default.
+    PRISMA_IMPORT_FORMAT,
   ],
   exportFormats: [
     {

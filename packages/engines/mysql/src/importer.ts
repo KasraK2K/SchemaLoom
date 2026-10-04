@@ -18,11 +18,13 @@ import type {
   SchemaModel,
   TypeRef,
 } from '@schemaloom/engine-sdk';
+import { importPrisma } from '@schemaloom/orm';
 import { CAPABILITIES, isMariaDb } from './capabilities.js';
 import { ImportModel } from './import-model.js';
 import { CODE } from './messages.js';
 import { loadMySqlParser, parseErrorMessage, type Ast, type MySqlParser } from './parser.js';
 import { seatReferences } from './references.js';
+import { ORM_DIALECT } from './orm-types.js';
 import {
   excerptOf,
   leadingWords,
@@ -908,7 +910,11 @@ async function importDdl(
 }
 
 export const IMPORTER: Importer = {
-  import(source, options, ctx) {
-    return importDdl(source, options, ctx);
+  async import(source, options, ctx) {
+    if (options.format !== 'prisma') return importDdl(source, options, ctx);
+    // Phase 7b — `schema.prisma`, read by the ORM layer through this engine's type table.
+    const result = await importPrisma(source, options, ctx, ORM_DIALECT);
+    seatReferences(result.model);
+    return result;
   },
 };

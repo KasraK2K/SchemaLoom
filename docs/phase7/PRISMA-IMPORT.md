@@ -1,8 +1,30 @@
 # Phase 7b: Prisma import
 
-Status: **approved 2026-10-04** with every default in the open-questions table. Roadmap row 7b.
-Builds on the shared ORM layer (`docs/phase8/DESIGN.md` §2.1), so it lands after row 8's
-first step.
+Status: **approved 2026-10-04** with every default in the open-questions table, and **built**
+the same day for PostgreSQL and MySQL/MariaDB (SQLite gets it with row 13). Roadmap row 7b.
+Builds on the shared ORM layer (`docs/phase8/DESIGN.md` §2.1).
+
+**As built**, where it differs from the text below:
+
+- **The parser drops three things Prisma treats as invisible**: `@@ignore` models, `@ignore`
+  fields and `Unsupported("…")` fields. They are real database objects, so the parser reads a
+  copy of the file with the ignores removed, a placeholder key on an ignored model that has
+  none (dropped again afterwards), and `String` in place of each `Unsupported`, whose type is
+  then read with the engine's own parser. Report ranges still point into the original file.
+- **A relation's `map:` name** isn't in the parser's output either; it's read from the field's
+  line in the block.
+- **Prisma's own notes** in `///` comments ("does not contain a valid unique identifier",
+  anything linking to pris.ly) are not imported as docs.
+- **MySQL's FULLTEXT** round-trips: the Prisma export now writes `@@fulltext` (which
+  `db pull` writes without a preview flag) instead of leaving it out.
+- **The queued import** (files over 5 MB) stays SQL-only; a `schema.prisma` always goes
+  through the request path.
+- **Verified** with real `prisma db pull` output from live PostgreSQL 16 and MySQL 8.4
+  databases (ignored tables, `Unsupported` columns, a second schema, a self-relation, prefix
+  and FULLTEXT indexes): every block imported, nothing failed. The e2e workflow step in §3 was
+  not added: the dev api is invite-only, so it couldn't be run here.
+- The parser is pinned to Prisma 6.19's engine build (`7.1.1-3.c2990dc…`), the one the repo's
+  `prisma` uses.
 
 ## 1. What the user sees
 

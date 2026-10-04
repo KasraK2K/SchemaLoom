@@ -303,7 +303,7 @@ export function buildPrismaExport(input: ExportInput, dialect: OrmDialect): Expo
     const method = dialect.indexMethod(index);
     if (
       ids === null ||
-      (method !== null && INDEX_TYPES[method] === undefined) ||
+      (method !== null && method !== 'fulltext' && INDEX_TYPES[method] === undefined) ||
       index.propsRedacted === true ||
       propString(index.engineProps, 'where') !== undefined
     ) {
@@ -331,8 +331,9 @@ export function buildPrismaExport(input: ExportInput, dialect: OrmDialect): Expo
         return args.length === 0 ? name : `${name}(${args.join(', ')})`;
       });
     const type = INDEX_TYPES[method ?? ''];
+    // MySQL's FULLTEXT is `@@fulltext`, which `db pull` writes without a preview flag.
     plan.blockAttrs.push(
-      `@@index(${[
+      `@@${method === 'fulltext' ? 'fulltext' : 'index'}(${[
         list(keys),
         mapArg(index.name, defaultName(plan.entity.name, columnsOf(ids), 'idx')),
         type === undefined ? null : `type: ${type}`,

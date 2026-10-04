@@ -730,6 +730,28 @@ describe('SnapshotsService.importSource with confirmed renames (Phase 4 Q1)', ()
     expect(h.writeCalls()).toEqual([]);
   });
 
+  it('reads the format the caller names, and refuses one the engine lacks (Phase 7b)', async () => {
+    const h = harness(project(), { realEngine: true });
+    const prisma = [
+      'datasource db {',
+      '  provider = "postgresql"',
+      '  url      = env("DATABASE_URL")',
+      '}',
+      'model invoices {',
+      '  id Int @id',
+      '}',
+    ].join('\n');
+
+    const preview = await h.service.preview(CTX, prisma, undefined, 'prisma');
+    expect(preview.creates).toEqual(['invoices']);
+
+    await expect(h.service.preview(CTX, prisma, undefined, 'yaml')).rejects.toMatchObject({
+      status: 422,
+      response: { code: 'import_format_unsupported', format: 'yaml' },
+    });
+    expect(h.writeCalls()).toEqual([]);
+  });
+
   it('applies the renames FIRST as update ops, keeping ids, then merges additively', async () => {
     const h = harness(project(), { imported: await renamedSql() });
 

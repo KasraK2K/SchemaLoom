@@ -1,4 +1,4 @@
-import type { Field, Id } from '@schemaloom/engine-sdk';
+import type { Field, Id, TypeRef } from '@schemaloom/engine-sdk';
 import { compare, type OrmDialect, type OrmEnum, type OrmTypeEntry } from '@schemaloom/orm';
 import { renderType } from './exporter.js';
 import { CODE } from './messages.js';
@@ -238,7 +238,51 @@ const INTEGERS = new Set(['tinyint', 'smallint', 'mediumint', 'int', 'bigint']);
 
 const isEnum = (field: Field): boolean => field.type.name.toLowerCase() === 'enum';
 
+const BUILTIN = { customTypes: [], namespaceName: null };
+const buildType = (name: string, args?: readonly (string | number)[]): TypeRef =>
+  TYPE_CATALOG.buildRef({ name, ...(args === undefined ? {} : { args }) }, BUILTIN);
+
 export const ORM_DIALECT: OrmDialect = {
+  prismaImport: {
+    engineId: 'mysql',
+    importFailedCode: CODE.importStatementFailed,
+    defaultNamespace: '',
+    // What `prisma migrate` creates for a scalar written without `@db.*`.
+    defaults: {
+      String: { id: 'varchar', args: [191] },
+      Int: { id: 'int' },
+      BigInt: { id: 'bigint' },
+      Float: { id: 'double' },
+      Decimal: { id: 'decimal', args: [65, 30] },
+      DateTime: { id: 'datetime', args: [3] },
+      Boolean: { id: 'boolean' },
+      Json: { id: 'json' },
+      Bytes: { id: 'longblob' },
+    },
+    enums: 'inline',
+    implicitManyToManyKey: 'unique',
+    type(id, args) {
+      const unsigned = id.endsWith(' unsigned');
+      return {
+        type: buildType(unsigned ? id.slice(0, -' unsigned'.length) : id, args),
+        props: unsigned ? { unsigned: true } : {},
+      };
+    },
+    parseType(text) {
+      const parsed = /^\s*([^()]+?)\s*(?:\(([^)]*)\))?\s*$/.exec(text);
+      if (parsed?.[1] === undefined) return null;
+      const args = parsed[2]
+        ?.split(',')
+        .map((a) => (/^\s*\d+\s*$/.test(a) ? Number(a) : a.trim().replace(/^'|'$/g, '')));
+      return buildType(parsed[1], args);
+    },
+    autoIncrement: (type, props) => ({ type, props: { ...props, autoIncrement: true } }),
+    plainType: (type) => type,
+    plainColumnProps: (props) => (props.unsigned === true ? { unsigned: true } : {}),
+    primaryKeyName: () => 'PRIMARY',
+    indexKind: (algorithm) => (algorithm === 'fulltext' ? 'fulltext' : 'btree'),
+    quote: (name) => `\`${name.replace(/`/g, '``')}\``,
+  },
   prismaProvider: 'mysql',
   drizzle: { core: 'mysql-core', prefix: 'mysql' },
   namedEnums: false,

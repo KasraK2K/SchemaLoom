@@ -30,6 +30,9 @@ export const ConfirmedRenamesSchema = z
 /** `POST /projects/:projectId/import/preview`. */
 export const ImportPreviewSchema = z.object({
   source: z.string().min(1).max(5_000_000),
+  /** Phase 7b — one of the engine's `importFormats` (`prisma`); the first one when absent.
+   *  The service checks it against the project's engine. */
+  format: z.string().min(1).max(64).optional(),
 });
 
 export class ImportPreviewDto extends createZodDto(ImportPreviewSchema) {}

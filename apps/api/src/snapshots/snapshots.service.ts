@@ -667,8 +667,9 @@ export class SnapshotsService {
     source: string,
     maxBytes: number = SYNC_IMPORT_MAX_BYTES,
     renames: readonly ConfirmedRename[] = [],
+    format?: string,
   ): Promise<ImportOutcome> {
-    const { project, model, report, docs } = await this.parseSource(ctx, source, maxBytes);
+    const { project, model, report, docs } = await this.parseSource(ctx, source, maxBytes, format);
 
     let merged = mergeImport(project.live, model);
     const renaming = renames.length === 0 ? [] : renameOps(project.live, merged.imported, renames);
@@ -739,8 +740,9 @@ export class SnapshotsService {
     ctx: SnapshotContext,
     source: string,
     maxBytes: number = SYNC_IMPORT_MAX_BYTES,
+    format?: string,
   ): Promise<ImportPreview> {
-    const { project, model } = await this.parseSource(ctx, source, maxBytes);
+    const { project, model } = await this.parseSource(ctx, source, maxBytes, format);
     const merged = mergeImport(project.live, model);
     return {
       creates: Object.values(merged.imported.objects.entity)
@@ -785,6 +787,7 @@ export class SnapshotsService {
     ctx: SnapshotContext,
     source: string,
     maxBytes: number,
+    format?: string,
   ): Promise<{
     project: LiveProject;
     model: SchemaModel;
@@ -794,7 +797,7 @@ export class SnapshotsService {
   }> {
     const visibility = this.filter.contextFrom(ctx.subject, ctx.projectId, ctx.map, ctx.skel);
     assertFullProjectView(visibility);
-    return this.importAgainstLive(ctx.projectId, source, maxBytes);
+    return this.importAgainstLive(ctx.projectId, source, maxBytes, format);
   }
 
   /** The source through the engine's importer, against the live project. No access check:
@@ -803,6 +806,7 @@ export class SnapshotsService {
     projectId: string,
     source: string,
     maxBytes: number,
+    formatId?: string,
   ): Promise<{
     project: LiveProject;
     model: SchemaModel;
@@ -816,9 +820,16 @@ export class SnapshotsService {
 
     const project = await loadLiveProject(this.prisma, projectId);
     const engine = this.registry.tryGet(project.engineId);
-    const format = engine?.capabilities.importFormats[0];
-    if (engine?.importer === undefined || format === undefined) {
+    const formats = engine?.capabilities.importFormats ?? [];
+    const format = formatId === undefined ? formats[0] : formats.find((f) => f.id === formatId);
+    if (engine?.importer === undefined || formats.length === 0) {
       throw new UnprocessableEntityException({ code: 'engine.import_unavailable' });
+    }
+    if (format === undefined) {
+      throw new UnprocessableEntityException({
+        code: 'import_format_unsupported',
+        format: formatId,
+      });
     }
 
     const {

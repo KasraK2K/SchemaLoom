@@ -250,7 +250,67 @@ function resolveField(field: Field, model: SchemaModel): ReturnType<typeof TYPE_
   return resolved;
 }
 
+const BUILTIN = { customTypes: [], namespaceName: null };
+const buildType = (name: string, args?: readonly (string | number)[], dimensions = 0): TypeRef =>
+  TYPE_CATALOG.buildRef(
+    { name, ...(args === undefined ? {} : { args }), ...(dimensions > 0 ? { dimensions } : {}) },
+    BUILTIN,
+  );
+
+/** `@default(autoincrement())` makes a serial; the join table's copy is the plain integer. */
+const TO_SERIAL: Readonly<Record<string, string>> = {
+  smallint: 'smallserial',
+  integer: 'serial',
+  bigint: 'bigserial',
+};
+const FROM_SERIAL: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(TO_SERIAL).map(([plain, serial]) => [serial, plain]),
+);
+
+const canonical = (type: TypeRef): string =>
+  TYPE_CATALOG.resolve(type, BUILTIN).descriptor?.id ?? type.name;
+
 export const ORM_DIALECT: OrmDialect = {
+  prismaImport: {
+    engineId: 'postgresql',
+    importFailedCode: CODE.importStatementFailed,
+    defaultNamespace: 'public',
+    // What `prisma migrate` creates for a scalar written without `@db.*`.
+    defaults: {
+      String: { id: 'text' },
+      Int: { id: 'integer' },
+      BigInt: { id: 'bigint' },
+      Float: { id: 'double precision' },
+      Decimal: { id: 'numeric', args: [65, 30] },
+      DateTime: { id: 'timestamp', args: [3] },
+      Boolean: { id: 'boolean' },
+      Json: { id: 'jsonb' },
+      Bytes: { id: 'bytea' },
+    },
+    enums: 'type',
+    implicitManyToManyKey: 'primaryKey',
+    type: (id, args, dimensions) => ({ type: buildType(id, args, dimensions), props: {} }),
+    parseType(text) {
+      const parsed = /^\s*([^()]+?)\s*(?:\(([^)]*)\))?\s*(\[\])?\s*$/.exec(text);
+      if (parsed?.[1] === undefined) return null;
+      const args = parsed[2]?.split(',').map((a) => (/^\s*\d+\s*$/.test(a) ? Number(a) : a.trim()));
+      return buildType(parsed[1], args, parsed[3] === undefined ? 0 : 1);
+    },
+    autoIncrement(type, props) {
+      const serial = TO_SERIAL[canonical(type)];
+      return serial === undefined
+        ? { type, props: { ...props, identity: 'byDefault' } }
+        : { type: buildType(serial), props };
+    },
+    plainType(type) {
+      const plain = FROM_SERIAL[canonical(type)];
+      return plain === undefined ? type : buildType(plain);
+    },
+    plainColumnProps: () => ({}),
+    primaryKeyName: (table) => `${table}_pkey`,
+    indexKind: (algorithm) => (algorithm === undefined ? 'btree' : algorithm.toLowerCase()),
+    quote: (name) => `"${name.replace(/"/g, '""')}"`,
+  },
   prismaProvider: 'postgresql',
   drizzle: { core: 'pg-core', prefix: 'pg' },
   namedEnums: true,

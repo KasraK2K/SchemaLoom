@@ -22,9 +22,9 @@ model customers {
   updated_at DateTime         @default(now()) @db.Timestamp(0)
   orders     orders[]
 
+  @@fulltext([bio], map: "ft_bio")
   @@index([email(length: 20)], map: "idx_email_prefix")
 
-  // Not supported by Prisma, left out: index "ft_bio"
   // Not supported by Prisma, left out: index "idx_status_lower"
 }
 

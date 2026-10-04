@@ -149,7 +149,7 @@ describe('the server definition', () => {
   });
 
   it('describes the formats the importer and exporter implement', () => {
-    expect(caps.importFormats.map((f) => f.id)).toEqual(['ddl']);
+    expect(caps.importFormats.map((f) => f.id)).toEqual(['ddl', 'prisma']);
     expect(caps.exportFormats.map((f) => f.id)).toEqual([
       'ddl',
       'prisma',
