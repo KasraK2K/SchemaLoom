@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { FAKE_ANTHROPIC_URL } from './fixtures/api';
 
 /**
  * Doc 01 §12.2. Playwright starts both apps itself, so `pnpm test:e2e` behaves the same
@@ -30,6 +31,12 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
+      // Workflow 3's AI steps: the api's Anthropic calls land here (scripts/fake-anthropic.ts).
+      command: 'node --experimental-strip-types scripts/fake-anthropic.ts',
+      url: `${FAKE_ANTHROPIC_URL}/calls`,
+      reuseExistingServer: process.env.CI === undefined,
+    },
+    {
       command: 'pnpm --filter @schemaloom/api start',
       url: `${API_URL}/healthz`,
       reuseExistingServer: process.env.CI === undefined,
@@ -42,6 +49,9 @@ export default defineConfig({
         INTROSPECT_ALLOW_PRIVATE_HOSTS: 'true',
         // Roadmap 16: workflow 1 signs up strangers; workflow 13 covers invite-only.
         SIGNUP_MODE: 'open',
+        // The SDK reads ANTHROPIC_BASE_URL; process env wins over the root .env's real key.
+        ANTHROPIC_API_KEY: 'e2e-fake',
+        ANTHROPIC_BASE_URL: FAKE_ANTHROPIC_URL,
       },
     },
     {

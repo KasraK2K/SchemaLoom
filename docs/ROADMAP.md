@@ -84,8 +84,11 @@ Small fixes that don't need a design doc. Pick one up freely.
   `node dist/refs-backfill.cli.js` once (`docs/deploy.md`).
 - Built 2026-10-04: e2e workflow 17 covers rows 8, 7b, 18 and 13 (ORM exports, Prisma import,
   model code, `.db` upload in the browser). It found that models pasted without a
-  `datasource` block failed to import; they now read as the project's own database. The AI
-  panel's Code mode still has no e2e (it needs an AI key).
+  `datasource` block failed to import; they now read as the project's own database.
+- Built 2026-10-04: the AI panel runs end to end without a key. The e2e api's
+  `ANTHROPIC_BASE_URL` points at `e2e/scripts/fake-anthropic.ts`, which records what it is
+  sent, so workflow 3 covers Code mode in the browser and checks that a masked column never
+  reaches the provider. Locally it runs with `E2E_FAKE_AI=1` once Playwright starts the api.
 
 - Built 2026-10-04: a view's text no longer reads as drift. Servers re-print a view body
   (pg_dump adds casts and `public.`, MySQL qualifies and aliases every column, MariaDB drops

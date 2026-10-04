@@ -17,6 +17,8 @@ import { DEMO_PASSWORD } from './seed-ids';
  */
 
 export const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3001';
+/** `scripts/fake-anthropic.ts`; the e2e api's ANTHROPIC_BASE_URL. */
+export const FAKE_ANTHROPIC_URL = 'http://127.0.0.1:3009';
 
 export interface Session {
   readonly api: APIRequestContext;

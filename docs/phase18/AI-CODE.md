@@ -14,8 +14,9 @@ model code comes from it.
 - The thread's selection is the Models pane's selection, so the pane matches what the AI was
   given.
 - The code is shown in a plain monospace block with Copy; there's no syntax highlighting yet.
-- The workflow 3 e2e step was not added: the dev api is invite-only, so it couldn't be run
-  here. The service spec covers the turn with the real engine, its redaction and L25.
+- The workflow 3 e2e step runs against `e2e/scripts/fake-anthropic.ts` (the api's
+  `ANTHROPIC_BASE_URL`), added after the first build. The service spec still covers the turn
+  with the real engine, its redaction and L25.
 
 Decided with the owner before writing (2026-10-04): **both kinds of code**. Model code (the
 Prisma, Drizzle, TypeORM or Django definitions) comes from the exporters, so it is exact and
