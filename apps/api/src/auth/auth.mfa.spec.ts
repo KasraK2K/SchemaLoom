@@ -21,7 +21,12 @@ function setup(
   users: UserRow[],
   consumed: { userId: string | null; email: string } = { userId: null, email: '' },
 ) {
+  const audit = vi.fn().mockResolvedValue({});
+  const enforced = vi.fn().mockResolvedValue(null);
   const prisma = {
+    auditLog: { create: audit },
+    // Roadmap 14 §1.3: no org enforces SSO unless a test says so.
+    ssoConnection: { findFirst: enforced },
     user: {
       findUnique: ({ where }: { where: { id: string } }) =>
         Promise.resolve(users.find((u) => u.id === where.id) ?? null),
@@ -88,7 +93,7 @@ function setup(
         create(prisma),
     } as unknown as SignupPolicy,
   );
-  return { auth, tokens, twoFactor, users };
+  return { auth, tokens, twoFactor, users, audit, enforced };
 }
 
 const plain: UserRow = {
@@ -106,10 +111,41 @@ const guarded: UserRow = {
 
 describe('the 2FA login gate', () => {
   it('opens a session for a user without 2FA', async () => {
-    const { auth, tokens } = setup([{ ...plain }]);
-    const outcome = await auth.issueSession('u1', {});
+    const { auth, tokens, audit } = setup([{ ...plain }]);
+    const outcome = await auth.issueSession('u1', { method: 'password', ip: '10.0.0.1' });
     expect(isMfaChallenge(outcome)).toBe(false);
     expect(tokens.startSession).toHaveBeenCalledOnce();
+    // Roadmap 14: every session opened leaves an `auth.login` row saying how.
+    expect(audit).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'auth.login',
+        actorUserId: 'u1',
+        ip: '10.0.0.1',
+        metadata: { method: 'password' },
+      }) as unknown,
+    });
+  });
+
+  it('refuses every non-SSO way in for a member whose org enforces SSO (roadmap 14 §1.3)', async () => {
+    const { auth, tokens, enforced } = setup([{ ...plain }]);
+    enforced.mockResolvedValue({ id: 'sso1', name: 'Acme Okta' });
+    await expect(auth.issueSession('u1', { method: 'password' })).rejects.toMatchObject({
+      response: { code: 'sso_required', connectionId: 'sso1' },
+    });
+    expect(tokens.startSession).not.toHaveBeenCalled();
+  });
+
+  it('an SSO sign-in opens a session in the connection’s org with no TOTP challenge', async () => {
+    const { auth, tokens, audit } = setup([{ ...guarded }]);
+    const bundle = await auth.openSsoSession('u2', {}, 'org1');
+    expect(isMfaChallenge(bundle)).toBe(false);
+    expect(tokens.startSession).toHaveBeenCalledOnce();
+    expect(audit).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'auth.login',
+        metadata: { method: 'sso' },
+      }) as unknown,
+    });
   });
 
   it('gives a 2FA user a challenge and NO refresh family', async () => {

@@ -54,6 +54,8 @@ describe('OrganizationsController route markers', () => {
       'DELETE /api/organizations/:orgSlug/members/:userId',
       'DELETE /api/organizations/:orgSlug/roles/:roleId',
       'GET /api/organizations',
+      'GET /api/organizations/:orgSlug/audit-log',
+      'GET /api/organizations/:orgSlug/audit-log.csv',
       'GET /api/organizations/:orgSlug/groups',
       'GET /api/organizations/:orgSlug/invitations',
       'GET /api/organizations/:orgSlug/members',

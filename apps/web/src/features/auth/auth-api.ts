@@ -57,6 +57,15 @@ export async function requestMagicLink(email: string, next?: string): Promise<vo
   await apiFetch<unknown>('/auth/magic-link', { method: 'POST', body: { email, next } });
 }
 
+/** Roadmap 14 — the SSO connections that sign this address in (names only). */
+export async function discoverSso(email: string): Promise<{ id: string; name: string }[]> {
+  const data = await apiFetch<{ connections: { id: string; name: string }[] }>(
+    '/auth/sso/discover',
+    { method: 'POST', body: { email } },
+  );
+  return data.connections;
+}
+
 export async function consumeMagicLink(token: string): Promise<LoginResult> {
   const data = await apiFetch<unknown>('/auth/magic-link/consume', {
     method: 'POST',

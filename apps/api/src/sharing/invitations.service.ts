@@ -128,11 +128,26 @@ export class InvitationsService {
 
       // 1. Membership FIRST (R11). Without it R12.2 kills the grant and the invitee lands
       //    on a 404. `update: {}` — an existing member is never downgraded to guest.
+      const key = { organizationId_userId: { organizationId: inv.organizationId, userId } };
+      const joined =
+        (await tx.orgMember.findUnique({ where: key, select: { userId: true } })) === null;
       await tx.orgMember.upsert({
-        where: { organizationId_userId: { organizationId: inv.organizationId, userId } },
+        where: key,
         update: {},
         create: { organizationId: inv.organizationId, userId, role: inv.orgRole },
       });
+      // Roadmap 14: joining an org is an audited event; a re-accept by a member is not.
+      if (joined)
+        await tx.auditLog.create({
+          data: {
+            organizationId: inv.organizationId,
+            actorUserId: userId,
+            action: 'org_member.added',
+            resourceType: 'user',
+            resourceId: userId,
+            metadata: { role: inv.orgRole, invitationId: inv.id },
+          },
+        });
 
       // 2. Repoint the pending grant, or collapse it onto an existing one (R11a).
       const pending =

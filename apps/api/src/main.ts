@@ -31,6 +31,8 @@ async function bootstrap(): Promise<void> {
   app.useBodyParser('json', { limit: '6mb' });
   // Larger sources go to the import job as raw `text/plain` (`import-jobs.controller.ts`).
   app.useBodyParser('text', { limit: '50mb' });
+  // Roadmap 14: the SAML ACS is an HTML form post from the IdP.
+  app.useBodyParser('urlencoded', { extended: false, limit: '1mb' });
   app.useLogger(app.get(Logger));
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
 

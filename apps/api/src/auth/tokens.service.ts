@@ -51,9 +51,14 @@ export interface ShareSessionClaims {
   readonly resourceId: string;
 }
 
+/** Roadmap 14 — how a session was won, for the `auth.login` audit row. */
+export type LoginMethod =
+  'password' | 'signup' | 'magic_link' | 'google' | 'github' | 'two_factor' | 'sso';
+
 export interface SessionContext {
   readonly userAgent?: string | undefined;
   readonly ip?: string | undefined;
+  readonly method?: LoginMethod | undefined;
 }
 
 export interface IssuedRefreshToken {

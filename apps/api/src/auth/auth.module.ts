@@ -11,6 +11,8 @@ import { GoogleAuthGuard } from './google-auth.guard';
 import { googleStrategyProvider } from './google.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { SignupPolicy } from './signup-policy';
+import { SsoController } from './sso.controller';
+import { SsoService } from './sso.service';
 import { TokensService } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
@@ -34,7 +36,7 @@ import { VerificationService } from './verification.service';
  */
 @Module({
   imports: [PassportModule.register({ session: false }), JwtModule.register({}), MailModule],
-  controllers: [AuthController],
+  controllers: [AuthController, SsoController],
   providers: [
     AuthService,
     TokensService,
@@ -43,6 +45,7 @@ import { VerificationService } from './verification.service';
     ApiTokenAuthService,
     TwoFactorService,
     SignupPolicy,
+    SsoService,
     GoogleAuthGuard,
     googleStrategyProvider,
     GitHubAuthGuard,

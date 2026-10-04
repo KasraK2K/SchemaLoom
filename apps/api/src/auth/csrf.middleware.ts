@@ -17,6 +17,13 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const SHARE_UNLOCK = /^\/api\/s\/[^/]+\/unlock$/;
 
 /**
+ * Roadmap 14 — the SAML ACS. The IdP's auto-submitting form posts here cross-site, so it can
+ * never carry our header. Its authority is the IdP-signed assertion, the one-time
+ * `InResponseTo`, and the RelayState matched against the signed `sl_sso` cookie.
+ */
+const SAML_ACS = '/api/auth/sso/saml/acs';
+
+/**
  * Doc 01 §4.5 — the verifier half. Mounted in `main.ts` after `cookieMiddleware`;
  * `AuthModule` owns issuance. Both halves ship together because a verifier with
  * nothing issuing the cookie rejects every write in the product.
@@ -39,7 +46,7 @@ const SHARE_UNLOCK = /^\/api\/s\/[^/]+\/unlock$/;
  */
 export function createCsrfMiddleware(secret: string): RequestHandler {
   return function verifyCsrf(req: Request, res: Response, next: NextFunction): void {
-    if (SAFE_METHODS.has(req.method) || SHARE_UNLOCK.test(req.path)) {
+    if (SAFE_METHODS.has(req.method) || SHARE_UNLOCK.test(req.path) || req.path === SAML_ACS) {
       next();
       return;
     }

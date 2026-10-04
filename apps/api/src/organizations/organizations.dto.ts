@@ -51,3 +51,15 @@ export class UpdateGroupDto extends createZodDto(updateGroupSchema) {}
 
 export const addGroupMemberSchema = z.object({ userId: z.string().min(1).max(64) });
 export class AddGroupMemberDto extends createZodDto(addGroupMemberSchema) {}
+
+/** Roadmap 14 §2 — the audit log's filters, shared by the page and the CSV. */
+export const auditQuerySchema = z.object({
+  action: z.string().trim().min(1).max(80).optional(),
+  actor: z.string().trim().min(1).max(320).optional(),
+  projectId: z.string().min(1).max(64).optional(),
+  // ISO strings, not z.date(): Swagger can't describe a Date and refuses to boot.
+  from: z.iso.datetime({ offset: true }).optional(),
+  to: z.iso.datetime({ offset: true }).optional(),
+  before: z.string().min(1).max(128).optional(),
+});
+export class AuditQueryDto extends createZodDto(auditQuerySchema) {}

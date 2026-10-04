@@ -131,7 +131,8 @@ function harness(world: World = {}) {
         .mockResolvedValue(world.user ?? { email: 'Bob@Example.com', emailVerifiedAt: new Date() }),
       update: userUpdate,
     },
-    orgMember: { upsert: orgMemberUpsert },
+    // Not a member yet, so accepting is a join (roadmap 14 `org_member.added`).
+    orgMember: { findUnique: vi.fn().mockResolvedValue(null), upsert: orgMemberUpsert },
     accessGrant: {
       findUnique: vi.fn(({ where }: { where: { id?: string } }) =>
         Promise.resolve(where.id !== undefined ? pending : (world.existing ?? null)),
@@ -175,7 +176,7 @@ describe('InvitationsService.accept (R11)', () => {
       where: { id: 'g_pending' },
       data: { principalType: 'user', principalId: USER },
     });
-    expect(actions(h.auditCreate)).toEqual(['grant.invite_converted']);
+    expect(actions(h.auditCreate)).toEqual(['org_member.added', 'grant.invite_converted']);
     expect(h.userUpdate.mock.calls[0]?.[0]).toMatchObject({
       data: { permGeneration: { increment: 1 } },
     });
@@ -200,7 +201,11 @@ describe('InvitationsService.accept (R11)', () => {
       data: { roleId: 'r_docs' },
     });
     expect(h.grantDelete).toHaveBeenCalledWith({ where: { id: 'g_pending' } });
-    expect(actions(h.auditCreate)).toEqual(['grant.invite_merge_review', 'grant.invite_converted']);
+    expect(actions(h.auditCreate)).toEqual([
+      'org_member.added',
+      'grant.invite_merge_review',
+      'grant.invite_converted',
+    ]);
   });
 
   it('refuses an unverified email and a different email', async () => {

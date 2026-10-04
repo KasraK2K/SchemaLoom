@@ -51,3 +51,30 @@ export async function myUserId(): Promise<string> {
 export async function listGroups(orgSlug: string): Promise<GroupView[]> {
   return GroupViewSchema.array().parse(await serverFetch<unknown>(`${org(orgSlug)}/groups`));
 }
+
+/** `GET /organizations/:slug/sso-connections` — `apps/api/src/auth/sso.controller.ts`. */
+export const SsoConnectionSchema = z.object({
+  id: z.string(),
+  protocol: z.enum(['oidc', 'saml']),
+  name: z.string(),
+  domains: z.array(z.string()),
+  oidcIssuer: z.string().nullable(),
+  oidcClientId: z.string().nullable(),
+  hasClientSecret: z.boolean(),
+  samlEntryPoint: z.string().nullable(),
+  samlIdpCert: z.string().nullable(),
+  jit: z.boolean(),
+  defaultOrgRole: z.enum(['member', 'guest', 'admin', 'owner']),
+  enforced: z.boolean(),
+  sp: z.union([
+    z.object({ redirectUri: z.string() }),
+    z.object({ entityId: z.string(), acsUrl: z.string(), metadataUrl: z.string() }),
+  ]),
+});
+export type SsoConnection = z.infer<typeof SsoConnectionSchema>;
+
+export async function listSsoConnections(orgSlug: string): Promise<SsoConnection[]> {
+  return SsoConnectionSchema.array().parse(
+    await serverFetch<unknown>(`${org(orgSlug)}/sso-connections`),
+  );
+}

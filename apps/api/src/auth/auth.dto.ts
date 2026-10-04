@@ -63,3 +63,39 @@ export const disableTwoFactorSchema = z
 export class DisableTwoFactorDto extends createZodDto(disableTwoFactorSchema) {}
 
 export class AppearanceDto extends createZodDto(appearanceInputSchema) {}
+
+// ------------------------------------------------------------- roadmap 14: SSO
+
+const ssoDomain = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, 'not a domain');
+
+export const ssoConnectionSchema = z
+  .object({
+    protocol: z.enum(['oidc', 'saml']),
+    name: z.string().trim().min(1).max(80),
+    domains: z.array(ssoDomain).min(1).max(20),
+    oidcIssuer: z.url().max(500).optional(),
+    oidcClientId: z.string().trim().min(1).max(300).optional(),
+    /** absent on an edit: the stored secret is kept */
+    oidcClientSecret: z.string().min(1).max(1000).optional(),
+    samlEntryPoint: z.url().max(1000).optional(),
+    samlIdpCert: z.string().trim().min(1).max(20_000).optional(),
+    jit: z.boolean().default(false),
+    /** a connection never mints owners or admins */
+    defaultOrgRole: z.enum(['member', 'guest']).default('member'),
+    enforced: z.boolean().default(false),
+  })
+  .refine(
+    (c) =>
+      c.protocol === 'oidc'
+        ? c.oidcIssuer !== undefined && c.oidcClientId !== undefined
+        : c.samlEntryPoint !== undefined && c.samlIdpCert !== undefined,
+    { message: 'OIDC needs an issuer and a client id; SAML needs a sign-in URL and a certificate' },
+  );
+export class SsoConnectionDto extends createZodDto(ssoConnectionSchema) {}
+
+export const ssoDiscoverSchema = z.object({ email });
+export class SsoDiscoverDto extends createZodDto(ssoDiscoverSchema) {}

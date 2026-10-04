@@ -7,19 +7,23 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
+  Res,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { Authenticated } from '../access';
 import { getPrincipal } from '../auth';
 import type { ProjectSummary } from '../projects';
+import { AuditLogService, auditFilters, type AuditRow } from './audit-log.service';
 import { GroupsService, type GroupView } from './groups.service';
 import { MemberInvitesService, type PendingInvite } from './member-invites.service';
 import { MembersService, type MemberView } from './members.service';
 import {
   AddGroupMemberDto,
+  AuditQueryDto,
   CreateGroupDto,
   CreateInviteDto,
   CreateOrganizationDto,
@@ -42,6 +46,7 @@ export class OrganizationsController {
     private readonly members: MembersService,
     private readonly groups: GroupsService,
     private readonly invites: MemberInvitesService,
+    private readonly audit: AuditLogService,
   ) {}
 
   /**
@@ -177,6 +182,41 @@ export class OrganizationsController {
    * `['owner','admin']` decorator predates it and agrees on the guest's 403); every write
    * is owner/admin, applied by the services.
    */
+  /**
+   * Roadmap 14 §2 — the audit log. Same marker and membership-first rule as the member
+   * routes; `AuditLogService` admits owners and admins, and an admin reads only org-level
+   * rows and rows of projects they can open (R13).
+   */
+  @ApiOperation({ summary: 'Audit log, newest first (owner or admin)' })
+  @Authenticated()
+  @Get(':orgSlug/audit-log')
+  auditLog(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Query() query: AuditQueryDto,
+  ): Promise<{ rows: AuditRow[]; nextCursor: string | null }> {
+    return this.audit.page(this.userId(req), orgSlug, auditFilters(query));
+  }
+
+  @ApiOperation({ summary: 'The audit log as CSV, same filters (owner or admin)' })
+  @Authenticated()
+  @Get(':orgSlug/audit-log.csv')
+  async auditCsv(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Param('orgSlug') orgSlug: string,
+    @Query() query: AuditQueryDto,
+  ): Promise<void> {
+    const lines = this.audit.csv(this.userId(req), orgSlug, auditFilters(query));
+    // The first line comes after the role check, so a refusal is still a plain status.
+    const first = await lines.next();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-log-${orgSlug}.csv"`);
+    if (first.done !== true) res.write(first.value);
+    for await (const line of lines) res.write(line);
+    res.end();
+  }
+
   @ApiOperation({ summary: 'Members of the organisation with their org role' })
   @Authenticated()
   @Get(':orgSlug/members')

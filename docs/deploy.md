@@ -69,8 +69,16 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
   2.1 MB of JSON and 380 KB gzipped). The AI assistant's event stream is sent uncompressed
   so it isn't buffered. Turn off compression at the proxy for `text/event-stream` too.
 - **Audit-log retention:** a nightly job (03:15 UTC) deletes `audit_log` rows older than
-  24 months (doc 00 Q10). Nothing else is deleted. To hand a customer their trail, export
-  it before it ages out: `SELECT * FROM audit_log WHERE organization_id = '<org id>'`.
+  24 months (doc 00 Q10). Nothing else is deleted. Owners and admins read and export it in
+  Settings → Audit log (CSV, up to 100,000 rows per download); hand a customer their trail
+  before it ages out.
+- **Single sign-on (roadmap 14):** org owners add OIDC or SAML connections in Settings →
+  Single sign-on, which shows the redirect URI / ACS URL / entity ID to paste into the IdP.
+  SSO needs HTTPS (its state cookie is `SameSite=None; Secure`), and the api must reach the
+  OIDC issuer; an issuer on a private address works only with `INTROSPECT_ALLOW_PRIVATE_HOSTS`.
+  Client secrets are encrypted with `SECRETS_ENCRYPTION_KEY`, so changing that key means
+  re-entering them. On an install shared by unrelated companies, keep JIT off (any owner can
+  list any domain; `docs/phase14/DESIGN.md`).
 - **Engine major bumps:** projects on an older engine major are read-only (writes answer 423) until an operator runs `node dist/engine-upgrade.cli.js --all` in the api image. Each
   project converts in one transaction or not at all.
 - **Expression refs (once, upgrading from before 2026-10-04):** run

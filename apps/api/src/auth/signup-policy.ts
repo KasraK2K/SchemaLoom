@@ -18,6 +18,11 @@ export interface SignupProof {
   readonly inviteToken?: string;
   /** The caller already proved the address (a magic link, a verified OAuth email). */
   readonly emailProven: boolean;
+  /**
+   * Roadmap 14 §1.2: an org's own IdP vouched for the person and that connection has JIT on
+   * for this domain (`SsoService` checks both). That org's invitation, in effect.
+   */
+  readonly ssoOrgId?: string;
 }
 
 /**
@@ -59,7 +64,7 @@ export class SignupPolicy {
       const viaToken =
         proof.inviteToken !== undefined &&
         (await liveInvitation(tx, { email, tokenHash: hashInviteToken(proof.inviteToken) }));
-      if (this.inviteOnly && !viaToken) {
+      if (this.inviteOnly && !viaToken && proof.ssoOrgId === undefined) {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${FIRST_ACCOUNT_LOCK})`;
         const first = (await tx.user.findFirst({ select: { id: true } })) === null;
         const invited = proof.emailProven && (await liveInvitation(tx, { email }));

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   Injectable,
   UnauthorizedException,
@@ -14,6 +15,7 @@ import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { issueCsrfToken } from './csrf';
 import { SignupPolicy } from './signup-policy';
+import { enforcedConnectionFor } from './sso.service';
 import { burnPasswordTime, hashPassword, verifyPassword } from './password';
 import { TokensService, type SessionContext } from './tokens.service';
 import { PER_CHALLENGE, TwoFactorService } from './two-factor.service';
@@ -117,12 +119,29 @@ export class AuthService implements OnModuleInit {
     ctx: SessionContext,
     preferredOrgId?: string,
   ): Promise<LoginOutcome> {
+    // Roadmap 14 §1.3: an org that enforces SSO refuses every other way in for its members
+    // (owners excepted). Only `openSsoSession` skips this, and it never comes through here.
+    const required = await enforcedConnectionFor(this.prisma, userId);
+    if (required !== null)
+      throw new ForbiddenException({
+        code: 'sso_required',
+        connectionId: required.id,
+        connectionName: required.name,
+      });
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { totpConfirmedAt: true },
     });
     if (user?.totpConfirmedAt) return { mfaChallenge: await this.tokens.issueMfaChallenge(userId) };
     return this.openSession(userId, ctx, preferredOrgId);
+  }
+
+  /**
+   * Roadmap 14 §1.3 — an SSO sign-in. No enforcement check (this IS the enforced path) and no
+   * TOTP challenge (Q5: the IdP owns MFA). The session opens in the connection's org.
+   */
+  openSsoSession(userId: string, ctx: SessionContext, orgId: string): Promise<SessionBundle> {
+    return this.openSession(userId, { ...ctx, method: 'sso' }, orgId);
   }
 
   /** `POST /auth/2fa/verify`. Five guesses per challenge, then the first factor is owed again. */
@@ -148,6 +167,19 @@ export class AuthService implements OnModuleInit {
   ): Promise<SessionBundle> {
     const orgId = await this.resolveOrgId(userId, preferredOrgId);
     const issued = await this.tokens.startSession(userId, ctx);
+    // Roadmap 14: who signed in, how, from where; filed under the org the session opens in.
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: orgId,
+        actorUserId: userId,
+        action: 'auth.login',
+        resourceType: 'user',
+        resourceId: userId,
+        ip: ctx.ip ?? null,
+        userAgent: ctx.userAgent ?? null,
+        metadata: { method: ctx.method ?? 'unknown' },
+      },
+    });
     return this.bundle(userId, orgId, issued.refreshToken, issued.expiresAt);
   }
 

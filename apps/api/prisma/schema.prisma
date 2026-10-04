@@ -358,15 +358,16 @@ model Organization {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  members       OrgMember[]
-  groups        UserGroup[]
-  workspaces    Workspace[]
-  projects      Project[]
-  roles         Role[]
-  accessGrants  AccessGrant[]
-  invitations   Invitation[]
-  auditLogs     AuditLog[]
-  notifications Notification[]
+  members        OrgMember[]
+  groups         UserGroup[]
+  workspaces     Workspace[]
+  projects       Project[]
+  roles          Role[]
+  accessGrants   AccessGrant[]
+  invitations    Invitation[]
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+  ssoConnections SsoConnection[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -1729,4 +1730,44 @@ model ChangeRequestReview {
 
   @@index([changeRequestId, createdAt])
   @@map("change_request_reviews")
+}
+
+/// Roadmap 14 (`docs/phase14/DESIGN.md` §1) — an org's sign-in through its identity provider.
+enum SsoProtocol {
+  oidc
+  saml
+
+  @@map("sso_protocol")
+}
+
+/// One identity provider an org signs in with. Managed by org owners only. `domains` are
+/// lower-case email domains; discovery may find several connections for one domain (one per
+/// org), and the sign-in page offers each. Accounts it signs in are `accounts` rows with
+/// provider `sso:<id>`.
+model SsoConnection {
+  id                  String      @id @default(cuid())
+  organizationId      String      @map("organization_id")
+  protocol            SsoProtocol
+  name                String
+  domains             String[]
+  /// OIDC: discovery runs against `<issuer>/.well-known/openid-configuration`.
+  oidcIssuer          String?     @map("oidc_issuer")
+  oidcClientId        String?     @map("oidc_client_id")
+  /// AES-256-GCM under SECRETS_ENCRYPTION_KEY (the TOTP helper), never returned.
+  oidcClientSecretEnc String?     @map("oidc_client_secret_enc")
+  /// SAML: the IdP's sign-in URL and its signing certificate (PEM or base64 body).
+  samlEntryPoint      String?     @map("saml_entry_point")
+  samlIdpCert         String?     @map("saml_idp_cert")
+  /// Create the account and the membership on first sign-in.
+  jit                 Boolean     @default(false)
+  defaultOrgRole      OrgRole     @default(member) @map("default_org_role")
+  /// Members with these domains (owners excepted) must sign in through this connection.
+  enforced            Boolean     @default(false)
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("sso_connections")
 }

@@ -15,6 +15,7 @@ import {
   fetchOAuthProviders,
   fetchSignupOpen,
   requestMagicLink,
+  discoverSso,
   safeNextPath,
   signIn,
   signUp,
@@ -88,6 +89,23 @@ function Field({ label, type, autoComplete, error, registration, readOnly }: Fie
   );
 }
 
+/** Roadmap 14 — why an SSO round trip came back to /login (`?sso_error=`). */
+export function ssoErrorMessage(code: string): string {
+  switch (code) {
+    case 'sso_required':
+      return 'Your organisation signs you in with single sign-on. Use “Continue with SSO”.';
+    case 'not_member':
+    case 'link_refused':
+      return 'Single sign-on can’t sign this account in. Sign in the usual way, or ask an owner of your organisation.';
+    case 'no_account':
+      return 'There is no account for you yet. Ask an owner of your organisation to invite you.';
+    case 'no_email':
+      return 'Your identity provider did not send a verified email address.';
+    default:
+      return 'Single sign-on did not finish. Try again.';
+  }
+}
+
 /** What the user should actually read when the API refuses. */
 export function messageFor(error: unknown): string {
   if (error instanceof ApiError) {
@@ -106,6 +124,8 @@ export function messageFor(error: unknown): string {
         return 'That link has expired or was already used. Ask for a new one.';
       case 'mfa_challenge_invalid':
         return 'That sign-in took too long. Start again.';
+      case 'sso_required':
+        return 'Your organisation signs you in with single sign-on. Use “Continue with SSO”.';
       case 'rate_limited':
       case 'too_many_requests':
         return 'Too many attempts. Wait a moment and try again.';
@@ -127,6 +147,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   const params = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
+  const [ssoChoices, setSsoChoices] = useState<{ id: string; name: string }[] | null>(null);
   // Roadmap 16. `null` while loading; the API refuses a closed sign-up anyway, so a
   // failed read only hides the "Create one" link rather than blocking anything.
   const [signupOpen, setSignupOpen] = useState<boolean | null>(null);
@@ -204,6 +225,31 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
       setFormError(messageFor(error));
     }
   });
+
+  useEffect(() => {
+    const code = params.get('sso_error');
+    if (code !== null) setFormError(ssoErrorMessage(code));
+  }, [params]);
+
+  const ssoStart = (id: string) =>
+    apiUrl(
+      `/auth/sso/${encodeURIComponent(id)}/start?next=${encodeURIComponent(safeNextPath(params.get('next')))}`,
+    );
+
+  // Roadmap 14: the work email picks the connection; one goes straight there.
+  const continueWithSso = async () => {
+    setFormError(null);
+    if (!(await form.trigger('email'))) return;
+    try {
+      const found = await discoverSso(form.getValues('email'));
+      const [only] = found;
+      if (found.length === 1 && only !== undefined) window.location.assign(ssoStart(only.id));
+      else if (found.length === 0) setFormError('No single sign-on is set up for this address.');
+      else setSsoChoices(found);
+    } catch (error) {
+      setFormError(messageFor(error));
+    }
+  };
 
   // Validates the email field alone: the password is irrelevant to a sign-in link.
   const sendLink = async () => {
@@ -284,6 +330,22 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
         <Button type="button" variant="outline" onClick={() => void sendLink()}>
           Email me a sign-in link
         </Button>
+      )}
+
+      {!isSignUp && (
+        <Button type="button" variant="outline" onClick={() => void continueWithSso()}>
+          Continue with SSO
+        </Button>
+      )}
+
+      {ssoChoices !== null && (
+        <div className="flex flex-col gap-2" aria-label="Single sign-on">
+          {ssoChoices.map((c) => (
+            <a key={c.id} href={ssoStart(c.id)} className={buttonVariants({ variant: 'outline' })}>
+              Sign in with {c.name}
+            </a>
+          ))}
+        </div>
       )}
 
       <OAuthButtons />

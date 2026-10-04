@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  ForbiddenException,
   NotFoundException,
   Param,
   Post,
@@ -54,11 +55,17 @@ import { GoogleAuthGuard } from './google-auth.guard';
 import { isGoogleConfigured, type OAuthUser } from './google.strategy';
 import { Public } from './public.decorator';
 import { SignupPolicy } from './signup-policy';
-import { MFA_CHALLENGE_TTL_SEC, TokensService, type DeviceSession } from './tokens.service';
+import {
+  MFA_CHALLENGE_TTL_SEC,
+  TokensService,
+  type DeviceSession,
+  type LoginMethod,
+  type SessionContext,
+} from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
 
-function sessionContext(req: Request): { userAgent?: string; ip?: string } {
-  return { userAgent: req.headers['user-agent'], ip: req.ip };
+function sessionContext(req: Request, method?: LoginMethod): SessionContext {
+  return { userAgent: req.headers['user-agent'], ip: req.ip, method };
 }
 
 /** The `sl_org` preference (see `cookies.ts`), re-checked by `AuthService` before use. */
@@ -136,7 +143,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<LoginResponse> {
     const userId = await this.auth.register(dto);
-    return this.respond(res, await this.auth.issueSession(userId, sessionContext(req)));
+    return this.respond(res, await this.auth.issueSession(userId, sessionContext(req, 'signup')));
   }
 
   @Public()
@@ -150,7 +157,7 @@ export class AuthController {
     const userId = await this.auth.login(dto);
     return this.respond(
       res,
-      await this.auth.issueSession(userId, sessionContext(req), preferredOrg(req)),
+      await this.auth.issueSession(userId, sessionContext(req, 'password'), preferredOrg(req)),
     );
   }
 
@@ -298,7 +305,7 @@ export class AuthController {
     const userId = await this.auth.consumeMagicLink(dto.token);
     return this.respond(
       res,
-      await this.auth.issueSession(userId, sessionContext(req), preferredOrg(req)),
+      await this.auth.issueSession(userId, sessionContext(req, 'magic_link'), preferredOrg(req)),
     );
   }
 
@@ -318,7 +325,7 @@ export class AuthController {
     const bundle = await this.auth.completeMfa(
       challenge,
       dto.code,
-      sessionContext(req),
+      sessionContext(req, 'two_factor'),
       preferredOrg(req),
     );
     clearMfaChallengeCookie(res, cookiePolicyFrom(this.config));
@@ -418,7 +425,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    await this.finishOAuth(req, res);
+    await this.finishOAuth(req, res, 'google');
   }
 
   // ------------------------------------------------------------------- github
@@ -439,15 +446,32 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    await this.finishOAuth(req, res);
+    await this.finishOAuth(req, res, 'github');
   }
 
-  private async finishOAuth(req: Request, res: Response): Promise<void> {
+  private async finishOAuth(
+    req: Request,
+    res: Response,
+    method: 'google' | 'github',
+  ): Promise<void> {
     const user = req.user as OAuthUser | undefined;
     if (!user?.userId) throw new UnauthorizedException({ code: 'OAUTH_FAILED' });
-    this.redirectAfterOAuth(
-      res,
-      await this.auth.issueSession(user.userId, sessionContext(req), preferredOrg(req)),
-    );
+    let outcome: LoginOutcome;
+    try {
+      outcome = await this.auth.issueSession(
+        user.userId,
+        sessionContext(req, method),
+        preferredOrg(req),
+      );
+    } catch (error) {
+      // Roadmap 14 §1.3: a top-level navigation can't show the JSON refusal.
+      if (error instanceof ForbiddenException) {
+        const web = this.config.get('WEB_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
+        res.redirect(`${web}/login?sso_error=sso_required`);
+        return;
+      }
+      throw error;
+    }
+    this.redirectAfterOAuth(res, outcome);
   }
 }

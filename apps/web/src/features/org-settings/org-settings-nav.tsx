@@ -1,7 +1,7 @@
 import type { OrgRole } from '@schemaloom/contracts';
 import Link from 'next/link';
 
-/** Tabs between the org settings pages. Roles are owner/admin only (doc 05 §3.2). */
+/** Tabs between the org settings pages. Roles and the audit log are owner/admin only. */
 export function OrgSettingsNav({
   orgSlug,
   orgRole,
@@ -9,12 +9,18 @@ export function OrgSettingsNav({
 }: {
   readonly orgSlug: string;
   readonly orgRole: OrgRole;
-  readonly current: 'members' | 'groups' | 'roles';
+  readonly current: 'members' | 'groups' | 'roles' | 'audit-log' | 'sso';
 }) {
   const tabs = [
     { key: 'members', label: 'Members' },
     { key: 'groups', label: 'Groups' },
-    ...(orgRole === 'owner' || orgRole === 'admin' ? [{ key: 'roles', label: 'Roles' }] : []),
+    ...(orgRole === 'owner' || orgRole === 'admin'
+      ? [
+          { key: 'roles', label: 'Roles' },
+          { key: 'audit-log', label: 'Audit log' },
+        ]
+      : []),
+    ...(orgRole === 'owner' ? [{ key: 'sso', label: 'Single sign-on' }] : []),
   ] as const;
   return (
     <nav
