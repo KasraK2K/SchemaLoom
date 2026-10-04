@@ -1,0 +1,93 @@
+import { relations, sql } from 'drizzle-orm';
+import { bigserial, check, customType, foreignKey, index, integer, jsonb, numeric, pgEnum, pgSchema, pgTable, pgView, smallint, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
+
+export const sales = pgSchema('sales');
+
+export const userRoleEnum = pgEnum('user_role', ['member', 'admin', 'super-admin']);
+
+export const auditLog = pgTable(
+  'audit_log',
+  {
+    at: timestamp('at'),
+  },
+);
+
+/** People who sign in */
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    email: varchar('email', { length: 320 }).notNull().unique('users_email_key'),
+    /** Shown "as is" */
+    name: text('name'),
+    tags: text('tags').array(),
+    role: userRoleEnum('role').notNull().default('member'),
+    balance: numeric('balance', { precision: 12, scale: 2 }).notNull().default(sql`0`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    displayName: varchar('Display Name', { length: 80 }),
+    managerId: uuid('manager_id'),
+    active: customType<{ data: unknown }>({ dataType: () => 'tstzrange' })('active'),
+  },
+  (table) => [
+    // Left out: index 'users_lower_email' (its columns include an expression)
+    foreignKey({ columns: [table.managerId], foreignColumns: [table.id], name: 'users_manager_fk' }),
+    check('users_balance_check', sql`balance >= 0`),
+  ],
+);
+
+export const posts = pgTable(
+  'posts',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    authorId: uuid('author_id').notNull(),
+    editorId: uuid('editor_id'),
+    body: jsonb('body'),
+    status: smallint('status').notNull().default(1),
+    title: text('title').notNull().default('Untitled \'draft\''),
+  },
+  (table) => [
+    unique('posts_title_status_key').on(table.title, table.status),
+    index('posts_author_id_idx').on(table.authorId),
+    index('posts_body_gin').using('gin', table.body),
+    index('posts_status_title_idx').on(table.status.desc(), table.title),
+    foreignKey({ columns: [table.authorId], foreignColumns: [users.id], name: 'posts_author_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.editorId], foreignColumns: [users.id], name: 'posts_editor_id_fkey' }).onDelete('set null').onUpdate('cascade'),
+  ],
+);
+
+export const profiles = pgTable(
+  'profiles',
+  {
+    userId: uuid('user_id').primaryKey(),
+    bio: text('bio'),
+  },
+  (table) => [
+    foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'profiles_user_id_fkey' }),
+  ],
+);
+
+export const invoices = sales.table(
+  'invoices',
+  {
+    id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+  },
+);
+
+export const recentPosts = pgView('recent_posts', {}).as(sql`SELECT 1`);
+
+export const postsRelations = relations(posts, ({ one }) => ({
+  usersAuthorId: one(users, { fields: [posts.authorId], references: [users.id], relationName: 'posts_author_id_fkey' }),
+  usersEditorId: one(users, { fields: [posts.editorId], references: [users.id], relationName: 'posts_editor_id_fkey' }),
+}));
+
+export const profilesRelations = relations(profiles, ({ one }) => ({
+  users: one(users, { fields: [profiles.userId], references: [users.id] }),
+}));
+
+export const usersRelations = relations(users, ({ many, one }) => ({
+  usersManagerId: one(users, { fields: [users.managerId], references: [users.id], relationName: 'users_manager_fk' }),
+  postsAuthorId: many(posts, { relationName: 'posts_author_id_fkey' }),
+  postsEditorId: many(posts, { relationName: 'posts_editor_id_fkey' }),
+  profiles: one(profiles),
+  usersChildrenManagerId: many(users, { relationName: 'users_manager_fk' }),
+}));

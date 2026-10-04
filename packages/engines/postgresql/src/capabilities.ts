@@ -1,4 +1,5 @@
 import {
+  ORM_EXPORT_FORMATS,
   SSH_TUNNEL_FIELDS,
   defineCapabilities,
   type ConstraintKindDescriptor,
@@ -194,14 +195,8 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
       supportsComments: true,
       supportsDrops: true,
     },
-    // Phase 7 — `export-prisma.ts`.
-    {
-      id: 'prisma',
-      displayName: 'Prisma schema',
-      fileExtension: 'prisma',
-      supportsComments: true,
-      supportsDrops: false,
-    },
+    // Phase 8 — Prisma, Drizzle, TypeORM and Django, written by `@schemaloom/orm`.
+    ...ORM_EXPORT_FORMATS,
   ],
   // The supported PostgreSQL majors, newest first. Drop one when it reaches end of life.
   targetVersions: ['18', '17', '16', '15', '14'],

@@ -1,29 +1,25 @@
 import type {
   Constraint,
-  CustomType,
   Diagnostic,
-  Entity,
   ExportInput,
   ExportResult,
   ExportStatement,
   Field,
   Id,
   Index,
+  IrObjectRef,
   IrObjectType,
   Link,
   SchemaModel,
-  TypeRef,
 } from '@schemaloom/engine-sdk';
-import { propString, propStringArray } from './export-ddl.js';
-import { compare } from './exporter.js';
-import { CODE } from './messages.js';
-import { TYPE_CATALOG } from './types.js';
+import type { OrmDialect, OrmEnum } from './dialect.js';
+import { compare, propString } from './util.js';
 
 /**
- * Phase 7 — the `prisma` export format: a `schema.prisma` shaped like what `prisma db pull`
- * writes for the same database (`docs/phase7/DESIGN.md` §3).
+ * The `prisma` export format: a `schema.prisma` shaped like what `prisma db pull` writes for
+ * the same database (`docs/phase7/DESIGN.md` §3), for any engine with an `OrmDialect`.
  *
- * Same three properties as the DDL exporter: it takes a `RedactedModel`, it is deterministic
+ * Same three properties as the DDL exporters: it takes a `RedactedModel`, it is deterministic
  * (explicit sort keys, byte comparison), and a hidden object sets `incomplete` with one
  * header line and no count. What Prisma cannot express is NOT incomplete: the column stays
  * (as `Unsupported`) or a `//` comment in the model names what was left out.
@@ -32,40 +28,6 @@ import { TYPE_CATALOG } from './types.js';
 const REDACTION_NOTICE = '// Some objects are not included because of your access level.';
 const NO_UNIQUE_IDENTIFIER =
   '/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.';
-
-/** canonical PostgreSQL type id → Prisma scalar, plus the `@db.*` attribute when the scalar's
- *  default native type is not this one. `precision` is PostgreSQL's default when unwritten. */
-const SCALARS: Readonly<
-  Record<string, { scalar: string; native?: string; precision?: number; serial?: true }>
-> = {
-  smallint: { scalar: 'Int', native: 'SmallInt' },
-  integer: { scalar: 'Int' },
-  bigint: { scalar: 'BigInt' },
-  smallserial: { scalar: 'Int', native: 'SmallInt', serial: true },
-  serial: { scalar: 'Int', serial: true },
-  bigserial: { scalar: 'BigInt', serial: true },
-  numeric: { scalar: 'Decimal', native: 'Decimal' },
-  real: { scalar: 'Float', native: 'Real' },
-  'double precision': { scalar: 'Float' },
-  money: { scalar: 'Decimal', native: 'Money' },
-  text: { scalar: 'String' },
-  varchar: { scalar: 'String', native: 'VarChar' },
-  char: { scalar: 'String', native: 'Char' },
-  boolean: { scalar: 'Boolean' },
-  date: { scalar: 'DateTime', native: 'Date' },
-  time: { scalar: 'DateTime', native: 'Time', precision: 6 },
-  timetz: { scalar: 'DateTime', native: 'Timetz', precision: 6 },
-  timestamp: { scalar: 'DateTime', native: 'Timestamp', precision: 6 },
-  timestamptz: { scalar: 'DateTime', native: 'Timestamptz', precision: 6 },
-  uuid: { scalar: 'String', native: 'Uuid' },
-  json: { scalar: 'Json', native: 'Json' },
-  jsonb: { scalar: 'Json' },
-  bytea: { scalar: 'Bytes' },
-  bit: { scalar: 'String', native: 'Bit' },
-  varbit: { scalar: 'String', native: 'VarBit' },
-  inet: { scalar: 'String', native: 'Inet' },
-  xml: { scalar: 'String', native: 'Xml' },
-};
 
 const ACTIONS: Readonly<Record<string, string>> = {
   noAction: 'NoAction',
@@ -112,7 +74,7 @@ class Names {
 }
 
 interface ModelPlan {
-  readonly entity: Entity;
+  readonly entity: SchemaModel['objects']['entity'][string];
   readonly nsName: string;
   readonly name: string;
   readonly fields: readonly Field[];
@@ -128,6 +90,13 @@ interface ModelPlan {
   ignored: boolean;
 }
 
+interface PrismaEnum {
+  readonly source: OrmEnum;
+  readonly name: string;
+  readonly values: Map<string, string>;
+  readonly ns: string;
+}
+
 /** Prisma's default constraint names; `map:` is written only when the real name differs. */
 const defaultName = (table: string, columns: readonly string[], suffix: string): string =>
   `${table}_${columns.join('_')}_${suffix}`;
@@ -137,7 +106,7 @@ const mapArg = (name: string, expected: string): string | null =>
 
 const setKey = (ids: readonly Id[]): string => [...ids].sort(compare).join(',');
 
-export function buildPrismaExport(input: ExportInput): ExportResult {
+export function buildPrismaExport(input: ExportInput, dialect: OrmDialect): ExportResult {
   const { model, options } = input;
   const diagnostics: Diagnostic[] = [];
   // `as boolean`: set inside `skip`, which narrowing cannot see.
@@ -146,14 +115,15 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
     skipped = true;
     if (model.redacted) return;
     diagnostics.push({
-      code: CODE.exportOmitted,
+      code: dialect.omittedCode,
       severity: 'warning',
       params: { reason },
       target: { type, id },
     });
   };
 
-  const nsName = (id: Id): string => model.objects.namespace[id]?.name ?? '';
+  const nsName = (id: Id | null): string =>
+    id === null ? '' : (model.objects.namespace[id]?.name ?? '');
   const defaultNs = new Set(
     Object.values(model.objects.namespace)
       .filter((n) => n.isDefault)
@@ -163,33 +133,21 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
   const schemas = new Set<string>();
 
   // --- enums ------------------------------------------------------------------------------
-  const enums = new Map<Id, { name: string; values: Map<string, string>; ns: string }>();
-  const sortedTypes = Object.values(model.objects.customType).sort(
-    (a, b) =>
-      compare(nsName(a.namespaceId), nsName(b.namespaceId)) ||
-      compare(a.name, b.name) ||
-      compare(a.id, b.id),
-  );
-  for (const customType of sortedTypes) {
-    if (customType.restricted === true) {
-      skip('customType', customType.id, 'hidden from the requester');
-      continue;
-    }
-    if (customType.kind !== 'enum') continue; // domains map to their base type, composites to Unsupported
-    const labels =
-      customType.propsRedacted === true
-        ? undefined
-        : propStringArray(customType.engineProps, 'labels');
-    if (labels === undefined || labels.length === 0) continue;
-    const ns = nsName(customType.namespaceId);
+  const found = dialect.enums(model);
+  for (const id of found.hidden) skip('customType', id, 'hidden from the requester');
+  const enums = new Map<string, PrismaEnum>();
+  for (const source of found.enums) {
+    const ns = nsName(source.namespaceId);
     const valueNames = new Names();
     const values = new Map(
-      labels.map((label) => [label, valueNames.take(prismaName(label), () => prismaName(label))]),
+      source.labels.map((label) => [
+        label,
+        valueNames.take(prismaName(label), () => prismaName(label)),
+      ]),
     );
-    enums.set(customType.id, {
-      name: fileNames.take(prismaName(customType.name), () =>
-        prismaName(`${ns}_${customType.name}`),
-      ),
+    enums.set(source.key, {
+      source,
+      name: fileNames.take(prismaName(source.name), () => prismaName(`${ns}_${source.name}`)),
       values,
       ns,
     });
@@ -234,7 +192,7 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
         skip('field', field.id, 'hidden from the requester');
         continue;
       }
-      // PostgreSQL makes primary-key columns NOT NULL, and an import of an inline
+      // Databases make primary-key columns NOT NULL, and an import of an inline
       // `PRIMARY KEY` doesn't say so on the field. Prisma rejects `@id` on an optional field.
       fields.push(primaryKeyFields.has(field.id) ? { ...field, isNullable: false } : field);
     }
@@ -295,10 +253,13 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
     const names = namesOf(plan, ids);
     if (names === null) return;
     const table = plan.entity.name;
-    const map = mapArg(
-      name,
-      suffix === 'pkey' ? `${table}_pkey` : defaultName(table, columnsOf(ids), suffix),
-    );
+    const map =
+      kind === 'id' && !dialect.namedPrimaryKeys
+        ? null
+        : mapArg(
+            name,
+            suffix === 'pkey' ? `${table}_pkey` : defaultName(table, columnsOf(ids), suffix),
+          );
     const [only] = ids;
     if (ids.length === 1 && only !== undefined) {
       addFieldAttr(plan, only, map === null ? `@${kind}` : `@${kind}(${map})`);
@@ -339,8 +300,10 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
     }
     if (plan === undefined) continue;
     const ids = indexFieldIds(index);
+    const method = dialect.indexMethod(index);
     if (
       ids === null ||
+      (method !== null && INDEX_TYPES[method] === undefined) ||
       index.propsRedacted === true ||
       propString(index.engineProps, 'where') !== undefined
     ) {
@@ -359,9 +322,15 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
       .sort((a, b) => a.ordinal - b.ordinal)
       .map((c) => {
         const name = plan.fieldName.get(c.fieldId ?? '') ?? '';
-        return c.direction === 'desc' ? `${name}(sort: Desc)` : name;
+        // MySQL's prefix index, `KEY (email(20))`.
+        const length = c.engineProps.length;
+        const args = [
+          typeof length === 'number' ? `length: ${String(length)}` : null,
+          c.direction === 'desc' ? 'sort: Desc' : null,
+        ].filter((a) => a !== null);
+        return args.length === 0 ? name : `${name}(${args.join(', ')})`;
       });
-    const type = INDEX_TYPES[index.kind];
+    const type = INDEX_TYPES[method ?? ''];
     plan.blockAttrs.push(
       `@@index(${[
         list(keys),
@@ -454,11 +423,12 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
     phase: ExportStatement['phase'];
     kind: string;
     text: string;
-    target: ExportStatement['target'];
+    target: IrObjectRef;
   }[] = [];
 
-  for (const [id, e] of enums) {
-    if (!defaultNs.has(model.objects.customType[id]?.namespaceId ?? '')) schemas.add(e.ns);
+  for (const e of enums.values()) {
+    const ns = e.source.namespaceId;
+    if (ns !== null && !defaultNs.has(ns)) schemas.add(e.ns);
   }
   for (const plan of plans.values())
     if (!defaultNs.has(plan.entity.namespaceId)) schemas.add(plan.nsName);
@@ -468,15 +438,16 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
     for (const plan of plans.values()) schemas.add(plan.nsName);
   }
 
-  for (const [id, e] of enums) {
-    const customType = model.objects.customType[id] as CustomType;
+  for (const e of enums.values()) {
     const lines = [`enum ${e.name} {`];
     for (const [label, name] of e.values) {
       lines.push(name === label ? `  ${name}` : `  ${name} @map(${prismaString(label)})`);
     }
+    // An enum that belongs to a column has no database name to map to.
+    const ownName = e.source.namespaceId !== null;
     const attrs = [
-      e.name === customType.name ? null : `@@map(${prismaString(customType.name)})`,
-      multiSchema ? `@@schema(${prismaString(e.ns)})` : null,
+      !ownName || e.name === e.source.name ? null : `@@map(${prismaString(e.source.name)})`,
+      multiSchema && ownName ? `@@schema(${prismaString(e.ns)})` : null,
     ].filter((a) => a !== null);
     if (attrs.length > 0) lines.push('', ...attrs.map((a) => `  ${a}`));
     lines.push('}');
@@ -484,7 +455,7 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
       phase: 'custom-types',
       kind: 'enum',
       text: lines.join('\n'),
-      target: { type: 'customType', id },
+      target: e.source.target,
     });
   }
 
@@ -497,14 +468,14 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
     for (const field of plan.fields) {
       if (options.includeComments) rows.push(...docLines(field.doc, '  '));
       const name = plan.fieldName.get(field.id) ?? field.name;
-      const { defaultAttr, nativeAttr } = fieldAttributes(field, model, enums);
+      const { defaultAttr, nativeAttr } = fieldAttributes(field, model, dialect, enums);
       const attrs = [
         ...(plan.fieldAttrs.get(field.id) ?? []),
         defaultAttr,
         name === field.name ? null : `@map(${prismaString(field.name)})`,
         nativeAttr,
       ].filter((a) => a !== null);
-      rows.push([name, fieldType(field, model, enums), attrs.join(' ')]);
+      rows.push([name, fieldType(field, model, dialect, enums), attrs.join(' ')]);
     }
     rows.push(...plan.relationLines);
     lines.push(...aligned(rows));
@@ -536,7 +507,7 @@ export function buildPrismaExport(input: ExportInput): ExportResult {
     header.push('// Views are not included: Prisma supports them only as a preview feature.');
   const datasource = [
     'datasource db {',
-    '  provider = "postgresql"',
+    `  provider = "${dialect.prismaProvider}"`,
     '  url      = env("DATABASE_URL")',
     ...(multiSchema ? [`  schemas  = ${list([...schemas].sort(compare).map(prismaString))}`] : []),
     '}',
@@ -565,65 +536,44 @@ function indexFieldIds(index: Index): Id[] | null {
   return ids.length === 0 ? null : ids;
 }
 
-type Enums = ReadonlyMap<Id, { name: string; values: ReadonlyMap<string, string> }>;
+type Enums = ReadonlyMap<string, PrismaEnum>;
 
-/** The field's type resolved through domains to a built-in, with the domain's array-ness kept. */
-function resolveField(field: Field, model: SchemaModel): ReturnType<typeof TYPE_CATALOG.resolve> {
-  const ctx = { customTypes: Object.values(model.objects.customType), namespaceName: '' };
-  let resolved = TYPE_CATALOG.resolve(field.type, ctx);
-  const custom = resolved.customType;
-  if (custom?.kind === 'domain' && custom.propsRedacted !== true) {
-    const base = propString(custom.engineProps, 'baseType');
-    const parsed = base === undefined ? null : /^\s*([^(]+?)\s*(?:\(([^)]*)\))?\s*$/.exec(base);
-    if (parsed?.[1] !== undefined) {
-      const args = parsed[2]?.split(',').map((a) => (/^\s*\d+\s*$/.test(a) ? Number(a) : a.trim()));
-      const ref: TypeRef = {
-        name: parsed[1],
-        ...(args === undefined ? {} : { args }),
-        dimensions: field.type.dimensions ?? 0,
-      };
-      resolved = TYPE_CATALOG.resolve(ref, ctx);
-    }
-  }
-  return resolved;
-}
-
-export function fieldType(field: Field, model: SchemaModel, enums: Enums): string {
-  const resolved = resolveField(field, model);
-  const dims = resolved.dimensions;
-  const enumType = resolved.customType === null ? undefined : enums.get(resolved.customType.id);
-  const scalar = enumType?.name ?? SCALARS[resolved.descriptor?.id ?? '']?.scalar;
-  if (scalar === undefined || dims > 1) {
-    return `Unsupported(${prismaString(TYPE_CATALOG.format(TYPE_CATALOG.resolve(field.type, { customTypes: Object.values(model.objects.customType), namespaceName: '' })))})${field.isNullable ? '?' : ''}`;
+function fieldType(field: Field, model: SchemaModel, dialect: OrmDialect, enums: Enums): string {
+  const type = dialect.columnType(field, model);
+  const enumType = type.enumKey === null ? undefined : enums.get(type.enumKey);
+  const scalar = enumType?.name ?? dialect.types[type.id ?? '']?.prisma?.scalar;
+  if (scalar === undefined || type.dimensions > 1) {
+    return `Unsupported(${prismaString(type.display)})${field.isNullable ? '?' : ''}`;
   }
   // A list can't be optional in Prisma; `db pull` drops the `?` the same way.
-  return dims === 1 ? `${scalar}[]` : `${scalar}${field.isNullable ? '?' : ''}`;
+  return type.dimensions === 1 ? `${scalar}[]` : `${scalar}${field.isNullable ? '?' : ''}`;
 }
 
 function fieldAttributes(
   field: Field,
   model: SchemaModel,
+  dialect: OrmDialect,
   enums: Enums,
 ): { defaultAttr: string | null; nativeAttr: string | null } {
-  const resolved = resolveField(field, model);
-  const scalar = SCALARS[resolved.descriptor?.id ?? ''];
-  const enumType = resolved.customType === null ? undefined : enums.get(resolved.customType.id);
+  const type = dialect.columnType(field, model);
+  const scalar = dialect.types[type.id ?? '']?.prisma;
+  const enumType = type.enumKey === null ? undefined : enums.get(type.enumKey);
   const props = field.propsRedacted === true ? {} : field.engineProps;
   let defaultAttr: string | null = null;
   let nativeAttr: string | null = null;
 
-  if (scalar?.serial === true || props.identity === 'always' || props.identity === 'byDefault') {
+  if (dialect.autoIncrement(field)) {
     defaultAttr = '@default(autoincrement())';
   } else {
     const expression = propString(props, 'default');
     if (expression !== undefined) {
       const kind = enumType === undefined ? (scalar?.scalar ?? null) : 'enum';
-      defaultAttr = `@default(${defaultValue(expression, kind, enumType?.values, resolved.dimensions > 0)})`;
+      defaultAttr = `@default(${defaultValue(expression, kind, enumType?.values, type.dimensions > 0)})`;
     }
   }
 
-  if (scalar?.native !== undefined && resolved.dimensions <= 1 && enumType === undefined) {
-    const args = resolved.ref.args ?? (scalar.precision === undefined ? [] : [scalar.precision]);
+  if (scalar?.native !== undefined && type.dimensions <= 1 && enumType === undefined) {
+    const args = type.args ?? (scalar.precision === undefined ? [] : [scalar.precision]);
     nativeAttr = `@db.${scalar.native}${args.length > 0 ? `(${args.join(', ')})` : ''}`;
   }
   return { defaultAttr, nativeAttr };

@@ -149,6 +149,39 @@ export interface ExportFormatDescriptor {
   readonly supportsDrops: boolean;
 }
 
+/** Phase 8 — the ORM formats `@schemaloom/orm` writes for any engine with a dialect. Data, so
+ *  an engine's capabilities (browser-safe) can list them without loading the writers. */
+export const ORM_EXPORT_FORMATS: readonly ExportFormatDescriptor[] = [
+  {
+    id: 'prisma',
+    displayName: 'Prisma schema',
+    fileExtension: 'prisma',
+    supportsComments: true,
+    supportsDrops: false,
+  },
+  {
+    id: 'drizzle',
+    displayName: 'Drizzle schema',
+    fileExtension: 'ts',
+    supportsComments: true,
+    supportsDrops: false,
+  },
+  {
+    id: 'typeorm',
+    displayName: 'TypeORM entities',
+    fileExtension: 'ts',
+    supportsComments: true,
+    supportsDrops: false,
+  },
+  {
+    id: 'django',
+    displayName: 'Django models',
+    fileExtension: 'py',
+    supportsComments: true,
+    supportsDrops: false,
+  },
+];
+
 /** Pure JSON: served to the browser by `GET /engines` and cached in the project store. No
  *  functions, no classes — that is what lets the fallback UI gate features for an engine that
  *  ships no UI package at all. */

@@ -1,0 +1,47 @@
+import { relations, sql } from 'drizzle-orm';
+import { bigint, check, decimal, foreignKey, index, mysqlEnum, mysqlTable, mysqlView, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
+
+export const customers = mysqlTable(
+  'customers',
+  {
+    id: bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey(),
+    email: varchar('email', { length: 255 }).notNull().unique('customers_email_uq'),
+    status: mysqlEnum('status', ['active', 'closed']).notNull().default('active'),
+    bio: text('bio'),
+    updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    // Left out: index 'ft_bio' (FULLTEXT indexes are not supported by Drizzle)
+    index('idx_email_prefix').on(table.email),
+    // Left out: index 'idx_status_lower' (its columns include an expression)
+  ],
+);
+
+/** Every customer's orders, one row per order */
+export const orders = mysqlTable(
+  'orders',
+  {
+    id: bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey(),
+    /** Who placed the order */
+    customerId: bigint('customer_id', { mode: 'number', unsigned: true }).notNull(),
+    total: decimal('total', { precision: 12, scale: 2 }).notNull(),
+    netTotal: decimal('net_total', { precision: 12, scale: 2 }).generatedAlwaysAs(sql`\`total\` * 0.9`),
+  },
+  (table) => [
+    index('idx_customer_id').on(table.customerId, table.total),
+    foreignKey({ columns: [table.customerId], foreignColumns: [customers.id], name: 'fk_orders_customer' }).onDelete('restrict').onUpdate('cascade'),
+    check('orders_total_positive', sql`\`total\` > 0`),
+  ],
+);
+
+export const orderSummary = mysqlView('order_summary', {
+  id: text('id'),
+}).as(sql`select \`orders\`.\`id\` AS \`id\` from \`orders\``);
+
+export const customersRelations = relations(customers, ({ many }) => ({
+  orders: many(orders),
+}));
+
+export const ordersRelations = relations(orders, ({ one }) => ({
+  customers: one(customers, { fields: [orders.customerId], references: [customers.id] }),
+}));

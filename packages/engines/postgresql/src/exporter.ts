@@ -44,7 +44,8 @@ import {
   type CommentSubject,
   type IndexColumnInput,
 } from './export-ddl.js';
-import { buildPrismaExport } from './export-prisma.js';
+import { buildOrmExport, isOrmId } from '@schemaloom/orm';
+import { ORM_DIALECT } from './orm-types.js';
 import { CODE } from './messages.js';
 import { quoteDocText } from './sql-text.js';
 import { TYPE_CATALOG } from './types.js';
@@ -614,7 +615,9 @@ export const EXPORTER: Exporter = {
   // another engine's exporter may need one.
   export(input: ExportInput): Promise<ExportResult> {
     return Promise.resolve(
-      input.options.format === 'prisma' ? buildPrismaExport(input) : buildExport(input),
+      isOrmId(input.options.format)
+        ? buildOrmExport(input.options.format, input, ORM_DIALECT)
+        : buildExport(input),
     );
   },
 };

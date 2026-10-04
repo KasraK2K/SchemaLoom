@@ -17,8 +17,10 @@ import type {
   Link,
 } from '@schemaloom/engine-sdk';
 import { EXPORT_PHASE_RANK } from '@schemaloom/engine-sdk';
+import { buildOrmExport, isOrmId } from '@schemaloom/orm';
 import { CAPABILITIES } from './capabilities.js';
 import { CODE } from './messages.js';
+import { ORM_DIALECT } from './orm-types.js';
 import { TYPE_CATALOG } from './types.js';
 
 /**
@@ -439,8 +441,10 @@ function linkSkipReason(
 
 export const EXPORTER: Exporter = {
   export(input) {
-    if (input.options.format !== 'ddl') {
-      return Promise.reject(new Error(`unknown export format “${input.options.format}”`));
+    const { format } = input.options;
+    if (isOrmId(format)) return Promise.resolve(buildOrmExport(format, input, ORM_DIALECT));
+    if (format !== 'ddl') {
+      return Promise.reject(new Error(`unknown export format “${format}”`));
     }
     return Promise.resolve(buildExport(input));
   },

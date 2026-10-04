@@ -1,4 +1,5 @@
 import {
+  ORM_EXPORT_FORMATS,
   SSH_TUNNEL_FIELDS,
   defineCapabilities,
   type ConstraintKindDescriptor,
@@ -148,6 +149,8 @@ export const CAPABILITIES: EngineCapabilities = defineCapabilities({
       supportsComments: true,
       supportsDrops: true,
     },
+    // Phase 8 — Prisma, Drizzle, TypeORM and Django, written by `@schemaloom/orm`.
+    ...ORM_EXPORT_FORMATS,
   ],
   // Q7: the current LTS lines. A version names its product, so the picker shows it as is.
   targetVersions: ['MySQL 8.4', 'MySQL 8.0', 'MariaDB 11.4', 'MariaDB 10.11'],

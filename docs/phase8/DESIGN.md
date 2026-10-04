@@ -1,6 +1,35 @@
 # Phase 8: ORM exporters (Drizzle, TypeORM, Django) and the shared ORM layer
 
-Status: **approved 2026-10-04** with every default in the open-questions table. Roadmap row 8.
+Status: **approved 2026-10-04** with every default in the open-questions table, and **built**
+the same day for PostgreSQL and MySQL/MariaDB (SQLite gets its dialect with row 13). Roadmap
+row 8.
+
+**As built**, where it differs from the text below:
+
+- **The dialect is a little wider than §2.1's sketch.** Besides the type table an engine
+  supplies `columnType(field)` (its type resolution, domains included), `enums(model)` (custom
+  types on PostgreSQL, a column's inline `enum(…)` on MySQL), `autoIncrement(field)`,
+  `indexMethod(index)`, and two flags: `namedPrimaryKeys` (MySQL's key is always `PRIMARY` and
+  Prisma rejects `map:` on it) and `namedEnums`. MySQL's unsigned integers are their own rows
+  (`int unsigned`), since every ORM spells them apart.
+- **The Prisma writer was moved, not rewritten on the shared plan.** Its output is pinned to
+  Phase 7's reviewed snapshot, which stays byte-identical. Drizzle, TypeORM and Django share
+  `planModels`.
+- **Drizzle:** foreign keys are `foreignKey({ …, name })` in the table callback so names
+  survive, except a reference to a table declared later that refers back (a cycle), which uses
+  `.references((): AnyPgColumn => …)`: TypeScript can't infer two consts from each other. MySQL
+  columns have no `.desc()`, and Drizzle has no FULLTEXT or SPATIAL index; both are left out
+  with a comment.
+- **Django:** `Meta.indexes` lists only plain indexes whose names Django accepts (30
+  characters); partial, expression and non-b-tree indexes become comments. A table or view
+  with no primary key uses its `id` column as one, because Django adds an `id` of its own.
+- **Prefix indexes** (`KEY (email(20))`) keep their length in Prisma (`length: 20`); Drizzle
+  and Django can't express it and index the whole column.
+- **Q4:** TypeORM 1.x is current now, so the output is checked against TypeORM 1.1 (its
+  decorators are the 0.3 ones) and Drizzle 0.45.
+- **Q5:** the CI workflow installs Django (`.github/workflows/ci.yml`); locally the check skips
+  without it, and `SL_PYTHON` picks the interpreter.
+- Downloads are named `schema.prisma`, `schema.ts`, `entities.ts` and `models.py`.
 
 Decided with the owner before writing (2026-10-04):
 

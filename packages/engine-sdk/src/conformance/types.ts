@@ -135,6 +135,7 @@ export type ConformanceCheckId =
   | 'export/comments-from-docs'
   | 'export/skips-restricted'
   | 'export/redaction-is-announced'
+  | 'export/orm-formats-build'
   | 'roundtrip/ddl-ir-ddl'
   | 'roundtrip/idempotent'
   | 'templates/import-cleanly'
@@ -190,6 +191,7 @@ export const CONFORMANCE_CHECKS: readonly ConformanceCheckId[] = [
   'export/comments-from-docs',
   'export/skips-restricted',
   'export/redaction-is-announced',
+  'export/orm-formats-build',
   'roundtrip/ddl-ir-ddl',
   'roundtrip/idempotent',
   'templates/import-cleanly',

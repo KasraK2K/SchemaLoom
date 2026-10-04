@@ -23,6 +23,12 @@ import {
 import { JobsService } from './jobs.service';
 import type { ExportDdlOptions } from './queues';
 
+/** Phase 8 §1 — the name each ORM's own tooling gives the file; everything else is `schema`. */
+const DOWNLOAD_BASENAME: Readonly<Record<string, string>> = {
+  typeorm: 'entities',
+  django: 'models',
+};
+
 /** L11 — the download link lives ten minutes. */
 export const EXPORT_DOWNLOAD_TTL_SEC = 600;
 
@@ -119,7 +125,7 @@ export class ExportsService {
       downloadUrl: await this.storage.presignGet(
         row.storageKey,
         EXPORT_DOWNLOAD_TTL_SEC,
-        `schema.${row.storageKey.slice(row.storageKey.lastIndexOf('.') + 1)}`,
+        `${DOWNLOAD_BASENAME[row.format] ?? 'schema'}.${row.storageKey.slice(row.storageKey.lastIndexOf('.') + 1)}`,
       ),
     };
   }

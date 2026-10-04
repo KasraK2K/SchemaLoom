@@ -1,0 +1,43 @@
+// Views are not included: Prisma supports them only as a preview feature.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum customers_status {
+  active
+  closed
+}
+
+model customers {
+  id         BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  email      String           @unique(map: "customers_email_uq") @db.VarChar(255)
+  status     customers_status @default(active)
+  bio        String?          @db.Text
+  updated_at DateTime         @default(now()) @db.Timestamp(0)
+  orders     orders[]
+
+  @@index([email(length: 20)], map: "idx_email_prefix")
+
+  // Not supported by Prisma, left out: index "ft_bio"
+  // Not supported by Prisma, left out: index "idx_status_lower"
+}
+
+/// Every customer's orders, one row per order
+model orders {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  /// Who placed the order
+  customer_id BigInt    @db.UnsignedBigInt
+  total       Decimal   @db.Decimal(12, 2)
+  net_total   Decimal?  @db.Decimal(12, 2)
+  customers   customers @relation(fields: [customer_id], references: [id], map: "fk_orders_customer")
+
+  @@index([customer_id, total(sort: Desc)], map: "idx_customer_id")
+
+  // Not supported by Prisma, left out: check constraint "orders_total_positive"
+}

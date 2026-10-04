@@ -1,0 +1,53 @@
+import { Check, Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, ViewColumn, ViewEntity } from 'typeorm';
+
+@Index('ft_bio', ['bio'], { fulltext: true })
+@Index('idx_email_prefix', ['email'])
+// Left out: index 'idx_status_lower' (its columns include an expression)
+@Index('customers_email_uq', ['email'], { unique: true })
+@Entity('customers')
+export class Customers {
+  @PrimaryGeneratedColumn({ type: 'bigint', name: 'id', unsigned: true })
+  id!: string;
+
+  @Column({ type: 'varchar', name: 'email', length: 255 })
+  email!: string;
+
+  @Column({ type: 'enum', name: 'status', enum: ['active', 'closed'], default: 'active' })
+  status!: 'active' | 'closed';
+
+  @Column({ type: 'text', name: 'bio', nullable: true })
+  bio!: string | null;
+
+  @Column({ type: 'timestamp', name: 'updated_at', default: () => 'CURRENT_TIMESTAMP' })
+  updatedAt!: Date;
+
+  @OneToMany(() => Orders, (x) => x.customers)
+  orders!: Orders[];
+}
+
+@Index('idx_customer_id', ['customerId', 'total'])
+@Check('orders_total_positive', '`total` > 0')
+@Entity('orders', { comment: 'Every customer\'s orders, one row per order' })
+export class Orders {
+  @PrimaryGeneratedColumn({ type: 'bigint', name: 'id', unsigned: true })
+  id!: string;
+
+  @Column({ type: 'bigint', name: 'customer_id', unsigned: true, comment: 'Who placed the order' })
+  customerId!: string;
+
+  @Column({ type: 'decimal', name: 'total', precision: 12, scale: 2 })
+  total!: string;
+
+  @Column({ type: 'decimal', name: 'net_total', precision: 12, scale: 2, nullable: true, generatedType: 'STORED', asExpression: '`total` * 0.9' })
+  netTotal!: string | null;
+
+  @ManyToOne(() => Customers, (x) => x.orders, { onDelete: 'RESTRICT', onUpdate: 'CASCADE' })
+  @JoinColumn([{ name: 'customer_id', referencedColumnName: 'id' }])
+  customers!: Customers;
+}
+
+@ViewEntity({ name: 'order_summary', expression: 'select `orders`.`id` AS `id` from `orders`' })
+export class OrderSummary {
+  @ViewColumn({ name: 'id' })
+  id!: string | null;
+}

@@ -1,4 +1,5 @@
 import { expect } from 'vitest';
+import { ORM_EXPORT_FORMATS } from '../capabilities.js';
 import { EXPORT_PHASE_RANK, type ExportResult } from '../exporter.js';
 import type { ConformanceCheck } from './check.js';
 import { allObjects, renderExport, reorderModel, runExport } from './io-context.js';
@@ -149,6 +150,43 @@ export const EXPORT_CHECKS: readonly ConformanceCheck[] = [
       const clean = await runExport(ctx, ctx.fixtures.redactForExport(ctx.fixtures.referenceModel));
       expect(clean.statements.filter((statement) => statement.phase === 'header')).toEqual([]);
       expect(clean.incomplete).toBe(false);
+    },
+  },
+  {
+    // Phase 8 §4 — an ORM format an engine declares must work on its fixtures, hidden objects
+    // included. The writers are shared, so this mostly catches a dialect's type table.
+    id: 'export/orm-formats-build',
+    requires: 'exporter',
+    run: async (ctx) => {
+      const formats = ctx.engine.capabilities.exportFormats.filter((f) =>
+        ORM_EXPORT_FORMATS.some((orm) => orm.id === f.id),
+      );
+      const model = ctx.fixtures.redactedModel;
+      const restricted = new Set(
+        allObjects(model)
+          .filter((entry) => entry.object.restricted === true)
+          .map((entry) => entry.object.id),
+      );
+      for (const { id } of formats) {
+        const clean = await runExport(
+          ctx,
+          ctx.fixtures.redactForExport(ctx.fixtures.referenceModel),
+          {
+            format: id,
+          },
+        );
+        expect(clean.statements.length).toBeGreaterThan(0);
+        expect(clean.incomplete).toBe(false);
+        expect(clean.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+
+        const redacted = await runExport(ctx, model, { format: id });
+        expect(redacted.incomplete).toBe(true);
+        expect(redacted.diagnostics).toEqual([]);
+        const leaked = redacted.statements
+          .filter((s) => s.target !== null && restricted.has(s.target.id))
+          .map((s) => `${id} ${s.kind}: ${s.text}`);
+        expect(leaked).toEqual([]);
+      }
     },
   },
 ];

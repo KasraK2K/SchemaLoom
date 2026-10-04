@@ -26,6 +26,11 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+      # Phase 8 Q5: the Django export is checked by `manage.py check`; without Django it skips.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install "django>=5.2,<6" "psycopg[binary]"
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prettier --check .
       - run: pnpm turbo lint typecheck test build

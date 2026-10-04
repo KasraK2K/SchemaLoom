@@ -1,0 +1,114 @@
+import { Check, Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryColumn, PrimaryGeneratedColumn, ViewEntity } from 'typeorm';
+
+@Entity('audit_log')
+export class AuditLog {
+  @Column({ type: 'timestamp', name: 'at', nullable: true })
+  at!: Date | null;
+}
+
+// Left out: index 'users_lower_email' (its columns include an expression)
+@Index('users_email_key', ['email'], { unique: true })
+@Check('users_balance_check', 'balance >= 0')
+@Entity('users', { comment: 'People who sign in' })
+export class Users {
+  @PrimaryColumn({ type: 'uuid', name: 'id', default: () => 'gen_random_uuid()' })
+  id!: string;
+
+  @Column({ type: 'varchar', name: 'email', length: 320 })
+  email!: string;
+
+  @Column({ type: 'text', name: 'name', nullable: true, comment: 'Shown "as is"' })
+  name!: string | null;
+
+  @Column({ type: 'text', name: 'tags', array: true, nullable: true })
+  tags!: string[] | null;
+
+  @Column({ type: 'enum', name: 'role', enum: ['member', 'admin', 'super-admin'], enumName: 'user_role', default: 'member' })
+  role!: 'member' | 'admin' | 'super-admin';
+
+  @Column({ type: 'numeric', name: 'balance', precision: 12, scale: 2, default: 0 })
+  balance!: string;
+
+  @Column({ type: 'timestamp with time zone', name: 'created_at', default: () => 'now()' })
+  createdAt!: Date;
+
+  @Column({ type: 'varchar', name: 'Display Name', length: 80, nullable: true })
+  displayName!: string | null;
+
+  @Column({ type: 'uuid', name: 'manager_id', nullable: true })
+  managerId!: string | null;
+
+  @Column({ type: 'tstzrange', name: 'active', nullable: true })
+  active!: string | null;
+
+  @ManyToOne(() => Users, (x) => x.usersChildrenManagerId)
+  @JoinColumn([{ name: 'manager_id', referencedColumnName: 'id' }])
+  usersManagerId!: Users | null;
+
+  @OneToMany(() => Posts, (x) => x.usersAuthorId)
+  postsAuthorId!: Posts[];
+
+  @OneToMany(() => Posts, (x) => x.usersEditorId)
+  postsEditorId!: Posts[];
+
+  @OneToOne(() => Profiles, (x) => x.users)
+  profiles!: Profiles | null;
+
+  @OneToMany(() => Users, (x) => x.usersManagerId)
+  usersChildrenManagerId!: Users[];
+}
+
+@Index('posts_author_id_idx', ['authorId'])
+// Left out: index 'posts_body_gin' (TypeORM has no gin index)
+@Index('posts_status_title_idx', ['status', 'title'])
+@Index('posts_title_status_key', ['title', 'status'], { unique: true })
+@Entity('posts')
+export class Posts {
+  @PrimaryGeneratedColumn({ type: 'bigint', name: 'id' })
+  id!: string;
+
+  @Column({ type: 'uuid', name: 'author_id' })
+  authorId!: string;
+
+  @Column({ type: 'uuid', name: 'editor_id', nullable: true })
+  editorId!: string | null;
+
+  @Column({ type: 'jsonb', name: 'body', nullable: true })
+  body!: unknown | null;
+
+  @Column({ type: 'smallint', name: 'status', default: 1 })
+  status!: number;
+
+  @Column({ type: 'text', name: 'title', default: 'Untitled \'draft\'' })
+  title!: string;
+
+  @ManyToOne(() => Users, (x) => x.postsAuthorId, { onDelete: 'CASCADE' })
+  @JoinColumn([{ name: 'author_id', referencedColumnName: 'id' }])
+  usersAuthorId!: Users;
+
+  @ManyToOne(() => Users, (x) => x.postsEditorId, { onDelete: 'SET NULL', onUpdate: 'CASCADE' })
+  @JoinColumn([{ name: 'editor_id', referencedColumnName: 'id' }])
+  usersEditorId!: Users | null;
+}
+
+@Entity('profiles')
+export class Profiles {
+  @PrimaryColumn({ type: 'uuid', name: 'user_id' })
+  userId!: string;
+
+  @Column({ type: 'text', name: 'bio', nullable: true })
+  bio!: string | null;
+
+  @OneToOne(() => Users, (x) => x.profiles)
+  @JoinColumn([{ name: 'user_id', referencedColumnName: 'id' }])
+  users!: Users;
+}
+
+@Entity('invoices', { schema: 'sales' })
+export class Invoices {
+  @PrimaryGeneratedColumn('identity', { type: 'integer', name: 'id', generatedIdentity: 'ALWAYS' })
+  id!: number;
+}
+
+@ViewEntity({ name: 'recent_posts', expression: 'SELECT 1' })
+export class RecentPosts {}
