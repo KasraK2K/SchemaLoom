@@ -54,7 +54,11 @@ interface DueRow {
   readonly project: { readonly organizationId: string; readonly name: string };
 }
 
-interface Counts { readonly added: number; readonly removed: number; readonly changed: number }
+interface Counts {
+  readonly added: number;
+  readonly removed: number;
+  readonly changed: number;
+}
 
 @Injectable()
 export class DriftCheckService {

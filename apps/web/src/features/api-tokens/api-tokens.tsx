@@ -178,8 +178,8 @@ export function ProjectApiTokens({ projectId }: { readonly projectId: string }) 
     <fieldset className="flex flex-col gap-2">
       <legend className="mb-1 text-sm text-text">API tokens</legend>
       <p className="text-xs text-text-muted">
-        For the <code className="font-mono">schemaloom</code> CLI and CI: pull the design, or
-        check the saved connection for drift. A token acts as you, on this project only.
+        For the <code className="font-mono">schemaloom</code> CLI and CI: pull the design, or check
+        the saved connection for drift. A token acts as you, on this project only.
       </p>
       {secret !== null && (
         <div role="status" className="flex flex-col gap-1 rounded-md border border-border p-2">

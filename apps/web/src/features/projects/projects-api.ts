@@ -79,6 +79,8 @@ export const EngineOptionSchema = z.object({
         }) satisfies z.ZodType<ConnectionField>,
       )
       .default([]),
+    // Phase 13 — absent from an older api: then it follows the connection form.
+    introspection: z.enum(['network', 'file', 'none']).optional(),
     targetVersions: z.array(z.string()).default([]),
     defaultTargetVersion: z.string().nullable().default(null),
   }),
@@ -94,6 +96,8 @@ export interface EngineOption {
   importFormats: { id: string; fileExtensions: string[] }[];
   /** Phase 6 — the engine's "read a database" form; empty when it has none. */
   connectionFields: ConnectionField[];
+  /** Phase 13 — `file`: the "read a database" form is a file upload (SQLite) */
+  introspection: 'network' | 'file' | 'none';
   /** Database versions a project can target, newest first; empty means free text. */
   targetVersions: string[];
   defaultTargetVersion: string | null;
@@ -117,6 +121,9 @@ export async function listEngines(): Promise<EngineOption[]> {
     displayName: engine.displayName,
     importFormats: engine.capabilities.importFormats,
     connectionFields: engine.capabilities.connectionFields,
+    introspection:
+      engine.capabilities.introspection ??
+      (engine.capabilities.connectionFields.length > 0 ? 'network' : 'none'),
     targetVersions: engine.capabilities.targetVersions,
     defaultTargetVersion: engine.capabilities.defaultTargetVersion,
     templates: engine.templates,

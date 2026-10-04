@@ -28,6 +28,12 @@ export interface IntrospectRequest {
   readonly signal: AbortSignalLike;
   /** output cap; over it the engine throws `IntrospectError('too_large')` */
   readonly maxBytes: number;
+  /**
+   * Phase 13 §5 — for an engine whose `capabilities.introspection` is `file`: the uploaded
+   * database, already in a temporary file core deletes afterwards. `connection` is empty and
+   * `resolvedAddress` is '' for such an engine: nothing is reached over the network.
+   */
+  readonly file?: string;
 }
 
 export interface IntrospectResult {

@@ -48,7 +48,10 @@ export type SavedConnection = z.infer<typeof SavedSchema>;
 
 /** What a read sends: the typed details, or the saved connection as saved. */
 export type ConnectionSource =
-  { readonly connection: Record<string, unknown> } | { readonly saved: true };
+  | { readonly connection: Record<string, unknown> }
+  | { readonly saved: true }
+  /** Phase 13 — a database file for an engine that reads one (SQLite) */
+  | { readonly upload: File };
 
 const path = (projectId: string) => `/projects/${encodeURIComponent(projectId)}/connection`;
 export const savedConnectionKey = (projectId: string) => ['saved-connection', projectId] as const;
@@ -128,25 +131,37 @@ export interface ConnectionChoice {
    *  comes back when saving was refused (only managers may) and the typed details are used. */
   readonly resolve: () => Promise<{ readonly source: ConnectionSource; readonly note?: string }>;
   readonly reset: () => void;
+  /** Phase 13 — the engine reads an uploaded file (SQLite): no form, no saved connection */
+  readonly upload: boolean;
+  readonly file: File | null;
+  readonly setFile: (file: File | null) => void;
 }
 
 export function useConnectionChoice(
   projectId: string | null,
   fields: readonly ConnectionField[],
+  upload = false,
 ): ConnectionChoice {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: savedConnectionKey(projectId ?? ''),
     queryFn: () => getSavedConnection(projectId ?? ''),
-    enabled: projectId !== null,
+    enabled: projectId !== null && !upload,
   });
-  // An error (no access, network) reads as none, never as loading forever.
-  const saved = projectId === null || query.isError ? null : query.data;
+  // An error (no access, network) reads as none, never as loading forever. A file engine has
+  // nothing to save, so nothing is ever saved.
+  const saved = projectId === null || upload || query.isError ? null : query.data;
+  const [file, setFile] = useState<File | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ConnectionDraft>(() => initialDraft(fields));
   const [remember, setRemember] = useState(true);
 
   const resolve = async (): Promise<{ source: ConnectionSource; note?: string }> => {
+    if (upload) {
+      if (file === null)
+        throw new ApiError(400, 'introspect.upload_empty', 'Choose a database file.');
+      return { source: { upload: file } };
+    }
     if (saved && !editing) return { source: { saved: true } };
     const connection = connectionPayload(fields, draft);
     if (projectId === null || (!remember && !editing)) return { source: { connection } };
@@ -185,7 +200,11 @@ export function useConnectionChoice(
       setEditing(false);
       setDraft(initialDraft(fields));
       setRemember(true);
+      setFile(null);
     },
+    upload,
+    file,
+    setFile,
   };
 }
 
@@ -203,6 +222,26 @@ export function ConnectionSection({
   readonly canRemember?: boolean;
 }) {
   const { saved } = choice;
+  if (choice.upload) {
+    return (
+      <label className="flex flex-col gap-1 text-xs text-text-muted">
+        Database file
+        <input
+          type="file"
+          accept=".db,.sqlite,.sqlite3,.db3"
+          disabled={disabled}
+          onChange={(e) => {
+            choice.setFile(e.target.files?.[0] ?? null);
+          }}
+        />
+        <span>
+          Only its schema is read, never its rows, and the file is deleted after. Too big to upload?
+          Run <code className="font-mono">sqlite3 app.db .schema</code> and import the output as
+          SQL.
+        </span>
+      </label>
+    );
+  }
   if (saved && !choice.editing) {
     return (
       <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-xs">

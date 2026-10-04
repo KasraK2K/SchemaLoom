@@ -145,25 +145,25 @@ async function controllerWith(registry: EngineRegistry): Promise<EnginesControll
 }
 
 describe('ENGINE_MANIFEST', () => {
-  it('names PostgreSQL and MySQL, PostgreSQL first', () => {
+  it('names PostgreSQL, MySQL and SQLite, PostgreSQL first', () => {
     // The C10 claim under test: roadmap 9's second engine was a second line HERE (and a
     // dependency), with nothing else in apps/api changed for it.
-    expect(ENGINE_MANIFEST.map((e) => e.id)).toEqual(['postgresql', 'mysql']);
+    expect(ENGINE_MANIFEST.map((e) => e.id)).toEqual(['postgresql', 'mysql', 'sqlite']);
   });
 
-  it('serves both engines as available and the rest as coming soon', async () => {
+  it('serves the registered engines as available and the rest as coming soon', async () => {
     const moduleRef = await Test.createTestingModule({ imports: [EnginesModule] }).compile();
     const catalog = moduleRef.get(EnginesController).catalog();
 
     // Manifest order: PostgreSQL first, so it stays the picker's default.
-    expect(catalog.available.map((e) => e.id)).toEqual(['postgresql', 'mysql']);
+    expect(catalog.available.map((e) => e.id)).toEqual(['postgresql', 'mysql', 'sqlite']);
 
     // A registration SHADOWS an announcement of the same id — otherwise the picker would
     // offer PostgreSQL twice, once greyed out as "coming soon".
     expect(catalog.comingSoon.map((e) => e.id)).not.toContain('postgresql');
 
     const announcedMinusRegistered = [...COMING_SOON]
-      .filter((e) => e.id !== 'postgresql' && e.id !== 'mysql')
+      .filter((e) => !['postgresql', 'mysql', 'sqlite'].includes(e.id))
       .sort((a, b) => (a.displayName < b.displayName ? -1 : 1));
     expect(catalog.comingSoon.map((e) => e.id)).toEqual(announcedMinusRegistered.map((e) => e.id));
   });

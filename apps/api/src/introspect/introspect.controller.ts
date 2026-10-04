@@ -1,4 +1,13 @@
-import { BadRequestException, Body, Controller, HttpCode, Param, Post, Req } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { RequirePermission } from '../access';
@@ -67,4 +76,53 @@ export class IntrospectController {
       transactional: body.transactional,
     });
   }
+
+  /**
+   * Phase 13 §5 — the same two reads for an engine that reads a FILE (SQLite): the body is the
+   * database itself, `application/octet-stream`. Same atom, same full-view check, same answer.
+   */
+  @ApiOperation({ summary: 'Upload a database file and preview importing its schema' })
+  @RequirePermission('schema:edit', { project: 'projectId' })
+  @Post('upload/preview')
+  @HttpCode(200)
+  previewUpload(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: unknown,
+  ): Promise<IntrospectPreview> {
+    return this.introspect.preview(snapshotContext(req, projectId), { upload: uploaded(body) });
+  }
+
+  @ApiOperation({ summary: 'Compare the design with an uploaded database file' })
+  @RequirePermission('schema:edit', { project: 'projectId' })
+  @Post('upload/drift')
+  @HttpCode(200)
+  driftUpload(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: unknown,
+    @Query('allowDestructive') allowDestructive?: string,
+    @Query('transactional') transactional?: string,
+  ): Promise<DriftView> {
+    // Phase 11 Q4 holds here too: a token never sends the server something new to read.
+    if (req.auth?.kind === 'user' && req.auth.token !== undefined) {
+      throw new BadRequestException({ code: 'saved_connection_required' });
+    }
+    return this.introspect.drift(
+      snapshotContext(req, projectId),
+      { upload: uploaded(body) },
+      {
+        allowDestructive: allowDestructive === 'true',
+        transactional: transactional !== 'false',
+      },
+    );
+  }
+}
+
+/** The raw body parser hands a Buffer only for `application/octet-stream`. */
+function uploaded(body: unknown): Buffer {
+  if (!Buffer.isBuffer(body) || body.length === 0) {
+    throw new BadRequestException({ code: 'introspect.upload_empty' });
+  }
+  return body;
 }

@@ -35,6 +35,7 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
     typeDescriptors,
     features: declared,
     connectionFields = [],
+    introspection = connectionFields.length > 0 ? 'network' : 'none',
     targetVersions = [],
     defaultTargetVersion = null,
     ...rest
@@ -48,6 +49,7 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
     ...rest,
     features,
     connectionFields,
+    introspection,
     targetVersions,
     defaultTargetVersion,
     typeCatalogSupportsArrays: typeDescriptors.some((d) => d.supportsArray),
@@ -56,6 +58,14 @@ export function defineCapabilities(input: CapabilitiesInput): EngineCapabilities
   const fail = (rule: string, detail: string): never => {
     throw new CapabilitiesContradictionError(engineId, rule, detail);
   };
+
+  // Phase 13 §5: a network read needs its form, and a file read has none.
+  if ((introspection === 'network') !== connectionFields.length > 0) {
+    fail(
+      'introspection-matches-fields',
+      `introspection=${introspection} with ${String(connectionFields.length)} connection fields`,
+    );
+  }
 
   // --- the §4.1 invariant table, in full and in order ---
 

@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { IntrospectError, type EngineDefinition } from '@schemaloom/engine-sdk';
 import { describe, expect, it, vi } from 'vitest';
 import { ENGINE_MANIFEST } from '../engines/engines.manifest';
@@ -7,6 +10,7 @@ import { IntrospectService } from './introspect.service';
 import { openTunnel } from './ssh-tunnel';
 
 const postgresEngine = ENGINE_MANIFEST[0]!;
+const sqliteEngine = ENGINE_MANIFEST.find((e) => e.id === 'sqlite')!;
 const FIELDS = postgresEngine.capabilities.connectionFields;
 
 /** The `field` a validation error names, or undefined when nothing was thrown. */
@@ -116,6 +120,7 @@ function build(opts: {
   nodeEnv?: 'development' | 'production';
   /** what the saved-connection store hands back for `{ saved: true }` */
   saved?: Record<string, unknown>;
+  uploadMax?: number;
 }) {
   const introspect = vi.fn().mockResolvedValue({
     source: 'CREATE TABLE t (id int);',
@@ -131,7 +136,9 @@ function build(opts: {
           ? (opts.nodeEnv ?? 'production')
           : key === 'INTROSPECTION_ENABLED'
             ? true
-            : (opts.allowPrivate ?? true),
+            : key === 'INTROSPECT_UPLOAD_MAX_BYTES'
+              ? (opts.uploadMax ?? 1_000_000)
+              : (opts.allowPrivate ?? true),
     },
     registry: { tryGet: () => engine },
     prisma: {
@@ -337,5 +344,71 @@ describe('IntrospectService with the saved connection (6c)', () => {
       response: { code: 'introspect.invalid_connection' },
     });
     expect(introspect).not.toHaveBeenCalled();
+  });
+});
+
+describe('IntrospectService — an uploaded SQLite file (Phase 13 §5)', () => {
+  async function sqliteFile(): Promise<Buffer> {
+    const { DatabaseSync } = await import('node:sqlite');
+    const dir = mkdtempSync(join(tmpdir(), 'sl-spec-'));
+    const path = join(dir, 'app.db');
+    const db = new DatabaseSync(path);
+    db.exec(
+      "CREATE TABLE customers (id INTEGER PRIMARY KEY, email TEXT NOT NULL); INSERT INTO customers VALUES (1, 'secret-row@example.com');",
+    );
+    db.close();
+    return readFileSync(path);
+  }
+
+  it('reads the schema and never a row, and leaves no file behind', async () => {
+    let seenFile = '';
+    const real = sqliteEngine.introspector;
+    const { service, deps } = build({
+      engine: {
+        ...sqliteEngine,
+        introspector: {
+          introspect: (req) => {
+            seenFile = req.file ?? '';
+            if (real === undefined) throw new Error('no introspector');
+            return real.introspect(req);
+          },
+        },
+      },
+    });
+    await service.preview(ctx, { upload: await sqliteFile() });
+    const source = String(deps.snapshots.preview.mock.calls[0]?.[1]);
+    expect(source).toContain('CREATE TABLE customers');
+    expect(source).not.toContain('secret-row');
+    expect(seenFile).not.toBe('');
+    expect(existsSync(seenFile)).toBe(false);
+    expect(deps.prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          metadata: expect.objectContaining({ upload: true, ok: true }),
+        }),
+      }),
+    );
+  });
+
+  it('refuses a file that is not a database, a file too large, and the wrong kind of read', async () => {
+    const sqlite = build({ engine: sqliteEngine });
+    await expect(
+      sqlite.service.preview(ctx, { upload: Buffer.from('CREATE TABLE t (id int);') }),
+    ).rejects.toMatchObject({ status: 422, response: { code: 'introspect.failed' } });
+    await expect(sqlite.service.preview(ctx, { connection })).rejects.toMatchObject({
+      status: 422,
+      response: { code: 'introspect.upload_required' },
+    });
+    const small = build({ engine: sqliteEngine, uploadMax: 10 });
+    await expect(small.service.preview(ctx, { upload: await sqliteFile() })).rejects.toMatchObject({
+      status: 413,
+    });
+    const postgres = build({});
+    await expect(postgres.service.preview(ctx, { upload: Buffer.from('x') })).rejects.toMatchObject(
+      {
+        status: 422,
+        response: { code: 'introspect.upload_not_supported' },
+      },
+    );
   });
 });

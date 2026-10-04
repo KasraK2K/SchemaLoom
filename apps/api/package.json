@@ -35,6 +35,7 @@
     "@schemaloom/contracts": "workspace:*",
     "@schemaloom/engine-mysql": "workspace:*",
     "@schemaloom/engine-postgresql": "workspace:*",
+    "@schemaloom/engine-sqlite": "workspace:*",
     "@schemaloom/engine-sdk": "workspace:*",
     "@schemaloom/orm": "workspace:*",
     "@schemaloom/schema-model": "workspace:*",

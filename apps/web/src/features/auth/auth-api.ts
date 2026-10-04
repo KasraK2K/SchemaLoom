@@ -88,8 +88,7 @@ export function afterFirstFactor(result: LoginResult, next: string | null): stri
 
 /** Roadmap 16: false once an invite-only install has its first account. */
 export async function fetchSignupOpen(): Promise<boolean> {
-  return z.object({ open: z.boolean() }).parse(await apiFetch<unknown>('/auth/signup-policy'))
-    .open;
+  return z.object({ open: z.boolean() }).parse(await apiFetch<unknown>('/auth/signup-policy')).open;
 }
 
 /** The address an invitation link is for; the sign-up form locks its email field to it. */

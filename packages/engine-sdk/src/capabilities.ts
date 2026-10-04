@@ -216,6 +216,12 @@ export interface EngineCapabilities {
    *  `introspector`; `capabilities/services-match-features` checks the two agree. Here and not
    *  on the introspector because the browser only ever sees capabilities. */
   readonly connectionFields: readonly ConnectionField[];
+  /**
+   * Phase 13 §5 — how a live database is read: over the network with `connectionFields`
+   * (PostgreSQL, MySQL), from an uploaded file (SQLite), or not at all. A `file` engine has
+   * no connection fields, saved connections or scheduled checks.
+   */
+  readonly introspection: 'network' | 'file' | 'none';
   /** The database versions a project can target, newest first ("16", not "16.4": a minor
    *  release adds no syntax). Empty = free text. Pure metadata today: it reaches the AI
    *  prompt and the exports, and no generator branches on it. */
@@ -332,11 +338,14 @@ export interface CapabilitiesInput extends Omit<
   | 'features'
   | 'typeCatalogSupportsArrays'
   | 'connectionFields'
+  | 'introspection'
   | 'targetVersions'
   | 'defaultTargetVersion'
 > {
   /** defaults to none: an engine without an introspector declares nothing */
   readonly connectionFields?: readonly ConnectionField[];
+  /** default `network` when there are connection fields, else `none`; `file` is declared */
+  readonly introspection?: 'network' | 'file' | 'none';
   /** default none: the create form then asks for the version as free text */
   readonly targetVersions?: readonly string[];
   readonly defaultTargetVersion?: string | null;
@@ -374,4 +383,4 @@ export const anySchemalessEntity = (c: EngineCapabilities): boolean =>
   c.entityKinds.some((k) => !k.fieldsAreAuthoritative);
 export const canImport = (c: EngineCapabilities): boolean => c.importFormats.length > 0;
 export const canExport = (c: EngineCapabilities): boolean => c.exportFormats.length > 0;
-export const canIntrospect = (c: EngineCapabilities): boolean => c.connectionFields.length > 0;
+export const canIntrospect = (c: EngineCapabilities): boolean => c.introspection !== 'none';

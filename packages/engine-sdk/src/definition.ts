@@ -71,7 +71,7 @@ export interface EngineDefinition extends EngineStaticFacet {
   /** step 21 — `Importer` (§9). Narrowed from `unknown` when the contract landed. */
   readonly importer?: Importer;
   /** Phase 6 §1 — reads a live database into import source. Presence must equal
-   *  `canIntrospect(capabilities)` (non-empty `connectionFields`). */
+   *  `canIntrospect(capabilities)` (`introspection` is `network` or `file`). */
   readonly introspector?: Introspector;
   /** step 20 — `Exporter` (§10). Narrowed from `unknown` when the contract landed. */
   readonly exporter?: Exporter;

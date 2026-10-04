@@ -8,6 +8,7 @@ import {
   ConnectionForm,
   connectionPayload,
   initialDraft,
+  readsDatabase,
   type ConnectionDraft,
 } from './connection-form';
 import type {
@@ -123,11 +124,11 @@ export async function introspectPreview(
   projectId: string,
   source: ConnectionSource,
 ): Promise<Introspected> {
+  const base = `/projects/${encodeURIComponent(projectId)}/introspect`;
   return IntrospectedSchema.parse(
-    await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/introspect/preview`, {
-      method: 'POST',
-      body: source,
-    }),
+    'upload' in source
+      ? await apiFetch<unknown>(`${base}/upload/preview`, { method: 'POST', file: source.upload })
+      : await apiFetch<unknown>(`${base}/preview`, { method: 'POST', body: source }),
   );
 }
 
@@ -322,6 +323,8 @@ export function NoProjects({
   const [draft, setDraft] = useState<ConnectionDraft>({});
   /** 6c — save the connection on the project, so it can Sync later */
   const [remember, setRemember] = useState(true);
+  /** Phase 13 — the database file, for an engine that reads one */
+  const [dbFile, setDbFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -333,7 +336,7 @@ export function NoProjects({
 
   const engine = engines.find((candidate) => candidate.id === engineId);
   const canImport = engines.some((candidate) => candidate.importFormats.length > 0);
-  const canRead = engines.some((candidate) => candidate.connectionFields.length > 0);
+  const canRead = engines.some((candidate) => readsDatabase(candidate));
   const hasTemplates = engines.some((candidate) => candidate.templates.length > 0);
   const fromTemplate = mode === 'template';
   const importing = mode === 'import' || mode === 'database';
@@ -345,7 +348,7 @@ export function NoProjects({
       ? candidate.importFormats.length > 0
       : m === 'template'
         ? candidate.templates.length > 0
-        : candidate.connectionFields.length > 0);
+        : readsDatabase(candidate));
 
   if (skipped !== null) {
     return (
@@ -462,6 +465,11 @@ export function NoProjects({
   /** Saves the connection on the project first when asked; a manager-only save that is
    *  refused (importing into someone else's project) falls back to the typed details. */
   const databaseSource = async (id: string): Promise<ConnectionSource> => {
+    if (engine?.introspection === 'file') {
+      if (dbFile === null)
+        throw new ApiError(400, 'introspect.upload_empty', 'Choose a database file.');
+      return { upload: dbFile };
+    }
     const connection = connectionPayload(engine?.connectionFields ?? [], draft);
     if (!remember) return { connection };
     try {
@@ -697,7 +705,21 @@ export function NoProjects({
           </label>
         </>
       )}
-      {mode === 'database' && engine !== undefined && (
+      {mode === 'database' && engine?.introspection === 'file' && (
+        <label className="flex flex-col gap-1 text-xs text-text-muted">
+          Database file
+          <input
+            type="file"
+            accept=".db,.sqlite,.sqlite3,.db3"
+            disabled={busy}
+            onChange={(e) => {
+              setDbFile(e.target.files?.[0] ?? null);
+            }}
+          />
+          Only its schema is read, never its rows, and the file is deleted after.
+        </label>
+      )}
+      {mode === 'database' && engine !== undefined && engine.introspection !== 'file' && (
         <>
           <ConnectionForm
             fields={engine.connectionFields}

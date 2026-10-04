@@ -12,6 +12,13 @@ export type ConnectionDraft = Readonly<Record<string, string>>;
 export const hasConnectionForm = (fields: readonly ConnectionField[] | undefined): boolean =>
   (fields?.length ?? 0) > 0;
 
+/** Phase 13 — whether the engine reads a live database at all: by its form, or a file. */
+export const readsDatabase = (capabilities: {
+  readonly connectionFields?: readonly ConnectionField[];
+  readonly introspection?: 'network' | 'file' | 'none';
+}): boolean =>
+  capabilities.introspection === 'file' || hasConnectionForm(capabilities.connectionFields);
+
 export function initialDraft(fields: readonly ConnectionField[]): ConnectionDraft {
   return Object.fromEntries(
     fields.map((f) => [f.id, f.default === undefined ? '' : String(f.default)]),

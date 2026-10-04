@@ -13,7 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useEngine } from '@/engines';
 import { DescribeSchema } from '@/features/ai/describe-schema';
-import { SshHostKeyNote, hasConnectionForm } from '@/features/projects/connection-form';
+import { SshHostKeyNote, readsDatabase } from '@/features/projects/connection-form';
 import {
   detectImportFormat,
   fetchTemplate,
@@ -71,7 +71,11 @@ export function ImportDialog({
     enabled: open,
     staleTime: Infinity,
   });
-  const choice = useConnectionChoice(projectId, connectionFields);
+  const choice = useConnectionChoice(
+    projectId,
+    connectionFields,
+    facet.capabilities.introspection === 'file',
+  );
   /** "Not saved: only managers can…" after a read that fell back to the typed details */
   const [note, setNote] = useState<string | null>(null);
   /** The introspected dump waiting on the server (Phase 6 §4). */
@@ -327,7 +331,7 @@ export function ImportDialog({
               submitSource();
             }}
           >
-            {hasConnectionForm(connectionFields) && (
+            {readsDatabase(facet.capabilities) && (
               <div role="group" aria-label="Import from" className="flex gap-1">
                 {(
                   [

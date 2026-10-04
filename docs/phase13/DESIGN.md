@@ -1,8 +1,25 @@
 # Phase 13: SQLite engine
 
-Status: **approved 2026-10-04** with every default in the open-questions table. Roadmap row 13.
-The third engine, after PostgreSQL and MySQL/MariaDB (`docs/phase9/DESIGN.md`, whose structure
-this follows).
+Status: **approved 2026-10-04** with every default in the open-questions table, and **built**
+2026-10-04. Roadmap row 13.
+
+**As built**, where it differs from the text below:
+
+- **Upload routes (§5):** separate routes, `POST …/introspect/upload/preview` and
+  `…/introspect/upload/drift`, take the file as a raw `application/octet-stream` body (no
+  multipart parser). Same marker and the same full-view check before the bytes are read.
+- **Cap (§5, Q4):** the variable is `INTROSPECT_UPLOAD_MAX_BYTES` (default 100 MB), named
+  for the route rather than the engine.
+- **Namespaces:** `none`, not a single `main` schema. Attached databases are out of scope.
+- **`CREATE TABLE … AS SELECT`** is refused at import with a message. It is never executed,
+  so the importer's allowlist stays DDL only.
+- **Foreign key names** are not preserved. SQLite's `foreign_key_list` doesn't report them,
+  so the importer names each one `<table>_<columns>_fkey`.
+- **Build gotcha:** tsup strips the `node:` prefix by default, and `node:sqlite` has no
+  unprefixed name. The engine's `tsup.config.ts` sets `removeNodeProtocol: false`.
+- **No e2e workflow** for the upload. The api specs and the engine's conformance suite cover it.
+  The third engine, after PostgreSQL and MySQL/MariaDB (`docs/phase9/DESIGN.md`, whose structure
+  this follows).
 
 Decided with the owner before writing (2026-10-04): **live reading is by uploading a `.db`
 file.** There is no server to connect to, so there are no saved connections, scheduled drift

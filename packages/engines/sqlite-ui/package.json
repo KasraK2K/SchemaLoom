@@ -1,0 +1,25 @@
+{
+  "name": "@schemaloom/engine-sqlite-ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./facet": {
+      "types": "./src/facet.ts",
+      "default": "./src/facet.ts"
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@schemaloom/engine-sqlite": "workspace:*",
+    "@schemaloom/engine-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@schemaloom/config": "workspace:*",
+    "eslint": "catalog:",
+    "typescript": "catalog:"
+  }
+}

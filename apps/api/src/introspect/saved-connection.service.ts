@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
@@ -239,6 +240,11 @@ export class SavedConnectionService {
     const engine = this.registry.tryGet(project.engineId);
     if (engine?.introspector === undefined) {
       throw new UnprocessableEntityException({ code: 'engine.introspection_unavailable' });
+    }
+    // Phase 13 §5: a file engine (SQLite) has nothing to reconnect to, so nothing to save or
+    // schedule. Every save, schedule and load comes through here.
+    if (engine.capabilities.introspection === 'file') {
+      throw new BadRequestException({ code: 'connection.not_supported' });
     }
     return {
       engineId: project.engineId,

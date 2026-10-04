@@ -68,6 +68,7 @@ export const DECLARATION_CHECKS: readonly ConformanceCheck[] = [
         importFormats: caps.importFormats,
         exportFormats: caps.exportFormats,
         connectionFields: caps.connectionFields,
+        introspection: caps.introspection,
         targetVersions: caps.targetVersions,
         defaultTargetVersion: caps.defaultTargetVersion,
       });

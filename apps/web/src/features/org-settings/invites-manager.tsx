@@ -57,8 +57,8 @@ export function InvitesManager({
     <section className="mt-8 flex flex-col gap-3">
       <h2 className="text-sm font-semibold text-text">Invite people</h2>
       <p className="text-sm text-text-muted">
-        They get an email with a link to create their account (or sign in) and join. The link
-        works for 7 days.
+        They get an email with a link to create their account (or sign in) and join. The link works
+        for 7 days.
       </p>
       <form
         className="flex flex-wrap gap-2"

@@ -40,11 +40,13 @@ function sweep(): (SweptRoute & { requirement: PermissionRequirement | undefined
 describe('IntrospectController route markers', () => {
   const routes = sweep();
 
-  it('registers preview, apply and drift', () => {
+  it('registers preview, apply and drift, and the two upload reads (Phase 13)', () => {
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       'POST /api/projects/:projectId/introspect/apply',
       'POST /api/projects/:projectId/introspect/drift',
       'POST /api/projects/:projectId/introspect/preview',
+      'POST /api/projects/:projectId/introspect/upload/drift',
+      'POST /api/projects/:projectId/introspect/upload/preview',
     ]);
   });
 

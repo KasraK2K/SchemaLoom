@@ -35,6 +35,10 @@ async function bootstrap(): Promise<void> {
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
 
   const config = app.get<ConfigService<AppEnv, true>>(ConfigService);
+  // Phase 13 §5 — an uploaded database file arrives as `application/octet-stream`.
+  app.useBodyParser('raw', {
+    limit: config.get('INTROSPECT_UPLOAD_MAX_BYTES', { infer: true }),
+  });
 
   // Behind a load balancer every request's socket peer is the balancer, so without this
   // the per-IP rate limits (share-link unlock) would throttle all visitors as one.

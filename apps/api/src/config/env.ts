@@ -111,6 +111,11 @@ export const envSchema = z
       z.stringbool().default(false),
     ),
     PG_DUMP_PATH: optionalStr,
+    // Phase 13 §5: an uploaded database file (SQLite), read for its schema only. Q4.
+    INTROSPECT_UPLOAD_MAX_BYTES: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().positive().default(100_000_000),
+    ),
   })
   .superRefine((env, ctx) => {
     // §11.4: a mail provider is required. Boot fails if neither Mailgun nor SMTP is set.

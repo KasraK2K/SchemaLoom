@@ -222,8 +222,8 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
     return (
       <div className="mt-6 flex flex-col gap-4">
         <p className="text-sm text-text">
-          Sign-up is by invitation. Ask an owner of your organisation to invite you; the email
-          they send has a link to create your account.
+          Sign-up is by invitation. Ask an owner of your organisation to invite you; the email they
+          send has a link to create your account.
         </p>
         <p className="text-sm text-text-muted">
           Already have an account?{' '}

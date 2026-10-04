@@ -19,3 +19,5 @@ engineFacets.register('postgresql', () => import('@schemaloom/engine-postgresql-
 engineUi.register('postgresql', () => import('@schemaloom/engine-postgresql-ui'));
 engineFacets.register('mysql', () => import('@schemaloom/engine-mysql-ui/facet'));
 engineUi.register('mysql', () => import('@schemaloom/engine-mysql-ui'));
+// SQLite has no UI plugin yet: the fallback renders it.
+engineFacets.register('sqlite', () => import('@schemaloom/engine-sqlite-ui/facet'));

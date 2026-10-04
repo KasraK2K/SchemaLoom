@@ -19,7 +19,7 @@ import { useEngine } from '@/engines';
 import { irQueryOptions } from '@/features/canvas/ir-query';
 import { projectShellQueryOptions } from '@/features/change-requests/change-requests-api';
 import { EngineGate } from '@/features/project/engine-gate';
-import { SshHostKeyNote, hasConnectionForm } from '@/features/projects/connection-form';
+import { SshHostKeyNote, readsDatabase } from '@/features/projects/connection-form';
 import { relativeTime } from '@/features/projects/relative-time';
 import { ConnectionSection, useConnectionChoice } from '@/features/projects/saved-connection';
 import { ApiError } from '@/lib/api-client';
@@ -158,10 +158,11 @@ export function HistoryView({
  * migrations; the API says so otherwise.
  */
 function DriftCheck({ projectId }: { readonly projectId: string }) {
-  const fields = useEngine().capabilities.connectionFields;
+  const capabilities = useEngine().capabilities;
+  const fields = capabilities.connectionFields;
   const ir = useQuery(irQueryOptions(projectId));
   const [open, setOpen] = useState(false);
-  const choice = useConnectionChoice(projectId, fields);
+  const choice = useConnectionChoice(projectId, fields, capabilities.introspection === 'file');
   const [allowDestructive, setAllowDestructive] = useState(false);
   const [result, setResult] = useState<DriftView | null>(null);
   const compare = useMutation({
@@ -180,7 +181,7 @@ function DriftCheck({ projectId }: { readonly projectId: string }) {
     if (choice.saved !== null) compare.mutate();
   }, [choice.saved, compare]);
 
-  if (!hasConnectionForm(fields)) return null;
+  if (!readsDatabase(capabilities)) return null;
   const entityName = (id: string): string | null => ir.data?.objects.entity[id]?.name ?? null;
 
   return (

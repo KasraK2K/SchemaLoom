@@ -1,6 +1,7 @@
 import type { EngineDefinition } from '@schemaloom/engine-sdk';
 import { mysqlEngine } from '@schemaloom/engine-mysql';
 import { postgresEngine } from '@schemaloom/engine-postgresql';
+import { sqliteEngine } from '@schemaloom/engine-sqlite';
 
 /**
  * Doc 01 §4.2 — **the ONLY file in `apps/api` that names a concrete engine.**
@@ -18,4 +19,8 @@ import { postgresEngine } from '@schemaloom/engine-postgresql';
  * copy it into a second file. Do not widen the rule.
  */
 // PostgreSQL first: specs that need "a real engine" take `ENGINE_MANIFEST[0]`.
-export const ENGINE_MANIFEST: readonly EngineDefinition[] = [postgresEngine, mysqlEngine];
+export const ENGINE_MANIFEST: readonly EngineDefinition[] = [
+  postgresEngine,
+  mysqlEngine,
+  sqliteEngine,
+];

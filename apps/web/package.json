@@ -20,6 +20,7 @@
     "@schemaloom/contracts": "workspace:*",
     "@schemaloom/engine-mysql-ui": "workspace:*",
     "@schemaloom/engine-postgresql-ui": "workspace:*",
+    "@schemaloom/engine-sqlite-ui": "workspace:*",
     "@schemaloom/engine-sdk": "workspace:*",
     "@schemaloom/schema-model": "workspace:*",
     "@schemaloom/ui": "workspace:*",

@@ -195,10 +195,16 @@ export async function checkDrift(
   source: ConnectionSource,
   allowDestructive: boolean,
 ): Promise<DriftView> {
+  const base = `/projects/${encodeURIComponent(projectId)}/introspect`;
   return driftSchema.parse(
-    await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/introspect/drift`, {
-      method: 'POST',
-      body: { ...source, allowDestructive },
-    }),
+    'upload' in source
+      ? await apiFetch<unknown>(
+          `${base}/upload/drift?allowDestructive=${String(allowDestructive)}`,
+          { method: 'POST', file: source.upload },
+        )
+      : await apiFetch<unknown>(`${base}/drift`, {
+          method: 'POST',
+          body: { ...source, allowDestructive },
+        }),
   );
 }

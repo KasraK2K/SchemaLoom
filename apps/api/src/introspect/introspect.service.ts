@@ -17,6 +17,9 @@ import {
 } from '@schemaloom/engine-sdk';
 import type { Redis } from 'ioredis';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AppEnv } from '../config/env';
 import { ENGINE_REGISTRY } from '../engines';
 import { JobsService } from '../jobs';
@@ -77,7 +80,11 @@ const STATUS: Record<IntrospectError['code'], HttpStatus> = {
 /** What a read connects with: details typed now, or the project's saved connection (6c).
  *  Saved means as saved, with no overrides: a changed host would carry the saved password
  *  to a server of the caller's choosing. */
-export type ConnectionSource = { readonly connection: unknown } | { readonly saved: true };
+export type ConnectionSource =
+  | { readonly connection: unknown }
+  | { readonly saved: true }
+  /** Phase 13 §5 — an uploaded database file, for an engine that reads one (SQLite) */
+  | { readonly upload: Buffer };
 
 /** §10.3 — the bastion's key as seen on this read, so the form can offer to pin it. */
 interface SshSeen {
@@ -109,6 +116,7 @@ export class IntrospectService {
   private readonly enabled: boolean;
   private readonly allowPrivate: boolean;
   private readonly development: boolean;
+  private readonly uploadMax: number;
 
   constructor(
     config: ConfigService<AppEnv, true>,
@@ -124,6 +132,7 @@ export class IntrospectService {
     this.enabled = config.get('INTROSPECTION_ENABLED', { infer: true });
     this.allowPrivate = config.get('INTROSPECT_ALLOW_PRIVATE_HOSTS', { infer: true });
     this.development = config.get('NODE_ENV', { infer: true }) === 'development';
+    this.uploadMax = config.get('INTROSPECT_UPLOAD_MAX_BYTES', { infer: true });
   }
 
   async preview(ctx: SnapshotContext, connection: ConnectionSource): Promise<IntrospectPreview> {
@@ -191,6 +200,23 @@ export class IntrospectService {
     const introspector = engine?.introspector;
     if (engine === undefined || introspector === undefined) {
       throw new UnprocessableEntityException({ code: 'engine.introspection_unavailable' });
+    }
+    // Phase 13 §5: a file engine reads an upload and nothing else; a network one never does.
+    const fileEngine = engine.capabilities.introspection === 'file';
+    if ('upload' in connection !== fileEngine) {
+      throw new UnprocessableEntityException({
+        code: fileEngine ? 'introspect.upload_required' : 'introspect.upload_not_supported',
+      });
+    }
+    if ('upload' in connection) {
+      return this.readUpload(
+        ctx.projectId,
+        project.organizationId,
+        engine.id,
+        introspector,
+        userId,
+        connection.upload,
+      );
     }
     const saved = 'saved' in connection;
     const values = validateConnection(
@@ -350,6 +376,68 @@ export class IntrospectService {
     // "Last used" means by a person; a nightly check would make it meaningless.
     if (saved && actorUserId !== null) await this.savedConnections.touch(projectId);
     return { ...result, sshHostKey };
+  }
+
+  /**
+   * Phase 13 §5 — an uploaded database file: written to a temporary directory, read by the
+   * engine (read-only, schema only), and deleted whatever happens. No address to guard, so the
+   * SSRF guard has nothing to do; the per-user and per-org limits still apply.
+   */
+  private async readUpload(
+    projectId: string,
+    organizationId: string,
+    engineId: string,
+    introspector: Introspector,
+    userId: string,
+    bytes: Buffer,
+  ): Promise<IntrospectResult & { readonly sshHostKey: null }> {
+    if (bytes.length === 0) {
+      throw new UnprocessableEntityException({ code: 'introspect.upload_empty' });
+    }
+    if (bytes.length > this.uploadMax) {
+      throw new HttpException(
+        { code: 'introspect.too_large', max: this.uploadMax },
+        HttpStatus.PAYLOAD_TOO_LARGE,
+      );
+    }
+    await this.throttle(userId, organizationId);
+    const audit = (metadata: Record<string, string | number | boolean>) =>
+      this.prisma.auditLog.create({
+        data: {
+          organizationId,
+          projectId,
+          actorUserId: userId,
+          action: 'import.introspected',
+          resourceType: 'project',
+          resourceId: projectId,
+          // The file's size only: never its name or content.
+          metadata: { engineId, upload: true, fileBytes: bytes.length, ...metadata },
+        },
+      });
+    const dir = await mkdtemp(join(tmpdir(), 'sl-upload-'));
+    let result: IntrospectResult;
+    try {
+      const file = join(dir, 'upload.db');
+      await writeFile(file, bytes);
+      result = await introspector.introspect({
+        connection: {},
+        resolvedAddress: '',
+        signal: AbortSignal.timeout(130_000),
+        maxBytes: QUEUED_IMPORT_MAX_BYTES,
+        file,
+      });
+    } catch (error) {
+      if (!(error instanceof IntrospectError)) throw error;
+      await audit({ ok: false, error: error.code });
+      throw new HttpException(
+        { code: `introspect.${error.code}`, message: error.message },
+        STATUS[error.code],
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+    await audit({ ok: true, serverVersion: result.serverVersion });
+    return { ...result, sshHostKey: null };
   }
 
   private async throttle(userId: string, organizationId: string): Promise<void> {

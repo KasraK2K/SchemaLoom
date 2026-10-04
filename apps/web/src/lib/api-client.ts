@@ -70,6 +70,8 @@ export interface ApiRequestInit extends Omit<RequestInit, 'body'> {
   body?: unknown;
   /** Sent as-is as `text/plain` instead of `body` — the large SQL import takes raw text. */
   text?: string;
+  /** Sent as-is as `application/octet-stream` — an uploaded database file (Phase 13). */
+  file?: Blob;
 }
 
 /**
@@ -184,13 +186,14 @@ export function reconnectOnRefusal(socket: {
 }
 
 async function send(path: string, init: ApiRequestInit): Promise<Response> {
-  const { body, text, headers, method = 'GET', ...rest } = init;
+  const { body, text, file, headers, method = 'GET', ...rest } = init;
   const upperMethod = method.toUpperCase();
 
   const requestHeaders = new Headers(headers);
   requestHeaders.set('Accept', 'application/json');
   if (body !== undefined) requestHeaders.set('Content-Type', 'application/json');
   if (text !== undefined) requestHeaders.set('Content-Type', 'text/plain; charset=utf-8');
+  if (file !== undefined) requestHeaders.set('Content-Type', 'application/octet-stream');
 
   if (UNSAFE_METHODS.has(upperMethod)) {
     // Re-read per attempt: a refresh rotates sl_csrf, so the retry must not reuse the
@@ -204,7 +207,7 @@ async function send(path: string, init: ApiRequestInit): Promise<Response> {
     method: upperMethod,
     headers: requestHeaders,
     credentials: 'include',
-    body: text ?? (body === undefined ? undefined : JSON.stringify(body)),
+    body: file ?? text ?? (body === undefined ? undefined : JSON.stringify(body)),
   });
 }
 
