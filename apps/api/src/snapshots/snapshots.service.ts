@@ -59,7 +59,7 @@ import {
   type LiveProject,
 } from './live-ir';
 import { assertFullProjectView, assertSnapshotEngine } from './restore-guards';
-import { mergeImport, withDesignOnly } from './merge-import';
+import { mergeImport, withDesignOnly, withSameViewBodies } from './merge-import';
 import { planImport, planRestore } from './restore-plan';
 
 /**
@@ -498,7 +498,11 @@ export class SnapshotsService {
       ctx.map,
       ctx.skel,
     );
-    const database = withDesignOnly(mergeImport(project.live, model).imported, design);
+    const database = await withSameViewBodies(
+      withDesignOnly(mergeImport(project.live, model).imported, design),
+      design,
+      engine.sameViewBody,
+    );
     const diff = annotate(
       diffModels(database, design, {
         ignoreCosmetic: true,
@@ -756,8 +760,12 @@ export class SnapshotsService {
    * and there is no one to filter for), so the notification can only say how many.
    */
   async driftSummary(projectId: string, source: string, maxBytes: number): Promise<DriftSummary> {
-    const { project, model } = await this.importAgainstLive(projectId, source, maxBytes);
-    const database = withDesignOnly(mergeImport(project.live, model).imported, project.live);
+    const { project, model, engine } = await this.importAgainstLive(projectId, source, maxBytes);
+    const database = await withSameViewBodies(
+      withDesignOnly(mergeImport(project.live, model).imported, project.live),
+      project.live,
+      engine.sameViewBody,
+    );
     const diff = diffModels(database, project.live, {
       ignoreCosmetic: true,
       from: { kind: 'import', label: 'Database' },

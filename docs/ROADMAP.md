@@ -1,7 +1,7 @@
 # SchemaLoom roadmap
 
 This is the single list of what is built, what comes next, and in what order. It is for human
-contributors and AI agents alike. Last updated 2026-10-03.
+contributors and AI agents alike. Last updated 2026-10-04.
 
 ## How this file works
 
@@ -76,10 +76,11 @@ OpenSSH bastion.
 
 Small fixes that don't need a design doc. Pick one up freely.
 
-- **A view's text can read as drift.** Servers rewrite a view body (MariaDB drops
-  parentheses, pg_dump re-spells casts), and view bodies are compared as text. A design that
-  was imported from the same database is unaffected; a view drawn or pasted in another
-  spelling shows as changed until it is re-imported. Fix: compare a parsed and re-printed body.
+- Built 2026-10-04: a view's text no longer reads as drift. Servers re-print a view body
+  (pg_dump adds casts and `public.`, MySQL qualifies and aliases every column, MariaDB drops
+  parentheses), so drift asks the engine (`EngineDefinition.sameViewBody`) whether two bodies
+  parse to the same query once those spellings are undone. Still reads as changed: a
+  multi-table view written with unqualified columns, which the server qualifies.
 - Built 2026-10-02 with 9b: drift no longer reports SchemaLoom-only attributes (docs, PII and
   restricted flags, areas) or store defaults (`customTypeId: null`, `asc` index columns) as
   changes, for every engine. Found by reading a live MariaDB. The PostgreSQL importer leaves

@@ -7,7 +7,7 @@ import {
   entityRow,
   fieldRow,
 } from '../schema/fixture';
-import { mergeImport, withDesignOnly } from './merge-import';
+import { mergeImport, withDesignOnly, withSameViewBodies } from './merge-import';
 import { planImport } from './restore-plan';
 import { liveFrom } from './test-fixture';
 
@@ -40,6 +40,25 @@ describe('drift against an unchanged database', () => {
     expect(diffModels(database, live, { ignoreCosmetic: true }).entries).toEqual([]);
     // Without the copy, the PII flag alone is drift.
     expect(diffModels(mergeImport(live, read).imported, live).entries).toHaveLength(1);
+  });
+
+  it('takes the design’s view text when the engine calls the bodies the same query', async () => {
+    const view = (body: string) =>
+      baseStore({
+        entity: [
+          entityRow('ent_v', { name: 'v', kind: 'view', engineProps: { viewDefinition: body } }),
+        ],
+      });
+    const live = await liveFrom(view('select id from orders'));
+    const read = await importedFrom(view('SELECT id FROM public.orders;'));
+    const database = withDesignOnly(mergeImport(live, read).imported, live);
+    const drift = async (same?: (a: string, b: string) => Promise<boolean>) =>
+      diffModels(await withSameViewBodies(database, live, same), live, { ignoreCosmetic: true })
+        .entries;
+
+    expect(await drift()).toHaveLength(1);
+    expect(await drift(() => Promise.resolve(false))).toHaveLength(1);
+    expect(await drift(() => Promise.resolve(true))).toEqual([]);
   });
 });
 

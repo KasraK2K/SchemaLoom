@@ -174,3 +174,26 @@ export function withDesignOnly(database: SchemaModel, design: SchemaModel): Sche
   ) as unknown as SchemaModel['objects'];
   return { ...database, objects };
 }
+
+/**
+ * Drift — a server re-prints a view's body (casts, parentheses, qualification), so a body the
+ * engine calls the same query takes the design's text; otherwise a view drawn in another
+ * spelling reads as changed until it is re-imported. No engine hook: the text decides.
+ */
+export async function withSameViewBodies(
+  database: SchemaModel,
+  design: SchemaModel,
+  same: ((a: string, b: string) => Promise<boolean>) | undefined,
+): Promise<SchemaModel> {
+  if (same === undefined) return database;
+  const entity = { ...database.objects.entity };
+  for (const [id, view] of Object.entries(entity)) {
+    const theirs = view.engineProps.viewDefinition;
+    const ours = design.objects.entity[id]?.engineProps.viewDefinition;
+    if (typeof theirs !== 'string' || typeof ours !== 'string' || theirs === ours) continue;
+    if (await same(theirs, ours)) {
+      entity[id] = { ...view, engineProps: { ...view.engineProps, viewDefinition: ours } };
+    }
+  }
+  return { ...database, objects: { ...database.objects, entity } };
+}

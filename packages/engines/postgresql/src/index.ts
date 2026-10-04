@@ -10,6 +10,7 @@ import { extractReferences } from './references.js';
 import { postgresFacet } from './static.js';
 import { VALIDATOR } from './validator.js';
 import { TEMPLATES } from './templates.js';
+import { sameViewBody } from './view-body.js';
 
 /**
  * `@schemaloom/engine-postgresql` — the full `EngineDefinition`, loaded by `apps/api`
@@ -34,6 +35,7 @@ export const postgresEngine: EngineDefinition = {
   extractReferences,
   queryValidator: QUERY_VALIDATOR,
   annotateDiff,
+  sameViewBody,
   migrationGenerator: MIGRATION_GENERATOR,
   aiProfile: AI_PROFILE,
   templates: TEMPLATES,

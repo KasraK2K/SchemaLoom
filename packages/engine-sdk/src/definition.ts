@@ -83,6 +83,11 @@ export interface EngineDefinition extends EngineStaticFacet {
     before: SchemaModel,
     after: SchemaModel,
   ) => AnnotatedDiff;
+  /** Drift — whether two view bodies are the same query in different spellings (a server
+   *  re-prints the body it was given: parentheses, casts, qualification). Engine-specific
+   *  and lossy on purpose, so only drift uses it; false whenever either side won't parse.
+   *  Absent: drift compares the text. */
+  readonly sameViewBody?: (a: string, b: string) => Promise<boolean>;
   /** §11.2 — phase-gated; presence must equal `features.migrations` */
   readonly migrationGenerator?: MigrationGenerator;
   /** Phase 2 — `QueryValidator` (§12). Presence must equal `features.queryValidation`. */

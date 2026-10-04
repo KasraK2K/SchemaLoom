@@ -70,7 +70,7 @@ export async function loadMySqlParser(mariaDbFirst: boolean): Promise<MySqlParse
 const FUNCTION_SYNONYMS: Readonly<Record<string, string>> = { lcase: 'lower', ucase: 'upper' };
 
 /** A copy of an expression AST with synonym function names in one spelling. */
-function canonicalFunctions(node: unknown): unknown {
+export function canonicalFunctions(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(canonicalFunctions);
   if (typeof node !== 'object' || node === null) return node;
   const out: Record<string, unknown> = {};

@@ -10,6 +10,7 @@ import { extractReferences } from './references.js';
 import { mysqlFacet } from './static.js';
 import { TEMPLATES } from './templates.js';
 import { VALIDATOR } from './validator.js';
+import { sameViewBody } from './view-body.js';
 
 /**
  * `@schemaloom/engine-mysql` — the full `EngineDefinition` (design §4), loaded by `apps/api`
@@ -25,6 +26,7 @@ export const mysqlEngine: EngineDefinition = {
   introspector: INTROSPECTOR,
   extractReferences,
   annotateDiff,
+  sameViewBody,
   migrationGenerator: MIGRATION_GENERATOR,
   queryValidator: QUERY_VALIDATOR,
   aiProfile: AI_PROFILE,
