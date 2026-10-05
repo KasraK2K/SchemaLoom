@@ -806,4 +806,23 @@ describe('AiService.agentPropose (roadmap 21b)', () => {
     ).rejects.toMatchObject({ status: 403, response: { code: 'ai_disabled' } });
     expect(off.propose).not.toHaveBeenCalled();
   });
+
+  it('a table without ai:use is never declared: referencing it reads like a missing table', async () => {
+    // ent_prod exists but has no ai:use here, so its shape must not reach the draft.
+    const { service, propose } = harness({ view: { ...MARCH, ai: ['project', 'ent_emp'] } });
+    const refersTo = (table: string) =>
+      `CREATE TABLE reviews (id int PRIMARY KEY, p text,\n` +
+      `  CONSTRAINT reviews_p_fk FOREIGN KEY (p) REFERENCES ${table} (id));`;
+    const sent = async (table: string) => {
+      propose.mockClear();
+      await service.agentPropose(ANA, PROJECT, mapOf(ANA), 'tok_1', {
+        title: 'x',
+        sql: refersTo(table),
+      });
+      return (propose.mock.calls[0] as unknown as [unknown, { sql: string }])[1].sql;
+    };
+    expect(await sent('ent_emp')).toMatch(/CREATE TABLE[^;]*ent_emp[\s\S]*CREATE TABLE reviews/);
+    expect(await sent('ent_prod')).toBe(refersTo('ent_prod'));
+    expect(await sent('nope')).toBe(refersTo('nope'));
+  });
 });
