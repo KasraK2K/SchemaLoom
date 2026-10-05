@@ -1,5 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  applyOrgSettingsPatch,
+  readOrgSettings,
+  type OrgSettings,
+  type OrgSettingsPatch,
+} from '@schemaloom/contracts';
 import { PermissionResolver, hasCompleteView, type Subject } from '../access';
 import { PrismaService } from '../prisma/prisma.service';
 import { toSummary, type ProjectSummary } from '../projects';
@@ -235,6 +241,62 @@ export class OrganizationsService {
         if ((error as { code?: unknown }).code !== UNIQUE_VIOLATION || attempt >= 3) throw error;
       }
     }
+  }
+
+  /** Owner or admin; anyone else gets the same 404 as a missing org. */
+  async getSettings(userId: string, orgSlug: string): Promise<OrgSettings> {
+    const member = await this.settingsAdmin(userId, orgSlug);
+    const org = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: member.organizationId },
+      select: { settings: true },
+    });
+    return readOrgSettings(org.settings);
+  }
+
+  /**
+   * Owner or admin. Reads, merges and writes in one transaction so two admins patching
+   * different keys cannot overwrite each other; the merged result is re-validated. Keys this
+   * schema does not know are carried over untouched.
+   */
+  async updateSettings(
+    userId: string,
+    orgSlug: string,
+    patch: OrgSettingsPatch,
+  ): Promise<OrgSettings> {
+    const member = await this.settingsAdmin(userId, orgSlug);
+    const organizationId = member.organizationId;
+    return this.prisma.$transaction(async (tx) => {
+      const org = await tx.organization.findUniqueOrThrow({
+        where: { id: organizationId },
+        select: { settings: true },
+      });
+      const merged = applyOrgSettingsPatch(org.settings, patch);
+      const stored = org.settings as Record<string, unknown> | null;
+      await tx.organization.update({
+        where: { id: organizationId },
+        data: { settings: { ...stored, ...merged } },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: userId,
+          action: 'org.settings_changed',
+          resourceType: 'organization',
+          resourceId: organizationId,
+          metadata: patch,
+        },
+      });
+      return merged;
+    });
+  }
+
+  private async settingsAdmin(userId: string, orgSlug: string) {
+    const member = await this.membership(userId, orgSlug);
+    // 404 for a plain member too (docs/phase17/ORG-DEFAULT.md §3): there is no page for them.
+    if (member === null || (member.role !== 'owner' && member.role !== 'admin')) {
+      throw new NotFoundException({ code: 'not_found' });
+    }
+    return member;
   }
 
   private membership(userId: string, orgSlug: string) {

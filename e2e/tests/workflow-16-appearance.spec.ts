@@ -1,6 +1,13 @@
+import { createHash } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { API_URL, signIn, write } from '../fixtures/api';
+import { assertE2eDatabase, executeSql } from '../fixtures/database';
 import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
+
+const tag = String(Date.now());
+const INVITEE = `look-${tag}@acme.test`;
+const TOKEN = `w16-token-${tag}`;
+const db = assertE2eDatabase(process.env.DATABASE_URL_E2E);
 
 /**
  * Appearance themes: the choice is applied before paint, saved to the account, and follows
@@ -74,5 +81,74 @@ test.describe('workflow 16 — appearance themes', () => {
       data: { theme: 'blueprint', variant: 'jade', mode: 'dark' },
     });
     expect(response.status()).toBe(400);
+  });
+
+  // docs/phase17/ORG-DEFAULT.md: the org's default look reaches a new account, not old ones.
+  test('an owner sets the org default; an invited sign-up starts on it', async ({
+    browser,
+    page,
+  }) => {
+    const olivia = await signIn(SEED_EMAILS.owner);
+    const settings = `${API_URL}/api/organizations/${SEED.orgSlug}/settings`;
+    const patch = (data: object) => olivia.api.patch(settings, { headers: write(olivia), data });
+    try {
+      // Owner: Settings → General → Blueprint Graphite → Save.
+      const state = await olivia.api.storageState();
+      const ownerContext = await browser.newContext({ storageState: state });
+      const ownerPage = await ownerContext.newPage();
+      await ownerPage.goto(`/${SEED.orgSlug}/settings/general`);
+      await ownerPage.getByRole('radio', { name: 'Blueprint' }).click();
+      await ownerPage.getByRole('radio', { name: 'Graphite' }).click();
+      await ownerPage.getByRole('button', { name: 'Save' }).click();
+      await expect(ownerPage.getByRole('status')).toHaveText('Saved');
+      expect(await (await olivia.api.get(settings)).json()).toMatchObject({
+        defaultAppearance: { theme: 'blueprint', variant: 'graphite', mode: 'system' },
+      });
+      // A default, not an overwrite: the owner's own look is untouched.
+      await expect(ownerPage.locator('html')).toHaveAttribute('data-theme', 'studio');
+      await ownerContext.close();
+
+      // Invite, plant a known token (the real one only exists in the email), sign up.
+      const created = await olivia.api.post(
+        `${API_URL}/api/organizations/${SEED.orgSlug}/invitations`,
+        { headers: write(olivia), data: { email: INVITEE, role: 'member' } },
+      );
+      expect(created.status(), await created.text()).toBe(201);
+      const { id } = (await created.json()) as { id: string };
+      const hash = createHash('sha256').update(TOKEN).digest('hex');
+      executeSql(db, `UPDATE invitations SET token_hash = '${hash}' WHERE id = '${id}';`);
+
+      await page.goto(`/invite/${TOKEN}`);
+      await page.getByRole('link', { name: 'Create an account' }).click();
+      await page.getByLabel('Name', { exact: true }).fill('Lou Look');
+      await page.getByLabel('Password').fill('SchemaLoom!demo1');
+      await page.getByRole('button', { name: 'Create account' }).click();
+
+      // The first page after sign-up is already in the org's look.
+      await expect(page.getByRole('button', { name: 'Accept invitation' })).toBeVisible();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'blueprint');
+      await expect(page.locator('html')).toHaveAttribute('data-variant', 'graphite');
+      const me = (await (await page.request.get(`${API_URL}/api/auth/me`)).json()) as {
+        appearance: unknown;
+      };
+      expect(me.appearance).toEqual({ theme: 'blueprint', variant: 'graphite', mode: 'system' });
+
+      await page.getByRole('button', { name: 'Accept invitation' }).click();
+      await page.waitForURL(`**/${SEED.orgSlug}`);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'blueprint');
+    } finally {
+      expect((await patch({ defaultAppearance: null })).status()).toBe(200);
+    }
+  });
+
+  test('a plain member cannot read or change the org default', async () => {
+    const analyst = await signIn(SEED_EMAILS.analyst);
+    const settings = `${API_URL}/api/organizations/${SEED.orgSlug}/settings`;
+    expect((await analyst.api.get(settings)).status()).toBe(404);
+    const patched = await analyst.api.patch(settings, {
+      headers: write(analyst),
+      data: { defaultAppearance: null },
+    });
+    expect(patched.status()).toBe(404);
   });
 });

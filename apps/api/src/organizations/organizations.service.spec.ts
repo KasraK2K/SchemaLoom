@@ -332,3 +332,70 @@ describe('OrganizationsService workspaces', () => {
     await expect(service(null).svc.createWorkspace(USER, 'acme', 'Data')).rejects.toThrow();
   });
 });
+
+describe('OrganizationsService settings (docs/phase17/ORG-DEFAULT.md §2)', () => {
+  const GRAPHITE = { theme: 'blueprint', variant: 'graphite', mode: 'system' };
+
+  function settingsHarness(role: string | null, stored: unknown) {
+    const update = vi.fn(() => Promise.resolve({}));
+    const audit = vi.fn(() => Promise.resolve({}));
+    const tx = {
+      organization: {
+        findUniqueOrThrow: vi.fn(() => Promise.resolve({ settings: stored })),
+        update,
+      },
+      auditLog: { create: audit },
+    };
+    const prisma = {
+      ...tx,
+      orgMember: {
+        findFirst: vi.fn(() =>
+          Promise.resolve(role === null ? null : { organizationId: ORG, role }),
+        ),
+      },
+      $transaction: (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+    } as unknown as PrismaService;
+    return { service: new OrganizationsService(prisma, {} as PermissionResolver), update, audit };
+  }
+
+  it.each(['owner', 'admin'])(
+    '%s sets the default; other keys survive; it is audited',
+    async (role) => {
+      const h = settingsHarness(role, { allowGuestInvites: false, somethingElse: 1 });
+      const out = await h.service.updateSettings(USER, 'acme', {
+        defaultAppearance: GRAPHITE,
+      } as never);
+      expect(out).toEqual({ allowGuestInvites: false, defaultAppearance: GRAPHITE });
+      expect(h.update).toHaveBeenCalledWith({
+        where: { id: ORG },
+        data: {
+          settings: { allowGuestInvites: false, somethingElse: 1, defaultAppearance: GRAPHITE },
+        },
+      });
+      expect(h.audit).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'org.settings_changed',
+          organizationId: ORG,
+          metadata: { defaultAppearance: GRAPHITE },
+        }),
+      });
+    },
+  );
+
+  it('refuses a variant of another theme and writes nothing', async () => {
+    const h = settingsHarness('owner', {});
+    await expect(
+      h.service.updateSettings(USER, 'acme', {
+        defaultAppearance: { theme: 'blueprint', variant: 'jade', mode: 'dark' },
+      } as never),
+    ).rejects.toThrow();
+    expect(h.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['member', 'guest', null])('a %s gets 404 on read and write', async (role) => {
+    const h = settingsHarness(role, {});
+    await expect(h.service.getSettings(USER, 'acme')).rejects.toMatchObject({ status: 404 });
+    await expect(h.service.updateSettings(USER, 'acme', {})).rejects.toMatchObject({ status: 404 });
+    expect(h.update).not.toHaveBeenCalled();
+  });
+});

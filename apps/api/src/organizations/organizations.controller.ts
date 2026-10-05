@@ -13,6 +13,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { OrgSettings } from '@schemaloom/contracts';
 import type { Request, Response } from 'express';
 import { Authenticated } from '../access';
 import { getPrincipal } from '../auth';
@@ -32,6 +33,7 @@ import {
   CreateWorkspaceDto,
   UpdateGroupDto,
   UpdateMemberDto,
+  UpdateOrgSettingsDto,
   UpdateRoleDto,
   WorkspaceGrantDto,
 } from './organizations.dto';
@@ -118,6 +120,25 @@ export class OrganizationsController {
     @Param('orgSlug') orgSlug: string,
   ): Promise<WorkspaceSummary[]> {
     return this.organizations.listWorkspaces(this.userId(req), orgSlug);
+  }
+
+  /** Docs/phase17/ORG-DEFAULT.md. Same marker and membership-first rule; the service admits owner/admin. */
+  @ApiOperation({ summary: 'Organisation settings (owner or admin)' })
+  @Authenticated()
+  @Get(':orgSlug/settings')
+  getSettings(@Req() req: Request, @Param('orgSlug') orgSlug: string): Promise<OrgSettings> {
+    return this.organizations.getSettings(this.userId(req), orgSlug);
+  }
+
+  @ApiOperation({ summary: 'Change organisation settings, only the keys sent (owner or admin)' })
+  @Authenticated()
+  @Patch(':orgSlug/settings')
+  updateSettings(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Body() dto: UpdateOrgSettingsDto,
+  ): Promise<OrgSettings> {
+    return this.organizations.updateSettings(this.userId(req), orgSlug, dto);
   }
 
   @ApiOperation({ summary: 'Create a workspace (owner or admin)' })

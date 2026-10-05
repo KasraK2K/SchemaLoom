@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AppEnv } from '../config/env';
 import type { OrgRole, Prisma, SsoProtocol } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { applyOrgAppearance } from './org-appearance';
 import { SignupPolicy } from './signup-policy';
 import { decryptSecret, encryptSecret } from './totp';
 
@@ -332,6 +333,7 @@ export class SsoService {
         await tx.orgMember.create({
           data: { organizationId: conn.organizationId, userId: user.id, role: conn.defaultOrgRole },
         });
+        await applyOrgAppearance(tx, user.id, conn.organizationId);
         await tx.account.create({
           data: { userId: user.id, provider, providerAccountId: identity.subject },
         });

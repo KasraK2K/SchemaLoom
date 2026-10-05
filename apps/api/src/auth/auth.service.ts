@@ -14,7 +14,8 @@ import type { AppEnv } from '../config/env';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { issueCsrfToken } from './csrf';
-import { SignupPolicy } from './signup-policy';
+import { applyOrgAppearance } from './org-appearance';
+import { SignupPolicy, hashInviteToken } from './signup-policy';
 import { enforcedConnectionFor } from './sso.service';
 import { burnPasswordTime, hashPassword, verifyPassword } from './password';
 import { TokensService, type SessionContext } from './tokens.service';
@@ -283,6 +284,14 @@ export class AuthService implements OnModuleInit {
             },
             select: { id: true },
           });
+          // `verified` means the token named a live invitation, so it names the org.
+          if (verified && input.inviteToken !== undefined) {
+            const invite = await tx.invitation.findUnique({
+              where: { tokenHash: hashInviteToken(input.inviteToken) },
+              select: { organizationId: true },
+            });
+            if (invite !== null) await applyOrgAppearance(tx, user.id, invite.organizationId);
+          }
           return { id: user.id, verified };
         },
       );

@@ -83,6 +83,15 @@ export { DEMO_PASSWORD, HIDDEN_FROM_FREELANCER, SEED, SEED_EMAILS } from './fixt
 export { aiMessageMetaSchema, selectionSchema, type AiMessageMeta, type Selection } from './ai.js';
 
 export {
+  applyOrgSettingsPatch,
+  orgSettingsInputSchema,
+  orgSettingsPatchSchema,
+  readOrgSettings,
+  type OrgSettings,
+  type OrgSettingsPatch,
+} from './org-settings.js';
+
+export {
   APPEARANCE_MODES,
   APPEARANCE_THEME_IDS,
   APPEARANCE_THEMES,

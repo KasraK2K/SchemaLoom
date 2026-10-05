@@ -1,4 +1,4 @@
-import { orgRoleSchema } from '@schemaloom/contracts';
+import { orgRoleSchema, orgSettingsPatchSchema } from '@schemaloom/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -27,6 +27,8 @@ export const updateRoleSchema = z.object({
   archived: z.boolean().optional(),
 });
 export class UpdateRoleDto extends createZodDto(updateRoleSchema) {}
+
+export class UpdateOrgSettingsDto extends createZodDto(orgSettingsPatchSchema) {}
 
 export const updateMemberSchema = z.object({ role: orgRoleSchema });
 export class UpdateMemberDto extends createZodDto(updateMemberSchema) {}

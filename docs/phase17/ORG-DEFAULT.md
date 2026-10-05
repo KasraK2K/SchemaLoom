@@ -1,6 +1,6 @@
 # Phase 17b: an org default appearance
 
-Status: **proposed 2026-10-05**. Roadmap row 17b. Builds on `APPEARANCE.md` (four themes,
+Status: **built 2026-10-05**. Roadmap row 17b. Builds on `APPEARANCE.md` (four themes,
 saved per account).
 
 An owner wants everyone joining the team to start on the same look, for example Blueprint
@@ -56,3 +56,16 @@ Graphite, without telling each new person where the setting is.
 | Q1  | Include the mode (light/dark)?   | **Yes**, with System as the usual choice.            |
 | Q2  | Admins or owners only?           | **Owners and admins** (D4).                          |
 | Q3  | Lock the look for the whole org? | **No.** Appearance is personal; it's a default only. |
+
+## 5. As built
+
+- **Invite sign-up applies at account creation, not at accept.** The membership row is made later,
+  in `InvitationsService.accept`, so `register` resolves the org from the invite token inside the
+  `createUser` transaction. A person who signs up by magic link or OAuth and only then accepts an
+  invite is an existing account and keeps Studio Jade. Accepting never touches appearance.
+- **SCIM is not wired yet.** Row 14b is `proposed`; its create path must call
+  `applyOrgAppearance(tx, userId, orgId)` and add the §3 SCIM test when it lands.
+- **A `GET /organizations/:orgSlug/settings` route was added** (owner or admin) because the General
+  page has to read the current value. A plain member gets 404 on both routes, as §3 asks.
+- The picker moved out of the personal Appearance panel into `components/appearance-picker.tsx`;
+  the panel and Settings → General both use it.

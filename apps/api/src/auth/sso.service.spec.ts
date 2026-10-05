@@ -29,6 +29,8 @@ const conn = (over: Partial<SsoConnectionRecord> = {}): SsoConnectionRecord => (
 });
 
 interface World {
+  /** `organizations.settings` of ORG. */
+  orgSettings?: unknown;
   accounts?: { provider: string; providerAccountId: string; userId: string }[];
   users?: { id: string; email: string; orgs: string[] }[];
 }
@@ -42,11 +44,15 @@ function setup(world: World = {}) {
     audits: [],
   };
   const tx = {
+    organization: {
+      findUnique: vi.fn(() => Promise.resolve({ settings: world.orgSettings ?? {} })),
+    },
     user: {
       create: vi.fn(({ data }: { data: unknown }) => {
         created.users.push(data);
         return Promise.resolve({ id: 'new_user' });
       }),
+      update: vi.fn(() => Promise.resolve({})),
     },
     orgMember: {
       create: vi.fn(({ data }: { data: unknown }) => {
@@ -108,7 +114,7 @@ function setup(world: World = {}) {
     true
   >;
   const service = new SsoService(prisma, config, signup as unknown as SignupPolicy);
-  return { service, accounts, created, signup };
+  return { service, accounts, created, signup, tx };
 }
 
 const identity = (email: string | null, subject = 'sub-1') => ({ subject, email, name: 'Kim' });
@@ -168,6 +174,25 @@ describe('SsoService.resolve — which account an assertion becomes (§1.2)', ()
     );
     expect(created.members).toEqual([{ organizationId: ORG, userId: 'new_user', role: 'guest' }]);
     expect(created.audits.map((a) => a.action)).toEqual(['org_member.added']);
+  });
+
+  it('3. JIT starts the new account on the org’s default appearance; linking an existing user does not', async () => {
+    const orgSettings = {
+      defaultAppearance: { theme: 'blueprint', variant: 'graphite', mode: 'dark' },
+    };
+    const jit = setup({ orgSettings });
+    await jit.service.resolve(conn({ jit: true }), identity('new@acme.com'));
+    expect(jit.tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'new_user' },
+      data: { uiTheme: 'blueprint', uiVariant: 'graphite', theme: 'dark' },
+    });
+
+    const linked = setup({
+      orgSettings,
+      users: [{ id: 'u1', email: 'kim@acme.com', orgs: [ORG] }],
+    });
+    await linked.service.resolve(conn({ jit: true }), identity('kim@acme.com'));
+    expect(linked.tx.user.update).not.toHaveBeenCalled();
   });
 
   it('3. JIT only for the connection’s domains', async () => {

@@ -1,4 +1,4 @@
-import { orgRoleSchema } from '@schemaloom/contracts';
+import { appearanceInputSchema, orgRoleSchema } from '@schemaloom/contracts';
 import { z } from 'zod';
 import { serverFetch } from '@/lib/server-api';
 
@@ -103,4 +103,15 @@ export async function listWorkspaceGrants(
       `${org(orgSlug)}/workspaces/${encodeURIComponent(workspaceId)}/grants`,
     ),
   );
+}
+
+/** `GET /organizations/:slug/settings` — `apps/api/src/organizations/organizations.service.ts`. */
+export const OrgSettingsSchema = z.object({
+  allowGuestInvites: z.boolean(),
+  defaultAppearance: appearanceInputSchema.nullable(),
+});
+export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
+
+export async function getOrgSettings(orgSlug: string): Promise<OrgSettings> {
+  return OrgSettingsSchema.parse(await serverFetch<unknown>(`${org(orgSlug)}/settings`));
 }
