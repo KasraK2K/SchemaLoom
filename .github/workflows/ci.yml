@@ -157,7 +157,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo build --filter=@schemaloom/api --filter=@schemaloom/web
+      - run: pnpm turbo build --filter=@schemaloom/api --filter=@schemaloom/web --filter=@schemaloom/cli
       - run: pnpm --filter @schemaloom/api exec prisma migrate deploy
         env:
           DATABASE_URL: ${{ env.DATABASE_URL_E2E }}
