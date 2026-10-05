@@ -501,6 +501,14 @@ export function CanvasSurface({
                         setImporting(true);
                       },
                     },
+                    {
+                      id: 'describe',
+                      label: 'Describe with AI',
+                      onSelect: () => {
+                        setImportFrom('describe');
+                        setImporting(true);
+                      },
+                    },
                   ]),
             ]),
         ...(readOnly ? [] : [{ id: 'layout', label: 'Auto-layout', onSelect: runLayout }]),
@@ -712,6 +720,15 @@ export function CanvasSurface({
                             label: `Import ${importSourceName(facet.capabilities.importFormats)}`,
                             onSelect: () => {
                               setImportFrom('sql');
+                              setImporting(true);
+                            },
+                          },
+                          // Phase 22 §1.1: the AI draft lived only inside the import dialog.
+                          describe: {
+                            label: 'Describe with AI',
+                            title: 'Describe tables or a feature and let AI draft them',
+                            onSelect: () => {
+                              setImportFrom('describe');
                               setImporting(true);
                             },
                           },

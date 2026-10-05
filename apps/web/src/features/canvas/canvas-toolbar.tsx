@@ -8,6 +8,7 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  Sparkles,
   Upload,
 } from '@schemaloom/ui';
 import { useReactFlow, useViewport } from '@xyflow/react';
@@ -20,7 +21,13 @@ export interface ToolbarAction {
   readonly title?: string;
 }
 
-const ICONS = { add: FilePlus2, import: Upload, sync: RefreshCw, layout: LayoutGrid } as const;
+const ICONS = {
+  add: FilePlus2,
+  import: Upload,
+  describe: Sparkles,
+  sync: RefreshCw,
+  layout: LayoutGrid,
+} as const;
 
 /**
  * The canvas's one floating toolbar, bottom centre: the editing actions, then zoom. Zoom is

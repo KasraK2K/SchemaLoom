@@ -1,6 +1,10 @@
 # Phase 22: Describe it, get a schema (roadmap 22)
 
 Status: **proposed** 2026-10-05. Waiting for approval; every §9 question has a default.
+**Step 1 built** 2026-10-05 (§5): **Describe with AI** in the canvas toolbar and menu.
+**Step 6 built early** 2026-10-05: the projects-page **Describe your app** card (§1.2), on the
+current route. It creates the project, drafts, shows the SQL to review or edit (with **Draft
+again**), and **Create tables** runs the import. The summary and Refine come with steps 2–4.
 
 The goal: a user describes what they need in plain words, from a whole application down to
 one table, and the AI drafts the tables and relations. Examples:
@@ -39,7 +43,10 @@ until the user accepts. Existing tables are never changed or dropped by a descri
 AI**, next to **Import SQL or Prisma**. It opens the import dialog in describe mode, as the
 empty-state card already does (`setImportFrom('describe')`). Right-clicking a selection
 offers **Describe something connected to these**, which opens it with that selection as the
-focus. The entries are shown when the caller can import and the engine has an `aiProfile`.
+focus. The entries are shown when the caller can import, as the empty-state card is. The web has
+no per-engine AI flag (the AI tab is always shown too), so a project without AI gets the API's
+error in the dialog. As built, the selection entry waits for `focusEntityIds` (step 2):
+without it, the AI can't use the selection yet.
 
 Then the Describe box itself changes:
 

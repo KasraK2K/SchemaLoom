@@ -208,7 +208,9 @@ export function ImportDialog({
             ? 'Import from a database'
             : detected === 'prisma'
               ? 'Import a Prisma schema'
-              : `Import ${importSourceName(formats)}`}
+              : initialFrom === 'describe'
+                ? 'Describe with AI'
+                : `Import ${importSourceName(formats)}`}
         </DialogTitle>
         <DialogDescription>
           Adds what the project does not have yet. Existing objects are left unchanged, except for

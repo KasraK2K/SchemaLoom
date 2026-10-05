@@ -1,8 +1,9 @@
 'use client';
 
-import { Button, Database, FilePlus2, LayoutGrid, Upload } from '@schemaloom/ui';
+import { Button, Database, FilePlus2, LayoutGrid, Sparkles, Upload } from '@schemaloom/ui';
 import { useState } from 'react';
 import { z } from 'zod';
+import { aiErrorMessage, draftSchema } from '@/features/ai/ai-api';
 import { ApiError, apiFetch } from '@/lib/api-client';
 import {
   ConnectionForm,
@@ -28,6 +29,8 @@ const POLL_MS = 1_500;
 const POLL_LIMIT = 400;
 const NEW_WORKSPACE = '__new';
 const NEW_PROJECT = '__new';
+/** The draft-schema route's own limit (`draftSchemaSchema`). */
+const DESCRIPTION_MAX = 10_000;
 
 const JobSchema = z.object({
   state: z.string(),
@@ -247,6 +250,13 @@ const STARTING_POINTS = [
     action: 'New project',
   },
   {
+    mode: 'describe',
+    icon: Sparkles,
+    title: 'Describe your app',
+    body: 'Explain what you are building, in as much detail as you like. AI drafts the tables and relations; you review them before anything is created.',
+    action: 'Describe',
+  },
+  {
     mode: 'import',
     icon: Upload,
     title: 'Import SQL or Prisma',
@@ -325,6 +335,7 @@ export function NoProjects({
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? '');
   const [workspaceName, setWorkspaceName] = useState('');
   const [source, setSource] = useState('');
+  const [description, setDescription] = useState('');
   const [draft, setDraft] = useState<ConnectionDraft>({});
   /** 6c — save the connection on the project, so it can Sync later */
   const [remember, setRemember] = useState(true);
@@ -349,7 +360,7 @@ export function NoProjects({
   /** Engines each mode can use: import needs a format, database a connection form, template one. */
   const usable = (candidate: EngineOption, m: Mode = mode ?? 'blank') =>
     m === 'blank' ||
-    (m === 'import'
+    (m === 'import' || m === 'describe'
       ? candidate.importFormats.length > 0
       : m === 'template'
         ? candidate.templates.length > 0
@@ -422,7 +433,7 @@ export function NoProjects({
               className={compact ? 'shrink-0' : 'mt-auto self-start'}
               disabled={
                 engines.length === 0 ||
-                (point.mode === 'import' && !canImport) ||
+                ((point.mode === 'import' || point.mode === 'describe') && !canImport) ||
                 (point.mode === 'database' && !canRead) ||
                 (point.mode === 'template' && !hasTemplates)
               }
@@ -486,6 +497,18 @@ export function NoProjects({
     }
   };
 
+  const describing = mode === 'describe';
+
+  /** Phase 22 §1.2 — the AI's DDL lands in the SQL box for review; nothing is imported yet. */
+  const draftInto = async (id: string) => {
+    try {
+      setSource((await draftSchema(id, description)).source);
+    } catch (caught) {
+      setError(aiErrorMessage(caught));
+    }
+    setBusy(false);
+  };
+
   const submit = async () => {
     setBusy(true);
     setError(null);
@@ -494,7 +517,11 @@ export function NoProjects({
       const id = intoExisting ? target : (createdId ?? (await createProject()));
       if (!intoExisting) setCreatedId(id);
       const href = `/${encodeURIComponent(orgSlug)}/p/${encodeURIComponent(id)}`;
-      if (importing || fromTemplate) {
+      if (describing && source === '') {
+        await draftInto(id);
+        return;
+      }
+      if (importing || fromTemplate || describing) {
         const { report, existing } =
           mode === 'database'
             ? await importIntrospected(
@@ -540,7 +567,9 @@ export function NoProjects({
             ? 'Read a database'
             : mode === 'template'
               ? 'Start from a template'
-              : `Import ${importSourceName(engine?.importFormats ?? [])}`}
+              : describing
+                ? 'Describe your app'
+                : `Import ${importSourceName(engine?.importFormats ?? [])}`}
       </h2>
       {fromTemplate && engine !== undefined && (
         <label className="flex flex-col gap-1 text-sm text-text">
@@ -684,6 +713,43 @@ export function NoProjects({
           )}
         </>
       )}
+      {describing && (
+        <>
+          <label className="flex flex-col gap-1 text-sm text-text">
+            What are you building?
+            <textarea
+              required
+              rows={8}
+              maxLength={DESCRIPTION_MAX}
+              disabled={busy}
+              value={description}
+              placeholder="e.g. A booking app for barbershops: shops have barbers and services, customers book appointments with a barber, pay online and leave reviews."
+              onChange={(e) => {
+                setDescription(e.target.value);
+              }}
+              className={inputClass}
+            />
+            <span className="self-end text-xs text-text-muted">
+              {description.length.toLocaleString()} / {DESCRIPTION_MAX.toLocaleString()}
+            </span>
+          </label>
+          {source !== '' && (
+            <label className="flex flex-col gap-1 text-sm text-text">
+              Drafted schema: review or edit it, then create the tables
+              <textarea
+                required
+                rows={12}
+                disabled={busy}
+                value={source}
+                onChange={(e) => {
+                  setSource(e.target.value);
+                }}
+                className={`${inputClass} font-mono text-xs`}
+              />
+            </label>
+          )}
+        </>
+      )}
       {mode === 'import' && (
         <>
           <label className="flex flex-col gap-1 text-sm text-text">
@@ -748,7 +814,9 @@ export function NoProjects({
       )}
       {createdId !== null && (
         <p className="text-xs text-text-muted">
-          The project exists; submitting again retries only the import.
+          {describing
+            ? 'The project exists and stays empty until you create the tables.'
+            : 'The project exists; submitting again retries only the import.'}
         </p>
       )}
       {error !== null && (
@@ -759,13 +827,36 @@ export function NoProjects({
       <div className="flex gap-2">
         <Button type="submit" variant="primary" size="sm" disabled={busy}>
           {busy
-            ? 'Working…'
-            : mode === 'blank' || fromTemplate
-              ? 'Create project'
-              : intoExisting
-                ? 'Import'
-                : 'Create and import'}
+            ? describing && source === ''
+              ? 'Drafting…'
+              : 'Working…'
+            : describing
+              ? source === ''
+                ? createdId === null
+                  ? 'Create project and draft'
+                  : 'Draft'
+                : 'Create tables'
+              : mode === 'blank' || fromTemplate
+                ? 'Create project'
+                : intoExisting
+                  ? 'Import'
+                  : 'Create and import'}
         </Button>
+        {describing && source !== '' && createdId !== null && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy || description.trim() === ''}
+            onClick={() => {
+              setBusy(true);
+              setError(null);
+              void draftInto(createdId);
+            }}
+          >
+            Draft again
+          </Button>
+        )}
         <Button
           type="button"
           variant="outline"
