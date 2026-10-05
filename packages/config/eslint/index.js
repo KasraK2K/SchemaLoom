@@ -16,6 +16,8 @@ export const ignores = {
     '**/.next/**',
     '**/.turbo/**',
     '**/coverage/**',
+    // tsup's temporary config bundle; a parallel build deletes it mid-lint.
+    '**/tsup.config.bundled_*',
     '**/node_modules/**',
     '**/generated/**',
     'docs/**',

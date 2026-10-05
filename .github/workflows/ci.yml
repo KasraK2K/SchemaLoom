@@ -101,7 +101,10 @@ jobs:
       redis:
         image: redis:7-alpine
         ports: ['6379:6379']
+        # The e2e fixture flushes its keys with `docker exec schemaloom-redis-1`, the
+        # docker compose name, so the service takes the same name here.
         options: >-
+          --name schemaloom-redis-1
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 20
       minio:
