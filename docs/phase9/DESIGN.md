@@ -220,7 +220,8 @@ The roadmap row splits the same way, `9a`–`9d`, each with its own status.
 - Spatial types beyond carrying them through, and MariaDB-only features like system-versioned
   tables and sequences (reported `unsupported`).
 - A separate MariaDB engine (Q1).
-- Prisma export for MySQL (Q6).
+- Prisma export for MySQL (Q6). _Built 2026-10-04 with row 8 (`36d24ac`):_ MySQL exports
+  Prisma, Drizzle, TypeORM and Django like every engine.
 
 ## 10. Open questions
 
