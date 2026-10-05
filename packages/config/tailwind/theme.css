@@ -119,6 +119,14 @@
   --color-area-6: #e6edfe;
   --color-area-7: #ffe8d7;
   --color-area-8: #fee9f5;
+  --color-area-9: #e0f8f3;
+  --color-area-10: #e1f6fd;
+  --color-area-11: #f1fadc;
+  --color-area-12: #efeafd;
+  --color-area-13: #f9e8fa;
+  --color-area-14: #ffe8f1;
+  --color-area-15: #f4ece4;
+  --color-area-16: #eceff3;
 
   /* ---- Elevation and motion --------------------------------------------- */
   --shadow-panel: 0 1px 2px rgb(26 33 30 / 0.05), 0 6px 16px rgb(26 33 30 / 0.06);
@@ -202,6 +210,14 @@
     --color-area-6: color-mix(in srgb, #3e63dd 14%, var(--sage-2));
     --color-area-7: color-mix(in srgb, #f76b15 14%, var(--sage-2));
     --color-area-8: color-mix(in srgb, #d6409f 14%, var(--sage-2));
+    --color-area-9: color-mix(in srgb, #12a594 14%, var(--sage-2));
+    --color-area-10: color-mix(in srgb, #00a2c7 14%, var(--sage-2));
+    --color-area-11: color-mix(in srgb, #7fb800 14%, var(--sage-2));
+    --color-area-12: color-mix(in srgb, #6e56cf 14%, var(--sage-2));
+    --color-area-13: color-mix(in srgb, #ab4aba 14%, var(--sage-2));
+    --color-area-14: color-mix(in srgb, #e93d82 14%, var(--sage-2));
+    --color-area-15: color-mix(in srgb, #ad7f58 14%, var(--sage-2));
+    --color-area-16: color-mix(in srgb, #6f8196 14%, var(--sage-2));
 
     --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.03), 0 8px 24px rgb(0 0 0 / 0.45);
     --shadow-popover: 0 8px 28px rgb(0 0 0 / 0.5);
@@ -217,6 +233,42 @@
 
   :root {
     color-scheme: light;
+
+    /* The hue each area token stands for, and its thin card outline. Area cards (roadmap 23)
+       are a tint plus a border; the border is the hue mixed into the canvas, so it reads on
+       the light and the dark canvas alike. Each appearance theme in themes.css re-mixes it. */
+    --area-hue-1: #29a383;
+    --area-hue-2: #0090ff;
+    --area-hue-3: #e5a000;
+    --area-hue-4: #e5484d;
+    --area-hue-5: #8e4ec6;
+    --area-hue-6: #3e63dd;
+    --area-hue-7: #f76b15;
+    --area-hue-8: #d6409f;
+    --area-hue-9: #12a594;
+    --area-hue-10: #00a2c7;
+    --area-hue-11: #7fb800;
+    --area-hue-12: #6e56cf;
+    --area-hue-13: #ab4aba;
+    --area-hue-14: #e93d82;
+    --area-hue-15: #ad7f58;
+    --area-hue-16: #6f8196;
+    --color-area-1-border: color-mix(in srgb, var(--area-hue-1) 45%, var(--color-canvas));
+    --color-area-2-border: color-mix(in srgb, var(--area-hue-2) 45%, var(--color-canvas));
+    --color-area-3-border: color-mix(in srgb, var(--area-hue-3) 45%, var(--color-canvas));
+    --color-area-4-border: color-mix(in srgb, var(--area-hue-4) 45%, var(--color-canvas));
+    --color-area-5-border: color-mix(in srgb, var(--area-hue-5) 45%, var(--color-canvas));
+    --color-area-6-border: color-mix(in srgb, var(--area-hue-6) 45%, var(--color-canvas));
+    --color-area-7-border: color-mix(in srgb, var(--area-hue-7) 45%, var(--color-canvas));
+    --color-area-8-border: color-mix(in srgb, var(--area-hue-8) 45%, var(--color-canvas));
+    --color-area-9-border: color-mix(in srgb, var(--area-hue-9) 45%, var(--color-canvas));
+    --color-area-10-border: color-mix(in srgb, var(--area-hue-10) 45%, var(--color-canvas));
+    --color-area-11-border: color-mix(in srgb, var(--area-hue-11) 45%, var(--color-canvas));
+    --color-area-12-border: color-mix(in srgb, var(--area-hue-12) 45%, var(--color-canvas));
+    --color-area-13-border: color-mix(in srgb, var(--area-hue-13) 45%, var(--color-canvas));
+    --color-area-14-border: color-mix(in srgb, var(--area-hue-14) 45%, var(--color-canvas));
+    --color-area-15-border: color-mix(in srgb, var(--area-hue-15) 45%, var(--color-canvas));
+    --color-area-16-border: color-mix(in srgb, var(--area-hue-16) 45%, var(--color-canvas));
   }
   .dark {
     color-scheme: dark;

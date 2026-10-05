@@ -3,6 +3,7 @@ import {
   isForeignKeyField,
   isPrimaryKey,
   isUniqueField,
+  type Area,
   type Entity,
   type Field,
   type Id,
@@ -11,7 +12,10 @@ import {
   type SchemaModel,
 } from '@schemaloom/schema-model';
 import type { Edge, Node } from '@xyflow/react';
+import type { CSSProperties } from 'react';
 import type { FieldBadges, LinkStyle } from '@/engines';
+import { areaBorderVar, areaColorVar } from './area-color';
+import { areaNodeId, areaRect } from './area-card';
 import { NODE_HANDLE, fieldHandleId, type HandleSide } from './handles';
 
 /**
@@ -57,6 +61,8 @@ export function buildNodes(
   ix: ModelIndex,
   facet: EngineStaticFacet,
   areaColorById: ReadonlyMap<Id, string>,
+  /** area -> token slot; a table in an area rings itself in that area's hue when selected */
+  areaSlotById: ReadonlyMap<Id, number> = new Map(),
 ): EntityNode[] {
   const { model } = ix;
   const customTypes = Object.values(model.objects.customType);
@@ -75,6 +81,7 @@ export function buildNodes(
       position: entity.position,
       ...(entity.width === undefined ? {} : { width: entity.width }),
       ...(entity.height === undefined ? {} : { height: entity.height }),
+      ...selectStyle(entity, areaSlotById),
       data: {
         entity,
         fields,
@@ -91,6 +98,86 @@ export function buildNodes(
       },
     } satisfies EntityNode;
   });
+}
+
+export const AREA_NODE_TYPE = 'area';
+
+export interface AreaNodeData extends Record<string, unknown> {
+  readonly area: Area;
+  readonly fill: string;
+  readonly border: string;
+  /** a dragged table is over this card and would join it on drop */
+  readonly highlighted: boolean;
+  readonly memberIds: readonly Id[];
+}
+
+export type AreaNode = Node<AreaNodeData, typeof AREA_NODE_TYPE>;
+
+/**
+ * The cards, derived from where the tables are NOW (docs/phase23/AREA-CARDS.md D2). Not
+ * kept in state: a card has no position of its own, so it is rebuilt from the measured
+ * table nodes on every render and can never disagree with them. A card none of whose
+ * tables is measured yet, or that has no visible table, is not drawn.
+ *
+ * `selectable`/`draggable` off, so React Flow gives the wrapper `pointer-events: none` and
+ * only the label (which opts back in) takes the pointer.
+ */
+export function buildAreaNodes(
+  areas: readonly Area[],
+  tables: readonly EntityNode[],
+  slots: ReadonlyMap<Id, number>,
+  highlighted: Id | null,
+): AreaNode[] {
+  return areas.flatMap((area) => {
+    const members = tables.filter(
+      (n) => n.data.entity.areaId === area.id && n.data.entity.restricted !== true,
+    );
+    const rect = areaRect(
+      members.flatMap((n) => {
+        const width = n.measured?.width ?? n.width;
+        const height = n.measured?.height ?? n.height;
+        return width === undefined || height === undefined
+          ? []
+          : [{ x: n.position.x, y: n.position.y, width, height }];
+      }),
+    );
+    if (rect === null) return [];
+    const slot = slots.get(area.id) ?? 0;
+    return [
+      {
+        id: areaNodeId(area.id),
+        type: AREA_NODE_TYPE,
+        position: { x: rect.x, y: rect.y },
+        width: rect.width,
+        height: rect.height,
+        // Cards are not state, so React Flow's own measurement of one has nowhere to go.
+        // Without a size here `useNodesInitialized` stays false for as long as a card is
+        // on the canvas, and the first placement of an import never runs.
+        measured: { width: rect.width, height: rect.height },
+        zIndex: -1,
+        selectable: false,
+        draggable: false,
+        connectable: false,
+        focusable: false,
+        data: {
+          area,
+          fill: areaColorVar(slot),
+          border: areaBorderVar(slot),
+          highlighted: highlighted === area.id,
+          memberIds: members.map((n) => n.id),
+        },
+      } satisfies AreaNode,
+    ];
+  });
+}
+
+/** `--sl-select` is the ring colour of a selected table; the renderers read it (themes.css). */
+function selectStyle(entity: Entity, slots: ReadonlyMap<Id, number>) {
+  const slot =
+    entity.areaId === null || entity.restricted === true ? undefined : slots.get(entity.areaId);
+  return slot === undefined
+    ? {}
+    : { style: { '--sl-select': `var(--area-hue-${String(slot + 1)})` } as CSSProperties };
 }
 
 function badgesOf(ix: ModelIndex, fields: readonly Field[]): ReadonlyMap<Id, FieldBadges> {

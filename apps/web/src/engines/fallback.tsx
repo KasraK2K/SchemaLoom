@@ -78,7 +78,7 @@ function FallbackNode({
     <div
       className={cn(
         'min-w-48 overflow-hidden rounded-lg border bg-surface shadow-sm',
-        selected ? 'border-accent ring-1 ring-accent' : 'border-border',
+        selected ? 'border-(--sl-select) ring-1 ring-(--sl-select)' : 'border-border',
       )}
     >
       <button

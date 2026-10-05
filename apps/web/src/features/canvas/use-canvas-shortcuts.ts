@@ -19,6 +19,8 @@ export interface CanvasShortcuts {
   readonly clearSelection: () => void;
   readonly autoLayout: () => void;
   readonly fitView: () => void;
+  /** Ctrl/Cmd+G: group the selected tables into an area */
+  readonly group: () => void;
 }
 
 function isTyping(target: EventTarget | null): boolean {
@@ -59,6 +61,11 @@ export function useCanvasShortcuts(handlers: CanvasShortcuts): void {
       if (mod && event.shiftKey && key === 'l') {
         event.preventDefault();
         current.autoLayout();
+        return;
+      }
+      if (mod && !event.shiftKey && key === 'g') {
+        event.preventDefault();
+        current.group();
         return;
       }
       if (!mod && key === 'f') {

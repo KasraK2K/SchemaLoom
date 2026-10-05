@@ -19,6 +19,7 @@ export {
   FilePlus2,
   FileText,
   GitPullRequestArrow,
+  Group,
   Inbox,
   LayoutGrid,
   Link2,

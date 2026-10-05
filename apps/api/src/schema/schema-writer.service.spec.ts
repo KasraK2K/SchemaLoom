@@ -5,6 +5,7 @@ import type { PermissionResolver, ProjectPermissionMap, ProjectSkeleton } from '
 import { fakePrisma, type FakePrisma, type Store } from './fake-prisma';
 import {
   PROJECT,
+  areaRow,
   baseStore,
   constraintColumnRow,
   constraintRow,
@@ -600,5 +601,131 @@ describe('SchemaWriter — refs (doc 03 §3.1)', () => {
       .callsTo('entity', 'updateMany')
       .filter((c) => (c.args as { data?: { refs?: unknown } }).data?.refs !== undefined);
     expect(writes).toHaveLength(1);
+  });
+});
+
+describe('SchemaWriter — area cards (roadmap 23)', () => {
+  const group = () =>
+    batch([
+      // listed before the create on purpose: the server, not the client, orders the batch
+      {
+        op: 'update',
+        type: 'entity',
+        id: 'ent_orders',
+        expectedVersion: 2,
+        patch: { areaId: 'are_new' },
+      },
+      {
+        op: 'update',
+        type: 'entity',
+        id: 'ent_users',
+        expectedVersion: 0,
+        patch: { areaId: 'are_new' },
+      },
+      {
+        op: 'create',
+        type: 'area',
+        object: { id: 'are_new', name: 'Area 1', engineProps: {}, color: 'area-1', ordinal: 0 },
+      },
+    ]);
+  const ungroup = () =>
+    batch([
+      {
+        op: 'update',
+        type: 'entity',
+        id: 'ent_orders',
+        expectedVersion: 2,
+        patch: { areaId: null },
+      },
+      {
+        op: 'update',
+        type: 'entity',
+        id: 'ent_users',
+        expectedVersion: 0,
+        patch: { areaId: null },
+      },
+      { op: 'delete', type: 'area', id: 'are_new', expectedVersion: 0 },
+    ]);
+  const grouped = (): Partial<Store> => {
+    const store = world();
+    store.area = [areaRow('are_new', { color: 'area-1' })];
+    store.entity = [
+      entityRow('ent_orders', { version: 2, areaId: 'are_new' }),
+      entityRow('ent_users', { areaId: 'are_new' }),
+    ];
+    return store;
+  };
+  const generation = (prisma: FakePrisma): unknown => prisma.store.project?.[0]?.permGeneration;
+
+  it('bumps permGeneration once for a group batch, however many tables join', async () => {
+    const { prisma, writer, context } = harness();
+    await writer.apply(group(), await context());
+    expect(generation(prisma)).toBe(1);
+    expect(prisma.store.area?.map((a) => a.id)).toEqual(['are_new']);
+    expect(prisma.store.entity?.map((e) => e.areaId)).toEqual(['are_new', 'are_new']);
+  });
+
+  it('bumps it once for an ungroup batch, and keeps the tables', async () => {
+    const { prisma, writer, context } = harness(grouped());
+    await writer.apply(ungroup(), await context());
+    expect(generation(prisma)).toBe(1);
+    expect(prisma.store.area ?? []).toEqual([]);
+    expect(prisma.store.entity?.map((e) => [e.id, e.areaId])).toEqual([
+      ['ent_orders', null],
+      ['ent_users', null],
+    ]);
+  });
+
+  it('does not bump it for a recolour or a rename of the card', async () => {
+    const { prisma, writer, context } = harness(grouped());
+    await writer.apply(
+      batch([
+        {
+          op: 'update',
+          type: 'area',
+          id: 'are_new',
+          expectedVersion: 0,
+          patch: { color: 'area-4' },
+        },
+      ]),
+      await context(),
+    );
+    expect(generation(prisma)).toBe(0);
+    expect(prisma.store.area?.[0]?.color).toBe('area-4');
+  });
+
+  describe('on a protected project', () => {
+    const protectedWorld = (): Partial<Store> => {
+      const store = world();
+      store.project = [projectRow({ requireChangeRequests: true })];
+      return store;
+    };
+
+    it.each(['group', 'ungroup'] as const)(
+      'refuses a %s with 423 outside a merge, writing nothing',
+      async (gesture) => {
+        const store =
+          gesture === 'group'
+            ? protectedWorld()
+            : { ...grouped(), project: protectedWorld().project };
+        const { prisma, writer, context } = harness(store);
+        const before = JSON.stringify(prisma.store.entity);
+        const error = await writer
+          .apply(gesture === 'group' ? group() : ungroup(), await context({ origin: 'edit' }))
+          .catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(HttpException);
+        expect((error as HttpException).getStatus()).toBe(423);
+        expect(generation(prisma)).toBe(0);
+        expect(JSON.stringify(prisma.store.entity)).toBe(before);
+        expect(prisma.store.area?.length ?? 0).toBe(gesture === 'group' ? 0 : 1);
+      },
+    );
+
+    it('lets a merge carry it, and bumps the generation once', async () => {
+      const { prisma, writer, context } = harness(protectedWorld());
+      await writer.apply(group(), await context({ origin: 'merge' }));
+      expect(generation(prisma)).toBe(1);
+      expect(prisma.store.entity?.every((e) => e.areaId === 'are_new')).toBe(true);
+    });
   });
 });

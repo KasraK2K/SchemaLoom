@@ -39,7 +39,7 @@ const uuid: TypeRef = { name: 'uuid' };
 const text: TypeRef = { name: 'text' };
 
 function area(id: Id, name: string, ordinal: number): Area {
-  return { ...base(id, name), color: 'indigo', ordinal, doc: null };
+  return { ...base(id, name), color: `area-${String(ordinal + 1)}`, ordinal, doc: null };
 }
 
 function namespace(id: Id, name: string): Namespace {

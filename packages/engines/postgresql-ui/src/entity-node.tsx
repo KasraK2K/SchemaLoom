@@ -42,7 +42,7 @@ export function PostgresEntityNode({
         'min-w-52 overflow-hidden rounded-lg border bg-surface-raised shadow-node transition-shadow theme-blueprint:bg-canvas',
         // Blueprint and Compact draw a hairline ring, not a soft halo.
         selected
-          ? 'border-accent ring-[3px] ring-accent/25 theme-blueprint:ring-1 theme-blueprint:ring-accent theme-compact:ring-1 theme-compact:ring-accent'
+          ? 'border-(--sl-select) ring-[3px] ring-(--sl-select)/25 theme-blueprint:ring-1 theme-blueprint:ring-(--sl-select) theme-compact:ring-1 theme-compact:ring-(--sl-select)'
           : 'border-border-strong theme-float:border-transparent',
       )}
     >

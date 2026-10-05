@@ -19,6 +19,12 @@ export interface IrObject {
   readonly engineProps: Record<string, unknown>;
 }
 
+export interface IrArea extends IrObject {
+  /** a theme token name, `area-1` ... `area-8` */
+  readonly color: string;
+  readonly ordinal: number;
+}
+
 export interface IrEntity extends IrObject {
   readonly areaId: string | null;
   readonly namespaceId: string;
@@ -37,7 +43,7 @@ export interface Ir {
   readonly projectId: string;
   readonly redacted: boolean;
   readonly objects: {
-    readonly area: Record<string, IrObject>;
+    readonly area: Record<string, IrArea>;
     readonly namespace: Record<string, IrObject>;
     readonly entity: Record<string, IrEntity>;
     readonly field: Record<string, IrField>;

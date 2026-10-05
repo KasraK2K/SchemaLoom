@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEngine, useEngineUi, useTerminology } from '@/engines';
 import { irQueryKey } from '@/features/canvas/ir-query';
 import { postOps } from '@/features/canvas/schema-ops';
+import { areaWriteMessage, useAreaActions } from '@/features/canvas/use-area-actions';
 import { ApiError } from '@/lib/api-client';
 
 /**
@@ -310,6 +311,59 @@ export function ColumnRow({
   );
 }
 
+/**
+ * Which area (card) the table belongs to, or none. The same write as dropping it on a card
+ * or "Remove from area", through the same confirmation when the move changes who sees it.
+ * Hidden when the project has no areas yet: the way to start one is Group on the canvas.
+ */
+function AreaField({
+  projectId,
+  model,
+  entity,
+}: {
+  readonly projectId: Id;
+  readonly model: SchemaModel;
+  readonly entity: Entity;
+}) {
+  const areas = useAreaActions(projectId, model);
+  const [error, setError] = useState<string | null>(null);
+  const options = Object.values(model.objects.area).sort((a, b) => a.ordinal - b.ordinal);
+  if (options.length === 0 && entity.areaId === null) return null;
+  return (
+    <div className="space-y-1">
+      <label className="flex items-center gap-2 text-xs text-text-subtle">
+        Area
+        <select
+          aria-label="Area"
+          className={`${inputClass} flex-1`}
+          value={entity.areaId ?? ''}
+          onChange={(e) => {
+            setError(null);
+            areas
+              .moveTo([entity.id], e.target.value === '' ? null : e.target.value)
+              .catch((caught: unknown) => {
+                setError(areaWriteMessage(caught));
+              });
+          }}
+        >
+          <option value="">None</option>
+          {options.map((area) => (
+            <option key={area.id} value={area.id}>
+              {area.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {error !== null && (
+        <p role="alert" className="text-xs text-danger-text">
+          {error}
+        </p>
+      )}
+      {areas.dialog}
+    </div>
+  );
+}
+
 export function EntityEditor({
   projectId,
   model,
@@ -392,6 +446,7 @@ export function EntityEditor({
             {entityOps.error}
           </p>
         )}
+        <AreaField projectId={projectId} model={model} entity={entity} />
         {entity.propsRedacted === true ? (
           <p className="text-xs text-text-subtle">Some properties are hidden from you.</p>
         ) : null}

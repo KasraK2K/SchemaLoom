@@ -54,43 +54,60 @@ interface StagedChange {
 export function WhoHasAccessDialog({
   projectId,
   trigger,
+  open: controlledOpen,
+  onOpenChange,
+  initialScopeId = null,
 }: {
   readonly projectId: string;
+  /** `null`: no trigger at all, for a caller that opens it itself (area cards, roadmap 23). */
   readonly trigger?: ReactNode;
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
+  /** The resource the dialog opens on (an area, from its card), instead of the project. */
+  readonly initialScopeId?: string | null;
 }) {
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = controlledOpen ?? ownOpen;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <button
-            type="button"
-            className="flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-sm text-text-muted hover:bg-surface-hover"
-          >
-            <Users className="size-4" aria-hidden="true" />
-            Share
-          </button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange ?? setOwnOpen}>
+      {trigger !== null && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <button
+              type="button"
+              className="flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-sm text-text-muted hover:bg-surface-hover"
+            >
+              <Users className="size-4" aria-hidden="true" />
+              Share
+            </button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-xl">
         <DialogTitle>Who has access</DialogTitle>
         <DialogDescription>
           Access granted here applies to everything inside it, unless something inside has its own
           grant.
         </DialogDescription>
-        {open && <AccessBody projectId={projectId} />}
+        {open && <AccessBody projectId={projectId} initialScopeId={initialScopeId} />}
       </DialogContent>
     </Dialog>
   );
 }
 
 /** Split out so the query does not run until the dialog is actually opened. */
-function AccessBody({ projectId }: { readonly projectId: string }) {
+function AccessBody({
+  projectId,
+  initialScopeId,
+}: {
+  readonly projectId: string;
+  readonly initialScopeId: string | null;
+}) {
   const terminology = useTerminology();
   const noun = useMemo(() => resourceNounFor(terminology), [terminology]);
   const queryClient = useQueryClient();
   const { data, isPending, isError } = useQuery(accessQueryOptions(projectId));
-  const [scopeId, setScopeId] = useState<string | null>(null);
+  const [scopeId, setScopeId] = useState<string | null>(initialScopeId);
   const [staged, setStaged] = useState<StagedChange | null>(null);
 
   const invalidate = async () => {

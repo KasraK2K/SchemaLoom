@@ -3,6 +3,7 @@
 import {
   Button,
   FilePlus2,
+  Group,
   LayoutGrid,
   Maximize,
   Minus,
@@ -23,6 +24,7 @@ export interface ToolbarAction {
 
 const ICONS = {
   add: FilePlus2,
+  group: Group,
   import: Upload,
   describe: Sparkles,
   sync: RefreshCw,

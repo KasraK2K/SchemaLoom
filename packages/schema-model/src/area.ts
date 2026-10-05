@@ -17,8 +17,9 @@ import { DocRefSchema } from './doc-ref.js';
  */
 export const AreaSchema = z.object({
   ...IrBaseShape,
-  /** Radix/Tailwind palette token, not a hex value: "indigo" | "amber" | … so
-   *  light/dark theming stays with the design tokens. */
+  /** A theme token name, not a hex value: `area-1` … `area-8`, so light/dark and every
+   *  appearance theme stay with the design tokens. Older projects hold a Radix name
+   *  ("indigo" | "amber" | …); the canvas reads those too (`area-color.ts`). */
   color: z.string().min(1).max(32),
   /** C11 — order in the sidebar legend and in the Area filter list. */
   ordinal: z.number().int().nonnegative(),

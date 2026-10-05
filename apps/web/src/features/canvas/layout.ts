@@ -1,4 +1,6 @@
 import type { Id, Point } from '@schemaloom/schema-model';
+import type { ElkNode } from 'elkjs/lib/elk-api';
+import { AREA_PADDING, areaIdOfNode, areaNodeId, isAreaNodeId } from './area-card';
 
 /**
  * Auto-layout with elkjs (§6.1).
@@ -18,6 +20,8 @@ export interface LayoutNode {
   readonly id: Id;
   readonly width: number;
   readonly height: number;
+  /** The area card the table belongs to: its tables are laid out inside it as a unit. */
+  readonly areaId?: Id | null;
 }
 
 export interface LayoutEdge {
@@ -28,8 +32,28 @@ export interface LayoutEdge {
 
 export const GRID_SIZE = 16;
 
-const snap = (value: number): number => Math.round(value / GRID_SIZE) * GRID_SIZE;
+export const snap = (value: number): number => Math.round(value / GRID_SIZE) * GRID_SIZE;
 
+const LAYERED = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'RIGHT',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '96',
+  'elk.spacing.nodeNode': '48',
+  'elk.edgeRouting': 'POLYLINE',
+};
+
+/**
+ * Two levels, one ELK run each (docs/phase23/AREA-CARDS.md D4):
+ *
+ * 1. every card's tables are laid out on their own, which gives the card a size;
+ * 2. the cards, now fixed-size boxes, are laid out with the loose tables, a link into a card
+ *    counting as a link to the card.
+ *
+ * Not one run over a compound hierarchy (`INCLUDE_CHILDREN`): ELK then stops splitting the
+ * graph into connected components and packing them side by side, so a project of tables that
+ * are not linked to each other (common after a database import) came out as one column
+ * thousands of pixels tall.
+ */
 export async function autoLayout(
   nodes: readonly LayoutNode[],
   edges: readonly LayoutEdge[],
@@ -39,28 +63,86 @@ export async function autoLayout(
   const { default: Elk } = await import('elkjs/lib/elk.bundled.js');
   const elk = new Elk();
   const known = new Set(nodes.map((node) => node.id));
+  // An edge whose endpoint is not laid out would make ELK throw and lose the whole
+  // layout, so every pair is filtered against the node set rather than trusted.
+  const usable = edges.filter(({ source, target }) => known.has(source) && known.has(target));
+  const leaf = (node: LayoutNode) => ({ id: node.id, width: node.width, height: node.height });
+  const link = (edge: LayoutEdge, source: Id, target: Id) => ({
+    id: edge.id,
+    sources: [source],
+    targets: [target],
+  });
+  const pad = String(AREA_PADDING);
 
-  const laid = await elk.layout({
+  const cards = new Map<Id, LayoutNode[]>();
+  const loose: LayoutNode[] = [];
+  for (const node of nodes) {
+    if (node.areaId == null) loose.push(node);
+    else cards.set(node.areaId, [...(cards.get(node.areaId) ?? []), node]);
+  }
+
+  // Level 1: inside each card. Tables sit at their offset from the card's corner, which
+  // already includes the padding, so the card drawn around them is the box ELK reports.
+  const inner = new Map<Id, { width: number; height: number; at: Map<Id, Point> }>();
+  const cardOf = new Map<Id, Id>();
+  for (const [areaId, members] of cards) {
+    const ids = new Set(members.map((m) => m.id));
+    for (const id of ids) cardOf.set(id, areaId);
+    const laid: ElkNode = await elk.layout({
+      id: areaNodeId(areaId),
+      layoutOptions: {
+        ...LAYERED,
+        'elk.padding': `[top=${pad},left=${pad},bottom=${pad},right=${pad}]`,
+      },
+      children: members.map(leaf),
+      edges: usable
+        .filter(({ source, target }) => ids.has(source) && ids.has(target))
+        .map((edge) => link(edge, edge.source, edge.target)),
+    });
+    inner.set(areaId, {
+      width: laid.width ?? 0,
+      height: laid.height ?? 0,
+      at: new Map((laid.children ?? []).map((c) => [c.id, { x: c.x ?? 0, y: c.y ?? 0 }])),
+    });
+  }
+
+  // Level 2: the cards and the loose tables.
+  const top = (id: Id): Id => {
+    const areaId = cardOf.get(id);
+    return areaId === undefined ? id : areaNodeId(areaId);
+  };
+  const seen = new Set<string>();
+  const outer = await elk.layout({
     id: 'root',
-    layoutOptions: {
-      'elk.algorithm': 'layered',
-      'elk.direction': 'RIGHT',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '96',
-      'elk.spacing.nodeNode': '48',
-      'elk.edgeRouting': 'POLYLINE',
-    },
-    children: nodes.map((node) => ({ id: node.id, width: node.width, height: node.height })),
-    // An edge whose endpoint is not laid out would make ELK throw and lose the whole
-    // layout, so the pair is filtered against the node set rather than trusted.
-    edges: edges
-      .filter(({ source, target }) => known.has(source) && known.has(target))
-      .map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
+    layoutOptions: LAYERED,
+    children: [
+      ...loose.map(leaf),
+      ...[...inner].map(([areaId, box]) => ({
+        id: areaNodeId(areaId),
+        width: box.width,
+        height: box.height,
+      })),
+    ],
+    edges: usable.flatMap((edge) => {
+      const source = top(edge.source);
+      const target = top(edge.target);
+      const key = `${source}>${target}`;
+      if (source === target || seen.has(key)) return [];
+      seen.add(key);
+      return [link(edge, source, target)];
+    }),
   });
 
   const positions = new Map<Id, Point>();
-  for (const child of laid.children ?? []) {
-    if (child.x === undefined || child.y === undefined) continue;
-    positions.set(child.id, { x: snap(child.x), y: snap(child.y) });
+  for (const child of outer.children ?? []) {
+    const x = child.x ?? 0;
+    const y = child.y ?? 0;
+    if (!isAreaNodeId(child.id)) {
+      positions.set(child.id, { x: snap(x), y: snap(y) });
+      continue;
+    }
+    for (const [id, at] of inner.get(areaIdOfNode(child.id))?.at ?? [])
+      positions.set(id, { x: snap(x + at.x), y: snap(y + at.y) });
   }
   return positions;
 }

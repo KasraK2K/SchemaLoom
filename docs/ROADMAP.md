@@ -67,7 +67,7 @@ a reason to come back every week, then reach more databases and teams.
 | 21  | MCP server for AI agents (`schemaloom mcp`)                                    | `built`    | `docs/phase21/DESIGN.md`               | A developer's own agent asks about the schema while coding. Same view as the built-in assistant, no server AI key. |
 | 21b | Agents propose schema changes (`propose_change`)                               | `built`    | `docs/phase21/DESIGN.md` §9            | An agent adds the tables its task needs, as a change request a person reviews and merges. Never a direct write.    |
 | 22  | Describe it, get a schema (AI drafts tables and relations from a description)  | `built`    | `docs/phase22/DESIGN.md`               | Describe a whole app or one feature; the AI builds on the existing tables. Draft, refine, review, then import.     |
-| 23  | Area cards: group related tables in a coloured card; auto layout keeps them in | `proposed` | `docs/phase23/AREA-CARDS.md`           | `books` and `book_shelves` belong together. Areas exist but are never drawn, and no screen creates one.            |
+| 23  | Area cards: group related tables in a coloured card; auto layout keeps them in | `built`    | `docs/phase23/AREA-CARDS.md` §7        | `books` and `book_shelves` belong together. Areas exist but are never drawn, and no screen creates one.            |
 | 17b | Org default appearance for new members                                         | `proposed` | `docs/phase17/ORG-DEFAULT.md`          | New people start in the team's look without being told where the setting is.                                       |
 | 12b | Areas in the built-in templates                                                | `proposed` | `docs/phase12/ORG-TEMPLATES.md` §1     | A template opens already organised into cards (needs 23).                                                          |
 | 12c | Org templates ("save this project as a template")                              | `proposed` | `docs/phase12/ORG-TEMPLATES.md` §2     | A house schema (audit columns, users, tenants) every new project starts from.                                      |
@@ -89,6 +89,10 @@ OpenSSH bastion.
 ## Known gaps in built features
 
 Small fixes that don't need a design doc. Pick one up freely.
+
+- Area cards (row 23): the canvas Ctrl/Cmd+Z undoes positions only, so Group, Ungroup, add
+  and remove are one History revision each but not undoable from the keyboard; removing the last
+  table leaves an empty, undrawn area (only Ungroup deletes one). See `phase23/AREA-CARDS.md` §7.
 
 - Built 2026-10-04: `refs` (doc 03 §3.1) are persisted. Every write recomputes them for the
   project (`src/schema/refs.ts`); before this no write stored them, so VisibilityFilter

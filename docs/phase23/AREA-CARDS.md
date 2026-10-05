@@ -1,7 +1,8 @@
 # Phase 23: area cards on the canvas
 
-Status: **proposed 2026-10-05**. Roadmap row 23. Builds on areas (doc 04 §2.11, doc 05 §7.11)
-and the canvas (`apps/web/src/features/canvas`).
+Status: **built 2026-10-05**, with every default in §6 approved (UI label: "area"). What
+differs from this design is in §7, "As built". Roadmap row 23. Builds on areas (doc 04 §2.11,
+doc 05 §7.11) and the canvas (`apps/web/src/features/canvas`).
 
 Some tables belong together (`books`, `book_shelves`, `authors`). The user puts them in a
 coloured card, and auto layout keeps them inside it.
@@ -108,3 +109,60 @@ people see it, and moving it out can let fewer people see it.
 | Q2  | Confirm before a move that changes access? | **Yes**, only when an affected area has its own grants and the user can see them.                                      |
 | Q3  | Drag a member out to remove it?            | **No** (D3). Use the menu or the inspector. Revisit if users keep trying.                                              |
 | Q4  | Empty cards                                | **Not drawn.** Ungrouping the last table deletes the area; an empty area stays in the sidebar only if a grant uses it. |
+
+## 7. As built
+
+Built as designed except for the points below. Tests are the ones in §4, plus a unit test for
+the access sentences (`area-access.spec.ts`) and for the write batches (`area-ops.spec.ts`).
+
+**Where the design assumed something that was not there**
+
+- **No sidebar area list existed**, and neither did an **Area field in the inspector** (§1
+  says "the existing area list" and "Area in the table's inspector"). Both are new, and small:
+  - the list is a panel under the canvas search, one row per area that has a visible table
+    (coloured dot and name; click selects its tables and frames them). It is not in the app
+    sidebar, which only holds org navigation;
+  - the inspector has an **Area** select (None plus the project's areas). It is hidden when
+    the project has no areas and the table is in none.
+- **"Share this card" reuses `WhoHasAccessDialog`**, which had no way to open on a chosen
+  resource. It now takes `open`, `onOpenChange` and `initialScopeId`, and `trigger={null}`
+  for "no button". The menu item reads **Share this area** and appears when `GET /access`
+  says `canManage`.
+
+**Choices the design left open**
+
+- **Removing the last table does not delete the area (Q4).** Only the explicit **Ungroup**
+  deletes it. A delete hard-deletes the area's grants, and for a viewer who sees only part of
+  an area it would also null the `areaId` of tables they cannot see, so deleting as a side
+  effect of "Remove from area" or setting **Area** to none is not safe. An empty area is not
+  drawn and not listed on the canvas; it stays in the sharing tree.
+- **One undo step means one batch.** Group, ungroup, add and remove are each one ops batch,
+  so one revision in History. The canvas's own Ctrl/Cmd+Z only covers positions today (no
+  schema write is undoable there), so those four cannot be undone from the keyboard. Dragging
+  the label is one geometry batch and one Ctrl/Cmd+Z step, as designed.
+- **Protected projects.** The canvas is read-only on a protected project (Phase 10c), so
+  Group and the other gestures are not offered there. There is no change-request canvas to
+  offer them in yet. Merges carry area ops, covered by an API test.
+- **Dropping several selected tables** on a card joins all of them. The card is chosen by the
+  centre of the table under the pointer, and a table's own card never counts as a drop target.
+- **The access sentence** is built from `GET /access?explain=1` and shown only when
+  `canManage` is true. If that request fails the move goes ahead without the dialog. It also
+  covers **Ungroup** ("Ungrouping removes that sharing") and the inspector's Area field, which
+  share one hook, `use-area-actions.tsx`. "People" are principals holding a grant on the area
+  itself.
+- **Colours.** New areas store `area-N`, the least used token first. Old Radix names are read
+  as the token of that hue (`indigo` is `area-6`); anything else falls back to the round-robin
+  by `ordinal`. Studio's border comes from `theme.css` (`--area-hue-N` mixed 45% into the
+  canvas); Blueprint (85%), Float (35%) and Compact (65%) set their own in `themes.css`.
+- **New area name** is "Area N" (first free number), with the name field focused and selected.
+- **Shortcut:** Ctrl/Cmd+G. The toolbar button **Group into area** appears while a table is
+  selected.
+
+**Found while building**
+
+- A card is derived, not state, so React Flow's measurement of it has nowhere to go. Without
+  an explicit `measured` size on the card node, `useNodesInitialized` never turned true while a
+  card was on the canvas and the first placement after an import never ran. Caught by the
+  e2e; covered by a unit test.
+- ELK lays the whole hierarchy out in one pass (`hierarchyHandling: INCLUDE_CHILDREN`), with
+  the same 32 px padding the card draws, so a link between two cards still orders them.
