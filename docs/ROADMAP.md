@@ -96,7 +96,8 @@ Small fixes that don't need a design doc. Pick one up freely.
   reaches the provider. Locally it runs with `E2E_FAKE_AI=1` once Playwright starts the api.
 - Built 2026-10-05: CI runs the e2e suite (`e2e` job in `.github/workflows/ci.yml`) against
   Postgres, Redis, MinIO, Mailpit and Keycloak, and uploads the Playwright report on failure.
-  Workflow 15's MariaDB test still skips there (no `MARIADB_TEST_URL`).
+  The job also runs MariaDB 11.4 for workflow 15 and fails early if the runner has no
+  `pg_dump` (workflows 10 and 12), so neither skips there.
 
 - Built 2026-10-04: a view's text no longer reads as drift. Servers re-print a view body
   (pg_dump adds casts and `public.`, MySQL qualifies and aliases every column, MariaDB drops

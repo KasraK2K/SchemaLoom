@@ -83,7 +83,8 @@ jobs:
 
   # Doc 01 §8.3. Playwright starts the fake Anthropic server, the api and the web app itself
   # (e2e/playwright.config.ts); this job supplies the services and the env they read. Tests
-  # for optional services skip on their own: MARIADB_TEST_URL (workflow 15) isn't set here.
+  # for optional services skip on their own, so this job provides each one: MariaDB for
+  # workflow 15, and the runner's pg_dump (checked below) for workflows 10 and 12.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -124,6 +125,16 @@ jobs:
           MP_SMTP_AUTH_ALLOW_INSECURE: 1
           MP_SMTP_DISABLE_RDNS: 1
         ports: ['1025:1025', '8025:8025']
+      # Same image as the compose `mysql` profile. 11.4 makes its own TLS certificate, which
+      # the test's sslmode REQUIRED needs.
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: schemaloom
+        ports: ['3307:3306']
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 3s --health-retries 30
     env:
       # CI-only values for a throwaway stack; nothing here is a real secret. No NODE_ENV:
       # `next build` breaks under development, and Playwright starts the api as production.
@@ -143,6 +154,7 @@ jobs:
       S3_BUCKET: schemaloom
       S3_ACCESS_KEY_ID: schemaloom
       S3_SECRET_ACCESS_KEY: schemaloom-ci-secret
+      MARIADB_TEST_URL: mysql://root:schemaloom@127.0.0.1:3307
     steps:
       # Workflow 18's SSO tests. Service containers can't take a command (`start-dev`), so
       # Keycloak starts here and boots while the apps build.
@@ -157,6 +169,9 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # Workflows 10 and 12 skip when the api finds no pg_dump; fail here instead. The runner's
+      # client must be at least the server's major (16).
+      - run: pg_dump --version
       - run: pnpm turbo build --filter=@schemaloom/api --filter=@schemaloom/web --filter=@schemaloom/cli
       - run: pnpm --filter @schemaloom/api exec prisma migrate deploy
         env:
