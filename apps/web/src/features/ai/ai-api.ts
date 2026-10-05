@@ -156,16 +156,39 @@ export async function reviewDocDraft(id: string, verdict: 'accept' | 'reject'): 
   await apiFetch<unknown>(`/ai/doc-drafts/${id}/${verdict}`, { method: 'POST' });
 }
 
+/** Phase 22 §2.1 — what the importer reads in a draft, against the caller's view. */
+const draftSummarySchema = z.object({
+  creates: z.array(z.string()),
+  existing: z.array(z.string()),
+  addsColumns: z.array(z.object({ table: z.string(), columns: z.array(z.string()) })),
+  relations: z.array(z.object({ from: z.string(), to: z.string() })),
+  linksTo: z.array(z.string()),
+});
+export type DraftSummary = z.infer<typeof draftSummarySchema>;
+
+export interface DraftSchemaBody {
+  readonly description: string;
+  readonly focusEntityIds?: readonly string[];
+  /** stateless: the draft the user holds, edits included */
+  readonly revise?: { readonly draft: string; readonly instruction: string };
+}
+
 export async function draftSchema(
   projectId: string,
-  description: string,
-): Promise<{ source: string; importFormat: string }> {
-  return z.object({ source: z.string(), importFormat: z.string() }).parse(
-    await apiFetch<unknown>(`/projects/${projectId}/ai/draft-schema`, {
-      method: 'POST',
-      body: { description },
-    }),
-  );
+  body: DraftSchemaBody,
+): Promise<{ source: string; importFormat: string; summary: DraftSummary | null }> {
+  return z
+    .object({
+      source: z.string(),
+      importFormat: z.string(),
+      summary: draftSummarySchema.nullable().default(null),
+    })
+    .parse(
+      await apiFetch<unknown>(`/projects/${projectId}/ai/draft-schema`, {
+        method: 'POST',
+        body,
+      }),
+    );
 }
 
 // --- server-sent events -------------------------------------------------------------------

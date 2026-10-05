@@ -134,6 +134,8 @@ export function CanvasSurface({
   const [importing, setImporting] = useState(false);
   /** 6c — Sync opens the import dialog on its database tab */
   const [importFrom, setImportFrom] = useState<'sql' | 'database' | 'describe'>('sql');
+  /** Phase 22 — "Describe something connected to these": the tables the AI builds on */
+  const [describeFocus, setDescribeFocus] = useState<readonly string[]>([]);
 
   useEffect(() => {
     // Carry `measured` over: a node without it loses its handle bounds, so React Flow
@@ -452,6 +454,20 @@ export function CanvasSurface({
     fitView,
   });
 
+  const canImport = facet.capabilities.importFormats.length > 0;
+  // Phase 22 §1.1 / Q5 — Describe is offered wherever the caller can import, and on a
+  // protected project too, where the draft can only become a change request.
+  const protectedProject = !shareLink && shell.data?.requireChangeRequests === true;
+  const canDescribe = canImport && (!readOnly || protectedProject);
+  const openImport = useCallback(
+    (from: 'sql' | 'database' | 'describe', focus: readonly string[] = []) => {
+      setDescribeFocus(focus);
+      setImportFrom(from);
+      setImporting(true);
+    },
+    [],
+  );
+
   const menuItems = useMemo<readonly CanvasMenuItem[]>(() => {
     const entityId = menu?.entityId ?? null;
     const linkId = menu?.linkId ?? null;
@@ -490,27 +506,29 @@ export function CanvasSurface({
                   setNewEntityAt(at ?? viewportCentre());
                 },
               },
-              ...(facet.capabilities.importFormats.length === 0
-                ? []
-                : [
+              ...(canImport
+                ? [
                     {
                       id: 'import',
                       label: `Import ${importSourceName(facet.capabilities.importFormats)}`,
                       onSelect: () => {
-                        setImportFrom('sql');
-                        setImporting(true);
+                        openImport('sql');
                       },
                     },
-                    {
-                      id: 'describe',
-                      label: 'Describe with AI',
-                      onSelect: () => {
-                        setImportFrom('describe');
-                        setImporting(true);
-                      },
-                    },
-                  ]),
+                  ]
+                : []),
             ]),
+        ...(canDescribe
+          ? [
+              {
+                id: 'describe',
+                label: 'Describe with AI',
+                onSelect: () => {
+                  openImport('describe');
+                },
+              },
+            ]
+          : []),
         ...(readOnly ? [] : [{ id: 'layout', label: 'Auto-layout', onSelect: runLayout }]),
         { id: 'fit', label: 'Fit to view', onSelect: fitView },
       ];
@@ -530,8 +548,26 @@ export function CanvasSurface({
           void flow.fitView({ nodes: [{ id: entityId }], padding: 0.4, duration: 200 });
         },
       },
+      ...(canDescribe
+        ? [
+            {
+              id: 'describe-connected',
+              label: 'Describe something connected to these',
+              onSelect: () => {
+                // The selection when this card is in it, else just this card.
+                const selected = [...useCanvasStore.getState().selection].filter(
+                  (id) => id in model.objects.entity,
+                );
+                openImport('describe', selected.includes(entityId) ? selected : [entityId]);
+              },
+            },
+          ]
+        : []),
     ];
   }, [
+    canImport,
+    canDescribe,
+    openImport,
     menu,
     runLayout,
     fitView,
@@ -546,28 +582,35 @@ export function CanvasSurface({
     viewportCentre,
   ]);
 
-  const canImport = facet.capabilities.importFormats.length > 0;
   // 6c — the saved connection, if any. Its GET needs schema:edit, so read-only users skip it.
   const savedConnection = useQuery({
     queryKey: savedConnectionKey(projectId),
     queryFn: () => getSavedConnection(projectId),
     enabled: canImport && !readOnly && facet.capabilities.connectionFields.length > 0,
   });
-  const dialogs = readOnly ? null : (
+  const visibleEntities = Object.values(model.objects.entity).filter((e) => e.restricted !== true);
+  const dialogs = (
     <>
-      <NameDialog
-        open={newEntityAt !== null}
-        onOpenChange={(open) => {
-          if (!open) setNewEntityAt(null);
-        }}
-        title={t.msg('action.add', 'entity')}
-        submitLabel="Create"
-        onSubmit={(name) => createEntity(name, newEntityAt ?? { x: 0, y: 0 })}
-      />
-      {importing && (
+      {!readOnly && (
+        <NameDialog
+          open={newEntityAt !== null}
+          onOpenChange={(open) => {
+            if (!open) setNewEntityAt(null);
+          }}
+          title={t.msg('action.add', 'entity')}
+          submitLabel="Create"
+          onSubmit={(name) => createEntity(name, newEntityAt ?? { x: 0, y: 0 })}
+        />
+      )}
+      {importing && (!readOnly || canDescribe) && (
         <ImportDialog
           key={importFrom}
-          initialFrom={importFrom}
+          initialFrom={readOnly ? 'describe' : importFrom}
+          proposeOnly={readOnly}
+          tableCount={visibleEntities.length}
+          focus={visibleEntities
+            .filter((e) => describeFocus.includes(e.id))
+            .map((e) => ({ id: e.id, name: e.name }))}
           open
           onOpenChange={setImporting}
           projectId={projectId}
@@ -599,16 +642,14 @@ export function CanvasSurface({
           onImport={
             canImport
               ? () => {
-                  setImportFrom('sql');
-                  setImporting(true);
+                  openImport('sql');
                 }
               : undefined
           }
           onDescribe={
             canImport
               ? () => {
-                  setImportFrom('describe');
-                  setImporting(true);
+                  openImport('describe');
                 }
               : undefined
           }
@@ -704,8 +745,8 @@ export function CanvasSurface({
         </Panel>
         <Panel position="bottom-left" className="theme-float:ml-[66px]!">
           <CanvasToolbar
-            actions={
-              readOnly
+            actions={{
+              ...(readOnly
                 ? {}
                 : {
                     add: {
@@ -719,36 +760,41 @@ export function CanvasSurface({
                           import: {
                             label: `Import ${importSourceName(facet.capabilities.importFormats)}`,
                             onSelect: () => {
-                              setImportFrom('sql');
-                              setImporting(true);
-                            },
-                          },
-                          // Phase 22 §1.1: the AI draft lived only inside the import dialog.
-                          describe: {
-                            label: 'Describe with AI',
-                            title: 'Describe tables or a feature and let AI draft them',
-                            onSelect: () => {
-                              setImportFrom('describe');
-                              setImporting(true);
+                              openImport('sql');
                             },
                           },
                         }
                       : {}),
+                  }),
+              // Phase 22 §1.1: the AI draft lived only inside the import dialog.
+              ...(canDescribe
+                ? {
+                    describe: {
+                      label: 'Describe with AI',
+                      title: 'Describe tables or a feature and let AI draft them',
+                      onSelect: () => {
+                        openImport('describe');
+                      },
+                    },
+                  }
+                : {}),
+              ...(readOnly
+                ? {}
+                : {
                     ...(canImport && savedConnection.data
                       ? {
                           sync: {
                             label: 'Sync',
                             title: "Read the saved database connection and import what's new",
                             onSelect: () => {
-                              setImportFrom('database');
-                              setImporting(true);
+                              openImport('database');
                             },
                           },
                         }
                       : {}),
                     layout: { label: 'Auto-layout', onSelect: runLayout },
-                  }
-            }
+                  }),
+            }}
           />
         </Panel>
         {message === null ? null : (

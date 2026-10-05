@@ -1,8 +1,8 @@
 // A stand-in for the Anthropic Messages API, so the AI panel runs end to end without a key.
 // The e2e api points `ANTHROPIC_BASE_URL` here (the SDK reads it); the production code is
 // unchanged. Every request body is kept, and `GET /calls` returns them, so a test can check
-// exactly what left the api. The answer is always the same Code-mode answer over the seed's
-// `orders` and `customers`.
+// exactly what left the api. The answer is the same Code-mode answer over the seed's
+// `orders` and `customers`, except for draft-schema requests (below).
 import { createServer } from 'node:http';
 
 const PORT = Number(process.env.FAKE_ANTHROPIC_PORT ?? 3009);
@@ -25,6 +25,28 @@ const ANSWER = [
   '</assumptions>',
 ].join('\n');
 
+// Phase 22 — draft-schema requests (their instructions ask for `<ddl>`) get invoices that
+// reference the project's existing `customers`. A revise (draft sent back as the model's
+// own turn) adds a status column.
+const invoices = (status: boolean): string =>
+  [
+    '<ddl>',
+    'CREATE TABLE invoices (',
+    '  id uuid PRIMARY KEY,',
+    '  customer_id uuid NOT NULL,',
+    '  total_cents bigint NOT NULL,',
+    ...(status ? ["  status text NOT NULL DEFAULT 'open',"] : []),
+    '  CONSTRAINT invoices_customer_fk FOREIGN KEY (customer_id) REFERENCES customers (id) ON DELETE RESTRICT',
+    ');',
+    "COMMENT ON TABLE invoices IS 'One row per invoice';",
+    '</ddl>',
+  ].join('\n');
+
+const answerFor = (body: { system?: unknown; messages?: unknown[] }): string =>
+  JSON.stringify(body.system ?? '').includes('<ddl>')
+    ? invoices((body.messages?.length ?? 0) > 1)
+    : ANSWER;
+
 const calls: unknown[] = [];
 
 const sse = (event: string, data: unknown): string =>
@@ -43,7 +65,9 @@ createServer((req, res) => {
   let body = '';
   req.on('data', (chunk: Buffer) => (body += chunk.toString()));
   req.on('end', () => {
-    calls.push(JSON.parse(body));
+    const request = JSON.parse(body) as { system?: unknown; messages?: unknown[] };
+    calls.push(request);
+    const answer = answerFor(request);
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     res.write(
       sse('message_start', {
@@ -68,8 +92,8 @@ createServer((req, res) => {
       }),
     );
     // Two deltas, so the panel's streaming path runs and not just the final message.
-    const half = Math.floor(ANSWER.length / 2);
-    for (const text of [ANSWER.slice(0, half), ANSWER.slice(half)]) {
+    const half = Math.floor(answer.length / 2);
+    for (const text of [answer.slice(0, half), answer.slice(half)]) {
       res.write(
         sse('content_block_delta', {
           type: 'content_block_delta',

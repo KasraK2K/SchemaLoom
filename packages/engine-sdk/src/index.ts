@@ -222,6 +222,7 @@ export type {
 export {
   AI_MODES,
   DEFAULT_AI_CONTEXT_OPTIONS,
+  DRAFT_SCHEMA_RULES,
   approxTokens,
   createTaggedBlockStream,
   defaultJoinPaths,

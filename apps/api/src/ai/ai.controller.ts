@@ -20,7 +20,13 @@ import {
 } from '../access';
 import { getSubject } from '../auth';
 import { CreateThreadDto, DocDraftsDto, DraftSchemaDto, PostMessageDto } from './ai.dto';
-import { AiService, type AiMessageView, type AiThreadView, type DocDraftView } from './ai.service';
+import {
+  AiService,
+  type AiMessageView,
+  type AiThreadView,
+  type DocDraftView,
+  type DraftSchemaResult,
+} from './ai.service';
 
 /**
  * DESIGN §4.2 — the AI assistant. Markers as in `SavedQueriesController`: project-scoped
@@ -160,8 +166,8 @@ export class AiController {
     @Req() req: Request,
     @Param('projectId') projectId: string,
     @Body() body: DraftSchemaDto,
-  ): Promise<{ source: string; importFormat: string; warnings: readonly string[] }> {
-    return this.ai.draftSchema(subjectOf(req), projectId, mapFor(req, projectId), body.description);
+  ): Promise<DraftSchemaResult> {
+    return this.ai.draftSchema(subjectOf(req), projectId, mapFor(req, projectId), body);
   }
 }
 

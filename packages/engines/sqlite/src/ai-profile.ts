@@ -1,5 +1,6 @@
 import {
   approxTokens,
+  DRAFT_SCHEMA_RULES,
   codeModeInstructions,
   parseAiOutput,
   type AiContextOptions,
@@ -418,6 +419,7 @@ export const OUTPUT_INSTRUCTIONS: Readonly<Record<AiMode, string>> = {
     '<ddl>',
     'the statements, separated by semicolons, no markdown fence',
     '</ddl>',
+    DRAFT_SCHEMA_RULES,
   ].join('\n'),
 };
 

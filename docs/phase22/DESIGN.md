@@ -1,10 +1,31 @@
 # Phase 22: Describe it, get a schema (roadmap 22)
 
-Status: **proposed** 2026-10-05. Waiting for approval; every §9 question has a default.
-**Step 1 built** 2026-10-05 (§5): **Describe with AI** in the canvas toolbar and menu.
-**Step 6 built early** 2026-10-05: the projects-page **Describe your app** card (§1.2), on the
-current route. It creates the project, drafts, shows the SQL to review or edit (with **Draft
-again**), and **Create tables** runs the import. The summary and Refine come with steps 2–4.
+Status: **built** 2026-10-05. Approved with the §9 defaults the same day.
+
+As built, where it differs from or adds to the text below:
+
+- **The summary** is read against the caller's redacted view, not the live project (the
+  import preview needs a full view and `schema:edit`; this route needs only `ai:use`). A
+  table the caller can't see reads as "creates", so the summary is not an existence oracle.
+  It lists `creates`, `existing`, `addsColumns` (the additive merge adds new columns to an
+  existing table), `relations` and `linksTo`. Rename candidates still come from the import
+  preview, at Import time.
+- **Existing tables the draft only references** are declared in front of it by the server
+  (the engine's exporter over the caller's view). Found by e2e: the importer drops a foreign
+  key whose target is not in the same source, so `REFERENCES customers` alone imported
+  without its link. The additive merge matches the declared copy, leaves it unchanged and
+  points the new key at the real table. A name match picks them, so a table named only in a
+  comment is declared too, which is harmless.
+- **Entities without `ai:use`** are removed from the context model before serializing.
+  Under the budget the serializer sends every visible table in full; the focus is named in
+  the request ("Build on these tables: …") and decides what stays full when the budget trims.
+- **The rules** (§2.3) are one shared `DRAFT_SCHEMA_RULES` in the engine SDK, appended by every
+  engine, with a conformance check (`ai/draft-schema-rules`). The per-table comment line is
+  per engine: `COMMENT ON` (PostgreSQL), `COMMENT=` (MySQL), none for SQLite, whose importer
+  has no comments.
+- **Protected projects** (row 10b) offer **Describe with AI** too, with **Propose as a change**
+  as the only way out of the dialog. Inside a change request's own draft, Propose is hidden.
+- e2e is workflow 21 (`e2e/tests/workflow-21-describe.spec.ts`).
 
 The goal: a user describes what they need in plain words, from a whole application down to
 one table, and the AI drafts the tables and relations. Examples:

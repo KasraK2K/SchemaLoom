@@ -1,3 +1,5 @@
+import { QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { NoOrganizations, OrgList } from './org-list';
@@ -5,6 +7,7 @@ import { NoProjects } from './create-project';
 import { ProjectList } from './project-list';
 import { homeDestination, type OrganizationSummary, type ProjectSummary } from './projects-api';
 import { relativeTime } from './relative-time';
+import { makeQueryClient } from '@/lib/query-client';
 
 /**
  * Rendering lives next to the components rather than in `packages/ui` for the same
@@ -127,25 +130,32 @@ describe('<ProjectList>', () => {
   });
 });
 
+/** The create form drafts with AI through React Query, as the app's provider supplies. */
+const withQuery = (node: ReactNode) => (
+  <QueryClientProvider client={makeQueryClient()}>{node}</QueryClientProvider>
+);
+
 describe('<NoProjects>', () => {
   it('teaches the ways in instead of saying "no projects"', () => {
     const html = renderToStaticMarkup(
-      <NoProjects
-        orgId="org_1"
-        orgSlug="acme"
-        engines={[
-          {
-            id: 'pg',
-            displayName: 'PG',
-            importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }],
-            connectionFields: [{ id: 'host', label: 'Host', kind: 'text', required: true }],
-            introspection: 'network',
-            targetVersions: ['16', '15'],
-            defaultTargetVersion: '16',
-            templates: [{ id: 'shop', title: 'Shop', summary: 'A shop.', tableCount: 3 }],
-          },
-        ]}
-      />,
+      withQuery(
+        <NoProjects
+          orgId="org_1"
+          orgSlug="acme"
+          engines={[
+            {
+              id: 'pg',
+              displayName: 'PG',
+              importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }],
+              connectionFields: [{ id: 'host', label: 'Host', kind: 'text', required: true }],
+              introspection: 'network',
+              targetVersions: ['16', '15'],
+              defaultTargetVersion: '16',
+              templates: [{ id: 'shop', title: 'Shop', summary: 'A shop.', tableCount: 3 }],
+            },
+          ]}
+        />,
+      ),
     );
     expect(html).toContain('Start blank');
     expect(html).toContain('Import SQL');
@@ -157,22 +167,24 @@ describe('<NoProjects>', () => {
 
   it('disables "Read a database" and templates when no engine has them', () => {
     const html = renderToStaticMarkup(
-      <NoProjects
-        orgId="org_1"
-        orgSlug="acme"
-        engines={[
-          {
-            id: 'pg',
-            displayName: 'PG',
-            importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }],
-            connectionFields: [],
-            introspection: 'none',
-            targetVersions: [],
-            defaultTargetVersion: null,
-            templates: [],
-          },
-        ]}
-      />,
+      withQuery(
+        <NoProjects
+          orgId="org_1"
+          orgSlug="acme"
+          engines={[
+            {
+              id: 'pg',
+              displayName: 'PG',
+              importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }],
+              connectionFields: [],
+              introspection: 'none',
+              targetVersions: [],
+              defaultTargetVersion: null,
+              templates: [],
+            },
+          ]}
+        />,
+      ),
     );
     // "Read a database" and "Start from a template": nothing to connect to, no templates.
     expect(html.match(/disabled=""/g)).toHaveLength(2);

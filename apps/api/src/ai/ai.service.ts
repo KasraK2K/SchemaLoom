@@ -13,6 +13,7 @@ import {
   DEFAULT_AI_CONTEXT_OPTIONS,
   createTaggedBlockStream,
   defaultJoinPaths,
+  renderStatements,
   type AiProfile,
   type EngineRegistry,
   type QueryValidationResult,
@@ -21,10 +22,12 @@ import {
   fieldVisibilityIndex,
   type FieldVisibilityIndex,
   type RedactedModel,
+  type SchemaModel,
   type VisibilityContext,
 } from '@schemaloom/schema-model';
-import { ORM_AI_GUIDANCE, type OrmId } from '@schemaloom/orm';
+import { ORM_AI_GUIDANCE, subsetModel, type OrmId } from '@schemaloom/orm';
 import type { Redis } from 'ioredis';
+import { randomUUID } from 'node:crypto';
 import {
   PermissionResolver,
   VisibilityFilter,
@@ -42,6 +45,7 @@ import { identifiersResolved } from '../saved-queries/saved-queries.service';
 import { renderOrmCode } from '../jobs/orm-code';
 import { SchemaLoader } from '../schema';
 import { AiProvider, type AiResult } from './ai.provider';
+import { draftSummary, type DraftSummary } from './draft-summary';
 
 /**
  * DESIGN §4 — the AI assistant: threads, streamed turns, doc drafts, draft-schema.
@@ -145,6 +149,14 @@ export interface PreparedTurn {
 }
 
 export type AiStreamEmit = (event: string, data: unknown) => void;
+
+export interface DraftSchemaResult {
+  readonly source: string;
+  readonly importFormat: string;
+  readonly warnings: readonly string[];
+  /** Phase 22 — what the importer reads in the draft; null when it can't read it */
+  readonly summary: DraftSummary | null;
+}
 
 const notFound = (resourceType: string, id: string): NotFoundException =>
   new NotFoundException({ code: 'not_found', resourceType, id });
@@ -382,26 +394,71 @@ export class AiService {
 
   // --- draft-schema (DESIGN §4.2) -----------------------------------------------------------
 
+  /**
+   * Phase 22 §2 — the AI sees the project as the assistant does: entities that are visible,
+   * not restricted and carry `ai:use` (the rest are left out, not refused, so the AI never
+   * learns they exist). `focusEntityIds` outside that set are dropped silently. `revise` is
+   * stateless: the client's current draft goes back as the AI's own previous answer.
+   */
   async draftSchema(
     subject: Subject,
     projectId: string,
     map: ProjectPermissionMap,
-    description: string,
-  ): Promise<{ source: string; importFormat: string; warnings: readonly string[] }> {
+    body: {
+      description: string;
+      focusEntityIds?: readonly string[] | undefined;
+      revise?: { draft: string; instruction: string } | undefined;
+    },
+  ): Promise<DraftSchemaResult> {
     const view = await this.view(subject, projectId, map);
     const profile = this.profileFor(view);
     this.assertAiUseAtProject(view);
     this.provider.assertConfigured();
     await this.throttle(view);
+
+    const usable = new Set(
+      this.contextEntities(view, [], { strict: false }).filter((id) =>
+        this.has(view, 'ai:use', { type: 'entity', id }),
+      ),
+    );
+    const focus = [...new Set(body.focusEntityIds ?? [])].filter((id) => usable.has(id));
+    let prefix = profile.buildSystemPrompt({
+      projectName: view.projectName,
+      serverVersion: view.redacted.engineVersion || null,
+      mode: 'draft-schema',
+    });
+    // An empty project sends no <schema> block (Phase 5 behaviour).
+    if (usable.size > 0) {
+      const context = profile.serializeContext(withoutEntities(view.redacted, usable), {
+        ...CONTEXT_OPTIONS,
+        selectedEntityIds: focus,
+        includeDocs: view.includeDocs,
+      });
+      prefix += `\n\n<schema>\n${context.text}\n</schema>`;
+    }
+    const entities = view.redacted.objects.entity;
+    const ask =
+      focus.length === 0
+        ? body.description
+        : `${body.description}\n\nBuild on these tables: ${focus.map((id) => entities[id]?.name ?? id).join(', ')}`;
+    const messages: { role: 'user' | 'assistant'; content: string }[] = [
+      { role: 'user', content: ask },
+    ];
+    if (body.revise !== undefined) {
+      messages.push(
+        { role: 'assistant', content: `<ddl>\n${body.revise.draft}\n</ddl>` },
+        {
+          role: 'user',
+          content: `Revise the draft: ${body.revise.instruction}\nChange only what this asks, and return the whole revised draft.`,
+        },
+      );
+    }
+
     const result = await this.provider.stream(
       {
-        prefix: profile.buildSystemPrompt({
-          projectName: view.projectName,
-          serverVersion: view.redacted.engineVersion || null,
-          mode: 'draft-schema',
-        }),
+        prefix,
         instructions: profile.outputInstructions['draft-schema'],
-        messages: [{ role: 'user', content: description }],
+        messages,
         // A whole application's DDL is long, and thinking shares this budget.
         maxTokens: 32_000,
       },
@@ -416,11 +473,97 @@ export class AiService {
     if (parsed.mode !== 'draft-schema' || parsed.source === '') {
       throw new BadRequestException({ code: 'ai_no_schema', warnings: parsed.parseWarnings });
     }
+    const source = await this.withReferencedTables(
+      view,
+      usable,
+      parsed.source,
+      parsed.importFormat,
+    );
+    const imported = await this.readDraft(view, source, parsed.importFormat);
     return {
-      source: parsed.source,
+      source,
       importFormat: parsed.importFormat,
       warnings: parsed.parseWarnings,
+      summary: imported === null ? null : draftSummary(view.redacted, imported),
     };
+  }
+
+  /**
+   * The importer drops a foreign key whose target is not in the same source, so a draft
+   * that only REFERENCES `customers` would import without its links. Existing tables the
+   * draft names but doesn't declare are put in front, exported from the caller's own view:
+   * the additive merge matches them, leaves them unchanged and points the new keys at them.
+   */
+  private async withReferencedTables(
+    view: CallerView,
+    usable: ReadonlySet<string>,
+    source: string,
+    format: string,
+  ): Promise<string> {
+    const engine = this.registry.tryGet(view.redacted.engineId);
+    const declared = await this.readDraft(view, source, format);
+    if (
+      engine?.exporter === undefined ||
+      declared === null ||
+      !engine.capabilities.exportFormats.some((f) => f.id === format)
+    ) {
+      return source;
+    }
+    const names = new Set(Object.values(declared.objects.entity).map((e) => e.name.toLowerCase()));
+    const entities = view.redacted.objects.entity;
+    // ponytail: a name match, not a parse. A table named in a comment is added too, which
+    // costs only an unchanged existing table in the draft.
+    const referenced = [...usable].filter((id) => {
+      const name = entities[id]?.name;
+      return name !== undefined && !names.has(name.toLowerCase()) && mentions(source, name);
+    });
+    if (referenced.length === 0) return source;
+    const result = await engine.exporter.export({
+      model: subsetModel(withoutEntities(view.redacted, new Set(referenced)), referenced),
+      options: {
+        format,
+        includeComments: false,
+        includeDrops: false,
+        includeIfNotExists: false,
+        engineOptions: {},
+      },
+      context: { projectId: view.projectId, serverVersion: view.redacted.engineVersion },
+    });
+    const comment = engine.capabilities.queryLanguage.lineComment;
+    return `${comment} Existing tables this draft refers to. The import leaves them unchanged.\n${renderStatements(result)}\n\n${comment} New\n${source}`;
+  }
+
+  /** The draft through the engine's importer; null when it can't be read (the import
+   *  preview says why when the user tries it). */
+  private async readDraft(
+    view: CallerView,
+    source: string,
+    format: string,
+  ): Promise<SchemaModel | null> {
+    const engine = this.registry.tryGet(view.redacted.engineId);
+    if (engine?.importer === undefined) return null;
+    try {
+      const { model } = await engine.importer.import(
+        source,
+        {
+          format,
+          defaultNamespace: engine.capabilities.defaultNamespaceName,
+          caseFolding:
+            engine.capabilities.identifiers.foldsTo === 'none'
+              ? 'preserve'
+              : engine.capabilities.identifiers.foldsTo,
+          engineOptions: {},
+        },
+        {
+          projectId: view.projectId,
+          serverVersion: view.redacted.engineVersion,
+          newId: randomUUID,
+        },
+      );
+      return model;
+    } catch {
+      return null;
+    }
   }
 
   // --- doc drafts (DESIGN §4.2, Q5) ---------------------------------------------------------
@@ -817,6 +960,21 @@ export function aiSettings(settings: unknown): { enabled: boolean; includeDocsIn
     enabled: ai?.enabled !== false,
     includeDocsInContext: ai?.includeDocsInContext !== false,
   };
+}
+
+/** The view without the entities outside `keep`. Every serializer drops the fields, links
+ *  and indexes of an entity it doesn't have, so this is only ever narrower. */
+function withoutEntities(model: RedactedModel, keep: ReadonlySet<string>): RedactedModel {
+  const entity = Object.fromEntries(
+    Object.entries(model.objects.entity).filter(([id]) => keep.has(id)),
+  );
+  return { ...model, objects: { ...model.objects, entity } };
+}
+
+/** `name` as a whole identifier in `text`, any case, bare or quoted. */
+function mentions(text: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^\\w$])${escaped}($|[^\\w$])`, 'i').test(text);
 }
 
 function selectionOf(thread: AiThread): Selection {

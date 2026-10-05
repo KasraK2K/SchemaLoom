@@ -158,6 +158,7 @@ export type ConformanceCheckId =
   | 'ai/serialize-omits-restricted'
   | 'ai/serialize-escapes-docs'
   | 'ai/parse-output-tolerant'
+  | 'ai/draft-schema-rules'
   | 'static/bundle-size';
 
 export const CONFORMANCE_CHECKS: readonly ConformanceCheckId[] = [
@@ -214,5 +215,6 @@ export const CONFORMANCE_CHECKS: readonly ConformanceCheckId[] = [
   'ai/serialize-omits-restricted',
   'ai/serialize-escapes-docs',
   'ai/parse-output-tolerant',
+  'ai/draft-schema-rules',
   'static/bundle-size',
 ];

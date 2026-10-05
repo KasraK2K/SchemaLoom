@@ -18,6 +18,7 @@ import type { DocsService } from '../docs';
 import { PROJECT, baseStore, entityRow, fieldRow, projectRow } from '../schema/fixture';
 import { SchemaLoader } from '../schema/schema-loader.service';
 import { AiController } from './ai.controller';
+import { draftSchemaSchema } from './ai.dto';
 import { AiProvider, type AiRequest } from './ai.provider';
 import { AiService, type DocDraftQueue } from './ai.service';
 
@@ -145,6 +146,7 @@ function harness(
       aiProfile: engine?.aiProfile,
       queryValidator: validator,
       exporter: engine?.exporter,
+      importer: engine?.importer,
       capabilities: engine?.capabilities,
     }),
   } as unknown as EngineRegistry;
@@ -211,7 +213,7 @@ describe('AiService — 503 without a key', () => {
       service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection([]) }),
       service.getThread(ANA, 'thr_1'),
       service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'query' }),
-      service.draftSchema(ANA, PROJECT, mapOf(ANA), 'a shop'),
+      service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'a shop' }),
       service.enqueueDocDrafts(ANA, PROJECT, mapOf(ANA), ['ent_emp']),
       service.listDocDrafts(ANA, PROJECT, mapOf(ANA)),
       service.rejectDocDraft(ANA, 'd1'),
@@ -567,15 +569,131 @@ describe('AiService.draftSchema', () => {
   it('returns the DDL, with room for a whole application', async () => {
     const { provider, requests } = providerStub(DDL);
     const { service } = harness({ provider });
-    const out = await service.draftSchema(ANA, PROJECT, mapOf(ANA), 'a shop');
+    const out = await service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'a shop' });
     expect(out.source).toContain('CREATE TABLE shops');
     expect(requests[0]?.maxTokens).toBe(32_000);
+  });
+
+  it('sends the visible project, and the summary is what the importer reads (Phase 22)', async () => {
+    const answer = [
+      '<ddl>',
+      'CREATE TABLE ent_emp (fld_emp_name text, badge text);',
+      'CREATE TABLE reviews (id int PRIMARY KEY, emp text,',
+      '  CONSTRAINT reviews_emp_fk FOREIGN KEY (emp) REFERENCES ent_emp (fld_emp_name));',
+      '</ddl>',
+    ].join('\n');
+    const { provider, requests } = providerStub(answer);
+    const { service } = harness({ view: APRIL, provider });
+    const out = await service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'reviews' });
+    const prefix = requests[0]?.prefix ?? '';
+    expect(prefix).toContain('<schema>');
+    expect(prefix).toContain('T ent_emp');
+    expect(prefix).not.toContain('ent_prod');
+    expect(prefix).not.toContain('fld_sal');
+    expect(out.summary).toEqual({
+      creates: ['reviews'],
+      existing: ['ent_emp'],
+      addsColumns: [{ table: 'ent_emp', columns: ['badge'] }],
+      relations: [{ from: 'reviews.emp', to: 'ent_emp.fld_emp_name' }],
+      linksTo: ['ent_emp'],
+    });
+  });
+
+  it('an existing table the draft only references is declared in front, so the key survives', async () => {
+    const answer = [
+      '<ddl>',
+      'CREATE TABLE reviews (id int PRIMARY KEY, emp text,',
+      '  CONSTRAINT reviews_emp_fk FOREIGN KEY (emp) REFERENCES ent_emp (fld_emp_name));',
+      '</ddl>',
+    ].join('\n');
+    const { provider } = providerStub(answer);
+    const { service } = harness({ view: APRIL, provider });
+    const out = await service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'reviews' });
+    expect(out.source).toMatch(/CREATE TABLE[^;]*ent_emp/);
+    expect(out.source).not.toContain('fld_sal');
+    expect(out.source).not.toContain('ent_prod');
+    expect(out.summary).toMatchObject({
+      creates: ['reviews'],
+      existing: ['ent_emp'],
+      addsColumns: [],
+      relations: [{ from: 'reviews.emp', to: 'ent_emp.fld_emp_name' }],
+      linksTo: ['ent_emp'],
+    });
+    // Revising sends it all back; nothing is declared twice.
+    const again = await service.draftSchema(ANA, PROJECT, mapOf(ANA), {
+      description: 'reviews',
+      revise: { draft: out.source, instruction: 'x' },
+    });
+    expect(again.source.match(/CREATE TABLE[^;(]*ent_emp/g)).toHaveLength(1);
+  });
+
+  it('a table without ai:use is left out, not refused; a hidden one reads as new', async () => {
+    const { provider, requests } = providerStub(
+      '<ddl>\nCREATE TABLE ent_prod (id int PRIMARY KEY);\n</ddl>',
+    );
+    const { service } = harness({ view: { ...MARCH, ai: ['project', 'ent_emp'] }, provider });
+    await service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'x' });
+    expect(requests[0]?.prefix).toContain('T ent_emp');
+    expect(requests[0]?.prefix).not.toContain('ent_prod');
+
+    const april = harness({ view: APRIL, provider });
+    const out = await april.service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'x' });
+    expect(out.summary?.creates).toEqual(['ent_prod']);
+    expect(out.summary?.existing).toEqual([]);
+  });
+
+  it('an empty project sends no schema block', async () => {
+    const { provider, requests } = providerStub(DDL);
+    const { service } = harness({ provider, seed: { entity: [], field: [] } });
+    await service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'a shop' });
+    expect(requests[0]?.prefix).not.toContain('<schema>');
+  });
+
+  it('focus: names the visible focus, drops hidden and unknown ids silently', async () => {
+    const { provider, requests } = providerStub(DDL);
+    const { service } = harness({ view: APRIL, provider });
+    await service.draftSchema(ANA, PROJECT, mapOf(ANA), {
+      description: 'reviews',
+      focusEntityIds: ['ent_emp', 'ent_prod', 'ent_nope'],
+    });
+    const ask = requests[0]?.messages[0]?.content ?? '';
+    expect(ask).toContain('Build on these tables: ent_emp');
+    expect(ask).not.toContain('ent_prod');
+    expect(ask).not.toContain('ent_nope');
+  });
+
+  it('revise: the draft goes back as the previous answer, with the instruction', async () => {
+    const { provider, requests } = providerStub(DDL);
+    const { service } = harness({ provider });
+    const out = await service.draftSchema(ANA, PROJECT, mapOf(ANA), {
+      description: 'a shop',
+      revise: { draft: 'CREATE TABLE mine (id int);', instruction: 'add a name' },
+    });
+    expect(requests[0]?.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(requests[0]?.messages[1]?.content).toContain('CREATE TABLE mine');
+    expect(requests[0]?.messages[2]?.content).toContain('add a name');
+    expect(out.source).toContain('CREATE TABLE shops');
+  });
+
+  it('the body limits: focus, draft and instruction (400 at the route)', () => {
+    const ok = { description: 'x' };
+    expect(draftSchemaSchema.safeParse(ok).success).toBe(true);
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `e${String(i)}`);
+    expect(draftSchemaSchema.safeParse({ ...ok, focusEntityIds: ids(50) }).success).toBe(true);
+    expect(draftSchemaSchema.safeParse({ ...ok, focusEntityIds: ids(51) }).success).toBe(false);
+    const revise = (draft: string, instruction: string) =>
+      draftSchemaSchema.safeParse({ ...ok, revise: { draft, instruction } }).success;
+    expect(revise('a'.repeat(100_000), 'b'.repeat(2_000))).toBe(true);
+    expect(revise('a'.repeat(100_001), 'b')).toBe(false);
+    expect(revise('a', 'b'.repeat(2_001))).toBe(false);
   });
 
   it('refuses a cut-off answer instead of handing over half a schema', async () => {
     const { provider } = providerStub('<ddl>\nCREATE TABLE shops (id int', 'max_tokens');
     const { service } = harness({ provider });
-    await expect(service.draftSchema(ANA, PROJECT, mapOf(ANA), 'a shop')).rejects.toMatchObject({
+    await expect(
+      service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'a shop' }),
+    ).rejects.toMatchObject({
       status: 400,
       response: { code: 'ai_truncated' },
     });

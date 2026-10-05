@@ -3,7 +3,8 @@
 import { Button, Database, FilePlus2, LayoutGrid, Sparkles, Upload } from '@schemaloom/ui';
 import { useState } from 'react';
 import { z } from 'zod';
-import { aiErrorMessage, draftSchema } from '@/features/ai/ai-api';
+import { aiErrorMessage } from '@/features/ai/ai-api';
+import { DraftReview, useSchemaDraft } from '@/features/ai/describe-schema';
 import { ApiError, apiFetch } from '@/lib/api-client';
 import {
   ConnectionForm,
@@ -336,6 +337,7 @@ export function NoProjects({
   const [workspaceName, setWorkspaceName] = useState('');
   const [source, setSource] = useState('');
   const [description, setDescription] = useState('');
+  const schemaDraft = useSchemaDraft(source, setSource);
   const [draft, setDraft] = useState<ConnectionDraft>({});
   /** 6c — save the connection on the project, so it can Sync later */
   const [remember, setRemember] = useState(true);
@@ -502,7 +504,7 @@ export function NoProjects({
   /** Phase 22 §1.2 — the AI's DDL lands in the SQL box for review; nothing is imported yet. */
   const draftInto = async (id: string) => {
     try {
-      setSource((await draftSchema(id, description)).source);
+      await schemaDraft.draft(id, { description });
     } catch (caught) {
       setError(aiErrorMessage(caught));
     }
@@ -733,20 +735,33 @@ export function NoProjects({
               {description.length.toLocaleString()} / {DESCRIPTION_MAX.toLocaleString()}
             </span>
           </label>
+          {source !== '' && createdId !== null && (
+            <DraftReview
+              draft={schemaDraft}
+              onRefine={(instruction) =>
+                schemaDraft
+                  .refine(createdId, { description }, instruction)
+                  .catch((caught: unknown) => {
+                    setError(aiErrorMessage(caught));
+                  })
+              }
+            />
+          )}
           {source !== '' && (
-            <label className="flex flex-col gap-1 text-sm text-text">
-              Drafted schema: review or edit it, then create the tables
+            <details className="text-sm text-text">
+              <summary className="cursor-pointer">Show SQL (review or edit it)</summary>
               <textarea
                 required
                 rows={12}
                 disabled={busy}
+                aria-label="Drafted schema"
                 value={source}
                 onChange={(e) => {
                   setSource(e.target.value);
                 }}
-                className={`${inputClass} font-mono text-xs`}
+                className={`${inputClass} mt-2 w-full font-mono text-xs`}
               />
-            </label>
+            </details>
           )}
         </>
       )}

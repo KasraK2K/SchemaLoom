@@ -126,6 +126,24 @@ export function codeModeInstructions(sqlDialect: string): string {
   ].join('\n');
 }
 
+/**
+ * Phase 22 §2.3 — draft-schema's rules, the same for every engine. Each engine's
+ * `outputInstructions['draft-schema']` ends with them (conformance checks it).
+ */
+export const DRAFT_SCHEMA_RULES = [
+  'When a <schema> block is present, it is the project you are adding to. In this mode you',
+  'create new tables, so "use only the tables listed" applies to what already exists:',
+  '- Reuse what exists. Reference existing tables by their real names and key columns, and',
+  '  never re-create a table that is in <schema>. Add a column to an existing table with',
+  '  ALTER TABLE … ADD COLUMN only when the description asks for it. Never rename, change or',
+  '  drop anything that exists.',
+  '- Make relations explicit: foreign keys as named constraints, a join table for each',
+  '  many-to-many, and an ON DELETE action chosen for each foreign key.',
+  '- Follow the conventions visible in <schema>: naming case, key type, timestamp columns.',
+  '- When asked to revise a draft, change only what the request asks and return the whole',
+  '  revised draft.',
+].join('\n');
+
 /** The defaults core passes when a caller does not choose (§13 `maxDocChars`). */
 export const DEFAULT_AI_CONTEXT_OPTIONS: AiContextOptions = {
   selectedEntityIds: [],

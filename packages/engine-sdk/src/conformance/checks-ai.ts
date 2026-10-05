@@ -2,6 +2,7 @@ import { expect } from 'vitest';
 import {
   AI_MODES,
   DEFAULT_AI_CONTEXT_OPTIONS,
+  DRAFT_SCHEMA_RULES,
   type AiContextOptions,
   type AiProfile,
 } from '../ai.js';
@@ -183,6 +184,14 @@ export const AI_CHECKS: readonly ConformanceCheck[] = [
         expect(noExplanation.explanation).toBe('');
         expect(noExplanation.parseWarnings.length).toBeGreaterThan(0);
       }
+    },
+  },
+  {
+    // Phase 22 §2.3 — reuse what exists, explicit relations, conventions, revise in place.
+    id: 'ai/draft-schema-rules',
+    requires: 'aiProfile',
+    run: (ctx) => {
+      expect(profile(ctx).outputInstructions['draft-schema']).toContain(DRAFT_SCHEMA_RULES);
     },
   },
 ];

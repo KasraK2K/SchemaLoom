@@ -1,5 +1,6 @@
 import {
   approxTokens,
+  DRAFT_SCHEMA_RULES,
   codeModeInstructions,
   parseAiOutput,
   type AiContextOptions,
@@ -405,6 +406,8 @@ export const OUTPUT_INSTRUCTIONS: Readonly<Record<AiMode, string>> = {
     '<ddl>',
     'the statements, separated by semicolons, no markdown fence',
     '</ddl>',
+    'Give each new table a one-line COMMENT ON TABLE, so it is documented on import.',
+    DRAFT_SCHEMA_RULES,
   ].join('\n'),
 };
 

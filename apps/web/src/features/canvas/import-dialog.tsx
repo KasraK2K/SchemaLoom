@@ -9,10 +9,16 @@ import {
   DialogTitle,
   cn,
 } from '@schemaloom/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useEngine } from '@/engines';
-import { DescribeSchema } from '@/features/ai/describe-schema';
+import { DescribeSchema, useSchemaDraft } from '@/features/ai/describe-schema';
+import {
+  changeRequestsKey,
+  projectShellQueryOptions,
+  proposeChange,
+} from '@/features/change-requests/change-requests-api';
 import { SshHostKeyNote, readsDatabase } from '@/features/projects/connection-form';
 import {
   detectImportFormat,
@@ -51,6 +57,9 @@ export function ImportDialog({
   projectId,
   onImported,
   initialFrom = 'sql',
+  tableCount = 0,
+  focus = [],
+  proposeOnly = false,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -58,6 +67,11 @@ export function ImportDialog({
   readonly onImported: () => Promise<void>;
   /** 'database' for the toolbar's Sync; 'describe' for the empty canvas's Describe card */
   readonly initialFrom?: 'sql' | 'database' | 'describe';
+  /** Phase 22 §1.1 — "Build on": the visible tables, and the selection the AI connects to */
+  readonly tableCount?: number;
+  readonly focus?: readonly { readonly id: string; readonly name: string }[];
+  /** a protected project (row 10b): the draft can only become a change request */
+  readonly proposeOnly?: boolean;
 }) {
   const facet = useEngine();
   const formats = facet.capabilities.importFormats;
@@ -93,6 +107,14 @@ export function ImportDialog({
   const [candidates, setCandidates] = useState<readonly RenameCandidate[] | null>(null);
   /** Confirmed candidate keys (`type:fromId`). */
   const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(new Set());
+  const draft = useSchemaDraft(source, setSource);
+  const describing = initialFrom === 'describe';
+  // Q5 — offered to everyone who drafts, except inside a change request's own draft.
+  const shell = useQuery({ ...projectShellQueryOptions(projectId), enabled: describing });
+  const canPropose = describing && shell.data?.draft === null;
+  const { orgSlug } = useParams<{ orgSlug?: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
 
   const close = (next: boolean) => {
     if (busy) return;
@@ -157,6 +179,53 @@ export function ImportDialog({
     })();
   };
 
+  /** §1.1 step 4 — fork (or reuse) the caller's draft, import there, open it on its canvas. */
+  const propose = () => {
+    setBusy(true);
+    setError(null);
+    void (async () => {
+      try {
+        const request = await proposeChange(projectId);
+        await importInto(request.draftProjectId, source, [], detected);
+        await queryClient.invalidateQueries({ queryKey: changeRequestsKey(projectId) });
+        router.push(
+          `/${encodeURIComponent(orgSlug ?? '')}/p/${encodeURIComponent(request.draftProjectId)}`,
+        );
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 403)
+          setError('Proposing a change needs access to every table and column in the project.');
+        else fail(caught);
+        setBusy(false);
+      }
+    })();
+  };
+
+  const sqlBox = (
+    <>
+      <textarea
+        required
+        autoFocus={!describing}
+        rows={12}
+        aria-label={importSourceName(formats)}
+        value={source}
+        onChange={(e) => {
+          setSource(e.target.value);
+        }}
+        className="rounded-md border border-border bg-surface px-3 py-2 font-mono text-xs text-text"
+      />
+      <label className="flex flex-col gap-1 text-xs text-text-muted">
+        …or choose a file
+        <input
+          type="file"
+          accept={formats.flatMap((f) => f.fileExtensions).join(',')}
+          onChange={(e) => {
+            void e.target.files?.[0]?.text().then(setSource);
+          }}
+        />
+      </label>
+    </>
+  );
+
   const entities = (candidates ?? []).filter((c): c is EntityCandidate => c.type === 'entity');
   const fields = (candidates ?? []).filter((c): c is FieldCandidate => c.type === 'field');
   const renamedEntity = new Set(
@@ -202,7 +271,7 @@ export function ImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogTitle>
           {from === 'database'
             ? 'Import from a database'
@@ -334,7 +403,7 @@ export function ImportDialog({
               submitSource();
             }}
           >
-            {readsDatabase(facet.capabilities) && (
+            {readsDatabase(facet.capabilities) && !proposeOnly && (
               <div role="group" aria-label="Import from" className="flex gap-1">
                 {(
                   [
@@ -364,8 +433,10 @@ export function ImportDialog({
               <>
                 <DescribeSchema
                   projectId={projectId}
-                  onDraft={setSource}
-                  autoFocus={initialFrom === 'describe'}
+                  draft={draft}
+                  tableCount={tableCount}
+                  focus={focus}
+                  autoFocus={describing}
                 />
                 {(templates.data?.length ?? 0) > 0 && (
                   <label className="flex flex-col gap-1 text-xs text-text-muted">
@@ -392,27 +463,16 @@ export function ImportDialog({
                     </select>
                   </label>
                 )}
-                <textarea
-                  required
-                  autoFocus={initialFrom !== 'describe'}
-                  rows={12}
-                  aria-label={importSourceName(formats)}
-                  value={source}
-                  onChange={(e) => {
-                    setSource(e.target.value);
-                  }}
-                  className="rounded-md border border-border bg-surface px-3 py-2 font-mono text-xs text-text"
-                />
-                <label className="flex flex-col gap-1 text-xs text-text-muted">
-                  …or choose a file
-                  <input
-                    type="file"
-                    accept={formats.flatMap((f) => f.fileExtensions).join(',')}
-                    onChange={(e) => {
-                      void e.target.files?.[0]?.text().then(setSource);
-                    }}
-                  />
-                </label>
+                {describing && draft.drafted ? (
+                  // §1.1 step 2 — summary first, the SQL a click away and still editable.
+                  // Before a draft (a template, a file) the box stays in plain view.
+                  <details className="text-xs text-text-muted">
+                    <summary className="cursor-pointer">Show SQL</summary>
+                    <div className="mt-2 flex flex-col gap-3">{sqlBox}</div>
+                  </details>
+                ) : (
+                  sqlBox
+                )}
               </>
             )}
             {error !== null && (
@@ -421,24 +481,38 @@ export function ImportDialog({
               </p>
             )}
             <DialogFooter>
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                disabled={
-                  busy ||
-                  (from === 'sql' && source === '') ||
-                  (from === 'database' && choice.saved === undefined)
-                }
-              >
-                {busy
-                  ? from === 'database'
-                    ? 'Reading…'
-                    : 'Importing…'
-                  : from === 'database' && choice.saved && !choice.editing
-                    ? 'Sync now'
-                    : 'Import'}
-              </Button>
+              {canPropose && from === 'sql' && (
+                <Button
+                  type="button"
+                  variant={proposeOnly ? 'primary' : 'outline'}
+                  size="sm"
+                  disabled={busy || source === ''}
+                  title="Import the draft into a change request and review it on a canvas first"
+                  onClick={propose}
+                >
+                  Propose as a change
+                </Button>
+              )}
+              {!proposeOnly && (
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={
+                    busy ||
+                    (from === 'sql' && source === '') ||
+                    (from === 'database' && choice.saved === undefined)
+                  }
+                >
+                  {busy
+                    ? from === 'database'
+                      ? 'Reading…'
+                      : 'Importing…'
+                    : from === 'database' && choice.saved && !choice.editing
+                      ? 'Sync now'
+                      : 'Import'}
+                </Button>
+              )}
             </DialogFooter>
           </form>
         )}

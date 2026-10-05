@@ -34,6 +34,9 @@ arrive as packages rather than as changes to core code.
       <p><b>Start from what you already run.</b> Paste a <code>pg_dump</code> or a migration
       file and SchemaLoom lays it out on the canvas for you. Importing again merges
       additively.</p>
+      <p><b>Describe it instead.</b> Say what you are building, or the feature you are adding,
+      and AI drafts the tables and relations on top of the ones you have. Refine the draft,
+      then import it or propose it as a change for review.</p>
       <p><b>Share at any level.</b> Grant access to a project, an area or a single table, or
       send a view-only link with an expiry and an optional password.</p>
     </td>

@@ -28,7 +28,18 @@ export const docDraftsSchema = z.object({
 });
 export class DocDraftsDto extends createZodDto(docDraftsSchema) {}
 
+/** Phase 22 §2.1. `revise` is stateless: the client sends back the draft it holds. */
 export const draftSchemaSchema = z.object({
   description: z.string().trim().min(1).max(10_000),
+  focusEntityIds: z.array(z.string().min(1)).max(50).optional(),
+  revise: z
+    .object({
+      draft: z
+        .string()
+        .min(1)
+        .refine((s) => Buffer.byteLength(s, 'utf8') <= 100_000, 'draft is over 100 KB'),
+      instruction: z.string().trim().min(1).max(2_000),
+    })
+    .optional(),
 });
 export class DraftSchemaDto extends createZodDto(draftSchemaSchema) {}
