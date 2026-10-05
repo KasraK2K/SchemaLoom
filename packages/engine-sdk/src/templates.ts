@@ -18,7 +18,19 @@ export interface ProjectTemplate {
   /** one of `capabilities.importFormats` */
   readonly importFormat: string;
   readonly source: string;
+  /**
+   * Phase 12b — cards the project opens with. The web writes them as one ops batch after
+   * the import, skipping a table name it can't find. `color` is an area token
+   * (`area-1` … `area-16`); `templates/import-cleanly` checks every table name exists.
+   */
+  readonly areas?: readonly TemplateArea[];
+}
+
+export interface TemplateArea {
+  readonly name: string;
+  readonly color: string;
+  readonly tables: readonly string[];
 }
 
 /** What `GET /engines` lists: everything but the source. */
-export type ProjectTemplateSummary = Omit<ProjectTemplate, 'importFormat' | 'source'>;
+export type ProjectTemplateSummary = Omit<ProjectTemplate, 'importFormat' | 'source' | 'areas'>;

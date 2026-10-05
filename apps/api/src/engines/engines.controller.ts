@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, NotFoundException, Param } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { EngineCatalog, EngineRegistry } from '@schemaloom/engine-sdk';
+import type { EngineCatalog, EngineRegistry, TemplateArea } from '@schemaloom/engine-sdk';
 import { Authenticated } from '../access';
 import { ENGINE_REGISTRY } from './engines.tokens';
 
@@ -17,7 +17,7 @@ export class EnginesController {
   }
 
   /**
-   * Phase 12 — a template's SQL, which the web app then sends through the ordinary
+   * Phase 12 — a template's SQL (and its 12b areas), which the web app then sends through the ordinary
    * `POST /projects/:id/import`. Engine data, not project data: nothing to permission-check
    * beyond being signed in, like the catalog above.
    */
@@ -27,11 +27,15 @@ export class EnginesController {
   template(
     @Param('engineId') engineId: string,
     @Param('templateId') templateId: string,
-  ): { importFormat: string; source: string } {
+  ): { importFormat: string; source: string; areas: readonly TemplateArea[] } {
     const template = this.registry
       .tryGet(engineId)
       ?.templates?.find((candidate) => candidate.id === templateId);
     if (template === undefined) throw new NotFoundException({ code: 'template.not_found' });
-    return { importFormat: template.importFormat, source: template.source };
+    return {
+      importFormat: template.importFormat,
+      source: template.source,
+      areas: template.areas ?? [],
+    };
   }
 }

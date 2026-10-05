@@ -4,7 +4,8 @@ import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 /**
  * Roadmap 12 (`docs/phase12/DESIGN.md`) — start from a template on the projects page, and
- * load one (or describe one) from an empty project's canvas. Runs as the seeded owner, in a
+ * load one (or describe one) from an empty project's canvas. A template opens with its areas
+ * drawn as cards (12b, `docs/phase12/ORG-TEMPLATES.md` §1). Runs as the seeded owner, in a
  * new project each time, so the shared seed is never touched.
  */
 
@@ -29,11 +30,15 @@ test.describe('workflow 14 — templates and the first-run canvas', () => {
     await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 30_000 });
 
     const projectId = page.url().split('/p/')[1] ?? '';
-    const ir = await page.request.get(`${API_URL}/api/projects/${projectId}/ir`);
-    const names = Object.values(
-      ((await ir.json()) as { objects: { entity: Record<string, { name: string }> } }).objects
-        .entity,
-    ).map((e) => e.name);
+    const ir = (await (
+      await page.request.get(`${API_URL}/api/projects/${projectId}/ir`)
+    ).json()) as {
+      objects: {
+        entity: Record<string, { name: string; areaId: string | null }>;
+        area: Record<string, { id: string; name: string }>;
+      };
+    };
+    const names = Object.values(ir.objects.entity).map((e) => e.name);
     expect(names.sort()).toEqual([
       'addresses',
       'customers',
@@ -42,6 +47,49 @@ test.describe('workflow 14 — templates and the first-run canvas', () => {
       'payments',
       'products',
     ]);
+
+    // 12b — it opens organised into the template's cards, each drawn around its tables.
+    const areaOf = (table: string): string | undefined => {
+      const id = Object.values(ir.objects.entity).find((e) => e.name === table)?.areaId;
+      return Object.values(ir.objects.area).find((area) => area.id === id)?.name;
+    };
+    expect(['customers', 'products', 'orders', 'payments'].map(areaOf)).toEqual([
+      'Customers',
+      'Catalog',
+      'Orders',
+      'Orders',
+    ]);
+    const cards = page.getByTestId('area-card');
+    await expect(cards).toHaveCount(3);
+    for (const name of ['Customers', 'Catalog', 'Orders']) {
+      await expect(cards.filter({ hasText: name })).toHaveCount(1);
+    }
+
+    // The first-open auto layout keeps each card clear of the tables outside it.
+    await page.keyboard.press('f');
+    const boxOf = async (id: string) => {
+      const box = await page.locator(`.react-flow__node[data-id="${id}"]`).boundingBox();
+      if (box === null) throw new Error(`node ${id} is not on screen`);
+      return box;
+    };
+    const entities = Object.entries(ir.objects.entity);
+    await expect
+      .poll(async () => {
+        for (const area of Object.values(ir.objects.area)) {
+          const card = await boxOf(`area:${area.id}`);
+          for (const [id, e] of entities.filter(([, e]) => e.areaId !== area.id)) {
+            const t = await boxOf(id);
+            const touches =
+              t.x < card.x + card.width &&
+              card.x < t.x + t.width &&
+              t.y < card.y + card.height &&
+              card.y < t.y + t.height;
+            if (touches) return `${e.name} overlaps ${area.name}`;
+          }
+        }
+        return 'clear';
+      })
+      .toBe('clear');
 
     // The template's COMMENT ON statements arrive as docs: 6 tables and 4 columns.
     const docs = await page.request.get(`${API_URL}/api/projects/${projectId}/docs`);

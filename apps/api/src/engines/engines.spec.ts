@@ -177,16 +177,25 @@ describe('GET /engines/:engineId/templates/:templateId (Phase 12)', () => {
     tableCount: 1,
     importFormat: 'ddl',
     source: 'CREATE TABLE a (id int);',
+    areas: [{ name: 'Core', color: 'area-1', tables: ['a'] }],
   };
 
-  it('serves the source, and the catalog lists only metadata', async () => {
+  it('serves the source and areas, and the catalog lists only metadata', async () => {
     const registry = createEngineRegistry([]);
     registry.register({ ...fakeEngine(), templates: [shop] });
     const controller = await controllerWith(registry);
     expect(controller.template('fakesql', 'shop')).toEqual({
       importFormat: 'ddl',
       source: 'CREATE TABLE a (id int);',
+      areas: [{ name: 'Core', color: 'area-1', tables: ['a'] }],
     });
+    // A template without areas answers an empty list, so the web needs no second shape.
+    registry.register({
+      ...fakeEngine(),
+      id: 'plainsql',
+      templates: [{ ...shop, areas: undefined }],
+    });
+    expect(controller.template('plainsql', 'shop').areas).toEqual([]);
     expect(controller.catalog().available[0]?.templates).toEqual([
       { id: 'shop', title: 'Shop', summary: 'A shop.', tableCount: 1 },
     ]);

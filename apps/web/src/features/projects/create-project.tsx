@@ -1,10 +1,12 @@
 'use client';
 
 import { Button, Database, FilePlus2, LayoutGrid, Sparkles, Upload } from '@schemaloom/ui';
+import { SchemaModelSchema } from '@schemaloom/schema-model';
 import { useState } from 'react';
 import { z } from 'zod';
 import { aiErrorMessage } from '@/features/ai/ai-api';
 import { DraftReview, useSchemaDraft } from '@/features/ai/describe-schema';
+import { templateAreaOps } from '@/features/canvas/area-ops';
 import { ApiError, apiFetch } from '@/lib/api-client';
 import {
   ConnectionForm,
@@ -207,15 +209,47 @@ export async function previewImport(
   );
 }
 
-/** Phase 12 — a template's SQL; the caller imports it like any pasted source. */
-export async function fetchTemplate(engineId: string, templateId: string): Promise<string> {
-  return z
-    .object({ source: z.string() })
-    .parse(
-      await apiFetch<unknown>(
-        `/engines/${encodeURIComponent(engineId)}/templates/${encodeURIComponent(templateId)}`,
-      ),
-    ).source;
+const TemplateSchema = z.object({
+  source: z.string(),
+  areas: z
+    .array(z.object({ name: z.string(), color: z.string(), tables: z.array(z.string()) }))
+    .default([]),
+});
+
+/** Phase 12 — a template's SQL, imported like any pasted source, and its 12b areas. */
+export async function fetchTemplate(
+  engineId: string,
+  templateId: string,
+): Promise<z.infer<typeof TemplateSchema>> {
+  return TemplateSchema.parse(
+    await apiFetch<unknown>(
+      `/engines/${encodeURIComponent(engineId)}/templates/${encodeURIComponent(templateId)}`,
+    ),
+  );
+}
+
+/**
+ * Phase 12b — import the template, then draw its cards as ONE ops batch through the
+ * ordinary write path. The canvas auto-lays out a fresh import on open, cards included.
+ */
+async function importTemplate(
+  projectId: string,
+  engineId: string,
+  templateId: string,
+): Promise<Imported> {
+  const template = await fetchTemplate(engineId, templateId);
+  const imported = await importInto(projectId, template.source);
+  if (template.areas.length === 0) return imported;
+  const base = `/projects/${encodeURIComponent(projectId)}`;
+  const model = SchemaModelSchema.parse(await apiFetch<unknown>(`${base}/ir`));
+  const ops = templateAreaOps(model, template.areas);
+  if (ops.length > 0) {
+    await apiFetch<unknown>(`${base}/schema/ops`, {
+      method: 'POST',
+      body: { batchId: crypto.randomUUID(), projectId, ops, label: 'Template areas' },
+    });
+  }
+  return imported;
 }
 
 /** The templates one engine offers, read from `GET /engines` in the browser. */
@@ -531,7 +565,7 @@ export function NoProjects({
                 (await introspectPreview(id, await databaseSource(id))).sourceId,
               )
             : fromTemplate
-              ? await importInto(id, await fetchTemplate(engineId, templateId))
+              ? await importTemplate(id, engineId, templateId)
               : await importInto(
                   id,
                   source,

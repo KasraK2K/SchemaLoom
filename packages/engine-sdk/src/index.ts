@@ -246,7 +246,7 @@ export {
 } from './ai.js';
 
 // --- templates (Phase 12) ---
-export type { ProjectTemplate, ProjectTemplateSummary } from './templates.js';
+export type { ProjectTemplate, ProjectTemplateSummary, TemplateArea } from './templates.js';
 
 // --- the engine itself (§3) ---
 export type {

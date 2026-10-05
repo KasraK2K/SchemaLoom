@@ -79,6 +79,7 @@ export const TEMPLATES: readonly ProjectTemplate[] = [
     tableCount: 3,
     importFormat: 'ddl',
     source: TODO,
+    areas: [{ name: 'Tasks', color: 'area-2', tables: ['lists', 'tasks'] }],
   },
   {
     id: 'blog',
@@ -87,5 +88,9 @@ export const TEMPLATES: readonly ProjectTemplate[] = [
     tableCount: 5,
     importFormat: 'ddl',
     source: BLOG,
+    areas: [
+      { name: 'Content', color: 'area-5', tables: ['posts', 'tags', 'post_tags', 'comments'] },
+      { name: 'People', color: 'area-1', tables: ['authors'] },
+    ],
   },
 ];

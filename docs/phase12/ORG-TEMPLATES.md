@@ -1,6 +1,6 @@
 # Phase 12b–12c: areas in templates, and org templates
 
-Status: **proposed 2026-10-05**. Roadmap rows 12b (areas in the built-in templates) and 12c
+Status: 12b **built 2026-10-05** (§1, defaults approved); 12c **proposed 2026-10-05**. Roadmap rows 12b (areas in the built-in templates) and 12c
 ("save this project as a template"). Builds on `DESIGN.md` (templates) and Phase 23 (area
 cards), which makes areas worth shipping in a template.
 

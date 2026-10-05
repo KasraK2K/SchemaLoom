@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { groupOps, moveOps, ungroupOps, updateAreaOp, nextOrdinal } from './area-ops';
+import {
+  groupOps,
+  moveOps,
+  ungroupOps,
+  updateAreaOp,
+  nextOrdinal,
+  templateAreaOps,
+} from './area-ops';
 import { AREA_BILLING, AREA_CRM, CUSTOMERS, ORDERS, SECRET, fixtureModel } from './model-fixture';
 
 const model = fixtureModel();
@@ -95,5 +102,25 @@ describe('area edits', () => {
   it('a new area goes last in the legend', () => {
     expect(nextOrdinal([])).toBe(0);
     expect(nextOrdinal(Object.values(model.objects.area))).toBe(2);
+  });
+});
+
+describe('template areas (12b)', () => {
+  it('is one batch over the tables it finds, skipping missing names and empty areas', () => {
+    let n = 0;
+    const ops = templateAreaOps(
+      model,
+      [
+        { name: 'Sales', color: 'area-3', tables: ['orders', 'nope', 'customers'] },
+        { name: 'Ghost', color: 'area-4', tables: ['nope'] },
+      ],
+      () => `t${String(++n)}`,
+    );
+    expect(ops.map((op) => (op.op === 'create' ? op.object.name : op.id))).toEqual([
+      'Sales',
+      ORDERS,
+      CUSTOMERS,
+    ]);
+    expect(ops[0]).toMatchObject({ object: { id: 't1', color: 'area-3', ordinal: 0 } });
   });
 });

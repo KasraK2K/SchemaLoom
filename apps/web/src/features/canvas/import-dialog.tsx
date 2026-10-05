@@ -448,9 +448,14 @@ export function ImportDialog({
                         const id = e.target.value;
                         if (id === '') return;
                         setError(null);
-                        fetchTemplate(facet.id, id).then(setSource, () => {
-                          setError('Could not load the template. Try again.');
-                        });
+                        fetchTemplate(facet.id, id).then(
+                          (t) => {
+                            setSource(t.source);
+                          },
+                          () => {
+                            setError('Could not load the template. Try again.');
+                          },
+                        );
                       }}
                       className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-text"
                     >

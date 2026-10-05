@@ -70,3 +70,21 @@ export function updateAreaOp(area: Area, patch: { name: string } | { color: stri
 
 export const nextOrdinal = (areas: readonly Area[]): number =>
   areas.reduce((max, a) => Math.max(max, a.ordinal + 1), 0);
+
+/**
+ * Phase 12b — a template's areas as ONE batch over the freshly imported model: `groupOps`
+ * per area, matched by table name. A name that isn't there is skipped, and so is an area
+ * left with no table (an empty card has nothing to draw around).
+ */
+export function templateAreaOps(
+  model: { objects: Objects },
+  areas: readonly { name: string; color: string; tables: readonly string[] }[],
+  newId: () => Id = () => crypto.randomUUID(),
+) {
+  const byName = new Map(Object.values(model.objects.entity).map((e) => [e.name, e.id]));
+  return areas.flatMap((area, ordinal) => {
+    const ids = area.tables.flatMap((name) => byName.get(name) ?? []);
+    if (ids.length === 0) return [];
+    return groupOps(model, ids, { id: newId(), name: area.name, color: area.color, ordinal });
+  });
+}

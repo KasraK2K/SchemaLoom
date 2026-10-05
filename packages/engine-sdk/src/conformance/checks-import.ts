@@ -334,6 +334,15 @@ export const IMPORT_CHECKS: readonly ConformanceCheck[] = [
             `${template.id}: imports ${String(tables)} tables, not ${String(template.tableCount)}`,
           );
         }
+        const names = new Set(Object.values(model.objects.entity).map((e) => e.name));
+        for (const area of template.areas ?? []) {
+          for (const table of area.tables) {
+            if (!names.has(table))
+              problems.push(
+                `${template.id}: area ${area.name} names ${table}, which isn't imported`,
+              );
+          }
+        }
         const exported = await runExport(ctx, ctx.fixtures.redactForExport(model));
         if (exported.incomplete) problems.push(`${template.id}: export is incomplete`);
         for (const d of exported.diagnostics.filter((d) => d.severity === 'error')) {

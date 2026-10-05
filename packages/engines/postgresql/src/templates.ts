@@ -198,6 +198,11 @@ export const TEMPLATES: readonly ProjectTemplate[] = [
     tableCount: 6,
     importFormat: 'ddl',
     source: ECOMMERCE,
+    areas: [
+      { name: 'Customers', color: 'area-1', tables: ['customers', 'addresses'] },
+      { name: 'Catalog', color: 'area-2', tables: ['products'] },
+      { name: 'Orders', color: 'area-3', tables: ['orders', 'order_items', 'payments'] },
+    ],
   },
   {
     id: 'saas',
@@ -206,6 +211,10 @@ export const TEMPLATES: readonly ProjectTemplate[] = [
     tableCount: 6,
     importFormat: 'ddl',
     source: SAAS,
+    areas: [
+      { name: 'Accounts', color: 'area-2', tables: ['organizations', 'users', 'memberships'] },
+      { name: 'Billing', color: 'area-3', tables: ['plans', 'subscriptions', 'invoices'] },
+    ],
   },
   {
     id: 'blog',
@@ -214,5 +223,9 @@ export const TEMPLATES: readonly ProjectTemplate[] = [
     tableCount: 5,
     importFormat: 'ddl',
     source: BLOG,
+    areas: [
+      { name: 'Content', color: 'area-5', tables: ['posts', 'tags', 'post_tags', 'comments'] },
+      { name: 'People', color: 'area-1', tables: ['authors'] },
+    ],
   },
 ];
