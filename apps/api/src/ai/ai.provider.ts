@@ -12,6 +12,8 @@ export interface AiRequest {
   /** per-mode output instructions; after the breakpoint, so a mode switch keeps the cache */
   readonly instructions: string;
   readonly messages: readonly { readonly role: 'user' | 'assistant'; readonly content: string }[];
+  /** output budget, thinking included; default 16,000 */
+  readonly maxTokens?: number;
 }
 
 export interface AiResult {
@@ -64,7 +66,7 @@ export class AiProvider {
     const stream = client.beta.messages.stream(
       {
         model: this.model,
-        max_tokens: 16_000,
+        max_tokens: request.maxTokens ?? 16_000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         thinking: { type: 'adaptive' },

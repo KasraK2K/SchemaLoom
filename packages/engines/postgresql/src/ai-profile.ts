@@ -399,7 +399,9 @@ export const OUTPUT_INSTRUCTIONS: Readonly<Record<AiMode, string>> = {
   ].join('\n'),
   'draft-schema': [
     'The user describes a schema. Answer with PostgreSQL DDL (CREATE SCHEMA / TYPE / TABLE / INDEX,',
-    'foreign keys as constraints) in one block and nothing outside it:',
+    'foreign keys as constraints, COMMENT ON) in one block and nothing outside it.',
+    'Schema objects only: no extensions, roles, grants, DO blocks, functions, triggers or policies.',
+    'Answer in this shape:',
     '<ddl>',
     'the statements, separated by semicolons, no markdown fence',
     '</ddl>',

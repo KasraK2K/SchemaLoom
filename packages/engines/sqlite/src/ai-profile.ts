@@ -412,7 +412,9 @@ export const OUTPUT_INSTRUCTIONS: Readonly<Record<AiMode, string>> = {
   ].join('\n'),
   'draft-schema': [
     'The user describes a schema. Answer with SQLite DDL (CREATE TABLE with its PRIMARY KEY, UNIQUE,',
-    'CHECK and FOREIGN KEY clauses inside it, then CREATE INDEX) in one block and nothing outside it:',
+    'CHECK and FOREIGN KEY clauses inside it, then CREATE INDEX) in one block and nothing outside it.',
+    'Schema objects only: no PRAGMA, triggers, views or ATTACH.',
+    'Answer in this shape:',
     '<ddl>',
     'the statements, separated by semicolons, no markdown fence',
     '</ddl>',

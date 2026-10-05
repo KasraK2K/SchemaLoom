@@ -402,10 +402,16 @@ export class AiService {
         }),
         instructions: profile.outputInstructions['draft-schema'],
         messages: [{ role: 'user', content: description }],
+        // A whole application's DDL is long, and thinking shares this budget.
+        maxTokens: 32_000,
       },
       () => undefined,
     );
     if (result.stopReason === 'refusal') throw new BadRequestException({ code: 'ai_refused' });
+    // A cut-off answer ends mid-statement; handing it over would import half a schema.
+    if (result.stopReason === 'max_tokens') {
+      throw new BadRequestException({ code: 'ai_truncated' });
+    }
     const parsed = profile.parseOutput(result.text, 'draft-schema');
     if (parsed.mode !== 'draft-schema' || parsed.source === '') {
       throw new BadRequestException({ code: 'ai_no_schema', warnings: parsed.parseWarnings });

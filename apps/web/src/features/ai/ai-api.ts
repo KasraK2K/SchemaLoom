@@ -264,6 +264,8 @@ export function aiErrorMessage(error: unknown): string {
         : `Too many AI requests. Try again in ${String(minutes)} min.`;
     }
     if (error.status === 404) return 'This conversation is no longer available.';
+    if (error.code === 'ai_truncated')
+      return 'That schema is too big to draft in one go. Describe the core of the app first, then add the rest with Describe with AI on the canvas.';
     if (error.code === 'ai_selection_unavailable')
       return 'The tables this conversation was about no longer exist.';
   }

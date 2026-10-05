@@ -73,7 +73,10 @@ function resolverFor(view: View): PermissionResolver {
 const ANSWER =
   '<query>\nSELECT fld_emp_name FROM ent_emp\n</query>\n<explanation>\nNames.\n</explanation>\n<assumptions>\n- none\n</assumptions>';
 
-function providerStub(answer = ANSWER): { provider: AiProvider; requests: AiRequest[] } {
+function providerStub(
+  answer = ANSWER,
+  stopReason = 'end_turn',
+): { provider: AiProvider; requests: AiRequest[] } {
   const requests: AiRequest[] = [];
   const provider = {
     configured: true,
@@ -85,7 +88,7 @@ function providerStub(answer = ANSWER): { provider: AiProvider; requests: AiRequ
       for (let i = 0; i < answer.length; i += 3) onText(answer.slice(i, i + 3));
       return Promise.resolve({
         text: answer,
-        stopReason: 'end_turn',
+        stopReason,
         model: 'test-model',
         tokensIn: 10,
         tokensOut: 20,
@@ -555,5 +558,26 @@ describe('AiService doc drafts', () => {
       content: {},
     });
     expect(accepter.prisma.store.docDraft?.[0]?.status).toBe('accepted');
+  });
+});
+
+describe('AiService.draftSchema', () => {
+  const DDL = '<ddl>\nCREATE TABLE shops (id int PRIMARY KEY);\n</ddl>';
+
+  it('returns the DDL, with room for a whole application', async () => {
+    const { provider, requests } = providerStub(DDL);
+    const { service } = harness({ provider });
+    const out = await service.draftSchema(ANA, PROJECT, mapOf(ANA), 'a shop');
+    expect(out.source).toContain('CREATE TABLE shops');
+    expect(requests[0]?.maxTokens).toBe(32_000);
+  });
+
+  it('refuses a cut-off answer instead of handing over half a schema', async () => {
+    const { provider } = providerStub('<ddl>\nCREATE TABLE shops (id int', 'max_tokens');
+    const { service } = harness({ provider });
+    await expect(service.draftSchema(ANA, PROJECT, mapOf(ANA), 'a shop')).rejects.toMatchObject({
+      status: 400,
+      response: { code: 'ai_truncated' },
+    });
   });
 });

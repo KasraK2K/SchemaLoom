@@ -403,7 +403,9 @@ export const OUTPUT_INSTRUCTIONS: Readonly<Record<AiMode, string>> = {
   ].join('\n'),
   'draft-schema': [
     'The user describes a schema. Answer with MySQL DDL (CREATE TABLE with inline ENUM columns, KEY and',
-    'FOREIGN KEY definitions, ENGINE=InnoDB) in one block and nothing outside it:',
+    'FOREIGN KEY definitions, ENGINE=InnoDB) in one block and nothing outside it.',
+    'Schema objects only: no extensions, roles, grants, procedures, functions, triggers or events.',
+    'Answer in this shape:',
     '<ddl>',
     'the statements, separated by semicolons, no markdown fence',
     '</ddl>',
