@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessWriter } from '../sharing/access-write';
+import { SnapshotsModule } from '../snapshots';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 
@@ -10,6 +11,8 @@ import { ProjectsService } from './projects.service';
  * second set of providers and a second permission cache.
  */
 @Module({
+  // Roadmap 12c: a project made from an org template is filled by `OrgTemplatesService`.
+  imports: [SnapshotsModule],
   controllers: [ProjectsController],
   // `AccessWriter` needs only the global Prisma and resolver; settings writes reuse it.
   providers: [ProjectsService, AccessWriter],

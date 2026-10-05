@@ -4,6 +4,8 @@ import { NotificationsModule } from '../notifications';
 import { SchemaModule } from '../schema';
 import { ChangeRequestsController } from './change-requests.controller';
 import { ChangeRequestsService } from './change-requests.service';
+import { OrgTemplatesController } from './org-templates.controller';
+import { OrgTemplatesService } from './org-templates.service';
 import { ImportController, SnapshotsController } from './snapshots.controller';
 import { SnapshotsService } from './snapshots.service';
 
@@ -18,8 +20,13 @@ import { SnapshotsService } from './snapshots.service';
  */
 @Module({
   imports: [SchemaModule, NotificationsModule, DocsModule],
-  controllers: [SnapshotsController, ImportController, ChangeRequestsController],
-  providers: [SnapshotsService, ChangeRequestsService],
-  exports: [SnapshotsService, ChangeRequestsService],
+  controllers: [
+    SnapshotsController,
+    ImportController,
+    ChangeRequestsController,
+    OrgTemplatesController,
+  ],
+  providers: [SnapshotsService, ChangeRequestsService, OrgTemplatesService],
+  exports: [SnapshotsService, ChangeRequestsService, OrgTemplatesService],
 })
 export class SnapshotsModule {}

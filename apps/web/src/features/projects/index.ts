@@ -4,9 +4,11 @@ export { ProjectList } from './project-list';
 export {
   homeDestination,
   listEngines,
+  listOrgTemplates,
   listOrganizations,
   listProjects,
   listWorkspaces,
+  type OrgTemplate,
   type OrganizationSummary,
   type ProjectSummary,
   type WorkspaceSummary,

@@ -4,7 +4,7 @@ import { Database, Search, ShieldCheck, TriangleAlert, cn } from '@schemaloom/ui
 import Link from 'next/link';
 import { useState } from 'react';
 import { ProjectActions } from './project-actions';
-import type { ProjectSummary } from './projects-api';
+import type { OrgTemplate, ProjectSummary } from './projects-api';
 import { relativeTime } from './relative-time';
 
 const COLUMNS =
@@ -41,11 +41,16 @@ export function ProjectList({
   orgSlug,
   projects,
   engineNames = {},
+  orgName = '',
+  orgTemplates = [],
   now,
 }: {
   orgSlug: string;
   projects: readonly ProjectSummary[];
   engineNames?: Readonly<Record<string, string>>;
+  /** Roadmap 12c — for "Save as template…": who will see it, and what it can replace. */
+  orgName?: string;
+  orgTemplates?: readonly OrgTemplate[];
   now?: number;
 }) {
   const [filter, setFilter] = useState('');
@@ -154,7 +159,15 @@ export function ProjectList({
                 {/* Above the stretched link, so the menu opens instead of the project. */}
                 <span className="relative z-10 justify-self-end">
                   {project.role === 'manager' && (
-                    <ProjectActions id={project.id} name={project.name} />
+                    <ProjectActions
+                      id={project.id}
+                      name={project.name}
+                      orgName={orgName}
+                      tableCount={project.tableCount}
+                      templates={orgTemplates.filter(
+                        (t) => t.sourceProjectId === project.id && t.canManage,
+                      )}
+                    />
                   )}
                 </span>
               </div>

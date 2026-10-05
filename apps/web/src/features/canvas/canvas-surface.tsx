@@ -593,30 +593,37 @@ export function CanvasSurface({
   );
 
   // ── auto-layout ────────────────────────────────────────────────────────────────────
-  const runLayout = useCallback(() => {
-    const current = flow.getNodes().filter(isTable);
-    void autoLayout(
-      current.map((node) => ({
-        id: node.id,
-        width: node.measured?.width ?? node.width ?? FALLBACK_NODE_WIDTH,
-        height: node.measured?.height ?? node.height ?? FALLBACK_NODE_HEIGHT,
-        areaId: node.data.entity.restricted === true ? null : node.data.entity.areaId,
-      })),
-      flow.getEdges().map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
-    )
-      .then((positions) => {
-        const moves = current
-          .map((node) => ({ id: node.id, before: node.position, after: positions.get(node.id) }))
-          .filter((move): move is Move => move.after !== undefined);
-        if (moves.length === 0) return;
-        // One undo step for the whole layout — it was one gesture.
-        recordMove(moves);
-        applyPositions(moves.map((move) => ({ id: move.id, position: move.after })));
-      })
-      .catch(() => {
-        setMessage('Auto-layout failed.');
-      });
-  }, [flow, recordMove, applyPositions]);
+  /** `fit`: the first-open layout. The initial `fitView` saw every table piled at the
+   *  origin and zoomed in on the pile, so the laid-out canvas is fitted again. */
+  const runLayout = useCallback(
+    (fit = false) => {
+      const current = flow.getNodes().filter(isTable);
+      void autoLayout(
+        current.map((node) => ({
+          id: node.id,
+          width: node.measured?.width ?? node.width ?? FALLBACK_NODE_WIDTH,
+          height: node.measured?.height ?? node.height ?? FALLBACK_NODE_HEIGHT,
+          areaId: node.data.entity.restricted === true ? null : node.data.entity.areaId,
+        })),
+        flow.getEdges().map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
+      )
+        .then((positions) => {
+          const moves = current
+            .map((node) => ({ id: node.id, before: node.position, after: positions.get(node.id) }))
+            .filter((move): move is Move => move.after !== undefined);
+          if (moves.length === 0) return;
+          // One undo step for the whole layout — it was one gesture.
+          recordMove(moves);
+          applyPositions(moves.map((move) => ({ id: move.id, position: move.after })));
+          // React Flow queues a fitView made right after setNodes until the moves land.
+          if (fit) void flow.fitView({ padding: fitPadding(0.1) });
+        })
+        .catch(() => {
+          setMessage('Auto-layout failed.');
+        });
+    },
+    [flow, recordMove, applyPositions],
+  );
 
   // An imported model arrives with every entity at the origin (the importer leaves layout
   // to the canvas), so place it once, after React Flow has measured the nodes: a fresh
@@ -636,7 +643,7 @@ export function CanvasSurface({
       })),
     );
     if (placement === 'all') {
-      runLayout();
+      runLayout(true);
       return;
     }
     const moves = current.flatMap((node) => {
@@ -755,7 +762,17 @@ export function CanvasSurface({
                 },
               },
             ]),
-        ...(readOnly ? [] : [{ id: 'layout', label: 'Auto-layout', onSelect: runLayout }]),
+        ...(readOnly
+          ? []
+          : [
+              {
+                id: 'layout',
+                label: 'Auto-layout',
+                onSelect: () => {
+                  runLayout();
+                },
+              },
+            ]),
         { id: 'fit', label: 'Fit to view', onSelect: fitView },
       ];
     }
@@ -1080,7 +1097,12 @@ export function CanvasSurface({
                             },
                           }
                         : {}),
-                      layout: { label: 'Auto-layout', onSelect: runLayout },
+                      layout: {
+                        label: 'Auto-layout',
+                        onSelect: () => {
+                          runLayout();
+                        },
+                      },
                     }),
               }}
             />

@@ -40,6 +40,11 @@ export interface DocView {
   canEdit: boolean;
 }
 
+/** `importDocs`' input: SQL comment text, or a copied doc (org templates, 12c). */
+export type ImportedDocInput = { targetType: 'area' | 'entity' | 'field'; targetId: string } & (
+  { text: string } | { content: unknown; structured: unknown }
+);
+
 /** One caller's view of one project, resolved once per request. */
 interface CallerView {
   readonly subject: Subject;
@@ -197,13 +202,14 @@ export class DocsService {
    * SQL import's comments (`ImportResult.docs`), written as docs ADDITIVELY like the rest of
    * an import: a target that already has a doc keeps it, and only targets the caller can
    * see and holds `docs:edit` on are written. One read, one insert, one broadcast.
+   * Roadmap 12c copies an org template's docs through here too, as TipTap `content`.
    *
    * @returns how many docs were created
    */
   async importDocs(
     subject: Subject,
     projectId: string,
-    docs: readonly { targetType: 'entity' | 'field'; targetId: string; text: string }[],
+    docs: readonly ImportedDocInput[],
   ): Promise<number> {
     if (subject.kind !== 'user' || docs.length === 0) return 0;
     const view = await this.view(subject, projectId);
@@ -224,7 +230,8 @@ export class DocsService {
     if (writable.length === 0) return 0;
     const { count } = await this.prisma.doc.createMany({
       data: writable.map((d) => {
-        const content = parseContent(textToRichText(d.text));
+        const content = parseContent('text' in d ? textToRichText(d.text) : d.content);
+        const structured = 'text' in d ? undefined : parseStructured(d.targetType, d.structured);
         return {
           id: randomUUID(),
           projectId,
@@ -232,6 +239,7 @@ export class DocsService {
           targetId: d.targetId,
           content: content as Prisma.InputJsonValue,
           plainText: docPlainText(content),
+          ...(structured == null ? {} : { structured }),
           updatedById: subject.userId,
           version: 1,
         };

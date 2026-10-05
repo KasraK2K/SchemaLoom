@@ -17,15 +17,31 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { NameDialog } from '@/components/name-dialog';
 import { ApiError, apiFetch } from '@/lib/api-client';
+import type { OrgTemplate } from './projects-api';
+import { SaveTemplateDialog } from './save-template-dialog';
 
 /**
- * Rename / delete for one project row. Rendered only for a project manager: both routes
+ * Rename / save as template / delete for one project row. Rendered only for a project manager: both routes
  * are gated on `sharing:manage` at the project, and a menu that can only fail is noise.
  * The API stays the authority; this just hides the menu from everyone else.
  */
-export function ProjectActions({ id, name }: { readonly id: string; readonly name: string }) {
+export function ProjectActions({
+  id,
+  name,
+  orgName = '',
+  tableCount = null,
+  templates = [],
+}: {
+  readonly id: string;
+  readonly name: string;
+  readonly orgName?: string;
+  readonly tableCount?: number | null;
+  /** Org templates saved from this project that the caller may replace (12c). */
+  readonly templates?: readonly OrgTemplate[];
+}) {
   const router = useRouter();
   const [renaming, setRenaming] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +62,13 @@ export function ProjectActions({ id, name }: { readonly id: string; readonly nam
             }}
           >
             Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              setSaving(true);
+            }}
+          >
+            Save as template…
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-danger-text"
@@ -69,6 +92,16 @@ export function ProjectActions({ id, name }: { readonly id: string; readonly nam
           await apiFetch(path, { method: 'PATCH', body: { name: next } });
           router.refresh();
         }}
+      />
+
+      <SaveTemplateDialog
+        open={saving}
+        onOpenChange={setSaving}
+        projectId={id}
+        projectName={name}
+        orgName={orgName}
+        tableCount={tableCount}
+        existing={templates}
       />
 
       <Dialog

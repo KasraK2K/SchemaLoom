@@ -7,6 +7,7 @@ import {
   NoProjects,
   ProjectList,
   listEngines,
+  listOrgTemplates,
   listOrganizations,
   listProjects,
   listWorkspaces,
@@ -29,11 +30,12 @@ export default async function OrgProjectsPage({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  const [orgs, projects, engines, workspaces] = await Promise.all([
+  const [orgs, projects, engines, workspaces, orgTemplates] = await Promise.all([
     listOrganizations(),
     listProjects(orgSlug),
     listEngines(),
     listWorkspaces(orgSlug),
+    listOrgTemplates(orgSlug),
   ]);
 
   const org = orgs.find((candidate) => candidate.slug === orgSlug);
@@ -70,7 +72,13 @@ export default async function OrgProjectsPage({
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="flex min-w-0 flex-col gap-6">
             {projects.length > 0 && (
-              <ProjectList orgSlug={orgSlug} projects={projects} engineNames={engineNames} />
+              <ProjectList
+                orgSlug={orgSlug}
+                projects={projects}
+                engineNames={engineNames}
+                orgName={org.name}
+                orgTemplates={orgTemplates}
+              />
             )}
             {/* Doc 05 §3.2: a guest cannot create projects; the API would refuse anyway. */}
             {org.orgRole !== 'guest' && (
@@ -87,6 +95,7 @@ export default async function OrgProjectsPage({
                   importTargets={projects.filter(
                     (p) => p.role === 'editor' || p.role === 'manager',
                   )}
+                  orgTemplates={orgTemplates}
                   compact={projects.length > 0}
                 />
               </section>

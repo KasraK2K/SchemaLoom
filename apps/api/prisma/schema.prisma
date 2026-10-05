@@ -225,6 +225,7 @@ model User {
   notificationsCaused   Notification[]        @relation("NotificationActor")
   invitationsSent       Invitation[]          @relation("InvitationInvitedBy")
   invitationsAccepted   Invitation[]          @relation("InvitationAcceptedBy")
+  orgTemplates          OrgTemplate[]
 
   @@index([lastSeenAt])
   @@map("users")
@@ -370,6 +371,7 @@ model Organization {
   notifications   Notification[]
   ssoConnections  SsoConnection[]
   workspaceGrants WorkspaceGrant[]
+  templates       OrgTemplate[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -534,6 +536,7 @@ model Project {
   apiTokens          ApiToken[]
   changeRequests     ChangeRequest[]     @relation("ChangeRequestProject")
   draftOfRequest     ChangeRequest?      @relation("ChangeRequestDraft")
+  orgTemplates       OrgTemplate[]
 
   @@index([organizationId, deletedAt])
   @@index([draftOfId])
@@ -1813,4 +1816,36 @@ model WorkspaceGrant {
   @@index([principalType, principalId])
   @@index([roleId])
   @@map("workspace_grants")
+}
+
+/// Roadmap 12c (docs/phase12/ORG-TEMPLATES.md §2): a project saved as a starting point for
+/// the org. A copy of the model, never SQL, so docs, areas and layout survive. A project
+/// made from it does not remember it.
+model OrgTemplate {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  name            String
+  summary         String   @default("")
+  engineId        String   @map("engine_id")
+  /// Major of the source project's `enginePluginVersion`; another major is refused on use.
+  engineMajor     Int      @map("engine_major")
+  /// The TARGET DATABASE version ("16").
+  engineVersion   String   @map("engine_version")
+  /// The saver's complete view: a `SchemaModel`, ids as saved.
+  model           Json
+  /// `{ targetType, targetId, content, structured }[]` for the model's areas, tables, columns.
+  docs            Json     @default("[]")
+  tableCount      Int      @map("table_count")
+  /// For "Replace". Projects are soft-deleted, so the template outlives its source.
+  sourceProjectId String?  @map("source_project_id")
+  createdById     String?  @map("created_by_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceProject Project?     @relation(fields: [sourceProjectId], references: [id], onDelete: SetNull)
+  createdBy     User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@map("org_templates")
 }

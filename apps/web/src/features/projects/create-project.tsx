@@ -17,6 +17,7 @@ import {
 } from './connection-form';
 import type {
   EngineOption,
+  OrgTemplate,
   ProjectSummary,
   TemplateOption,
   WorkspaceSummary,
@@ -32,6 +33,9 @@ const POLL_MS = 1_500;
 const POLL_LIMIT = 400;
 const NEW_WORKSPACE = '__new';
 const NEW_PROJECT = '__new';
+/** Roadmap 12c — an org template's select value, beside the built-in templates' ids. */
+const ORG = 'org:';
+const OLDER_ENGINE = 'made with an older engine version, ask the saver to save it again';
 /** The draft-schema route's own limit (`draftSchemaSchema`). */
 const DESCRIPTION_MAX = 10_000;
 
@@ -334,6 +338,7 @@ export function NoProjects({
   workspaces = [],
   canManageWorkspaces = false,
   importTargets = [],
+  orgTemplates = [],
   compact = false,
 }: {
   orgId: string;
@@ -344,6 +349,8 @@ export function NoProjects({
   canManageWorkspaces?: boolean;
   /** Existing projects the caller may edit, offered as import targets. */
   importTargets?: readonly ProjectSummary[];
+  /** Roadmap 12c — "Your organization's templates", listed above the built-in ones. */
+  orgTemplates?: readonly OrgTemplate[];
   /** Under an existing project list: one row of small tiles instead of the teaching cards. */
   compact?: boolean;
 }) {
@@ -353,19 +360,37 @@ export function NoProjects({
   const [engineId, setEngineId] = useState(engines[0]?.id ?? '');
   const [engineVersion, setEngineVersion] = useState(engines[0]?.defaultTargetVersion ?? '');
   const [templateId, setTemplateId] = useState('');
+  const usableOrgTemplates = orgTemplates.filter((t) => t.usable);
+  const orgTemplate = orgTemplates.find((t) => `${ORG}${t.id}` === templateId);
+  const templateTitle = (id: string) =>
+    orgTemplates.find((t) => `${ORG}${t.id}` === id)?.name ??
+    engines.flatMap((e) => e.templates).find((t) => t.id === id)?.title;
   /** Pre-fills the name with the template's title, unless the user typed their own. */
   const chooseTemplate = (next: TemplateOption | undefined) => {
-    const previous = engines.flatMap((e) => e.templates).find((t) => t.id === templateId);
+    const previous = templateTitle(templateId);
     setTemplateId(next?.id ?? '');
     setName((current) =>
-      next !== undefined && (current === '' || current === previous?.title) ? next.title : current,
+      next !== undefined && (current === '' || current === previous) ? next.title : current,
     );
+  };
+  /** An org template brings its own engine and target version. */
+  const chooseOrgTemplate = (next: OrgTemplate) => {
+    chooseTemplate({ ...next, id: `${ORG}${next.id}`, title: next.name });
+    setEngineId(next.engineId);
+    setEngineVersion(next.engineVersion);
+  };
+  /** The engine's first built-in, so the engine picker stays visible; an org template only
+   *  when the engine has none (choosing one hides the picker: it brings its own engine). */
+  const chooseFirstTemplate = (builtIn: TemplateOption | undefined) => {
+    const org = usableOrgTemplates[0];
+    if (builtIn === undefined && org !== undefined) chooseOrgTemplate(org);
+    else chooseTemplate(builtIn);
   };
   /** Switching engine resets the version to that engine's default: "16" means nothing to MySQL. */
   const chooseEngine = (next: EngineOption, m: Mode | null = mode) => {
     setEngineId(next.id);
     setEngineVersion(next.defaultTargetVersion ?? '');
-    if (m === 'template') chooseTemplate(next.templates[0]);
+    if (m === 'template') chooseFirstTemplate(next.templates[0]);
   };
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? '');
   const [workspaceName, setWorkspaceName] = useState('');
@@ -389,7 +414,8 @@ export function NoProjects({
   const engine = engines.find((candidate) => candidate.id === engineId);
   const canImport = engines.some((candidate) => candidate.importFormats.length > 0);
   const canRead = engines.some((candidate) => readsDatabase(candidate));
-  const hasTemplates = engines.some((candidate) => candidate.templates.length > 0);
+  const hasTemplates =
+    usableOrgTemplates.length > 0 || engines.some((candidate) => candidate.templates.length > 0);
   const fromTemplate = mode === 'template';
   const importing = mode === 'import' || mode === 'database';
   const intoExisting = importing && target !== NEW_PROJECT;
@@ -480,7 +506,7 @@ export function NoProjects({
                     ? engine
                     : engines.find((c) => usable(c, point.mode));
                 if (next !== undefined && next.id !== engineId) chooseEngine(next, point.mode);
-                else if (point.mode === 'template') chooseTemplate(next?.templates[0]);
+                else if (point.mode === 'template') chooseFirstTemplate(next?.templates[0]);
                 if (point.mode === 'database') setDraft(initialDraft(next?.connectionFields ?? []));
               }}
             >
@@ -509,7 +535,15 @@ export function NoProjects({
     return CreatedSchema.parse(
       await apiFetch<unknown>('/projects', {
         method: 'POST',
-        body: { organizationId: orgId, workspaceId: workspace, name, engineId, engineVersion },
+        body: {
+          organizationId: orgId,
+          workspaceId: workspace,
+          name,
+          engineId,
+          engineVersion,
+          // 12c: the API fills the project from the template before it answers.
+          ...(orgTemplate === undefined ? {} : { orgTemplateId: orgTemplate.id }),
+        },
       }),
     ).id;
   };
@@ -557,7 +591,7 @@ export function NoProjects({
         await draftInto(id);
         return;
       }
-      if (importing || fromTemplate || describing) {
+      if (importing || (fromTemplate && orgTemplate === undefined) || describing) {
         const { report, existing } =
           mode === 'database'
             ? await importIntrospected(
@@ -607,22 +641,47 @@ export function NoProjects({
                 ? 'Describe your app'
                 : `Import ${importSourceName(engine?.importFormats ?? [])}`}
       </h2>
-      {fromTemplate && engine !== undefined && (
+      {fromTemplate && (
         <label className="flex flex-col gap-1 text-sm text-text">
           Template
           <select
             value={templateId}
             disabled={createdId !== null}
             onChange={(e) => {
-              chooseTemplate(engine.templates.find((t) => t.id === e.target.value));
+              const org = orgTemplates.find((t) => `${ORG}${t.id}` === e.target.value);
+              if (org !== undefined) chooseOrgTemplate(org);
+              else chooseTemplate(engine?.templates.find((t) => t.id === e.target.value));
             }}
             className={inputClass}
           >
-            {engine.templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.title}: {template.summary} ({template.tableCount} tables)
-              </option>
-            ))}
+            {orgTemplates.length > 0 && (
+              <optgroup label="Your organization's templates">
+                {orgTemplates.map((template) => (
+                  <option
+                    key={template.id}
+                    value={`${ORG}${template.id}`}
+                    disabled={!template.usable}
+                  >
+                    {template.name}
+                    {template.summary === '' ? '' : `: ${template.summary}`} ({template.tableCount}{' '}
+                    tables,{' '}
+                    {engines.find((e) => e.id === template.engineId)?.displayName ??
+                      template.engineId}
+                    {template.savedBy === null ? '' : `, saved by ${template.savedBy.name}`})
+                    {template.usable ? '' : ` (${OLDER_ENGINE})`}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {engine !== undefined && engine.templates.length > 0 && (
+              <optgroup label="Built-in">
+                {engine.templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.title}: {template.summary} ({template.tableCount} tables)
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </label>
       )}
@@ -662,56 +721,63 @@ export function NoProjects({
               className={inputClass}
             />
           </label>
-          <div className="flex flex-wrap gap-3">
-            <label className="flex flex-1 flex-col gap-1 text-sm text-text">
-              Engine
-              <select
-                value={engineId}
-                onChange={(e) => {
-                  const next = engines.find((candidate) => candidate.id === e.target.value);
-                  if (next !== undefined) chooseEngine(next);
-                }}
-                className={inputClass}
-              >
-                {engines
-                  .filter((candidate) => usable(candidate))
-                  .map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.displayName}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label className="flex flex-1 flex-col gap-1 text-sm text-text">
-              Target version
-              {engine !== undefined && engine.targetVersions.length > 0 ? (
+          {orgTemplate !== undefined ? (
+            <p className="text-xs text-text-muted">
+              {engine?.displayName ?? orgTemplate.engineId} {orgTemplate.engineVersion}, from the
+              template.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              <label className="flex flex-1 flex-col gap-1 text-sm text-text">
+                Engine
                 <select
-                  value={engineVersion}
+                  value={engineId}
                   onChange={(e) => {
-                    setEngineVersion(e.target.value);
+                    const next = engines.find((candidate) => candidate.id === e.target.value);
+                    if (next !== undefined) chooseEngine(next);
                   }}
                   className={inputClass}
                 >
-                  {engine.targetVersions.map((version) => (
-                    <option key={version} value={version}>
-                      {/* "16" reads "PostgreSQL 16"; "MariaDB 11.4" already names its product. */}
-                      {/^\d/.test(version) ? `${engine.displayName} ${version}` : version}
-                    </option>
-                  ))}
+                  {engines
+                    .filter((candidate) => usable(candidate))
+                    .map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.displayName}
+                      </option>
+                    ))}
                 </select>
-              ) : (
-                <input
-                  required
-                  maxLength={32}
-                  value={engineVersion}
-                  onChange={(e) => {
-                    setEngineVersion(e.target.value);
-                  }}
-                  className={inputClass}
-                />
-              )}
-            </label>
-          </div>
+              </label>
+              <label className="flex flex-1 flex-col gap-1 text-sm text-text">
+                Target version
+                {engine !== undefined && engine.targetVersions.length > 0 ? (
+                  <select
+                    value={engineVersion}
+                    onChange={(e) => {
+                      setEngineVersion(e.target.value);
+                    }}
+                    className={inputClass}
+                  >
+                    {engine.targetVersions.map((version) => (
+                      <option key={version} value={version}>
+                        {/* "16" reads "PostgreSQL 16"; "MariaDB 11.4" already names its product. */}
+                        {/^\d/.test(version) ? `${engine.displayName} ${version}` : version}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    required
+                    maxLength={32}
+                    value={engineVersion}
+                    onChange={(e) => {
+                      setEngineVersion(e.target.value);
+                    }}
+                    className={inputClass}
+                  />
+                )}
+              </label>
+            </div>
+          )}
           {(workspaces.length > 0 || canManageWorkspaces) && (
             <label className="flex flex-col gap-1 text-sm text-text">
               Workspace

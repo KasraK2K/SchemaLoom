@@ -898,13 +898,15 @@ export class ChangeRequestsService {
   /**
    * Bring the draft to `target(currentDraft)` through `SchemaWriter`, as the author, in
    * the import's batches. The map and skeleton are re-read between batches: the next
-   * batch's checks must see what the previous one created.
+   * batch's checks must see what the previous one created. Roadmap 12c fills a project
+   * from an org template through this same loop (`origin: 'import'`).
    */
-  private async writeDraft(
+  async writeDraft(
     user: User,
     draftProjectId: string,
     target: (draft: LiveIr) => LiveIr,
     label = 'Change request: copy of the project',
+    origin: 'draft' | 'import' = 'draft',
   ): Promise<void> {
     const first = await loadLiveProject(this.prisma, draftProjectId);
     // `{}`: the draft takes main's area moves and restriction changes as they are.
@@ -918,7 +920,7 @@ export class ChangeRequestsService {
       ]);
       await this.writer.apply(batch, {
         projectId: draftProjectId,
-        origin: 'draft',
+        origin,
         actorUserId: user.userId,
         map,
         skel,

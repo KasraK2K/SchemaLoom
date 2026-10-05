@@ -1,6 +1,6 @@
 # Phase 12b–12c: areas in templates, and org templates
 
-Status: 12b **built 2026-10-05** (§1, defaults approved); 12c **proposed 2026-10-05**. Roadmap rows 12b (areas in the built-in templates) and 12c
+Status: 12b **built 2026-10-05** (§1, defaults approved); 12c **built 2026-10-05** (§2, every §5 default approved). Roadmap rows 12b (areas in the built-in templates) and 12c
 ("save this project as a template"). Builds on `DESIGN.md` (templates) and Phase 23 (area
 cards), which makes areas worth shipping in a template.
 
@@ -52,22 +52,26 @@ export interface ProjectTemplate {
 
 ```prisma
 model OrgTemplate {
-  id              String   @id @default(uuid()) @db.Uuid
-  organizationId  String   @map("organization_id") @db.Uuid
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
   name            String
   summary         String   @default("")
   engineId        String   @map("engine_id")
   engineMajor     Int      @map("engine_major")
   engineVersion   String   @map("engine_version")    // the target version, e.g. "16"
   model           Json                               // SchemaModel, ids as saved
+  docs            Json     @default("[]")            // area/table/column docs, TipTap
   tableCount      Int      @map("table_count")
-  sourceProjectId String?  @map("source_project_id") @db.Uuid  // for "Replace"; SetNull
-  createdById     String?  @map("created_by_id") @db.Uuid
+  sourceProjectId String?  @map("source_project_id")  // for "Replace"; SetNull
+  createdById     String?  @map("created_by_id")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   @@index([organizationId])
 }
 ```
+
+Docs live in their own table and the fork doesn't copy them, so the template stores them
+beside the model and `DocsService.importDocs` writes them after the schema, onto the fresh ids.
 
 **What the copy leaves out:** comments, history, grants, change requests, saved queries and
 connections. With **Include layout** off, positions are dropped and auto layout runs on use.

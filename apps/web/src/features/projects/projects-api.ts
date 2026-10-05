@@ -56,6 +56,30 @@ export async function listWorkspaces(orgSlug: string): Promise<WorkspaceSummary[
   );
 }
 
+/** Roadmap 12c — `GET /organizations/:slug/templates` (`apps/api/src/snapshots/org-templates.service.ts`). */
+export const OrgTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  summary: z.string(),
+  engineId: z.string(),
+  engineVersion: z.string(),
+  tableCount: z.number(),
+  savedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+  sourceProjectId: z.string().nullable(),
+  /** False: saved on an older engine major, so it can't be used until saved again. */
+  usable: z.boolean(),
+  canManage: z.boolean(),
+  updatedAt: z.string(),
+});
+export type OrgTemplate = z.infer<typeof OrgTemplateSchema>;
+
+/** `[]` for a guest or a non-member, like the project list. */
+export async function listOrgTemplates(orgSlug: string): Promise<OrgTemplate[]> {
+  return OrgTemplateSchema.array().parse(
+    await serverFetch<unknown>(`/organizations/${encodeURIComponent(orgSlug)}/templates`),
+  );
+}
+
 /** The subset of `GET /engines` the create form reads. `comingSoon` engines are not offered. */
 export const EngineOptionSchema = z.object({
   id: z.string(),

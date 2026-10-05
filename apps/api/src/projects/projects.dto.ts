@@ -29,6 +29,9 @@ export const CreateProjectSchema = z.object({
   engineId: z.string().min(1).max(64),
   /** The TARGET DATABASE version the picker chose ("16"), not the plugin version. */
   engineVersion: z.string().min(1).max(32),
+  /** Roadmap 12c — fill the project from this org template. Its engine and target version
+   *  win over the two fields above. */
+  orgTemplateId: z.string().min(1).max(64).optional(),
 });
 
 export class CreateProjectDto extends createZodDto(CreateProjectSchema) {}

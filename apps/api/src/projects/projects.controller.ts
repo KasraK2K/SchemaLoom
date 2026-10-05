@@ -21,6 +21,7 @@ import {
 } from '../access';
 import { getSubject } from '../auth';
 import { userSubject } from '../sharing/access-write';
+import { OrgTemplatesService } from '../snapshots';
 import type { ProjectDetail } from './project-views';
 import {
   CreateProjectDto,
@@ -42,7 +43,10 @@ const MAY_CREATE_PROJECT: readonly OrgRole[] = ['owner', 'admin', 'member'];
 @ApiTags('projects')
 @Controller('projects')
 export class ProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    private readonly templates: OrgTemplatesService,
+  ) {}
 
   /**
    * MARKER: `@RequireProjectAccess('projectId')`, and it is not a free choice.
@@ -90,7 +94,22 @@ export class ProjectsController {
     if (subject?.kind !== 'user') {
       throw new ForbiddenException({ code: 'route_not_classified' });
     }
-    return this.projects.create(body, subject.userId);
+    if (body.orgTemplateId === undefined) return this.projects.create(body, subject.userId);
+    // Roadmap 12c: checked before the project exists, filled right after it does.
+    const template = await this.templates.forCreate(body.organizationId, body.orgTemplateId);
+    const project = await this.projects.create(
+      {
+        organizationId: body.organizationId,
+        workspaceId: body.workspaceId,
+        name: body.name,
+        description: body.description,
+        engineId: template.engineId,
+        engineVersion: template.engineVersion,
+      },
+      subject.userId,
+    );
+    await this.templates.fill(subject, project.id, template);
+    return project;
   }
 
   /**

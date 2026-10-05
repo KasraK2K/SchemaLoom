@@ -22,6 +22,7 @@ export {
   type SnapshotView,
 } from './snapshots.service';
 export { ChangeRequestsService, type AgentProposal } from './change-requests.service';
+export { OrgTemplatesService } from './org-templates.service';
 export { ConfirmedRenamesSchema, CreateSnapshotDto, CreateSnapshotSchema } from './snapshots.dto';
 export type { ConfirmedRename } from './import-renames';
 export {

@@ -189,6 +189,46 @@ describe('<NoProjects>', () => {
     // "Read a database" and "Start from a template": nothing to connect to, no templates.
     expect(html.match(/disabled=""/g)).toHaveLength(2);
   });
+
+  it('offers templates when only the org has one, and not for an outdated one (12c)', () => {
+    const engine = {
+      id: 'pg',
+      displayName: 'PG',
+      importFormats: [{ id: 'ddl', fileExtensions: ['.sql'] }],
+      connectionFields: [],
+      introspection: 'none' as const,
+      targetVersions: [],
+      defaultTargetVersion: null,
+      templates: [],
+    };
+    const template = {
+      id: 'tpl_1',
+      name: 'Core schema',
+      summary: '',
+      engineId: 'pg',
+      engineVersion: '16',
+      tableCount: 4,
+      savedBy: null,
+      sourceProjectId: null,
+      usable: true,
+      canManage: false,
+      updatedAt: '2026-10-05T12:00:00.000Z',
+    };
+    const render = (usable: boolean) =>
+      renderToStaticMarkup(
+        withQuery(
+          <NoProjects
+            orgId="org_1"
+            orgSlug="acme"
+            engines={[engine]}
+            orgTemplates={[{ ...template, usable }]}
+          />,
+        ),
+      ).match(/disabled=""/g);
+    // Only "Read a database" stays disabled.
+    expect(render(true)).toHaveLength(1);
+    expect(render(false)).toHaveLength(2);
+  });
 });
 
 describe('relativeTime', () => {
