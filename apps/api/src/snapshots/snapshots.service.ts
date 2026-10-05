@@ -289,6 +289,12 @@ export interface ImportPreview {
   readonly existing: readonly string[];
   /** Proposals only (§2.2); a human confirms each one. */
   readonly renameCandidates: readonly RenameCandidate[];
+  /** Statements the importer read with loss or not at all (roadmap 21b refuses `failed`). */
+  readonly notApplied: readonly {
+    readonly excerpt: string;
+    readonly status: 'partial' | 'unsupported' | 'failed';
+    readonly reason: string | null;
+  }[];
 }
 
 /** Doc 00 Q22 — larger sources go through the BullMQ import job (`import.processor.ts`). */
@@ -742,7 +748,7 @@ export class SnapshotsService {
     maxBytes: number = SYNC_IMPORT_MAX_BYTES,
     format?: string,
   ): Promise<ImportPreview> {
-    const { project, model } = await this.parseSource(ctx, source, maxBytes, format);
+    const { project, model, report } = await this.parseSource(ctx, source, maxBytes, format);
     const merged = mergeImport(project.live, model);
     return {
       creates: Object.values(merged.imported.objects.entity)
@@ -751,6 +757,11 @@ export class SnapshotsService {
       existing: merged.existing,
       // Only visible objects enter the pools: R21′ in `parseSource` required the full view.
       renameCandidates: renameCandidates(project.live, merged.imported),
+      notApplied: report.statements.flatMap((s) =>
+        s.status === 'partial' || s.status === 'unsupported' || s.status === 'failed'
+          ? [{ excerpt: s.excerpt, status: s.status, reason: s.reason }]
+          : [],
+      ),
     };
   }
 

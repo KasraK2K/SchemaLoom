@@ -6,6 +6,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import type { NotificationType } from '@schemaloom/contracts';
 import {
@@ -46,6 +47,7 @@ import {
   SnapshotsService,
   withCounts,
   type HistoryDiff,
+  type ImportPreview,
   type MigrationRequest,
   type MigrationView,
   type SnapshotContext,
@@ -53,11 +55,28 @@ import {
 
 type User = Extract<Subject, { kind: 'user' }>;
 
+/** Roadmap 21b §9.3 — so a looping agent can't flood the review queue. */
+export const AGENT_OPEN_PROPOSALS = 5;
+
+export interface AgentProposal {
+  readonly changeRequestId: string;
+  /** The request's page, relative to the web origin. */
+  readonly path: string;
+  /** Tables the proposal adds. */
+  readonly created: readonly string[];
+  /** Tables it names that already exist: left as they are ("already exists"). */
+  readonly skipped: readonly string[];
+  /** Statements the importer read with loss, or not at all (none `failed`). */
+  readonly notApplied: ImportPreview['notApplied'];
+}
+
 export interface CreateChangeRequestInput {
   /** Phase 10c: without a title the request is an unsubmitted draft (`submit` names it). */
   readonly title?: string;
   readonly description?: string;
   readonly reviewerIds?: readonly string[];
+  /** Roadmap 21b — proposed by an AI agent through this API token. */
+  readonly viaTokenId?: string;
 }
 
 export interface SubmitChangeRequestInput {
@@ -84,6 +103,8 @@ export interface ChangeRequestSummary {
   readonly description: string;
   readonly status: ChangeRequest['status'];
   readonly author: { readonly id: string; readonly name: string } | null;
+  /** Roadmap 21b — set when an AI agent proposed it through this token (the Agent badge). */
+  readonly viaToken: { readonly name: string } | null;
   readonly reviewerIds: readonly string[];
   readonly reviews: readonly ChangeRequestReviewView[];
   readonly createdAt: string;
@@ -131,6 +152,7 @@ export interface UpdateFromMainResult {
 
 const ROW_INCLUDE = {
   author: { select: { id: true, name: true } },
+  viaToken: { select: { name: true } },
   reviews: {
     orderBy: { createdAt: 'asc' },
     include: { reviewer: { select: { id: true, name: true } } },
@@ -139,6 +161,7 @@ const ROW_INCLUDE = {
 
 type Row = ChangeRequest & {
   author: { id: string; name: string } | null;
+  viaToken: { name: string } | null;
   reviews: (ChangeRequestReview & { reviewer: { id: string; name: string } | null })[];
 };
 
@@ -247,6 +270,7 @@ export class ChangeRequestsService {
           baseIr: snapshotBlob(project.live),
           idMap: invertIds(toDraft),
           reviewerIds,
+          viaTokenId: input.viaTokenId ?? null,
         },
         include: ROW_INCLUDE,
       });
@@ -315,6 +339,71 @@ export class ChangeRequestsService {
     return this.summaryOf(row.id);
   }
 
+  /**
+   * Roadmap 21b §9.3 steps 2–7 — an AI agent's proposal, as a change request a person
+   * reviews. The caller (`AiService.agentPropose`) checked `ai:use` and the AI switch.
+   * Bad SQL is refused on the preview, before anything is forked; a failure after the fork
+   * deletes the draft (and the request with it), so a failed proposal leaves nothing.
+   */
+  async proposeFromAgent(
+    ctx: SnapshotContext,
+    input: { tokenId: string; title: string; description?: string; sql: string },
+  ): Promise<AgentProposal> {
+    const user = asUser(ctx.subject);
+    // Row 10 §3, as the canvas's Propose a change: the whole project, and the right to comment.
+    if (!hasCompleteView(ctx.map, ctx.skel) || !ctx.map.projectAtoms.has('comment:create')) {
+      throw new ForbiddenException({ code: 'forbidden', atom: 'comment:create' });
+    }
+    const open = await this.prisma.changeRequest.count({
+      where: { viaTokenId: input.tokenId, status: { in: ['draft', 'open'] } },
+    });
+    if (open >= AGENT_OPEN_PROPOSALS) {
+      throw new ConflictException({ code: 'too_many_proposals', max: AGENT_OPEN_PROPOSALS });
+    }
+    const preview = await this.snapshots.preview(ctx, input.sql);
+    const failed = preview.notApplied.filter((s) => s.status === 'failed');
+    if (failed.length > 0) {
+      throw new UnprocessableEntityException({
+        code: 'proposal_statements_failed',
+        statements: failed,
+      });
+    }
+
+    const request = await this.create(ctx, {
+      title: input.title,
+      ...(input.description === undefined ? {} : { description: input.description }),
+      viaTokenId: input.tokenId,
+    });
+    try {
+      const before = await this.draftRevision(request.draftProjectId);
+      const [map, skel] = await Promise.all([
+        this.resolver.resolveProject(user, request.draftProjectId),
+        this.resolver.skeleton(request.draftProjectId),
+      ]);
+      await this.snapshots.importSource(
+        { projectId: request.draftProjectId, subject: user, actorUserId: user.userId, map, skel },
+        input.sql,
+      );
+      if ((await this.draftRevision(request.draftProjectId)) === before) {
+        throw new UnprocessableEntityException({ code: 'nothing_to_propose' });
+      }
+    } catch (error) {
+      await this.prisma.project.delete({ where: { id: request.draftProjectId } });
+      throw error;
+    }
+    const org = await this.prisma.project.findUniqueOrThrow({
+      where: { id: ctx.projectId },
+      select: { organization: { select: { slug: true } } },
+    });
+    return {
+      changeRequestId: request.id,
+      path: `/${encodeURIComponent(org.organization.slug)}/p/${encodeURIComponent(ctx.projectId)}/changes/${encodeURIComponent(request.id)}`,
+      created: preview.creates,
+      skipped: preview.existing,
+      notApplied: preview.notApplied,
+    };
+  }
+
   // ── read ───────────────────────────────────────────────────────────────────────────
 
   async list(ctx: SnapshotContext): Promise<ChangeRequestSummary[]> {
@@ -354,7 +443,7 @@ export class ChangeRequestsService {
       draftRevision: state.draft.schemaRevision.toString(),
       mergeBlockedBy: blocker(row, state, canEditMain || canEditSomeArea(map)),
       moved: state.moves.length,
-      canReview: row.status === 'open' && !isAuthor && canEditMain,
+      canReview: row.status === 'open' && (!isAuthor || row.viaTokenId !== null) && canEditMain,
       canManage: (row.status === 'open' || row.status === 'closed') && (isAuthor || canEditMain),
       canDelete: row.status !== 'merged' && (isAuthor || canEditMain) && row.reviews.length === 0,
       isAuthor,
@@ -376,7 +465,8 @@ export class ChangeRequestsService {
 
   // ── reviews, merge, update, close ──────────────────────────────────────────────────
 
-  /** §4 — an editor of the main project who is not the author. */
+  /** §4 — an editor of the main project who is not the author. Roadmap 21b Q11: on an agent's
+   *  request the author may review too; it still takes `schema:edit`. */
   async review(
     subject: Subject,
     id: string,
@@ -385,7 +475,7 @@ export class ChangeRequestsService {
     const { row, map } = await this.readable(subject, id);
     const user = asUser(subject);
     assertOpen(row);
-    if (row.authorId === user.userId) {
+    if (row.authorId === user.userId && row.viaTokenId === null) {
       throw new ForbiddenException({ code: 'change_request_own_review' });
     }
     if (!map.projectAtoms.has('schema:edit')) {
@@ -870,6 +960,7 @@ function summary(row: Row, draftRevision: bigint | null): ChangeRequestSummary {
     description: row.description,
     status: row.status,
     author: row.author,
+    viaToken: row.viaToken,
     reviewerIds: row.reviewerIds,
     reviews: row.reviews.map((r) => ({
       id: r.id,
@@ -917,7 +1008,10 @@ function blocker(row: Row, state: MergeState, mayWrite: boolean): MergeBlocker |
     (r) => r.draftRevision === state.draft.schemaRevision,
   );
   if (current.some((r) => r.verdict === 'changes_requested')) return 'changes_requested';
-  if (!current.some((r) => r.verdict === 'approved' && r.reviewerId !== row.authorId)) {
+  // Roadmap 21b Q11: the author's approval counts on an agent's request, and only there.
+  const counts = (r: Row['reviews'][number]) =>
+    r.reviewerId !== row.authorId || row.viaTokenId !== null;
+  if (!current.some((r) => r.verdict === 'approved' && counts(r))) {
     return 'needs_approval';
   }
   return mayWrite ? null : 'forbidden';

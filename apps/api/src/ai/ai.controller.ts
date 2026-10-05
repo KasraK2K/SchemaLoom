@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   Req,
   Res,
 } from '@nestjs/common';
@@ -18,8 +19,16 @@ import {
   type ProjectPermissionMap,
   type Subject,
 } from '../access';
-import { getSubject } from '../auth';
-import { CreateThreadDto, DocDraftsDto, DraftSchemaDto, PostMessageDto } from './ai.dto';
+import { getPrincipal, getSubject } from '../auth';
+import {
+  AgentContextDto,
+  AgentProposalDto,
+  AgentOutlineDto,
+  CreateThreadDto,
+  DocDraftsDto,
+  DraftSchemaDto,
+  PostMessageDto,
+} from './ai.dto';
 import {
   AiService,
   type AiMessageView,
@@ -168,6 +177,53 @@ export class AiController {
     @Body() body: DraftSchemaDto,
   ): Promise<DraftSchemaResult> {
     return this.ai.draftSchema(subjectOf(req), projectId, mapFor(req, projectId), body);
+  }
+
+  /** Phase 21 §5 — `schemaloom mcp` (API_TOKEN_ROUTES, `agent`). No AI provider involved. */
+  @ApiOperation({ summary: 'One line per table, view and enum an AI may be shown' })
+  @RequireProjectAccess('projectId')
+  @Get('projects/:projectId/agent/outline')
+  agentOutline(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Query() query: AgentOutlineDto,
+  ): Promise<{ lines: string[] }> {
+    return this.ai.agentOutline(subjectOf(req), projectId, mapFor(req, projectId), query);
+  }
+
+  @ApiOperation({ summary: 'The assistant’s schema text for the named tables' })
+  @RequireProjectAccess('projectId')
+  @HttpCode(200)
+  @Post('projects/:projectId/agent/context')
+  agentContext(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: AgentContextDto,
+  ): ReturnType<AiService['agentContext']> {
+    return this.ai.agentContext(subjectOf(req), projectId, mapFor(req, projectId), body);
+  }
+
+  /** Roadmap 21b — the one write a token reaches (`propose`): it opens a change request. */
+  @ApiOperation({ summary: 'An AI agent proposes a schema change, as a change request to review' })
+  @RequireProjectAccess('projectId')
+  @Post('projects/:projectId/agent/proposals')
+  agentPropose(
+    @Req() req: Request,
+    @Param('projectId') projectId: string,
+    @Body() body: AgentProposalDto,
+  ): ReturnType<AiService['agentPropose']> {
+    const principal = getPrincipal(req);
+    // A person proposes on the canvas; this route is for an agent's token.
+    if (principal?.kind !== 'user' || principal.token === undefined) {
+      throw new ForbiddenException({ code: 'agent_token_required' });
+    }
+    return this.ai.agentPropose(
+      subjectOf(req),
+      projectId,
+      mapFor(req, projectId),
+      principal.token.tokenId,
+      body,
+    );
   }
 }
 

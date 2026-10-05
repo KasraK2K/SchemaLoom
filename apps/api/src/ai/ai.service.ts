@@ -44,8 +44,10 @@ import { REDIS_RATELIMIT } from '../redis/redis.tokens';
 import { identifiersResolved } from '../saved-queries/saved-queries.service';
 import { renderOrmCode } from '../jobs/orm-code';
 import { SchemaLoader } from '../schema';
+import { ChangeRequestsService, type AgentProposal } from '../snapshots';
 import { AiProvider, type AiResult } from './ai.provider';
 import { draftSummary, type DraftSummary } from './draft-summary';
+import { aiSettings } from './ai-settings';
 
 /**
  * DESIGN §4 — the AI assistant: threads, streamed turns, doc drafts, draft-schema.
@@ -175,6 +177,7 @@ export class AiService {
     @Inject(REDIS_RATELIMIT) private readonly rateLimit: Redis,
     @Inject(AI_DOC_DRAFTS) private readonly drafts: DocDraftQueue,
     private readonly docs: DocsService,
+    private readonly changeRequests: ChangeRequestsService,
   ) {}
 
   // --- threads ------------------------------------------------------------------------------
@@ -566,6 +569,160 @@ export class AiService {
     }
   }
 
+  // --- agents over MCP (Phase 21 §5) -------------------------------------------------------
+
+  /**
+   * One line per table, view or enum the built-in assistant could be shown. No AI provider:
+   * no key needed, no AI rate limit (the token's own limit is the throttle).
+   */
+  async agentOutline(
+    subject: Subject,
+    projectId: string,
+    map: ProjectPermissionMap,
+    filter: { kind?: string | undefined; area?: string | undefined; namePattern?: string },
+  ): Promise<{ lines: string[] }> {
+    const { view, usable } = await this.agentView(subject, projectId, map);
+    const { objects } = view.redacted;
+    const nsName = (id: string) => objects.namespace[id]?.name ?? '';
+    const pattern =
+      filter.namePattern === undefined || filter.namePattern === ''
+        ? null
+        : new RegExp(
+            `^${filter.namePattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`,
+            'i',
+          );
+    const named = (ns: string, name: string) =>
+      pattern === null || pattern.test(name) || pattern.test(`${ns}.${name}`);
+    const area =
+      filter.area === undefined
+        ? null
+        : Object.values(objects.area).find(
+            (a) => a.id === filter.area || a.name.toLowerCase() === filter.area?.toLowerCase(),
+          );
+    if (area === undefined) return { lines: [] };
+    const kind = filter.kind?.toLowerCase();
+
+    const columns = new Map<string, number>();
+    for (const f of Object.values(objects.field)) {
+      if (f.restricted !== true && f.name !== '' && f.parentFieldId === null)
+        columns.set(f.entityId, (columns.get(f.entityId) ?? 0) + 1);
+    }
+    const lines: string[] = [];
+    for (const id of usable) {
+      const e = objects.entity[id];
+      if (e === undefined || (kind !== undefined && e.kind.toLowerCase() !== kind)) continue;
+      if (area !== null && e.areaId !== area.id) continue;
+      if (!named(nsName(e.namespaceId), e.name)) continue;
+      const n = columns.get(id) ?? 0;
+      const doc = view.includeDocs ? firstLine(e.doc?.excerpt) : '';
+      lines.push(
+        `${nsName(e.namespaceId)}.${e.name}  ${e.kind}  ${String(n)} column${n === 1 ? '' : 's'}${doc === '' ? '' : `  ${JSON.stringify(doc)}`}`,
+      );
+    }
+    // Enums carry no ai:use of their own and no area; the assistant's context lists them too.
+    if (area === null && (kind === undefined || kind === 'enum')) {
+      for (const t of Object.values(objects.customType)) {
+        if (t.restricted === true || t.name === '' || t.kind !== 'enum') continue;
+        if (named(nsName(t.namespaceId), t.name))
+          lines.push(`${nsName(t.namespaceId)}.${t.name}  enum`);
+      }
+    }
+    return { lines: lines.sort() };
+  }
+
+  /**
+   * `serializeContext` for the named tables plus the tables their keys point at, so foreign
+   * keys read whole: the same text the assistant puts in its prompt. A name that doesn't
+   * resolve is in `notFound`, missing and hidden alike (never "forbidden").
+   */
+  async agentContext(
+    subject: Subject,
+    projectId: string,
+    map: ProjectPermissionMap,
+    body: { names: readonly string[]; includeDocs?: boolean | undefined },
+  ): Promise<{
+    text: string;
+    approxTokens: number;
+    omitted: readonly { what: string; count: number }[];
+    notFound: string[];
+  }> {
+    const { view, usable } = await this.agentView(subject, projectId, map);
+    const profile = this.profileFor(view);
+    const { objects } = view.redacted;
+    const nsName = (id: string) => objects.namespace[id]?.name.toLowerCase() ?? '';
+    const found = new Set<string>();
+    const notFound: string[] = [];
+    for (const raw of body.names) {
+      const name = raw.trim().replace(/["`]/g, '').toLowerCase();
+      const dot = name.lastIndexOf('.');
+      const [ns, table] = dot === -1 ? [null, name] : [name.slice(0, dot), name.slice(dot + 1)];
+      const hits = [...usable].filter((id) => {
+        const e = objects.entity[id];
+        return e?.name.toLowerCase() === table && (ns === null || nsName(e.namespaceId) === ns);
+      });
+      // A bare name in two schemas is ambiguous: the agent should qualify it.
+      const [hit] = hits;
+      if (hits.length === 1 && hit !== undefined) found.add(hit);
+      else notFound.push(raw);
+    }
+    const keep = new Set(found);
+    for (const l of Object.values(objects.link)) {
+      if (l.restricted === true) continue;
+      if (found.has(l.from.entityId) && usable.has(l.to.entityId)) keep.add(l.to.entityId);
+      if (found.has(l.to.entityId) && usable.has(l.from.entityId)) keep.add(l.from.entityId);
+    }
+    if (found.size === 0) return { text: '', approxTokens: 0, omitted: [], notFound };
+    const context = profile.serializeContext(withoutEntities(view.redacted, keep), {
+      ...CONTEXT_OPTIONS,
+      selectedEntityIds: [...found],
+      includeDocs: body.includeDocs !== false && view.includeDocs,
+    });
+    return { ...context, notFound };
+  }
+
+  /**
+   * Roadmap 21b §9.3 — an agent proposes a change. Step 1 here (`ai:use`, the switch); the
+   * rest is `ChangeRequestsService.proposeFromAgent`. Existing tables the SQL only
+   * references are declared in front, as for draft-schema, so its foreign keys survive.
+   */
+  async agentPropose(
+    subject: Subject,
+    projectId: string,
+    map: ProjectPermissionMap,
+    tokenId: string,
+    body: { title: string; description?: string | undefined; sql: string },
+  ): Promise<AgentProposal> {
+    const { view, usable } = await this.agentView(subject, projectId, map);
+    const format =
+      this.registry.tryGet(view.redacted.engineId)?.capabilities.importFormats[0]?.id ?? 'ddl';
+    const sql = await this.withReferencedTables(view, usable, body.sql, format);
+    return this.changeRequests.proposeFromAgent(
+      { projectId, subject: view.subject, actorUserId: view.subject.userId, map, skel: view.skel },
+      {
+        tokenId,
+        title: body.title,
+        ...(body.description === undefined ? {} : { description: body.description }),
+        sql,
+      },
+    );
+  }
+
+  /** §5 steps 1–3: the caller's view, `ai:use` and the switch, then the usable entities. */
+  private async agentView(
+    subject: Subject,
+    projectId: string,
+    map: ProjectPermissionMap,
+  ): Promise<{ view: CallerView; usable: Set<string> }> {
+    const view = await this.view(subject, projectId, map);
+    this.assertAiUseAtProject(view);
+    const usable = new Set(
+      this.contextEntities(view, [], { strict: false }).filter((id) =>
+        this.has(view, 'ai:use', { type: 'entity', id }),
+      ),
+    );
+    return { view, usable };
+  }
+
   // --- doc drafts (DESIGN §4.2, Q5) ---------------------------------------------------------
 
   async enqueueDocDrafts(
@@ -951,17 +1108,6 @@ export class AiService {
 
 // --- pure helpers -----------------------------------------------------------------------------
 
-/** `projects.settings.ai`, defaults true (doc 02 `projectSettingsShape`). Read here; the
- *  PATCH that writes it is `ProjectsController`'s. Anything malformed reads as the default. */
-export function aiSettings(settings: unknown): { enabled: boolean; includeDocsInContext: boolean } {
-  const ai = (settings as { ai?: { enabled?: unknown; includeDocsInContext?: unknown } } | null)
-    ?.ai;
-  return {
-    enabled: ai?.enabled !== false,
-    includeDocsInContext: ai?.includeDocsInContext !== false,
-  };
-}
-
 /** The view without the entities outside `keep`. Every serializer drops the fields, links
  *  and indexes of an entity it doesn't have, so this is only ever narrower. */
 function withoutEntities(model: RedactedModel, keep: ReadonlySet<string>): RedactedModel {
@@ -970,6 +1116,9 @@ function withoutEntities(model: RedactedModel, keep: ReadonlySet<string>): Redac
   );
   return { ...model, objects: { ...model.objects, entity } };
 }
+
+const firstLine = (text: string | undefined): string =>
+  (text ?? '').split('\n')[0]?.trim().slice(0, 160) ?? '';
 
 /** `name` as a whole identifier in `text`, any case, bare or quoted. */
 function mentions(text: string, name: string): boolean {

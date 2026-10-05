@@ -13,10 +13,12 @@ import {
   routeKey,
   type SweptRoute,
 } from '../access';
+import { AiController } from '../ai/ai.controller';
 import { IS_PUBLIC_KEY } from '../auth';
 import { IntrospectController } from '../introspect/introspect.controller';
 import { ExportsController } from '../jobs/exports.controller';
 import { ProjectsController } from '../projects/projects.controller';
+import { SavedQueriesController } from '../saved-queries/saved-queries.controller';
 import { SchemaController } from '../schema/schema.controller';
 import { ApiTokensController } from './api-tokens.controller';
 
@@ -46,7 +48,7 @@ function sweep(controllers: readonly (abstract new (...args: never[]) => unknown
 }
 
 describe('API_TOKEN_ROUTES (Phase 11 §4)', () => {
-  it('is exactly the reviewed list: nothing that writes schema, sharing or settings', () => {
+  it('is exactly the reviewed list: no write but the agent proposal (a change request)', () => {
     expect([...API_TOKEN_ROUTES]).toEqual([
       ['GET /token', 'any'],
       ['GET /projects/:id', 'read'],
@@ -54,6 +56,11 @@ describe('API_TOKEN_ROUTES (Phase 11 §4)', () => {
       ['POST /projects/:id/exports', 'read'],
       ['GET /exports/:id', 'read'],
       ['POST /projects/:id/introspect/drift', 'drift'],
+      ['GET /projects/:id/agent/outline', 'agent'],
+      ['POST /projects/:id/agent/context', 'agent'],
+      ['POST /projects/:id/queries/validate', 'agent'],
+      ['GET /projects/:id/saved-queries', 'agent'],
+      ['POST /projects/:id/agent/proposals', 'propose'],
     ]);
   });
 
@@ -64,6 +71,8 @@ describe('API_TOKEN_ROUTES (Phase 11 §4)', () => {
       SchemaController,
       ExportsController,
       IntrospectController,
+      AiController,
+      SavedQueriesController,
     ]);
     const present = new Set(routes.map((r) => routeKey(r.method, r.path)));
     for (const entry of API_TOKEN_ROUTES.keys()) {

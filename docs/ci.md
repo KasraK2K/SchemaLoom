@@ -11,6 +11,8 @@ In the project, open **Settings → API tokens**:
 - Give the token a name, such as `GitHub Actions`.
 - Tick **Can also check drift** if the job runs `diff`. This needs edit access to the project.
 - Choose an expiry. The longest is a year.
+- **AI agents (MCP)** is for a developer's own AI agent, not for CI. See
+  [`docs/mcp.md`](mcp.md).
 
 The token is shown once. Store it as a CI secret named `SCHEMALOOM_TOKEN`.
 

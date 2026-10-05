@@ -1,6 +1,27 @@
 # Phase 21: MCP server for AI agents (roadmap 21)
 
-Status: **proposed** 2026-10-05. Waiting for approval; every §10 question has a default.
+Status: **built** 2026-10-05, with 21b (§9). Approved with every §10 default; the owner asked
+for 21b in the same change, so Q9's "after v1" was overridden. User docs: `docs/mcp.md`.
+
+As built, where it differs from or adds to the text below:
+
+- **Routes** `agent/outline`, `agent/context` and `agent/proposals` sit on `AiController`
+  rather than a new controller. `ai:use` plus the switch is one helper (`ai/ai-settings.ts`),
+  used at token creation and by the saved-queries controller for token callers, which covers
+  `list_saved_queries` as well as `validate_query`.
+- **`describe_objects`** sends the named tables plus the tables their keys point at (one hop),
+  so foreign keys read whole. A bare name in two schemas is `notFound` (ambiguous).
+- **Proposals** (§9.3) live in `ChangeRequestsService.proposeFromAgent`. Existing tables the
+  SQL only references are declared in front of it, as row 22 does, because the importer drops
+  a foreign key whose target is not in the same source. Only a `failed` statement refuses the
+  proposal; `partial` and `unsupported` ones come back as `notApplied`. "Nothing to propose"
+  is detected after the import into the draft (its revision didn't move), and the draft is
+  deleted. There is no `change_request.created` audit row to extend, so none was added.
+- **`propose` requires `agent`** in the token's scopes: an agent that proposes has to read
+  the design first.
+- **The CLI bundle** carries the MCP SDK, zod and ajv: `dist/index.js` grows to about 1.3 MB
+  and still has no runtime dependencies.
+- e2e is workflow 22 (`e2e/tests/workflow-22-mcp.spec.ts`; 20 was taken).
 
 The goal: a developer's own AI agent (Claude Code, Cursor, Claude Desktop, any MCP client)
 can ask SchemaLoom about a project's schema, such as "what columns does `orders` have", "how

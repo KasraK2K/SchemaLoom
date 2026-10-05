@@ -5,6 +5,7 @@ import type { AppEnv } from '../config/env';
 import { DocsModule } from '../docs';
 import { BULL_CONNECTION, JobsModule, runsJobs, type BullConnection } from '../jobs';
 import { SchemaModule } from '../schema';
+import { SnapshotsModule } from '../snapshots';
 import { AiController } from './ai.controller';
 import { AiProvider } from './ai.provider';
 import { AI_DOC_DRAFTS, AI_DOC_DRAFTS_QUEUE, AiService, type DocDraftJobData } from './ai.service';
@@ -47,7 +48,7 @@ class DocDraftWorker implements OnModuleDestroy {
 
 /** Prisma, access, engines and Redis are `@Global()`. */
 @Module({
-  imports: [SchemaModule, JobsModule, DocsModule],
+  imports: [SchemaModule, JobsModule, DocsModule, SnapshotsModule],
   controllers: [AiController],
   providers: [AiProvider, AiService, queueProvider, DocDraftWorker],
 })

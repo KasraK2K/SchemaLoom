@@ -142,7 +142,16 @@ export function AccountApiTokens() {
 const EXPIRY_DAYS = [30, 90, 180, 365] as const;
 
 /** Project settings: create a token for this project, and see the project's tokens. */
-export function ProjectApiTokens({ projectId }: { readonly projectId: string }) {
+export function ProjectApiTokens({
+  projectId,
+  aiEnabled,
+}: {
+  readonly projectId: string;
+  /** Phase 21 §1 — the agent scope needs the project's AI switch on. Unknown (only managers
+   *  read project settings) leaves the choice open; the api refuses it if AI is off. */
+  readonly aiEnabled: boolean | undefined;
+}) {
+  const aiOff = aiEnabled === false;
   const client = useQueryClient();
   const query = useQuery({
     queryKey: projectKey(projectId),
@@ -151,18 +160,32 @@ export function ProjectApiTokens({ projectId }: { readonly projectId: string }) 
   });
   const [name, setName] = useState('');
   const [drift, setDrift] = useState(false);
+  const [agent, setAgent] = useState(false);
+  const [propose, setPropose] = useState(false);
   const [expiresInDays, setExpiresInDays] = useState<number>(90);
   const [secret, setSecret] = useState<string | null>(null);
+  /** The created token's scopes, for the MCP setup snippet. */
+  const [createdScopes, setCreatedScopes] = useState<readonly string[]>([]);
   const create = useMutation({
     mutationFn: async () =>
       CreatedSchema.parse(
         await apiFetch<unknown>(`/projects/${encodeURIComponent(projectId)}/api-tokens`, {
           method: 'POST',
-          body: { name: name.trim(), scopes: drift ? ['read', 'drift'] : ['read'], expiresInDays },
+          body: {
+            name: name.trim(),
+            scopes: [
+              'read',
+              ...(drift ? ['drift'] : []),
+              ...(agent && !aiOff ? ['agent'] : []),
+              ...(agent && !aiOff && propose ? ['propose'] : []),
+            ],
+            expiresInDays,
+          },
         }),
       ),
     onSuccess: async (created) => {
       setSecret(created.secret);
+      setCreatedScopes(created.scopes);
       setName('');
       await client.invalidateQueries({ queryKey: ['api-tokens'] });
     },
@@ -170,21 +193,27 @@ export function ProjectApiTokens({ projectId }: { readonly projectId: string }) 
   const createError =
     create.error === null
       ? null
-      : create.error instanceof ApiError && create.error.status === 403
-        ? 'Check drift needs edit access to this project.'
-        : 'Could not create the token. Try again.';
+      : create.error instanceof ApiError && create.error.code === 'ai_disabled'
+        ? 'AI is turned off for this project, so agents can’t use it.'
+        : create.error instanceof ApiError && create.error.status === 403
+          ? agent
+            ? 'AI agents need AI access to this project; proposing also needs a complete view and permission to comment (and Check drift needs edit access).'
+            : 'Check drift needs edit access to this project.'
+          : 'Could not create the token. Try again.';
 
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="mb-1 text-sm text-text">API tokens</legend>
       <p className="text-xs text-text-muted">
-        For the <code className="font-mono">schemaloom</code> CLI and CI: pull the design, or check
-        the saved connection for drift. A token acts as you, on this project only.
+        For the <code className="font-mono">schemaloom</code> CLI and CI: pull the design, check the
+        saved connection for drift, or let your own AI agent read the design over MCP. A token acts
+        as you, on this project only.
       </p>
       {secret !== null && (
         <div role="status" className="flex flex-col gap-1 rounded-md border border-border p-2">
           <span className="text-xs text-text">Copy it now. It won’t be shown again.</span>
           <code className="font-mono text-xs break-all text-text">{secret}</code>
+          {createdScopes.includes('agent') && <McpSetup secret={secret} />}
           <div className="flex gap-2">
             <Button
               type="button"
@@ -240,6 +269,31 @@ export function ProjectApiTokens({ projectId }: { readonly projectId: string }) 
           Can also check drift against the saved connection
         </label>
         <label className="flex items-center gap-2 text-sm text-text">
+          <input
+            type="checkbox"
+            className="size-3.5 accent-accent"
+            checked={agent && !aiOff}
+            disabled={aiOff}
+            onChange={(event) => {
+              setAgent(event.target.checked);
+            }}
+          />
+          AI agents (MCP): your own agent can read the design and check its SQL
+          {aiOff && <span className="text-xs text-text-muted">(AI is off for this project)</span>}
+        </label>
+        <label className="flex items-center gap-2 pl-5 text-sm text-text">
+          <input
+            type="checkbox"
+            className="size-3.5 accent-accent"
+            checked={propose && agent && !aiOff}
+            disabled={!agent || aiOff}
+            onChange={(event) => {
+              setPropose(event.target.checked);
+            }}
+          />
+          …and propose schema changes, as change requests a person reviews
+        </label>
+        <label className="flex items-center gap-2 text-sm text-text">
           Expires after
           <select
             className="h-8 rounded-md border border-border bg-surface px-2 text-sm text-text"
@@ -275,5 +329,37 @@ export function ProjectApiTokens({ projectId }: { readonly projectId: string }) 
         />
       )}
     </fieldset>
+  );
+}
+
+/**
+ * Phase 21 §1 — paste-ready setup, shown once with the secret. The CLI is not on npm yet
+ * (Phase 11 Q5), so the command points at a built checkout.
+ */
+function McpSetup({ secret }: { readonly secret: string }) {
+  const url = window.location.origin;
+  const cli = '/path/to/schemaloom/packages/cli/dist/index.js';
+  const claude = `claude mcp add schemaloom -e SCHEMALOOM_URL=${url} -e SCHEMALOOM_TOKEN=${secret} -- node ${cli} mcp`;
+  const json = JSON.stringify(
+    {
+      mcpServers: {
+        schemaloom: {
+          command: 'node',
+          args: [cli, 'mcp'],
+          env: { SCHEMALOOM_URL: url, SCHEMALOOM_TOKEN: secret },
+        },
+      },
+    },
+    null,
+    2,
+  );
+  return (
+    <div className="flex flex-col gap-1 text-xs text-text-muted">
+      <span>Claude Code:</span>
+      <code className="font-mono break-all text-text">{claude}</code>
+      <span>Cursor, Claude Desktop and other config files:</span>
+      <pre className="overflow-x-auto font-mono text-text">{json}</pre>
+      <span>See docs/mcp.md for what an agent can and can’t see.</span>
+    </div>
   );
 }

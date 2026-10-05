@@ -31,6 +31,8 @@ export const summarySchema = z.object({
   description: z.string(),
   status: z.enum(STATUSES),
   author: person,
+  /** Roadmap 21b — proposed by an AI agent through this token */
+  viaToken: z.object({ name: z.string() }).nullable().default(null),
   reviewerIds: z.array(z.string()),
   reviews: z.array(reviewSchema),
   createdAt: z.string(),

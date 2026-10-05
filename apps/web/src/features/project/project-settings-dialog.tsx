@@ -170,7 +170,7 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
         {/* Not a manager-only setting: anyone who can open the project may hold a token. */}
         {open && (
           <div className="pt-3">
-            <ProjectApiTokens projectId={projectId} />
+            <ProjectApiTokens projectId={projectId} aiEnabled={settings?.ai.enabled} />
           </div>
         )}
       </DialogContent>

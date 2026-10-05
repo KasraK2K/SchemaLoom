@@ -581,7 +581,7 @@ model ApiToken {
   tokenHash  String    @unique @map("token_hash")
   /// The first 8 characters after `slt_`, shown in lists so people can tell tokens apart.
   prefix     String
-  /// 'read' | 'drift'
+  /// 'read' | 'drift' | 'agent' | 'propose' (`API_TOKEN_SCOPES`)
   scopes     String[]
   expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
   /// Written fire-and-forget, at most once a minute per token.
@@ -589,8 +589,9 @@ model ApiToken {
   revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  proposals ChangeRequest[]
 
   @@index([projectId])
   @@index([userId])
@@ -1703,6 +1704,9 @@ model ChangeRequest {
   idMap          Json                @map("id_map")
   /// Requested reviewers, notified on create.
   reviewerIds    String[]            @map("reviewer_ids")
+  /// Roadmap 21b: proposed by an AI agent through this token (author = its user). Lifts the
+  /// own-review rule for the author, and counts toward the token's cap on open proposals.
+  viaTokenId     String?             @map("via_token_id")
   mergedById     String?             @map("merged_by_id")
   mergedAt       DateTime?           @map("merged_at") @db.Timestamptz(6)
   closedAt       DateTime?           @map("closed_at") @db.Timestamptz(6)
@@ -1712,9 +1716,11 @@ model ChangeRequest {
   project      Project               @relation("ChangeRequestProject", fields: [projectId], references: [id], onDelete: Cascade)
   draftProject Project               @relation("ChangeRequestDraft", fields: [draftProjectId], references: [id], onDelete: Cascade)
   author       User?                 @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  viaToken     ApiToken?             @relation(fields: [viaTokenId], references: [id], onDelete: SetNull)
   reviews      ChangeRequestReview[]
 
   @@index([projectId, status, createdAt(sort: Desc)])
+  @@index([viaTokenId, status])
   @@map("change_requests")
 }
 

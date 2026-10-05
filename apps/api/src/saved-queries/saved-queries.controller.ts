@@ -21,7 +21,8 @@ import {
   type ProjectPermissionMap,
   type Subject,
 } from '../access';
-import { getSubject } from '../auth';
+import { assertAgentAllowed } from '../ai/ai-settings';
+import { getPrincipal, getSubject } from '../auth';
 import { CreateSavedQueryDto, UpdateSavedQueryDto, ValidateQueryDto } from './saved-queries.dto';
 import { SavedQueriesService, type SavedQueryView } from './saved-queries.service';
 
@@ -47,6 +48,7 @@ export class SavedQueriesController {
     @Param('projectId') projectId: string,
     @Query('tag') tag: string | undefined,
   ): Promise<{ queries: SavedQueryView[] }> {
+    await this.agentCheck(req, projectId);
     return {
       queries: await this.queries.list(subjectOf(req), projectId, mapFor(req, projectId), tag),
     };
@@ -67,12 +69,21 @@ export class SavedQueriesController {
   @RequireProjectAccess('projectId')
   @HttpCode(200)
   @Post('projects/:projectId/queries/validate')
-  validate(
+  async validate(
     @Req() req: Request,
     @Param('projectId') projectId: string,
     @Body() body: ValidateQueryDto,
   ): Promise<QueryValidationResult> {
+    await this.agentCheck(req, projectId);
     return this.queries.validate(subjectOf(req), projectId, mapFor(req, projectId), body.query);
+  }
+
+  /** Phase 21 §5 — a token reaches these two as an AI agent, so `ai:use` and the project's
+   *  AI switch apply, as in `AiService`. A person in the browser is not an agent. */
+  private async agentCheck(req: Request, projectId: string): Promise<void> {
+    const principal = getPrincipal(req);
+    if (principal?.kind !== 'user' || principal.token === undefined) return;
+    assertAgentAllowed(mapFor(req, projectId), await this.queries.projectSettings(projectId));
   }
 
   @ApiOperation({ summary: 'One saved query' })

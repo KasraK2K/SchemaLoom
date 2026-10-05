@@ -43,3 +43,28 @@ export const draftSchemaSchema = z.object({
     .optional(),
 });
 export class DraftSchemaDto extends createZodDto(draftSchemaSchema) {}
+
+/** Phase 21 §5 — `schemaloom mcp`'s two reads. */
+export const agentOutlineSchema = z.object({
+  kind: z.string().trim().min(1).max(64).optional(),
+  area: z.string().trim().min(1).max(200).optional(),
+  namePattern: z.string().trim().max(200).optional(),
+});
+export class AgentOutlineDto extends createZodDto(agentOutlineSchema) {}
+
+export const agentContextSchema = z.object({
+  names: z.array(z.string().trim().min(1).max(200)).min(1).max(50),
+  includeDocs: z.boolean().optional(),
+});
+export class AgentContextDto extends createZodDto(agentContextSchema) {}
+
+/** Roadmap 21b §9.2 — an agent's change, as DDL in the project's engine. */
+export const agentProposalSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(10_000).optional(),
+  sql: z
+    .string()
+    .min(1)
+    .refine((s) => Buffer.byteLength(s, 'utf8') <= 100_000, 'sql is over 100 KB'),
+});
+export class AgentProposalDto extends createZodDto(agentProposalSchema) {}

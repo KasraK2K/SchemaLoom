@@ -1,8 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { PermissionResolver, canOpenProject, type ApiTokenScope, type Subject } from '../access';
+import {
+  PermissionResolver,
+  canOpenProject,
+  hasCompleteView,
+  type ApiTokenScope,
+  type Subject,
+} from '../access';
 import { API_TOKEN_PREFIX, hashApiToken, type ApiTokenClaims } from '../auth';
 import type { ApiToken } from '../generated/prisma/client';
+import { assertAgentAllowed } from '../ai/ai-settings';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ProjectPermissionMap } from '../access';
 
@@ -51,7 +58,9 @@ export class ApiTokensService {
 
   /**
    * The route already checked `canOpenProject`. `drift` also needs `schema:edit` here, the
-   * drift route's atom, so a token is never created for something it could not do.
+   * drift route's atom, so a token is never created for something it could not do. `agent`
+   * (Phase 21 §3) needs `ai:use` and the project's AI switch on, for the same reason, and
+   * `propose` (§9.4) a complete view and `comment:create` on top.
    */
   async create(
     userId: string,
@@ -66,8 +75,17 @@ export class ApiTokensService {
     const secret = `${API_TOKEN_PREFIX}${body}`;
     const project = await this.prisma.project.findUniqueOrThrow({
       where: { id: projectId },
-      select: { organizationId: true },
+      select: { organizationId: true, settings: true },
     });
+    if (input.scopes.includes('agent')) assertAgentAllowed(map, project.settings);
+    // §9.4: `propose` also needs what the canvas's Propose a change needs.
+    if (
+      input.scopes.includes('propose') &&
+      (!map.projectAtoms.has('comment:create') ||
+        !hasCompleteView(map, await this.resolver.skeleton(projectId)))
+    ) {
+      throw new ForbiddenException({ code: 'forbidden', required: 'comment:create' });
+    }
     const row = await this.prisma.apiToken.create({
       data: {
         userId,

@@ -44,7 +44,17 @@ function setup(map = mapOf([])) {
     },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
   };
-  const resolver = { resolveProject: vi.fn().mockResolvedValue(map) };
+  const resolver = {
+    resolveProject: vi.fn().mockResolvedValue(map),
+    // One table with a restricted column: a complete view needs field:viewRestricted.
+    skeleton: vi.fn().mockResolvedValue({
+      generation: 1,
+      areaIds: [],
+      entities: [{ id: 'e1', areaId: null }],
+      entityById: new Map([['e1', { id: 'e1', areaId: null }]]),
+      entitiesWithRestrictedFields: new Set(['e1']),
+    }),
+  };
   const service = new ApiTokensService(
     prisma as unknown as PrismaService,
     resolver as unknown as PermissionResolver,
@@ -84,6 +94,48 @@ describe('ApiTokensService.create (Phase 11 §3)', () => {
         scopes: ['read', 'drift'],
       }),
     ).resolves.toMatchObject({ scopes: ['read', 'drift'] });
+  });
+
+  it('agent (Phase 21 §3) needs ai:use and the project AI switch on', async () => {
+    const agent = { ...input, scopes: ['read', 'agent'] as const };
+    await expect(
+      setup().service.create('owner', 'p1', mapOf(['schema:view']), agent),
+    ).rejects.toMatchObject({ response: { code: 'forbidden', atom: 'ai:use' } });
+
+    const off = setup();
+    off.prisma.project.findUniqueOrThrow.mockResolvedValue({
+      organizationId: 'org1',
+      settings: { ai: { enabled: false } },
+    });
+    await expect(
+      off.service.create('owner', 'p1', mapOf(['schema:view', 'ai:use']), agent),
+    ).rejects.toMatchObject({ response: { code: 'ai_disabled' } });
+    expect(off.prisma.apiToken.create).not.toHaveBeenCalled();
+
+    await expect(
+      setup().service.create('owner', 'p1', mapOf(['schema:view', 'ai:use']), agent),
+    ).resolves.toMatchObject({ scopes: ['read', 'agent'] });
+  });
+
+  it('propose (§9.4) also needs comment:create and a complete view', async () => {
+    const propose = { ...input, scopes: ['read', 'agent', 'propose'] as const };
+    const base = ['schema:view', 'ai:use'] as const;
+    for (const atoms of [
+      [...base, 'field:viewRestricted'],
+      [...base, 'comment:create'],
+    ] as PermissionAtom[][]) {
+      await expect(setup().service.create('owner', 'p1', mapOf(atoms), propose)).rejects.toThrow(
+        ForbiddenException,
+      );
+    }
+    await expect(
+      setup().service.create(
+        'owner',
+        'p1',
+        mapOf([...base, 'comment:create', 'field:viewRestricted']),
+        propose,
+      ),
+    ).resolves.toMatchObject({ scopes: ['read', 'agent', 'propose'] });
   });
 });
 

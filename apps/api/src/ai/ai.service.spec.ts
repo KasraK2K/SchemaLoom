@@ -15,6 +15,7 @@ import type { AppEnv } from '../config/env';
 import { ENGINE_MANIFEST } from '../engines/engines.manifest';
 import { fakePrisma, type FakePrisma, type Row } from '../schema/fake-prisma';
 import type { DocsService } from '../docs';
+import type { ChangeRequestsService } from '../snapshots';
 import { PROJECT, baseStore, entityRow, fieldRow, projectRow } from '../schema/fixture';
 import { SchemaLoader } from '../schema/schema-loader.service';
 import { AiController } from './ai.controller';
@@ -124,6 +125,7 @@ function harness(
   service: AiService;
   add: ReturnType<typeof vi.fn>;
   write: ReturnType<typeof vi.fn>;
+  propose: ReturnType<typeof vi.fn>;
 } {
   const prisma = fakePrisma({
     ...baseStore({
@@ -159,6 +161,8 @@ function harness(
   const add = vi.fn(() => Promise.resolve({ id: 'job_1' }));
   const queue: DocDraftQueue = { add };
   const write = vi.fn(() => Promise.resolve({}));
+  const propose = vi.fn(() => Promise.resolve({ changeRequestId: 'cr_1' }));
+  const changeRequests = { proposeFromAgent: propose };
   const service = new AiService(
     prisma.client,
     new SchemaLoader(prisma.client),
@@ -169,8 +173,9 @@ function harness(
     redis,
     queue,
     { write } as unknown as DocsService,
+    changeRequests as unknown as ChangeRequestsService,
   );
-  return { prisma, service, add, write };
+  return { prisma, service, add, write, propose };
 }
 
 const selection = (entityIds: string[]) => ({ entityIds, fieldIds: [], linkIds: [], areaIds: [] });
@@ -697,5 +702,108 @@ describe('AiService.draftSchema', () => {
       status: 400,
       response: { code: 'ai_truncated' },
     });
+  });
+});
+
+describe('AiService agent reads (Phase 21 §5)', () => {
+  const doc = {
+    doc: [
+      {
+        id: 'doc_emp',
+        projectId: PROJECT,
+        targetType: 'entity',
+        targetId: 'ent_emp',
+        plainText: 'People on the payroll',
+      },
+    ],
+  };
+  const noKey = () =>
+    new AiProvider({ get: () => undefined } as unknown as ConfigService<AppEnv, true>);
+
+  it('works with no API key and never calls a provider; masked columns stay out', async () => {
+    const { service } = harness({ provider: noKey(), seed: doc });
+    const outline = await service.agentOutline(ANA, PROJECT, mapOf(ANA), {});
+    expect(outline.lines).toEqual([
+      'public.ent_emp  table  1 column  "People on the payroll"',
+      'public.ent_prod  table  1 column',
+    ]);
+    const context = await service.agentContext(ANA, PROJECT, mapOf(ANA), { names: ['ent_emp'] });
+    expect(context.text).toContain('T ent_emp');
+    expect(context.text).toContain('fld_emp_name');
+    expect(context.text).toContain('People on the payroll');
+    expect(context.text).not.toContain('fld_sal');
+    expect(context.notFound).toEqual([]);
+  });
+
+  it('a table without ai:use is left out; hidden reads exactly like missing', async () => {
+    const noAi = harness({ view: { ...MARCH, ai: ['project', 'ent_emp'] } });
+    expect((await noAi.service.agentOutline(ANA, PROJECT, mapOf(ANA), {})).lines).toEqual([
+      'public.ent_emp  table  1 column',
+    ]);
+    const april = harness({ view: APRIL });
+    const out = await april.service.agentContext(ANA, PROJECT, mapOf(ANA), {
+      names: ['ent_prod', 'public.nope', 'ent_emp'],
+    });
+    expect(out.notFound).toEqual(['ent_prod', 'public.nope']);
+    expect(out.text).not.toContain('ent_prod');
+    expect(out.text).toContain('T ent_emp');
+  });
+
+  it('filters the outline by name pattern and kind', async () => {
+    const { service } = harness();
+    const by = async (filter: { kind?: string; namePattern?: string }) =>
+      (await service.agentOutline(ANA, PROJECT, mapOf(ANA), filter)).lines.length;
+    expect(await by({ namePattern: 'ent_e*' })).toBe(1);
+    expect(await by({ namePattern: 'public.*' })).toBe(2);
+    expect(await by({ kind: 'view' })).toBe(0);
+  });
+
+  it('docs follow the project setting, whatever the agent asks', async () => {
+    const { service } = harness({ seed: doc, settings: { ai: { includeDocsInContext: false } } });
+    const out = await service.agentContext(ANA, PROJECT, mapOf(ANA), {
+      names: ['ent_emp'],
+      includeDocs: true,
+    });
+    expect(out.text).not.toContain('People on the payroll');
+    const lines = (await service.agentOutline(ANA, PROJECT, mapOf(ANA), {})).lines;
+    expect(lines.join('\n')).not.toContain('payroll');
+  });
+
+  it('403 without ai:use at the project, and 403 ai_disabled with the switch off', async () => {
+    const off = harness({ settings: { ai: { enabled: false } } });
+    await expect(off.service.agentOutline(ANA, PROJECT, mapOf(ANA), {})).rejects.toMatchObject({
+      status: 403,
+      response: { code: 'ai_disabled' },
+    });
+    const none = harness({ view: { ...MARCH, ai: [] } });
+    await expect(
+      none.service.agentContext(ANA, PROJECT, mapOf(ANA), { names: ['ent_emp'] }),
+    ).rejects.toMatchObject({ status: 403, response: { atom: 'ai:use' } });
+  });
+});
+
+describe('AiService.agentPropose (roadmap 21b)', () => {
+  const sql =
+    'CREATE TABLE reviews (id int PRIMARY KEY, emp text,\n' +
+    '  CONSTRAINT reviews_emp_fk FOREIGN KEY (emp) REFERENCES ent_emp (fld_emp_name));';
+
+  it('checks ai:use and the switch, then hands over the SQL with referenced tables declared', async () => {
+    const { service, propose } = harness({ view: APRIL });
+    await service.agentPropose(ANA, PROJECT, mapOf(ANA), 'tok_1', { title: 'Reviews', sql });
+    const [ctx, input] = propose.mock.calls[0] as unknown as [
+      { projectId: string; actorUserId: string },
+      { tokenId: string; title: string; sql: string },
+    ];
+    expect(ctx).toMatchObject({ projectId: PROJECT, actorUserId: 'usr_ana' });
+    expect(input).toMatchObject({ tokenId: 'tok_1', title: 'Reviews' });
+    expect(input.sql).toMatch(/CREATE TABLE[^;]*ent_emp/);
+    expect(input.sql).toContain('CREATE TABLE reviews');
+    expect(input.sql).not.toContain('fld_sal');
+
+    const off = harness({ settings: { ai: { enabled: false } } });
+    await expect(
+      off.service.agentPropose(ANA, PROJECT, mapOf(ANA), 'tok_1', { title: 'x', sql }),
+    ).rejects.toMatchObject({ status: 403, response: { code: 'ai_disabled' } });
+    expect(off.propose).not.toHaveBeenCalled();
   });
 });

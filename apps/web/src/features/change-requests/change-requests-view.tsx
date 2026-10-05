@@ -51,6 +51,19 @@ const projectHref = (orgSlug: string, projectId: string): string =>
 const requestHref = (orgSlug: string, projectId: string, id: string): string =>
   `${projectHref(orgSlug, projectId)}/changes/${encodeURIComponent(id)}`;
 
+/** Roadmap 21b §9.1 — an AI agent proposed it, through the named token. */
+function AgentBadge({ token }: { readonly token: { readonly name: string } | null }) {
+  if (token === null) return null;
+  return (
+    <span
+      title={`Proposed by an AI agent through the token "${token.name}"`}
+      className="rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] text-text-muted uppercase"
+    >
+      Agent
+    </span>
+  );
+}
+
 function StatusChip({ status }: { readonly status: ChangeRequestSummary['status'] }) {
   return (
     <span
@@ -426,6 +439,7 @@ export function ChangesView({
                 className="flex items-center gap-3 rounded px-3 py-2 hover:bg-surface-hover"
               >
                 <StatusChip status={r.status} />
+                <AgentBadge token={r.viaToken} />
                 <span className="min-w-0 flex-1 truncate text-sm text-text">
                   {r.status === 'draft' ? 'Your draft' : r.title}
                 </span>
@@ -491,10 +505,14 @@ export function ChangeRequestView({
         </Link>
         <h1 className="flex items-center gap-2 text-base font-medium text-text">
           <StatusChip status={r.status} />
+          <AgentBadge token={r.viaToken} />
           {r.status === 'draft' ? 'Your draft' : r.title}
         </h1>
         <p className="text-xs text-text-subtle">
-          {r.author?.name ?? 'Someone'} proposed this {relativeTime(r.createdAt)} ·{' '}
+          {r.viaToken === null
+            ? `${r.author?.name ?? 'Someone'} proposed this`
+            : `${r.author?.name ?? 'Someone'}’s agent proposed this via the token “${r.viaToken.name}”`}{' '}
+          {relativeTime(r.createdAt)} ·{' '}
           <Link
             href={projectHref(orgSlug, r.draftProjectId)}
             className="text-accent hover:underline"
@@ -789,7 +807,8 @@ function Reviews({ request: r }: { readonly request: ChangeRequestDetail }) {
           {r.reviews.map((v) => (
             <li key={v.id} className={cn('text-xs text-text', !v.current && 'opacity-60')}>
               <span className="font-medium">{v.reviewer?.name ?? 'Someone'}</span>{' '}
-              {v.verdict === 'approved' ? 'approved' : 'requested changes'}{' '}
+              {v.verdict === 'approved' ? 'approved' : 'requested changes'}
+              {v.reviewer !== null && v.reviewer.id === r.author?.id && ' (the author)'}{' '}
               <span className="text-text-subtle">{relativeTime(v.createdAt)}</span>
               {!v.current && <span className="text-text-subtle"> · before the latest edit</span>}
               {v.note !== '' && <p className="whitespace-pre-wrap text-text-muted">{v.note}</p>}

@@ -20,11 +20,13 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "@schemaloom/config": "workspace:*",
     "@types/node": "^22.15.0",
     "eslint": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "zod": "catalog:"
   }
 }

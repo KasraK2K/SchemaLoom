@@ -192,7 +192,7 @@ function harness(
                   import: () =>
                     Promise.resolve({
                       model: over.imported,
-                      report: { statementCount: 1 },
+                      report: { statementCount: 1, statements: [] },
                       docs: over.importedDocs,
                     }),
                 },

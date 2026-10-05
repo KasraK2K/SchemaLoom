@@ -20,6 +20,6 @@ import { SnapshotsService } from './snapshots.service';
   imports: [SchemaModule, NotificationsModule, DocsModule],
   controllers: [SnapshotsController, ImportController, ChangeRequestsController],
   providers: [SnapshotsService, ChangeRequestsService],
-  exports: [SnapshotsService],
+  exports: [SnapshotsService, ChangeRequestsService],
 })
 export class SnapshotsModule {}

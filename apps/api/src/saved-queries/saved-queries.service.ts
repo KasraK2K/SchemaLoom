@@ -98,6 +98,15 @@ export class SavedQueriesService {
     @Inject(ENGINE_REGISTRY) private readonly registry: EngineRegistry,
   ) {}
 
+  /** For the agent-token check in the controller (Phase 21 §5). */
+  async projectSettings(projectId: string): Promise<unknown> {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId },
+      select: { settings: true },
+    });
+    return project?.settings ?? null;
+  }
+
   async list(
     subject: Subject,
     projectId: string,

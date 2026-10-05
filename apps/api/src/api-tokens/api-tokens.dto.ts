@@ -10,6 +10,10 @@ export const CreateApiTokenSchema = z.object({
     .min(1)
     .refine((s) => s.includes('read'), {
       message: 'Every token can read.',
+    })
+    // An agent that proposes has to read the design first (Phase 21 §9.4).
+    .refine((s) => !s.includes('propose') || s.includes('agent'), {
+      message: 'propose needs agent.',
     }),
   expiresInDays: z.number().int().min(1).max(365).default(90),
 });

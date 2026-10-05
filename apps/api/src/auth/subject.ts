@@ -37,7 +37,7 @@ export type AuthPrincipal =
 export interface ApiTokenClaims {
   readonly tokenId: string;
   readonly projectId: string;
-  /** 'read' | 'drift' (`API_TOKEN_SCOPES` in src/access). */
+  /** `API_TOKEN_SCOPES` in src/access. */
   readonly scopes: readonly string[];
 }
 

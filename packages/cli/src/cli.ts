@@ -1,5 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { buildMcpServer } from './mcp';
 
 /** Phase 11 §5. CI scripts can tell "the database moved" (1) from "the token expired" (3). */
 export const EXIT = { ok: 0, drift: 1, usage: 2, server: 3 } as const;
@@ -29,6 +31,8 @@ Commands:
                                  Writes to stdout without --out
   diff [--fail-on-drift] [--sql f] [--json] [--allow-destructive]
                                  Compare the project's saved connection with the design
+  mcp                            Serve the design to an AI agent over MCP (stdio).
+                                 Needs a token with the agent scope
 
 Configuration:
   SCHEMALOOM_URL    e.g. https://schemaloom.example.com   (or --url)
@@ -44,6 +48,8 @@ class ServerError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    /** The api's `error.details`, e.g. the statements a proposal failed on. */
+    readonly details: Record<string, unknown> = {},
   ) {
     super(`${String(status)} ${code}`);
   }
@@ -118,6 +124,7 @@ async function dispatch(argv: readonly string[], io: Io): Promise<number> {
   }
   const opts = parsed.values;
   const api = client(opts.url ?? io.env.SCHEMALOOM_URL, opts.token ?? io.env.SCHEMALOOM_TOKEN);
+  const base = (opts.url ?? io.env.SCHEMALOOM_URL ?? '').replace(/\/+$/, '');
 
   switch (command) {
     case 'whoami': {
@@ -144,11 +151,7 @@ async function dispatch(argv: readonly string[], io: Io): Promise<number> {
     }
     case 'diff': {
       const { projectId } = await api.json<Token>('GET', '/api/token');
-      const drift = await api.json<Drift>(
-        'POST',
-        `/api/projects/${encodeURIComponent(projectId)}/introspect/drift`,
-        { saved: true, allowDestructive: opts['allow-destructive'] },
-      );
+      const drift = await fetchDrift(api, projectId, opts['allow-destructive']);
       const inSync = drift.diff.entries.length === 0;
       if (opts.json) io.out(`${JSON.stringify(drift, null, 2)}\n`);
       else io.out(summary(drift));
@@ -158,9 +161,40 @@ async function dispatch(argv: readonly string[], io: Io): Promise<number> {
       }
       return !inSync && opts['fail-on-drift'] ? EXIT.drift : EXIT.ok;
     }
+    case 'mcp': {
+      // stdout is the protocol from here on: errors go to stderr only.
+      const token = await api.json<Token>('GET', '/api/token');
+      if (!token.scopes.includes('agent')) {
+        io.err('schemaloom: this token has no agent scope\n');
+        return EXIT.usage;
+      }
+      const server = buildMcpServer(
+        api,
+        token,
+        async () => summary(await fetchDrift(api, token.projectId, false)),
+        base,
+      );
+      await server.connect(new StdioServerTransport());
+      await new Promise<void>((resolve) => {
+        server.server.onclose = resolve;
+        process.stdin.once('end', resolve);
+      });
+      return EXIT.ok;
+    }
     default:
       throw new UsageError(`unknown command "${command}"`);
   }
+}
+
+function fetchDrift(api: Client, projectId: string, allowDestructive: boolean): Promise<Drift> {
+  return api.json<Drift>(
+    'POST',
+    `/api/projects/${encodeURIComponent(projectId)}/introspect/drift`,
+    {
+      saved: true,
+      allowDestructive,
+    },
+  );
 }
 
 async function pull(api: Client, format: string, io: Io): Promise<string | Uint8Array> {
@@ -222,18 +256,26 @@ function client(url: string | undefined, token: string | undefined): Client {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       const text = await response.text();
-      if (!response.ok) throw new ServerError(response.status, codeOf(text));
+      if (!response.ok) {
+        const { code, details } = errorOf(text);
+        throw new ServerError(response.status, code, details);
+      }
       return JSON.parse(text) as T;
     },
   };
 }
 
-function codeOf(text: string): string {
+function errorOf(text: string): { code: string; details: Record<string, unknown> } {
   try {
-    // The api's one error shape: `{ error: { code, message } }`.
-    const parsed = JSON.parse(text) as { error?: { code?: unknown } };
-    return typeof parsed.error?.code === 'string' ? parsed.error.code : 'error';
+    // The api's one error shape: `{ error: { code, message, details? } }`.
+    const parsed = JSON.parse(text) as { error?: { code?: unknown; details?: unknown } };
+    const details = parsed.error?.details;
+    return {
+      code: typeof parsed.error?.code === 'string' ? parsed.error.code : 'error',
+      details:
+        typeof details === 'object' && details !== null ? (details as Record<string, unknown>) : {},
+    };
   } catch {
-    return 'error';
+    return { code: 'error', details: {} };
   }
 }
