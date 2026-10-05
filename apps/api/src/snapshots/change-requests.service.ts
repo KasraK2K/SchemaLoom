@@ -9,7 +9,6 @@ import {
 } from '@nestjs/common';
 import type { NotificationType } from '@schemaloom/contracts';
 import {
-  IR_OBJECT_TYPES,
   RawSchemaModel,
   diffModels,
   threeWay,
@@ -525,15 +524,9 @@ export class ChangeRequestsService {
     const state = await this.state(row);
     const result = threeWay(state.base, state.theirs, state.main.live, { prefer: 'theirs' });
 
-    // main id -> draft id for everything already in the draft. An object the author
-    // created in the draft has no entry in `idMap` and the same id in both spaces.
-    const idMap = row.idMap as IdMap;
-    const toDraft: Record<string, string> = invertIds(idMap);
-    for (const type of IR_OBJECT_TYPES) {
-      for (const draftId of Object.keys(state.draft.live.objects[type])) {
-        if (idMap[draftId] === undefined) toDraft[draftId] = draftId;
-      }
-    }
+    // main id -> draft id for everything already in the draft, including what the author
+    // created there (under `state`'s fresh main ids), so those keep their draft ids.
+    const toDraft: Record<string, string> = invertIds(state.toMain);
     Object.assign(toDraft, freshIds(result.merged, toDraft, randomUUID));
     const target = asLive(remapIds(result.merged, toDraft, row.draftProjectId));
 
@@ -547,8 +540,9 @@ export class ChangeRequestsService {
       where: { id: row.id },
       data: {
         baseIr: snapshotBlob(state.main.live),
+        // Created-in-the-draft objects stay out of `idMap`: their main ids are minted per read.
         idMap: Object.fromEntries(
-          Object.entries(invertIds(toDraft)).filter(([draftId, mainId]) => draftId !== mainId),
+          Object.entries(invertIds(toDraft)).filter(([draftId]) => !state.created.has(draftId)),
         ),
       },
     });
@@ -707,13 +701,22 @@ export class ChangeRequestsService {
       this.restrictedFieldMode(row.projectId),
     ]);
     const base = blobToLive(row.baseIr);
-    const theirs = asLive(remapIds(draft.live, row.idMap as IdMap, row.projectId));
+    // Objects created in the draft have no `idMap` entry. §2 said they keep their id at
+    // merge, but ids are global keys and the draft's own row still holds it, so a merge
+    // that added a table failed on the primary key (found by roadmap 21b's e2e). They get
+    // fresh main ids instead, stable for this one read: a merge plans and writes from it.
+    const known = row.idMap as IdMap;
+    const fresh = freshIds(draft.live, known, randomUUID);
+    const toMain = { ...known, ...fresh };
+    const theirs = asLive(remapIds(draft.live, toMain, row.projectId));
     const merge = threeWay(base, main.live, theirs);
     return {
       base,
       main,
       draft,
       theirs,
+      toMain,
+      created: new Set(Object.keys(fresh)),
       restrictedFieldMode,
       taken: merge.taken,
       moves: layoutMoves(base, main.live, theirs),
@@ -889,6 +892,10 @@ interface MergeState {
   readonly draft: LiveProject;
   /** The draft in main ids. */
   readonly theirs: LiveIr;
+  /** Draft id → main id for every draft object: `idMap`, plus fresh ids for created ones. */
+  readonly toMain: IdMap;
+  /** Draft ids of objects created in the draft (no `idMap` entry). */
+  readonly created: ReadonlySet<string>;
   readonly restrictedFieldMode: ProjectPermissionMap['restrictedFieldMode'];
   /** Objects the merge takes from the draft. */
   readonly taken: number;

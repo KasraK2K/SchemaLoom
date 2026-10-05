@@ -54,7 +54,9 @@ main project. That is the one decision everything else follows from:
 - **Object ids are global primary keys**, so the copy cannot reuse the main project's ids.
   The fork gives every copied object a new id and stores `idMap` (draft id → main id) on the
   change request. Objects created in the draft have no entry; at merge they are created in
-  the main project with the id they already have, which is unique.
+  the main project under fresh ids. (As first written, they kept the id they had, but the
+  draft's own row still holds it, so every merge that added a table failed on the primary
+  key. Fixed 2026-10-05, found by roadmap 21b's e2e.)
 - **The fork** reads the main project's live IR, creates the draft row (same engine and
   engine version), and writes everything with `planImport` creates through SchemaWriter. It
   also stores the starting point as a snapshot of the main project (`baseIr`). If the
