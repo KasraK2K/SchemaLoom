@@ -65,6 +65,8 @@ a reason to come back every week, then reach more databases and teams.
 | 19  | Workspace-level sharing                                                       | `built`    | `docs/phase19/DESIGN.md`             | One grant covers every project in a workspace, including later ones. Reverses Phase 1 Q1 at the owner's request.   |
 | 20  | Ops: worker process, realtime over Redis, CI cache, row 15 e2e                | `built`    | `docs/phase20/DESIGN.md`             | The unscheduled Phase 1 leftovers (worker split, Q33, Q32) and tests for the login paths.                          |
 | 21  | MCP server for AI agents (`schemaloom mcp`)                                   | `proposed` | `docs/phase21/DESIGN.md`             | A developer's own agent asks about the schema while coding. Same view as the built-in assistant, no server AI key. |
+| 21b | Agents propose schema changes (`propose_change`)                              | `proposed` | `docs/phase21/DESIGN.md` §9          | An agent adds the tables its task needs, as a change request a person reviews and merges. Never a direct write.    |
+| 22  | Describe it, get a schema (AI drafts tables and relations from a description) | `proposed` | `docs/phase22/DESIGN.md`             | Describe a whole app or one feature; the AI builds on the existing tables. Draft, refine, review, then import.     |
 
 **6a/6b verified (2026-09-30)** with pg_dump 18.6 in Docker: the api image builds, the engine's
 live spec and workflow 10 pass. That run found pg_dump 17.6+'s `\restrict` lines, which the
