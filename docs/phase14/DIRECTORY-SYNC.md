@@ -1,8 +1,28 @@
 # Phase 14b–14c: directory sync and sign-in from the IdP
 
-Status: **proposed 2026-10-05**. Roadmap rows 14b (SCIM and group mapping) and 14c (sign-in
-from the IdP's dashboard). Builds on SSO (`DESIGN.md` §1); the audit log stream is
-`AUDIT-STREAMING.md` (row 14d).
+Status: **14b built 2026-10-06** (§1, §2, §4, §6; every default approved). 14c (§3) is still
+proposed. Builds on SSO (`DESIGN.md` §1); the audit log stream is `AUDIT-STREAMING.md` (row 14d).
+
+**As built (14b)**, where it differs from or adds to the text below:
+
+- Ids are `cuid` text like every other table, not `uuid`. The migration is
+  `20261006100000_directory_sync`; a partial unique index keeps one live token per connection.
+- `JwtAuthGuard` resolves `@RequireScimToken()` routes to a SCIM principal (`req.scim`) and
+  never to a user; a cookie or an `slt_` token on a SCIM route is 401, and an `slscim_` token
+  anywhere else is 401. The sweep also refuses the marker outside `/api/scim/` and any other
+  marker inside it.
+- The connection's groups claim is a column (`groups_claim`); the mappings and the SCIM token
+  are managed on the SSO page under each connection ("Directory sync").
+- A SCIM `GET /Users/:id` sees members and people this org's SCIM deprovisioned (so Okta can
+  reactivate them); anyone else is 404, so a token can't pull arbitrary accounts in by id.
+  `DELETE` marks them gone, and a later `GET` is 404.
+- SCIM `POST /Users` with `active: false` is refused (400): create, then deactivate.
+- Deleting the SSO connection hands its claim groups back to people, and its SCIM groups too
+  when no other connection of the org still has a live token. Members and grants stay.
+- Name changes are audited as `org_member.updated`; API tokens revoked by deprovisioning as
+  `api_token.revoked` (`via: 'scim'`, with the count).
+- The PATCH fixtures (`apps/api/src/scim/fixtures/`) are transcribed from Okta's and Microsoft's
+  published SCIM request examples, not captured from a live tenant.
 
 Today SSO signs people in, but the company directory (Okta, Microsoft Entra, Google,
 Keycloak) can't tell SchemaLoom who joined, who left, or who is in which team. When someone

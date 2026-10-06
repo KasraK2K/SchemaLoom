@@ -116,6 +116,9 @@ function GroupCard({
   const url = `${base}/${group.id}`;
   const inGroup = new Set(group.members.map((m) => m.userId));
   const addable = members.filter((m) => !inGroup.has(m.userId));
+  // Roadmap 14b §1.4: the IdP fills it, so no renaming or member edits here. It can still
+  // be shared, and deleted.
+  const editable = canManage && group.managedBy === null;
 
   return (
     <li className="rounded-md border border-border p-3" data-testid="org-group">
@@ -163,19 +166,26 @@ function GroupCard({
             <span className="ml-1.5 text-xs font-normal text-text-subtle">
               {group.members.length} member{group.members.length === 1 ? '' : 's'}
             </span>
+            {group.managedBy !== null && (
+              <span className="ml-2 rounded bg-surface-sunken px-1.5 py-0.5 text-xs font-normal text-text-muted">
+                Managed by your identity provider
+              </span>
+            )}
           </p>
         )}
         {canManage && !renaming && (
           <>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setRenaming(true);
-              }}
-            >
-              Rename
-            </Button>
+            {editable && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setRenaming(true);
+                }}
+              >
+                Rename
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -199,7 +209,7 @@ function GroupCard({
             <span className="min-w-0 flex-1 truncate">
               {m.name} <span className="text-xs text-text-muted">{m.email}</span>
             </span>
-            {canManage && (
+            {editable && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -215,7 +225,7 @@ function GroupCard({
         ))}
       </ul>
 
-      {canManage && addable.length > 0 && (
+      {editable && addable.length > 0 && (
         <form
           className="mt-2 flex gap-2"
           onSubmit={(event) => {

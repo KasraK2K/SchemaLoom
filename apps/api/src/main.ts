@@ -28,7 +28,8 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   // Doc 00 Q22: SQL import is synchronous up to 5 MB of source, which arrives JSON-encoded.
   // Express's 100 KB default also rejected large `schema/ops` batches (MAX_OPS_PER_BATCH).
-  app.useBodyParser('json', { limit: '6mb' });
+  // Roadmap 14b: SCIM clients send `application/scim+json`.
+  app.useBodyParser('json', { limit: '6mb', type: ['application/json', 'application/scim+json'] });
   // Larger sources go to the import job as raw `text/plain` (`import-jobs.controller.ts`).
   app.useBodyParser('text', { limit: '50mb' });
   // Roadmap 14: the SAML ACS is an HTML form post from the IdP.

@@ -8,6 +8,9 @@ import type { AppEnv } from '../config/env';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ApiTokenAuthService } from './api-token-auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { IS_PUBLIC_KEY } from './public.decorator';
+import type { ScimTokenAuthService } from './scim-token-auth.service';
+import { SCIM_TOKEN_META } from './scim-token.decorator';
 import { getSubject } from './subject';
 import { TokensService } from './tokens.service';
 
@@ -45,8 +48,14 @@ const noApiTokens = {
   principalFor: () => Promise.reject(new Error('no bearer expected')),
 } as unknown as ApiTokenAuthService;
 
-const reflector = (isPublic: boolean) =>
-  ({ getAllAndOverride: () => (isPublic ? true : undefined) }) as unknown as Reflector;
+const noScimTokens = {
+  principalFor: () => Promise.reject(new Error('no scim token expected')),
+} as unknown as ScimTokenAuthService;
+
+const reflector = (isPublic: boolean, marker: string = IS_PUBLIC_KEY) =>
+  ({
+    getAllAndOverride: (key: string) => (isPublic && key === marker ? true : undefined),
+  }) as unknown as Reflector;
 
 let tokens: TokensService;
 
@@ -58,7 +67,9 @@ describe('JwtAuthGuard', () => {
   it('resolves a user subject in the shape doc 05 §7.1 specifies', async () => {
     const access = await tokens.issueAccessToken({ userId: 'u1', orgId: 'org1' });
     const req = request(`sl_access=${access}`);
-    await new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(context(req));
+    await new JwtAuthGuard(reflector(false), tokens, noApiTokens, noScimTokens).canActivate(
+      context(req),
+    );
 
     expect(req.auth).toEqual({ kind: 'user', userId: 'u1', orgId: 'org1' });
     expect(getSubject(req)).toEqual({ kind: 'user', userId: 'u1', orgId: 'org1' });
@@ -70,7 +81,9 @@ describe('JwtAuthGuard', () => {
       null,
     );
     const req = request(`sl_session=${token}`);
-    await new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(context(req));
+    await new JwtAuthGuard(reflector(false), tokens, noApiTokens, noScimTokens).canActivate(
+      context(req),
+    );
 
     expect(req.auth).toEqual({
       kind: 'share_link',
@@ -84,7 +97,9 @@ describe('JwtAuthGuard', () => {
   it('authenticates an org-less user but hands the resolver no subject', async () => {
     const access = await tokens.issueAccessToken({ userId: 'u1', orgId: null });
     const req = request(`sl_access=${access}`);
-    await new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(context(req));
+    await new JwtAuthGuard(reflector(false), tokens, noApiTokens, noScimTokens).canActivate(
+      context(req),
+    );
 
     expect(req.auth).toEqual({ kind: 'user', userId: 'u1', orgId: null });
     expect(getSubject(req)).toBeNull();
@@ -92,12 +107,14 @@ describe('JwtAuthGuard', () => {
 
   it('rejects an unauthenticated request on a guarded route', async () => {
     await expect(
-      new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(context(request())),
+      new JwtAuthGuard(reflector(false), tokens, noApiTokens, noScimTokens).canActivate(
+        context(request()),
+      ),
     ).rejects.toThrow();
   });
 
   it('lets a @Public() route through, and still names the caller when it can', async () => {
-    const guard = new JwtAuthGuard(reflector(true), tokens, noApiTokens);
+    const guard = new JwtAuthGuard(reflector(true), tokens, noApiTokens, noScimTokens);
     const anonymous = request();
     await expect(guard.canActivate(context(anonymous))).resolves.toBe(true);
     expect(anonymous.auth).toBeUndefined();
@@ -115,7 +132,7 @@ describe('JwtAuthGuard', () => {
       { subject: 'u9', secret: 'a-different-secret-that-is-long-enough!!', audience: 'sl_access' },
     );
     await expect(
-      new JwtAuthGuard(reflector(false), tokens, noApiTokens).canActivate(
+      new JwtAuthGuard(reflector(false), tokens, noApiTokens, noScimTokens).canActivate(
         context(request(`sl_access=${token}`)),
       ),
     ).rejects.toThrow();
@@ -134,10 +151,35 @@ describe('JwtAuthGuard', () => {
         secret === 'slt_abc' ? Promise.resolve(viaToken) : Promise.reject(new Error('bad')),
     } as unknown as ApiTokenAuthService;
     const req = request(`sl_access=${access}`, 'Bearer slt_abc');
-    await new JwtAuthGuard(reflector(false), tokens, apiTokens).canActivate(context(req));
+    await new JwtAuthGuard(reflector(false), tokens, apiTokens, noScimTokens).canActivate(
+      context(req),
+    );
 
     expect(req.auth).toEqual(viaToken);
     expect(req.shareAuth).toBeUndefined();
     expect(getSubject(req)).toEqual({ kind: 'user', userId: 'u2', orgId: 'org2' });
+  });
+
+  it('a SCIM route takes only the SCIM token: no cookie identity rides along (roadmap 14b)', async () => {
+    const access = await tokens.issueAccessToken({ userId: 'u1', orgId: 'org1' });
+    const scim = { tokenId: 's1', connectionId: 'c1', organizationId: 'org9' };
+    const scimTokens = {
+      principalFor: (secret: string | undefined) =>
+        secret === 'slscim_abc' ? Promise.resolve(scim) : Promise.reject(new Error('bad')),
+    } as unknown as ScimTokenAuthService;
+    const guard = new JwtAuthGuard(
+      reflector(true, SCIM_TOKEN_META),
+      tokens,
+      noApiTokens,
+      scimTokens,
+    );
+
+    const req = request(`sl_access=${access}`, 'Bearer slscim_abc');
+    await guard.canActivate(context(req));
+    expect(req.scim).toEqual(scim);
+    expect(req.auth).toBeUndefined();
+
+    // A cookie alone is not a SCIM client.
+    await expect(guard.canActivate(context(request(`sl_access=${access}`)))).rejects.toThrow();
   });
 });

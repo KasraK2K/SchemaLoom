@@ -47,7 +47,8 @@ DEV database.
 ## Rules that are easy to break
 
 - **Every route carries exactly one marker** (`@RequirePermission`, `@RequireProjectAccess`,
-  `@RequireOrgRole`, `@Authenticated`, `@Public`). The boot sweep refuses to start
+  `@RequireOrgRole`, `@Authenticated`, `@Public`, or `@RequireScimToken` under `/api/scim/v2`
+  only). The boot sweep refuses to start
   otherwise, and each controller has a `*.routes.spec.ts` listing its routes.
 - **Web and api share one hostname** in every deploy (the api refuses to boot otherwise).
   Session cookies are host-only and RSC pages forward the browser's cookies; two hostnames

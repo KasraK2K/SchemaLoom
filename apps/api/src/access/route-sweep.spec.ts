@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { IS_PUBLIC_KEY } from '../auth/public.decorator';
-import { AUTHENTICATED_META, ORG_ROLE_META, PERM_META, PROJECT_ACCESS_META } from './route-markers';
+import {
+  AUTHENTICATED_META,
+  ORG_ROLE_META,
+  PERM_META,
+  PROJECT_ACCESS_META,
+  SCIM_TOKEN_META,
+} from './route-markers';
 import { assertRouteTable, type SweptRoute } from './route-sweep';
 import { isShareLinkRoute, routeKey } from './share-link-allowlist';
 
@@ -77,6 +83,21 @@ describe('assertRouteTable', () => {
     });
     expect(sweep([orgGated])).toThrow(/SHARE_LINK_ROUTES/);
     expect(sweep([publicGated])).toThrow(/SHARE_LINK_ROUTES/);
+  });
+
+  it('accepts @RequireScimToken() under /api/scim/ (roadmap 14b)', () => {
+    expect(
+      sweep([route({ path: '/api/scim/v2/Users/:id', markers: [SCIM_TOKEN_META] })]),
+    ).not.toThrow();
+  });
+
+  it('THROWS on @RequireScimToken() outside /api/scim/, and on another marker inside it', () => {
+    expect(
+      sweep([route({ path: '/api/projects', markers: [SCIM_TOKEN_META], source: 'P.list' })]),
+    ).toThrow(/P\.list[\s\S]*outside \/api\/scim\//);
+    expect(
+      sweep([route({ path: '/api/scim/v2/Users', markers: [IS_PUBLIC_KEY], source: 'S.users' })]),
+    ).toThrow(/S\.users[\s\S]*under \/api\/scim\//);
   });
 
   it('accepts an allow-listed surface that is view-gated', () => {

@@ -1,0 +1,49 @@
+{
+  "$source": "Microsoft Entra ID SCIM provisioning, request shapes from learn.microsoft.com/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups (2026-10)",
+  "disableUser": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{ "op": "Replace", "path": "active", "value": "False" }]
+  },
+  "updateUserAttributes": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [
+      { "op": "Replace", "path": "displayName", "value": "Ann Lee-Park" },
+      { "op": "Add", "path": "name.givenName", "value": "Ann" },
+      { "op": "Add", "path": "name.familyName", "value": "Lee-Park" },
+      { "op": "Replace", "path": "title", "value": "Analyst" },
+      { "op": "Replace", "path": "externalId", "value": "a1b2c3d4-ENTRA" }
+    ]
+  },
+  "changeUserEmail": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [
+      { "op": "Replace", "path": "emails[type eq \"work\"].value", "value": "ann.park@acme.test" }
+    ]
+  },
+  "createUser": {
+    "schemas": [
+      "urn:ietf:params:scim:schemas:core:2.0:User",
+      "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+    ],
+    "externalId": "a1b2c3d4-ENTRA",
+    "userName": "Ann.Lee@acme.test",
+    "active": true,
+    "displayName": "Ann Lee",
+    "emails": [{ "primary": true, "type": "work", "value": "Ann.Lee@acme.test" }],
+    "meta": { "resourceType": "User" },
+    "name": { "formatted": "Ann Lee", "familyName": "Lee", "givenName": "Ann" },
+    "roles": []
+  },
+  "renameGroup": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{ "op": "Replace", "path": "displayName", "value": "Data Team" }]
+  },
+  "addGroupMember": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{ "op": "Add", "path": "members", "value": [{ "value": "usr_ann" }] }]
+  },
+  "removeGroupMember": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{ "op": "Remove", "path": "members", "value": [{ "value": "usr_bob" }] }]
+  }
+}

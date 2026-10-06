@@ -99,7 +99,27 @@ export async function oidcFinish(
   // An unverified address proves nothing (§1.2): no email, so only a known subject signs in.
   const verified = claims.email_verified === true;
   const name = typeof claims.name === 'string' ? claims.name : null;
-  return { subject: claims.sub, email: verified ? email : null, name };
+  return {
+    subject: claims.sub,
+    email: verified ? email : null,
+    name,
+    groups: groupsOf(claims, conn.groupsClaim),
+  };
+}
+
+/**
+ * Roadmap 14b §2 — the values of the connection's groups claim (OIDC) or attribute (SAML):
+ * a list or a single string. `undefined` when the connection has no groups claim (no sync);
+ * an empty list when the IdP sent none, which removes the person from mapped groups.
+ */
+export function groupsOf(
+  source: Record<string, unknown>,
+  claim: string | null,
+): readonly string[] | undefined {
+  if (claim === null) return undefined;
+  const raw = source[claim];
+  const list: unknown[] = Array.isArray(raw) ? raw : raw === undefined ? [] : [raw];
+  return list.filter((v): v is string => typeof v === 'string');
 }
 
 // ------------------------------------------------------------------------- SAML
@@ -154,7 +174,7 @@ export function samlClient(
 }
 
 /** The email from a SAML profile: an `email`/`mail` attribute, or an email-format NameID. */
-export function samlIdentity(profile: Profile): SsoIdentity {
+export function samlIdentity(profile: Profile, groupsClaim: string | null): SsoIdentity {
   const attribute = [
     profile.email,
     profile.mail,
@@ -167,5 +187,6 @@ export function samlIdentity(profile: Profile): SsoIdentity {
     subject: profile.nameID,
     email: attribute ?? fromNameId ?? null,
     name: [first, last].filter(Boolean).join(' ') || null,
+    groups: groupsOf(profile, groupsClaim),
   };
 }

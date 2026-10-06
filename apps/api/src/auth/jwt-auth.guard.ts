@@ -10,6 +10,8 @@ import { parseCookieHeader } from '../common/cookies.middleware';
 import { ApiTokenAuthService, bearerToken } from './api-token-auth.service';
 import { COOKIE_NAMES } from './cookies';
 import { IS_PUBLIC_KEY } from './public.decorator';
+import { ScimTokenAuthService } from './scim-token-auth.service';
+import { SCIM_TOKEN_META } from './scim-token.decorator';
 import type { AuthPrincipal } from './subject';
 import { TokensService } from './tokens.service';
 
@@ -41,12 +43,26 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly tokens: TokensService,
     private readonly apiTokens: ApiTokenAuthService,
+    private readonly scimTokens: ScimTokenAuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (context.getType() !== 'http') return true;
     const request = context.switchToHttp().getRequest<Request>();
     const bearer = bearerToken(request.headers.authorization);
+
+    // Roadmap 14b: a SCIM route takes a SCIM token and nothing else — no cookie, no API
+    // token. Everywhere else a `slscim_` bearer fails `principalFor` below (wrong prefix).
+    const scim = this.reflector.getAllAndOverride<boolean | undefined>(SCIM_TOKEN_META, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (scim === true) {
+      request.auth = undefined;
+      request.shareAuth = undefined;
+      request.scim = await this.scimTokens.principalFor(bearer);
+      return true;
+    }
     if (bearer !== undefined) {
       request.auth = await this.apiTokens.principalFor(bearer);
       request.shareAuth = undefined;

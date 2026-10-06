@@ -14,6 +14,7 @@ import {
   MARKER_NAMES,
   PERM_META,
   PROJECT_ACCESS_META,
+  SCIM_TOKEN_META,
   markerKeysOn,
 } from './route-markers';
 import { isShareLinkRoute } from './share-link-allowlist';
@@ -54,6 +55,9 @@ const TOKEN_GATED: ReadonlySet<string> = new Set([...VIEW_GATED, AUTHENTICATED_M
 
 const isUnderApi = (path: string): boolean => path === '/api' || path.startsWith('/api/');
 
+/** Roadmap 14b: the SCIM surface, and the only place a SCIM token is accepted. */
+const isUnderScim = (path: string): boolean => path.startsWith('/api/scim/');
+
 const nameOf = (key: string): string => MARKER_NAMES[key] ?? key;
 
 const label = (route: SweptRoute): string => `${route.method} ${route.path} (${route.source})`;
@@ -93,6 +97,15 @@ export function assertRouteTable(routes: readonly SweptRoute[]): void {
         `${label(route)} is in SHARE_LINK_ROUTES but is marked ${nameOf(marker)}. ` +
           `A share-link subject is capped at schema:view (R17) and has no organisation, ` +
           `so an allow-listed surface must be @RequireProjectAccess() or @RequirePermission().`,
+      );
+    }
+    if ((marker === SCIM_TOKEN_META) !== isUnderScim(route.path)) {
+      problems.push(
+        marker === SCIM_TOKEN_META
+          ? `${label(route)} is marked @RequireScimToken() outside /api/scim/. ` +
+              `An IdP's provisioning token reaches the SCIM surface and nothing else.`
+          : `${label(route)} is under /api/scim/ but is marked ${nameOf(marker)}. ` +
+              `Every SCIM route is @RequireScimToken(): the token's connection fixes the org.`,
       );
     }
     if (isApiTokenRoute(route.method, route.path) && !TOKEN_GATED.has(marker)) {

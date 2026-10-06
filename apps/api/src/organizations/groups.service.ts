@@ -3,24 +3,39 @@ import { PermissionResolver } from '../access';
 import { PrincipalType } from '../generated/prisma/enums';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { assertMayList, orgMembership } from './members.service';
-import { assertRoleAdmin } from './roles.service';
+import {
+  assertMayList,
+  assertRoleAdmin,
+  orgMembership,
+  type DirectoryVia,
+} from './members.service';
 import type { CreateGroupDto, UpdateGroupDto } from './organizations.dto';
 
 const UNIQUE_VIOLATION = 'P2002';
+
+/** Roadmap 14b: who fills a group. `null` is a group people manage here. */
+export type GroupManagedBy = 'scim' | 'claim';
 
 export interface GroupView {
   id: string;
   name: string;
   description: string | null;
+  managedBy: GroupManagedBy | null;
   members: { userId: string; name: string; email: string }[];
 }
+
+/** Who made a membership change: a person, or the IdP (no actor, `metadata.via`). */
+type Actor = { readonly userId: string } | { readonly via: DirectoryVia };
 
 /**
  * Doc 05 §3.2 user groups (the `group` grant principal). Listing is owner/admin/member,
  * every write owner/admin. Invalidation is §9.3's: create/delete bump
  * `Organization.permGeneration`; one membership change bumps that user's counter; a rename
  * changes nobody's access and bumps nothing. Every write is audited in its transaction.
+ *
+ * Roadmap 14b §1.4: a group the IdP fills (`managedBy`) is read-only to people (no rename,
+ * no member edits); it can still be granted access. The `*ByDirectory` methods are the
+ * IdP's way in, with the same transactions, bumps and audit rows.
  */
 @Injectable()
 export class GroupsService {
@@ -43,18 +58,11 @@ export class GroupsService {
 
   async create(userId: string, orgSlug: string, dto: CreateGroupDto): Promise<GroupView> {
     const organizationId = await this.admin(userId, orgSlug);
-    await this.assertNameFree(organizationId, dto.name, null);
-    const group = await this.prisma.$transaction(async (tx) => {
-      const row = await tx.userGroup.create({
-        data: { organizationId, name: dto.name, description: dto.description ?? null },
-        select: GROUP,
-      });
-      await bumpOrg(tx, organizationId);
-      await audit(tx, organizationId, userId, 'group.created', row.id, { name: row.name });
-      return row;
-    });
-    await this.resolver.invalidate({ org: organizationId });
-    return toView(group);
+    return this.insert(
+      organizationId,
+      { userId },
+      { name: dto.name, description: dto.description },
+    );
   }
 
   async update(
@@ -64,21 +72,8 @@ export class GroupsService {
     dto: UpdateGroupDto,
   ): Promise<GroupView> {
     const organizationId = await this.admin(userId, orgSlug);
-    const before = await this.group(organizationId, groupId);
-    if (dto.name !== undefined) await this.assertNameFree(organizationId, dto.name, groupId);
-    const group = await this.prisma.$transaction(async (tx) => {
-      const row = await tx.userGroup.update({
-        where: { id: groupId },
-        data: { name: dto.name, description: dto.description },
-        select: GROUP,
-      });
-      await audit(tx, organizationId, userId, 'group.updated', groupId, {
-        before: { name: before.name, description: before.description },
-        after: { name: row.name, description: row.description },
-      });
-      return row;
-    });
-    return toView(group);
+    assertUnmanaged(await this.group(organizationId, groupId));
+    return this.rename(organizationId, groupId, { userId }, dto);
   }
 
   /**
@@ -100,10 +95,10 @@ export class GroupsService {
       await tx.workspaceGrant.deleteMany({ where });
       await tx.userGroup.delete({ where: { id: groupId } });
       await bumpOrg(tx, organizationId);
-      await audit(tx, organizationId, userId, 'group.deleted', groupId, {
+      await audit(tx, organizationId, { userId }, 'group.deleted', groupId, {
         name: group.name,
         memberIds: group.members.map((m) => m.user.id),
-        grantsRemoved: grants as unknown as Prisma.InputJsonValue,
+        grantsRemoved: grants,
       });
     });
     await this.resolver.invalidate({ org: organizationId });
@@ -117,23 +112,9 @@ export class GroupsService {
     userId: string,
   ): Promise<GroupView> {
     const organizationId = await this.admin(actorId, orgSlug);
-    await this.group(organizationId, groupId);
-    const target = await this.prisma.orgMember.findUnique({
-      where: { organizationId_userId: { organizationId, userId } },
-      select: { userId: true },
-    });
-    if (target === null)
+    assertUnmanaged(await this.group(organizationId, groupId));
+    if (!(await this.join(organizationId, groupId, userId, { userId: actorId })))
       throw new NotFoundException({ code: 'not_found', resourceType: 'org_member', id: userId });
-    try {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.groupMember.create({ data: { groupId, userId } });
-        await tx.user.update({ where: { id: userId }, data: { permGeneration: { increment: 1 } } });
-        await audit(tx, organizationId, actorId, 'group.member_added', groupId, { userId });
-      });
-      await this.resolver.invalidate({ user: userId });
-    } catch (error) {
-      if ((error as { code?: unknown }).code !== UNIQUE_VIOLATION) throw error;
-    }
     return toView(await this.group(organizationId, groupId));
   }
 
@@ -144,19 +125,191 @@ export class GroupsService {
     userId: string,
   ): Promise<void> {
     const organizationId = await this.admin(actorId, orgSlug);
-    await this.group(organizationId, groupId);
+    assertUnmanaged(await this.group(organizationId, groupId));
+    if (!(await this.leave(organizationId, groupId, userId, { userId: actorId })))
+      throw new NotFoundException({
+        code: 'not_found',
+        resourceType: 'group_member',
+        id: userId,
+      });
+  }
+
+  // ------------------------------------------------------- roadmap 14b: the IdP's way in
+
+  /** SCIM `POST /Groups`. A name already taken is 409 `group_name_taken`, as for people. */
+  createByDirectory(
+    organizationId: string,
+    name: string,
+    scimExternalId: string | null,
+  ): Promise<GroupView> {
+    return this.insert(
+      organizationId,
+      { via: 'scim' },
+      { name, managedBy: 'scim', scimExternalId },
+    );
+  }
+
+  renameByDirectory(
+    organizationId: string,
+    groupId: string,
+    data: { name?: string; scimExternalId?: string | null },
+  ): Promise<GroupView> {
+    return this.rename(organizationId, groupId, { via: 'scim' }, data);
+  }
+
+  /** Adds an org member; `false` when the user isn't in the org (SCIM skips them, §1.4). */
+  addMemberByDirectory(
+    organizationId: string,
+    groupId: string,
+    userId: string,
+    via: DirectoryVia,
+  ): Promise<boolean> {
+    return this.join(organizationId, groupId, userId, { via });
+  }
+
+  /** Idempotent: `false` when they weren't in it. */
+  removeMemberByDirectory(
+    organizationId: string,
+    groupId: string,
+    userId: string,
+    via: DirectoryVia,
+  ): Promise<boolean> {
+    return this.leave(organizationId, groupId, userId, { via });
+  }
+
+  /**
+   * §1.4 / Q4 — the IdP deleted the group: empty it and hand it back to people as a normal
+   * group. It is NOT deleted: its grants would go with it, and unassigning a group in the
+   * IdP shouldn't silently wipe a project's sharing. Each removed member's counter is
+   * bumped, as for any membership change.
+   */
+  async releaseByDirectory(organizationId: string, groupId: string): Promise<void> {
+    const group = await this.group(organizationId, groupId);
+    const memberIds = group.members.map((m) => m.user.id);
     await this.prisma.$transaction(async (tx) => {
-      const { count } = await tx.groupMember.deleteMany({ where: { groupId, userId } });
-      if (count === 0)
-        throw new NotFoundException({
-          code: 'not_found',
-          resourceType: 'group_member',
-          id: userId,
+      await tx.groupMember.deleteMany({ where: { groupId } });
+      if (memberIds.length > 0)
+        await tx.user.updateMany({
+          where: { id: { in: memberIds } },
+          data: { permGeneration: { increment: 1 } },
         });
-      await tx.user.update({ where: { id: userId }, data: { permGeneration: { increment: 1 } } });
-      await audit(tx, organizationId, actorId, 'group.member_removed', groupId, { userId });
+      await tx.userGroup.update({
+        where: { id: groupId },
+        data: { managedBy: null, scimExternalId: null },
+      });
+      await audit(tx, organizationId, { via: 'scim' }, 'group.released', groupId, {
+        name: group.name,
+        memberIds,
+      });
     });
-    await this.resolver.invalidate({ user: userId });
+    await Promise.all(memberIds.map((user) => this.resolver.invalidate({ user })));
+  }
+
+  // ------------------------------------------------------------------------ internals
+
+  private async insert(
+    organizationId: string,
+    actor: Actor,
+    data: {
+      name: string;
+      description?: string | null | undefined;
+      managedBy?: GroupManagedBy;
+      scimExternalId?: string | null;
+    },
+  ): Promise<GroupView> {
+    await this.assertNameFree(organizationId, data.name, null);
+    const group = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.userGroup.create({
+        data: {
+          organizationId,
+          name: data.name,
+          description: data.description ?? null,
+          managedBy: data.managedBy ?? null,
+          scimExternalId: data.scimExternalId ?? null,
+        },
+        select: GROUP,
+      });
+      await bumpOrg(tx, organizationId);
+      await audit(tx, organizationId, actor, 'group.created', row.id, { name: row.name });
+      return row;
+    });
+    await this.resolver.invalidate({ org: organizationId });
+    return toView(group);
+  }
+
+  private async rename(
+    organizationId: string,
+    groupId: string,
+    actor: Actor,
+    data: {
+      name?: string | undefined;
+      description?: string | null | undefined;
+      scimExternalId?: string | null;
+    },
+  ): Promise<GroupView> {
+    const before = await this.group(organizationId, groupId);
+    if (data.name !== undefined) await this.assertNameFree(organizationId, data.name, groupId);
+    const group = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.userGroup.update({
+        where: { id: groupId },
+        data: {
+          name: data.name,
+          description: data.description,
+          scimExternalId: data.scimExternalId,
+        },
+        select: GROUP,
+      });
+      if (row.name !== before.name || row.description !== before.description)
+        await audit(tx, organizationId, actor, 'group.updated', groupId, {
+          before: { name: before.name, description: before.description },
+          after: { name: row.name, description: row.description },
+        });
+      return row;
+    });
+    return toView(group);
+  }
+
+  /** `false` when the user isn't an org member. Already in the group is success. */
+  private async join(
+    organizationId: string,
+    groupId: string,
+    userId: string,
+    actor: Actor,
+  ): Promise<boolean> {
+    const target = await this.prisma.orgMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+      select: { userId: true },
+    });
+    if (target === null) return false;
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.groupMember.create({ data: { groupId, userId } });
+        await tx.user.update({ where: { id: userId }, data: { permGeneration: { increment: 1 } } });
+        await audit(tx, organizationId, actor, 'group.member_added', groupId, { userId });
+      });
+      await this.resolver.invalidate({ user: userId });
+    } catch (error) {
+      if ((error as { code?: unknown }).code !== UNIQUE_VIOLATION) throw error;
+    }
+    return true;
+  }
+
+  /** `false` when they weren't in the group (nothing written). */
+  private async leave(
+    organizationId: string,
+    groupId: string,
+    userId: string,
+    actor: Actor,
+  ): Promise<boolean> {
+    const removed = await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.groupMember.deleteMany({ where: { groupId, userId } });
+      if (count === 0) return false;
+      await tx.user.update({ where: { id: userId }, data: { permGeneration: { increment: 1 } } });
+      await audit(tx, organizationId, actor, 'group.member_removed', groupId, { userId });
+      return true;
+    });
+    if (removed) await this.resolver.invalidate({ user: userId });
+    return removed;
   }
 
   private async admin(userId: string, orgSlug: string): Promise<string> {
@@ -195,26 +348,35 @@ export class GroupsService {
   }
 }
 
+/** §1.4: people don't edit what the IdP fills; the next sync would undo it anyway. */
+function assertUnmanaged(group: { managedBy: string | null }): void {
+  if (group.managedBy !== null)
+    throw new ConflictException({ code: 'group_managed', managedBy: group.managedBy });
+}
+
 const GROUP = {
   id: true,
   name: true,
   description: true,
+  managedBy: true,
   members: {
     select: { user: { select: { id: true, name: true, email: true } } },
     orderBy: { user: { name: 'asc' } },
   },
 } as const;
 
-function toView(g: {
+export function toView(g: {
   id: string;
   name: string;
   description: string | null;
+  managedBy: string | null;
   members: { user: { id: string; name: string; email: string } }[];
 }): GroupView {
   return {
     id: g.id,
     name: g.name,
     description: g.description,
+    managedBy: g.managedBy === 'scim' || g.managedBy === 'claim' ? g.managedBy : null,
     members: g.members.map((m) => ({ userId: m.user.id, name: m.user.name, email: m.user.email })),
   };
 }
@@ -229,19 +391,19 @@ function bumpOrg(tx: Prisma.TransactionClient, organizationId: string): Promise<
 function audit(
   tx: Prisma.TransactionClient,
   organizationId: string,
-  actorUserId: string,
+  actor: Actor,
   action: string,
   groupId: string,
-  metadata: Prisma.InputJsonValue,
+  metadata: Record<string, Prisma.InputJsonValue>,
 ): Promise<unknown> {
   return tx.auditLog.create({
     data: {
       organizationId,
-      actorUserId,
+      actorUserId: 'userId' in actor ? actor.userId : null,
       action,
       resourceType: 'group',
       resourceId: groupId,
-      metadata,
+      metadata: 'via' in actor ? { ...metadata, via: actor.via } : metadata,
     },
   });
 }

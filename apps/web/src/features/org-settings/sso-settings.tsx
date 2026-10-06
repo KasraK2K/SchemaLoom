@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useState, type SyntheticEvent } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { orgAdminMessage } from './messages';
-import type { SsoConnection } from './org-settings-api';
+import { DirectorySync } from './directory-sync';
+import type { GroupView, SsoConnection } from './org-settings-api';
 
 const INPUT = 'rounded-md border border-border bg-surface px-2 py-1 text-sm text-text';
 
@@ -21,6 +22,7 @@ interface Draft {
   jit: boolean;
   defaultOrgRole: 'member' | 'guest';
   enforced: boolean;
+  groupsClaim: string;
 }
 
 const EMPTY: Draft = {
@@ -35,6 +37,7 @@ const EMPTY: Draft = {
   jit: false,
   defaultOrgRole: 'member',
   enforced: false,
+  groupsClaim: '',
 };
 
 const draftOf = (c: SsoConnection): Draft => ({
@@ -49,6 +52,7 @@ const draftOf = (c: SsoConnection): Draft => ({
   jit: c.jit,
   defaultOrgRole: c.defaultOrgRole === 'guest' ? 'guest' : 'member',
   enforced: c.enforced,
+  groupsClaim: c.groupsClaim ?? '',
 });
 
 /** The body the api takes; a blank secret on an edit keeps the stored one. */
@@ -63,6 +67,7 @@ function bodyOf(d: Draft) {
     jit: d.jit,
     defaultOrgRole: d.defaultOrgRole,
     enforced: d.enforced,
+    groupsClaim: d.groupsClaim.trim(),
   };
   return d.protocol === 'oidc'
     ? {
@@ -257,6 +262,18 @@ function ConnectionForm({
         Require single sign-on for members with these domains (owners can still sign in the usual
         way)
       </label>
+      <Field
+        label="Groups claim"
+        hint="The claim or attribute listing a person's groups, e.g. groups. Leave blank to skip group sync at sign-in."
+      >
+        <input
+          className={INPUT}
+          value={d.groupsClaim}
+          onChange={(e) => {
+            set('groupsClaim', e.target.value);
+          }}
+        />
+      </Field>
       {error !== null && (
         <p role="alert" className="text-sm text-danger-text">
           {error}
@@ -305,9 +322,11 @@ function SpValues({ sp }: { readonly sp: SsoConnection['sp'] }) {
 export function SsoSettings({
   orgSlug,
   connections,
+  groups,
 }: {
   readonly orgSlug: string;
   readonly connections: readonly SsoConnection[];
+  readonly groups: readonly GroupView[];
 }) {
   const router = useRouter();
   const base = `/organizations/${encodeURIComponent(orgSlug)}/sso-connections`;
@@ -379,6 +398,7 @@ export function SsoSettings({
                 {c.jit && ` · new people join as ${c.defaultOrgRole}`}
               </p>
               <SpValues sp={c.sp} />
+              <DirectorySync base={`${base}/${c.id}`} connection={c} groups={groups} />
             </li>
           ),
         )}

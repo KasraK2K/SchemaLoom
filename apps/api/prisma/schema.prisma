@@ -383,6 +383,8 @@ model OrgMember {
   userId         String   @map("user_id")
   role           OrgRole  @default(member)
   joinedAt       DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
+  /// Roadmap 14b: the IdP's id for this person, when SCIM provisioned the membership.
+  scimExternalId String?  @map("scim_external_id")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -400,11 +402,17 @@ model UserGroup {
   organizationId String   @map("organization_id")
   name           String
   description    String?
+  /// Roadmap 14b: 'scim' (pushed by the IdP) or 'claim' (filled from a sign-in claim), or
+  /// null for a group people manage here. A managed group is read-only in SchemaLoom.
+  managedBy      String?  @map("managed_by")
+  /// The IdP's id for a SCIM-pushed group.
+  scimExternalId String?  @map("scim_external_id")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members      GroupMember[]
+  ssoMappings  SsoGroupMapping[]
 
   @@index([organizationId])
   @@map("user_groups")
@@ -1776,10 +1784,15 @@ model SsoConnection {
   defaultOrgRole      OrgRole     @default(member) @map("default_org_role")
   /// Members with these domains (owners excepted) must sign in through this connection.
   enforced            Boolean     @default(false)
+  /// Roadmap 14b §2: the claim (OIDC) or attribute (SAML) listing the person's groups.
+  /// Null: no group sync at sign-in.
+  groupsClaim         String?     @map("groups_claim")
   createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  scimTokens    ScimToken[]
+  groupMappings SsoGroupMapping[]
 
   @@index([organizationId])
   @@map("sso_connections")
@@ -1848,4 +1861,41 @@ model OrgTemplate {
 
   @@index([organizationId])
   @@map("org_templates")
+}
+
+/// Roadmap 14b §1.1 (`docs/phase14/DIRECTORY-SYNC.md`) — the bearer token an IdP's SCIM client
+/// uses. The connection fixes the org. At most one live token per connection (a partial
+/// unique index in the migration).
+model ScimToken {
+  id              String    @id @default(cuid())
+  ssoConnectionId String    @map("sso_connection_id")
+  /// sha256 hex of the secret, as `ApiToken.tokenHash`.
+  tokenHash       String    @unique @map("token_hash")
+  /// "slscim_" and the first 8 characters, so people can tell tokens apart.
+  prefix          String
+  createdById     String?   @map("created_by_id")
+  lastUsedAt      DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  connection SsoConnection @relation(fields: [ssoConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([ssoConnectionId])
+  @@map("scim_tokens")
+}
+
+/// Roadmap 14b §2 — a value of the connection's groups claim fills one group (managedBy 'claim').
+model SsoGroupMapping {
+  id              String   @id @default(cuid())
+  ssoConnectionId String   @map("sso_connection_id")
+  claimValue      String   @map("claim_value")
+  groupId         String   @map("group_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  connection SsoConnection @relation(fields: [ssoConnectionId], references: [id], onDelete: Cascade)
+  group      UserGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([ssoConnectionId, claimValue])
+  @@index([groupId])
+  @@map("sso_group_mappings")
 }

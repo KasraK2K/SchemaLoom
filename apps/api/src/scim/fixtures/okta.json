@@ -1,0 +1,50 @@
+{
+  "$source": "Okta SCIM 2.0 provisioning, request shapes from developer.okta.com/docs/api/openapi/okta-scim/guides/scim-20 (2026-10)",
+  "deactivateUser": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{ "op": "replace", "value": { "active": false } }]
+  },
+  "reactivateUser": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{ "op": "replace", "value": { "active": true } }]
+  },
+  "updateUserName": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [
+      { "op": "replace", "value": { "name": { "givenName": "Ann", "familyName": "Lee" } } }
+    ]
+  },
+  "createUser": {
+    "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+    "userName": "ann.lee@acme.test",
+    "name": { "givenName": "Ann", "familyName": "Lee" },
+    "emails": [{ "primary": true, "value": "ann.lee@acme.test", "type": "work" }],
+    "displayName": "Ann Lee",
+    "locale": "en-US",
+    "externalId": "00u1abcdOKTA",
+    "groups": [],
+    "password": "ignored-by-us",
+    "active": true
+  },
+  "renameGroup": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{ "op": "replace", "value": { "id": "grp_1", "displayName": "Data Team" } }]
+  },
+  "addGroupMembers": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [
+      {
+        "op": "add",
+        "path": "members",
+        "value": [
+          { "value": "usr_ann", "display": "ann.lee@acme.test" },
+          { "value": "usr_bob", "display": "bob@acme.test" }
+        ]
+      }
+    ]
+  },
+  "removeGroupMember": {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{ "op": "remove", "path": "members[value eq \"usr_bob\"]" }]
+  }
+}

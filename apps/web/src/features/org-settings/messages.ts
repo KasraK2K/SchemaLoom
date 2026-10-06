@@ -14,6 +14,10 @@ export function orgAdminMessage(error: unknown): string {
     return 'You do not have permission to do that. Owners and admins manage members and groups; only owners change or appoint owners.';
   }
   if (error.code === 'group_name_taken') return 'Another group already has that name.';
+  if (error.code === 'group_managed') {
+    return 'Your identity provider manages this group. Change it there.';
+  }
+  if (error.code === 'mapping_exists') return 'That claim value is already mapped.';
   if (error.status === 404) return 'That member or group no longer exists. Reload the page.';
   return error.message;
 }

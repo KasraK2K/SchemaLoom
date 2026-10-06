@@ -17,6 +17,8 @@ export const GroupViewSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().nullable(),
+  /** Roadmap 14b: filled by the IdP (SCIM or a sign-in claim), read-only here. */
+  managedBy: z.enum(['scim', 'claim']).nullable(),
   members: z.array(z.object({ userId: z.string(), name: z.string(), email: z.string() })),
 });
 export type GroupView = z.infer<typeof GroupViewSchema>;
@@ -70,6 +72,20 @@ export const SsoConnectionSchema = z.object({
     z.object({ redirectUri: z.string() }),
     z.object({ entityId: z.string(), acsUrl: z.string(), metadataUrl: z.string() }),
   ]),
+  /** Roadmap 14b: directory sync. */
+  groupsClaim: z.string().nullable(),
+  scimBaseUrl: z.string(),
+  scim: z
+    .object({ prefix: z.string(), createdAt: z.string(), lastUsedAt: z.string().nullable() })
+    .nullable(),
+  groupMappings: z.array(
+    z.object({
+      id: z.string(),
+      claimValue: z.string(),
+      groupId: z.string(),
+      groupName: z.string(),
+    }),
+  ),
 });
 export type SsoConnection = z.infer<typeof SsoConnectionSchema>;
 

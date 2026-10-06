@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { MailModule } from '../mail/mail.module';
+import { GroupsService } from '../organizations/groups.service';
 import { AuthController } from './auth.controller';
 import { ApiTokenAuthService } from './api-token-auth.service';
 import { AuthService } from './auth.service';
@@ -10,6 +11,7 @@ import { githubStrategyProvider } from './github.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { googleStrategyProvider } from './google.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { ScimTokenAuthService } from './scim-token-auth.service';
 import { SignupPolicy } from './signup-policy';
 import { SsoController } from './sso.controller';
 import { SsoService } from './sso.service';
@@ -43,9 +45,15 @@ import { VerificationService } from './verification.service';
     VerificationService,
     JwtAuthGuard,
     ApiTokenAuthService,
+    ScimTokenAuthService,
     TwoFactorService,
     SignupPolicy,
     SsoService,
+    // Roadmap 14b: the groups claim at SSO sign-in. Provided here, not by importing
+    // OrganizationsModule: that module's files import `../auth`, a cycle that leaves modules
+    // undefined at boot. Stateless (Prisma and the resolver are global), so a second
+    // instance is harmless.
+    GroupsService,
     GoogleAuthGuard,
     googleStrategyProvider,
     GitHubAuthGuard,

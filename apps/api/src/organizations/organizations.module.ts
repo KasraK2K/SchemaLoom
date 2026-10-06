@@ -27,6 +27,6 @@ import { RolesService } from './roles.service';
     AuditLogService,
     WorkspaceGrantsService,
   ],
-  exports: [OrganizationsService],
+  exports: [OrganizationsService, MembersService, GroupsService],
 })
 export class OrganizationsModule {}

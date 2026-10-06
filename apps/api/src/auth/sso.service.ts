@@ -1,9 +1,16 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnv } from '../config/env';
 import type { OrgRole, Prisma, SsoProtocol } from '../generated/prisma/client';
+import { GroupsService } from '../organizations/groups.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { applyOrgAppearance } from './org-appearance';
+import { newScimToken } from './scim-token-auth.service';
 import { SignupPolicy } from './signup-policy';
 import { decryptSecret, encryptSecret } from './totp';
 
@@ -26,6 +33,11 @@ export interface SsoConnectionView {
   readonly jit: boolean;
   readonly defaultOrgRole: OrgRole;
   readonly enforced: boolean;
+  /** Roadmap 14b §2: the claim listing the person's groups; null = no sync at sign-in. */
+  readonly groupsClaim: string | null;
+  /** §1.1: the live SCIM token, never its secret. */
+  readonly scim: { prefix: string; createdAt: Date; lastUsedAt: Date | null } | null;
+  readonly groupMappings: { id: string; claimValue: string; groupId: string; groupName: string }[];
 }
 
 export interface SsoConnectionInput {
@@ -41,6 +53,7 @@ export interface SsoConnectionInput {
   readonly jit: boolean;
   readonly defaultOrgRole: 'member' | 'guest';
   readonly enforced: boolean;
+  readonly groupsClaim?: string | undefined;
 }
 
 /** The connection as the sign-in flow needs it, secret decrypted. */
@@ -56,6 +69,7 @@ export interface SsoConnectionRecord {
   readonly samlIdpCert: string | null;
   readonly jit: boolean;
   readonly defaultOrgRole: OrgRole;
+  readonly groupsClaim: string | null;
 }
 
 /** The person the IdP vouched for. `email` is null when the IdP sent none we can trust. */
@@ -63,6 +77,8 @@ export interface SsoIdentity {
   readonly subject: string;
   readonly email: string | null;
   readonly name: string | null;
+  /** Roadmap 14b §2: the groups claim's values; absent when the connection has none. */
+  readonly groups?: readonly string[] | undefined;
 }
 
 export type SsoRefusal = 'no_email' | 'not_member' | 'link_refused' | 'no_account';
@@ -90,11 +106,25 @@ const VIEW = {
   jit: true,
   defaultOrgRole: true,
   enforced: true,
+  groupsClaim: true,
+  scimTokens: {
+    where: { revokedAt: null },
+    select: { prefix: true, createdAt: true, lastUsedAt: true },
+  },
+  groupMappings: {
+    select: { id: true, claimValue: true, groupId: true, group: { select: { name: true } } },
+    orderBy: { claimValue: 'asc' },
+  },
 } satisfies Prisma.SsoConnectionSelect;
 
 function toView(row: Prisma.SsoConnectionGetPayload<{ select: typeof VIEW }>): SsoConnectionView {
-  const { oidcClientSecretEnc, ...rest } = row;
-  return { ...rest, hasClientSecret: oidcClientSecretEnc !== null };
+  const { oidcClientSecretEnc, scimTokens, groupMappings, ...rest } = row;
+  return {
+    ...rest,
+    hasClientSecret: oidcClientSecretEnc !== null,
+    scim: scimTokens[0] ?? null,
+    groupMappings: groupMappings.map(({ group, ...m }) => ({ ...m, groupName: group.name })),
+  };
 }
 
 /**
@@ -128,6 +158,7 @@ export class SsoService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnv, true>,
     private readonly signup: SignupPolicy,
+    private readonly groups: GroupsService,
   ) {}
 
   private get key(): string {
@@ -174,6 +205,7 @@ export class SsoService {
       jit: input.jit,
       defaultOrgRole: input.defaultOrgRole,
       enforced: input.enforced,
+      groupsClaim: input.groupsClaim?.trim() ? input.groupsClaim.trim() : null,
     };
   }
 
@@ -225,10 +257,32 @@ export class SsoService {
   async remove(userId: string, orgSlug: string, id: string): Promise<void> {
     const organizationId = await this.ownedOrg(userId, orgSlug);
     await this.prisma.$transaction(async (tx) => {
+      const mapped = await tx.ssoGroupMapping.findMany({
+        where: { ssoConnectionId: id },
+        select: { groupId: true },
+      });
       const { count } = await tx.ssoConnection.deleteMany({ where: { id, organizationId } });
       if (count === 0) throw new NotFoundException({ code: 'not_found' });
       // Its identities sign in nowhere now; the accounts themselves stay.
       await tx.account.deleteMany({ where: { provider: ssoProvider(id) } });
+      // Roadmap 14b: the groups it filled go back to people, members and grants intact.
+      // SCIM groups only once no other connection of the org still has a live token.
+      await tx.userGroup.updateMany({
+        where: {
+          id: { in: mapped.map((m) => m.groupId) },
+          managedBy: 'claim',
+          ssoMappings: { none: {} },
+        },
+        data: { managedBy: null },
+      });
+      const scimLeft = await tx.scimToken.count({
+        where: { revokedAt: null, connection: { organizationId } },
+      });
+      if (scimLeft === 0)
+        await tx.userGroup.updateMany({
+          where: { organizationId, managedBy: 'scim' },
+          data: { managedBy: null, scimExternalId: null },
+        });
       await this.audit(tx, organizationId, userId, 'sso_connection.deleted', id, {});
     });
   }
@@ -265,7 +319,159 @@ export class SsoService {
       samlIdpCert: row.samlIdpCert,
       jit: row.jit,
       defaultOrgRole: row.defaultOrgRole,
+      groupsClaim: row.groupsClaim,
     };
+  }
+
+  // ------------------------------------------------- roadmap 14b: directory sync (owners)
+
+  /**
+   * §1.1 — one live SCIM token per connection: a new one revokes the old in the same
+   * transaction (a partial unique index backs it). The secret is returned once.
+   */
+  async createScimToken(
+    userId: string,
+    orgSlug: string,
+    id: string,
+  ): Promise<{ secret: string; prefix: string }> {
+    const organizationId = await this.ownedOrg(userId, orgSlug);
+    const token = newScimToken();
+    await this.prisma.$transaction(async (tx) => {
+      await this.connectionOf(tx, organizationId, id);
+      const revoked = await tx.scimToken.updateMany({
+        where: { ssoConnectionId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.scimToken.create({
+        data: {
+          ssoConnectionId: id,
+          tokenHash: token.tokenHash,
+          prefix: token.prefix,
+          createdById: userId,
+        },
+      });
+      await this.audit(tx, organizationId, userId, 'scim_token.created', id, {
+        prefix: token.prefix,
+        replaced: revoked.count > 0,
+      });
+    });
+    return { secret: token.secret, prefix: token.prefix };
+  }
+
+  /** Revoked at once: the next SCIM request with it is a 401. */
+  async revokeScimToken(userId: string, orgSlug: string, id: string): Promise<void> {
+    const organizationId = await this.ownedOrg(userId, orgSlug);
+    await this.prisma.$transaction(async (tx) => {
+      await this.connectionOf(tx, organizationId, id);
+      const { count } = await tx.scimToken.updateMany({
+        where: { ssoConnectionId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      if (count === 0) throw new NotFoundException({ code: 'not_found' });
+      await this.audit(tx, organizationId, userId, 'scim_token.revoked', id, {});
+    });
+  }
+
+  /**
+   * §2 — a claim value fills a group, which becomes read-only (`managedBy: 'claim'`). A SCIM
+   * group can't also be claim-mapped (D4, one source per group).
+   */
+  async addGroupMapping(
+    userId: string,
+    orgSlug: string,
+    id: string,
+    input: { claimValue: string; groupId: string },
+  ): Promise<void> {
+    const organizationId = await this.ownedOrg(userId, orgSlug);
+    const claimValue = input.claimValue.trim();
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await this.connectionOf(tx, organizationId, id);
+        const group = await tx.userGroup.findFirst({
+          where: { id: input.groupId, organizationId },
+          select: { managedBy: true },
+        });
+        if (group === null)
+          throw new NotFoundException({ code: 'not_found', resourceType: 'group' });
+        if (group.managedBy === 'scim')
+          throw new ConflictException({ code: 'group_managed', managedBy: 'scim' });
+        await tx.userGroup.update({ where: { id: input.groupId }, data: { managedBy: 'claim' } });
+        await tx.ssoGroupMapping.create({
+          data: { ssoConnectionId: id, claimValue, groupId: input.groupId },
+        });
+        await this.audit(tx, organizationId, userId, 'sso_group_mapping.created', id, {
+          claimValue,
+          groupId: input.groupId,
+        });
+      });
+    } catch (error) {
+      if ((error as { code?: unknown }).code === 'P2002')
+        throw new ConflictException({ code: 'mapping_exists' });
+      throw error;
+    }
+  }
+
+  /** The group goes back to people once nothing maps to it. Its members stay. */
+  async removeGroupMapping(
+    userId: string,
+    orgSlug: string,
+    id: string,
+    mappingId: string,
+  ): Promise<void> {
+    const organizationId = await this.ownedOrg(userId, orgSlug);
+    await this.prisma.$transaction(async (tx) => {
+      await this.connectionOf(tx, organizationId, id);
+      const mapping = await tx.ssoGroupMapping.findFirst({
+        where: { id: mappingId, ssoConnectionId: id },
+        select: { claimValue: true, groupId: true },
+      });
+      if (mapping === null) throw new NotFoundException({ code: 'not_found' });
+      await tx.ssoGroupMapping.delete({ where: { id: mappingId } });
+      await tx.userGroup.updateMany({
+        where: { id: mapping.groupId, managedBy: 'claim', ssoMappings: { none: {} } },
+        data: { managedBy: null },
+      });
+      await this.audit(tx, organizationId, userId, 'sso_group_mapping.deleted', id, mapping);
+    });
+  }
+
+  /**
+   * §2 — on every SSO sign-in, mapped groups only: in when the claim lists one of the
+   * group's values, out when it lists none. Groups nobody mapped are never touched. Goes
+   * through `GroupsService`, so the bumps and audit rows (`via: 'sso'`) are the usual ones.
+   * ponytail: only as fresh as the last sign-in (the doc's known ceiling); SCIM is real time.
+   */
+  async syncClaimGroups(
+    conn: SsoConnectionRecord,
+    userId: string,
+    identity: SsoIdentity,
+  ): Promise<void> {
+    if (conn.groupsClaim === null || identity.groups === undefined) return;
+    const mappings = await this.prisma.ssoGroupMapping.findMany({
+      where: { ssoConnectionId: conn.id },
+      select: { claimValue: true, groupId: true },
+    });
+    const listed = new Set(identity.groups);
+    const wanted = new Map<string, boolean>();
+    for (const m of mappings)
+      wanted.set(m.groupId, (wanted.get(m.groupId) ?? false) || listed.has(m.claimValue));
+    for (const [groupId, inGroup] of wanted) {
+      if (inGroup)
+        await this.groups.addMemberByDirectory(conn.organizationId, groupId, userId, 'sso');
+      else await this.groups.removeMemberByDirectory(conn.organizationId, groupId, userId, 'sso');
+    }
+  }
+
+  private async connectionOf(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    id: string,
+  ): Promise<void> {
+    const found = await tx.ssoConnection.findFirst({
+      where: { id, organizationId },
+      select: { id: true },
+    });
+    if (found === null) throw new NotFoundException({ code: 'not_found' });
   }
 
   /**

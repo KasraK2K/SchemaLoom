@@ -102,7 +102,9 @@ describe('assertMemberChange (doc 05 §3.2)', () => {
   });
 });
 
-function harness(over: { actor?: OrgRole; target?: OrgRole | null; owners?: number } = {}) {
+function harness(
+  over: { actor?: OrgRole; target?: OrgRole | null; owners?: number; managedBy?: string } = {},
+) {
   const actor = over.actor ?? 'owner';
   const target = over.target === undefined ? 'member' : over.target;
   const tx = {
@@ -128,9 +130,13 @@ function harness(over: { actor?: OrgRole; target?: OrgRole | null; owners?: numb
     user: { update: vi.fn().mockResolvedValue({}) },
     organization: { update: vi.fn().mockResolvedValue({}) },
     userGroup: {
-      create: vi
-        .fn()
-        .mockResolvedValue({ id: 'grp_1', name: 'Analysts', description: null, members: [] }),
+      create: vi.fn().mockResolvedValue({
+        id: 'grp_1',
+        name: 'Analysts',
+        description: null,
+        managedBy: over.managedBy ?? null,
+        members: [],
+      }),
     },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
   };
@@ -147,9 +153,13 @@ function harness(over: { actor?: OrgRole; target?: OrgRole | null; owners?: numb
     },
     userGroup: {
       ...tx.userGroup,
-      findFirst: vi
-        .fn()
-        .mockResolvedValue({ id: 'grp_1', name: 'Analysts', description: null, members: [] }),
+      findFirst: vi.fn().mockResolvedValue({
+        id: 'grp_1',
+        name: 'Analysts',
+        description: null,
+        managedBy: over.managedBy ?? null,
+        members: [],
+      }),
     },
     $transaction: (fn: (t: unknown) => Promise<unknown>) => fn(tx),
   } as unknown as PrismaService;
@@ -165,6 +175,36 @@ function harness(over: { actor?: OrgRole; target?: OrgRole | null; owners?: numb
 }
 
 describe('MembersService', () => {
+  it('the IdP never deprovisions an owner (roadmap 14b Q3), checked under the lock', async () => {
+    const h = harness({ target: 'owner', owners: 3 });
+    await expect(h.members.removeByDirectory(ORG, 'usr_target', 'scim')).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'owner_protected' },
+    });
+    expect(h.tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(h.tx.orgMember.delete).not.toHaveBeenCalled();
+    expect(h.tx.user.update).not.toHaveBeenCalled();
+  });
+
+  it('IdP deprovisioning removes like a person would, with no actor, and bumps the user', async () => {
+    const h = harness();
+    await expect(h.members.removeByDirectory(ORG, 'usr_target', 'scim')).resolves.toBe(true);
+    expect(h.tx.groupMember.deleteMany).toHaveBeenCalled();
+    expect(h.tx.orgMember.delete).toHaveBeenCalled();
+    expect(h.tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorUserId: null,
+        action: 'org_member.removed',
+        metadata: { role: 'member', groupMembershipsRemoved: 2, via: 'scim' },
+      }),
+    });
+    expect(h.tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'usr_target' },
+      data: { permGeneration: { increment: 1 } },
+    });
+    expect(h.invalidate).toHaveBeenCalledWith({ user: 'usr_target' });
+  });
+
   it('a role change is locked, audited, bumps the target user and invalidates them (§9.3)', async () => {
     const h = harness();
     await h.members.setRole('usr_actor', 'acme', 'usr_target', 'admin');
@@ -251,6 +291,45 @@ describe('GroupsService', () => {
     await expect(
       outsider.groups.addMember('usr_actor', 'acme', 'grp_1', 'usr_x'),
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('people cannot rename or edit the members of an IdP-managed group (roadmap 14b)', async () => {
+    const h = harness({ managedBy: 'scim' });
+    for (const write of [
+      () => h.groups.update('usr_actor', 'acme', 'grp_1', { name: 'X' }),
+      () => h.groups.addMember('usr_actor', 'acme', 'grp_1', 'usr_target'),
+      () => h.groups.removeMember('usr_actor', 'acme', 'grp_1', 'usr_target'),
+    ])
+      await expect(write()).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'group_managed' },
+      });
+    expect(h.tx.groupMember.create).not.toHaveBeenCalled();
+    expect(h.tx.groupMember.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('the IdP adds members of a managed group, audited with no actor and via', async () => {
+    const h = harness({ managedBy: 'scim' });
+    await expect(h.groups.addMemberByDirectory(ORG, 'grp_1', 'usr_target', 'scim')).resolves.toBe(
+      true,
+    );
+    expect(h.tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'usr_target' },
+      data: { permGeneration: { increment: 1 } },
+    });
+    expect(h.tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorUserId: null,
+        action: 'group.member_added',
+        metadata: { userId: 'usr_target', via: 'scim' },
+      }),
+    });
+    // Not in the org: skipped, nothing written (§1.4).
+    const outsider = harness({ target: null });
+    await expect(outsider.groups.addMemberByDirectory(ORG, 'grp_1', 'usr_x', 'scim')).resolves.toBe(
+      false,
+    );
+    expect(outsider.tx.groupMember.create).not.toHaveBeenCalled();
   });
 
   it('a member may list but not write', async () => {

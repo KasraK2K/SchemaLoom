@@ -41,6 +41,16 @@ export interface ApiTokenClaims {
   readonly scopes: readonly string[];
 }
 
+/**
+ * Roadmap 14b — an IdP's SCIM client. Not a person and not an `AuthPrincipal`: it never
+ * reaches the resolver, and only `@RequireScimToken()` routes accept it.
+ */
+export interface ScimPrincipal {
+  readonly tokenId: string;
+  readonly connectionId: string;
+  readonly organizationId: string;
+}
+
 export function toSubject(principal: AuthPrincipal): Subject | null {
   if (principal.kind === 'share_link') {
     return {
@@ -63,6 +73,8 @@ declare global {
       /** A share-link session held BESIDE a signed-in user (`auth` is the user). Used only
        *  by `PermissionGuard`, only when the user can't see the project themselves. */
       shareAuth?: Extract<AuthPrincipal, { kind: 'share_link' }>;
+      /** Set by `JwtAuthGuard` on `@RequireScimToken()` routes only, and then `auth` isn't. */
+      scim?: ScimPrincipal;
     }
   }
 }

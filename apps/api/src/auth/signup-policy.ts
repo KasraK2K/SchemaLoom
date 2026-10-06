@@ -23,6 +23,11 @@ export interface SignupProof {
    * for this domain (`SsoService` checks both). That org's invitation, in effect.
    */
   readonly ssoOrgId?: string;
+  /**
+   * Roadmap 14b §1.3: the org's SCIM client provisioned the person, with a token only that
+   * org's owner could mint. Also that org's invitation.
+   */
+  readonly scimOrgId?: string;
 }
 
 /**
@@ -64,7 +69,12 @@ export class SignupPolicy {
       const viaToken =
         proof.inviteToken !== undefined &&
         (await liveInvitation(tx, { email, tokenHash: hashInviteToken(proof.inviteToken) }));
-      if (this.inviteOnly && !viaToken && proof.ssoOrgId === undefined) {
+      if (
+        this.inviteOnly &&
+        !viaToken &&
+        proof.ssoOrgId === undefined &&
+        proof.scimOrgId === undefined
+      ) {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${FIRST_ACCOUNT_LOCK})`;
         const first = (await tx.user.findFirst({ select: { id: true } })) === null;
         const invited = proof.emailProven && (await liveInvitation(tx, { email }));

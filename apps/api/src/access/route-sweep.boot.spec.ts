@@ -3,7 +3,7 @@ import { DiscoveryModule } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { Public } from '../auth/public.decorator';
-import { Authenticated, RequireProjectAccess } from './route-markers';
+import { Authenticated, RequireProjectAccess, RequireScimToken } from './route-markers';
 import { RouteSweep } from './route-sweep';
 
 /**
@@ -105,6 +105,18 @@ describe('RouteSweep at boot', () => {
     await expect(boot([DoubleMarkedController])).rejects.toThrow(
       /DoubleMarkedController\.list[\s\S]*2 route markers/,
     );
+  });
+
+  it('starts with a @RequireScimToken() controller under /scim/v2 (roadmap 14b)', async () => {
+    @Controller('scim/v2')
+    class ScimLike {
+      @RequireScimToken()
+      @Get('Users')
+      users(): string {
+        return 'users';
+      }
+    }
+    await expect(boot([ScimLike])).resolves.toBeUndefined();
   });
 
   it('does not trip on /healthz and /readyz even when they are unmarked', async () => {

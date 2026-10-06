@@ -51,9 +51,13 @@ const PUBLIC_ROUTES = [
 
 const AUTHENTICATED_ROUTES = [
   'DELETE /api/organizations/:orgSlug/sso-connections/:id',
+  'DELETE /api/organizations/:orgSlug/sso-connections/:id/group-mappings/:mappingId',
+  'DELETE /api/organizations/:orgSlug/sso-connections/:id/scim-token',
   'GET /api/organizations/:orgSlug/sso-connections',
   'PATCH /api/organizations/:orgSlug/sso-connections/:id',
   'POST /api/organizations/:orgSlug/sso-connections',
+  'POST /api/organizations/:orgSlug/sso-connections/:id/group-mappings',
+  'POST /api/organizations/:orgSlug/sso-connections/:id/scim-token',
 ];
 
 const key = (r: SweptRoute): string => `${r.method} ${r.path}`;

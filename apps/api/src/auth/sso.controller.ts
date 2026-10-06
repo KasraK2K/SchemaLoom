@@ -26,7 +26,7 @@ import { Authenticated } from '../access';
 import { parseCookieHeader } from '../common/cookies.middleware';
 import type { AppEnv } from '../config/env';
 import { REDIS_CACHE } from '../redis/redis.tokens';
-import { SsoConnectionDto, SsoDiscoverDto } from './auth.dto';
+import { SsoConnectionDto, SsoDiscoverDto, SsoGroupMappingDto } from './auth.dto';
 import { AuthService } from './auth.service';
 import { cookiePolicyFrom, setUserSessionCookies } from './cookies';
 import { Public } from './public.decorator';
@@ -65,6 +65,7 @@ type ConnectionView = SsoConnectionView & {
   readonly sp:
     | { readonly redirectUri: string }
     | { readonly entityId: string; readonly acsUrl: string; readonly metadataUrl: string };
+  readonly scimBaseUrl: string;
 };
 
 /** A same-site path or nothing: `next` must never send the browser to another host. */
@@ -158,6 +159,58 @@ export class SsoController {
     @Param('id') id: string,
   ): Promise<void> {
     await this.sso.remove(userIdOf(req), orgSlug, id);
+  }
+
+  // ---------------------------------------------- roadmap 14b: directory sync
+
+  @ApiOperation({ summary: 'Generate the SCIM token, replacing any live one (owner)' })
+  @Authenticated()
+  @Post('organizations/:orgSlug/sso-connections/:id/scim-token')
+  async createScimToken(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id') id: string,
+  ): Promise<{ secret: string; prefix: string; baseUrl: string }> {
+    const token = await this.sso.createScimToken(userIdOf(req), orgSlug, id);
+    return { ...token, baseUrl: `${this.apiPublicUrl}/api/scim/v2` };
+  }
+
+  @ApiOperation({ summary: 'Revoke the SCIM token (owner)' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete('organizations/:orgSlug/sso-connections/:id/scim-token')
+  async revokeScimToken(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id') id: string,
+  ): Promise<void> {
+    await this.sso.revokeScimToken(userIdOf(req), orgSlug, id);
+  }
+
+  @ApiOperation({ summary: 'Map a groups-claim value to a group (owner)' })
+  @Authenticated()
+  @HttpCode(204)
+  @Post('organizations/:orgSlug/sso-connections/:id/group-mappings')
+  async addGroupMapping(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id') id: string,
+    @Body() dto: SsoGroupMappingDto,
+  ): Promise<void> {
+    await this.sso.addGroupMapping(userIdOf(req), orgSlug, id, dto);
+  }
+
+  @ApiOperation({ summary: 'Remove a groups-claim mapping (owner)' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete('organizations/:orgSlug/sso-connections/:id/group-mappings/:mappingId')
+  async removeGroupMapping(
+    @Req() req: Request,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id') id: string,
+    @Param('mappingId') mappingId: string,
+  ): Promise<void> {
+    await this.sso.removeGroupMapping(userIdOf(req), orgSlug, id, mappingId);
   }
 
   // --------------------------------------------------------------- sign-in
@@ -255,7 +308,7 @@ export class SsoController {
         RelayState: pending.rs,
       });
       if (profile === null) throw new UnauthorizedException({ code: 'sso_failed' });
-      await this.finish(req, res, conn, samlIdentity(profile), pending.next);
+      await this.finish(req, res, conn, samlIdentity(profile, conn.groupsClaim), pending.next);
     } catch (error) {
       this.fail(res, error);
     }
@@ -282,6 +335,7 @@ export class SsoController {
         c.protocol === 'oidc'
           ? { redirectUri: `${this.apiPublicUrl}/api/auth/sso/oidc/callback` }
           : { ...saml, metadataUrl: saml.entityId },
+      scimBaseUrl: `${this.apiPublicUrl}/api/scim/v2`,
     };
   }
 
@@ -315,6 +369,7 @@ export class SsoController {
       res.redirect(`${this.webPublicUrl}/login?sso_error=${outcome.refused}`);
       return;
     }
+    await this.sso.syncClaimGroups(conn, outcome.userId, identity);
     const bundle = await this.auth.openSsoSession(
       outcome.userId,
       { userAgent: req.headers['user-agent'], ip: req.ip },

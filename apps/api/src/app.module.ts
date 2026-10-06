@@ -16,6 +16,7 @@ import { OrganizationsModule } from './organizations';
 import { ProjectsModule } from './projects';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SavedQueriesModule } from './saved-queries/saved-queries.module';
+import { ScimModule } from './scim/scim.module';
 import { SchemaModule } from './schema';
 import { SharingModule } from './sharing';
 import { SnapshotsModule } from './snapshots';
@@ -80,6 +81,7 @@ import { RedisModule } from './redis/redis.module';
     JobsModule,
     IntrospectModule,
     ApiTokensModule,
+    ScimModule,
     HealthModule,
   ],
   providers: [

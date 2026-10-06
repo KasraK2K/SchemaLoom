@@ -4,6 +4,8 @@ import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 /**
  * Roadmap 14 (`docs/phase14/DESIGN.md`): the audit log viewer, and single sign-on.
+ * Roadmap 14b (`docs/phase14/DIRECTORY-SYNC.md`): SCIM provisioning (a scripted client,
+ * since Keycloak has none) and groups from a sign-in claim (Keycloak).
  */
 
 interface AuditPage {
@@ -120,6 +122,14 @@ async function keycloakAdmin() {
     },
     get: async <T>(path: string): Promise<T> =>
       (await (await api.get(`/admin/realms${path}`, { headers })).json()) as T,
+    put: async (path: string) => {
+      const r = await api.put(`/admin/realms${path}`, { headers });
+      expect(r.status(), `${path}: ${await r.text()}`).toBe(204);
+    },
+    delete: async (path: string) => {
+      const r = await api.delete(`/admin/realms${path}`, { headers });
+      expect([204, 404], `${path}: ${await r.text()}`).toContain(r.status());
+    },
   };
   await admin.post('', { realm: REALM, enabled: true });
   return admin;
@@ -165,9 +175,23 @@ async function signInWithSso(browser: Browser, email: string): Promise<Page> {
 
 interface Connection {
   id: string;
+  name: string;
   hasClientSecret: boolean;
   sp: { redirectUri?: string; entityId?: string; acsUrl?: string };
 }
+
+interface OrgGroup {
+  id: string;
+  name: string;
+  managedBy: 'scim' | 'claim' | null;
+  members: { userId: string; email: string }[];
+}
+
+const groupsOf = async (owner: Session): Promise<OrgGroup[]> => {
+  const response = await owner.api.get(`/api/organizations/${SEED.orgSlug}/groups`);
+  expect(response.status(), await response.text()).toBe(200);
+  return (await response.json()) as OrgGroup[];
+};
 
 async function createConnection(owner: Session, data: unknown): Promise<Connection> {
   const created = await owner.api.post(`/api/organizations/${SEED.orgSlug}/sso-connections`, {
@@ -305,6 +329,95 @@ test.describe('workflow 18 — single sign-on (Keycloak)', () => {
     }
   });
 
+  test('a groups claim fills a mapped group at sign-in, and empties it when the claim drops it', async ({
+    browser,
+  }) => {
+    test.setTimeout(180_000);
+    const stamp = String(Date.now());
+    const domain = `claim-${stamp}.test`;
+    const email = `gia@${domain}`;
+    const clientId = `sl-claim-${stamp}`;
+    const kcGroup = `data-team-${stamp}`;
+    const admin = await keycloakAdmin();
+    await admin.post(`/${REALM}/clients`, {
+      clientId,
+      protocol: 'openid-connect',
+      publicClient: false,
+      secret: 'e2e-claim-secret',
+      standardFlowEnabled: true,
+      redirectUris: [`${API_URL}/api/auth/sso/oidc/callback`],
+      protocolMappers: [
+        {
+          name: 'groups',
+          protocol: 'openid-connect',
+          protocolMapper: 'oidc-group-membership-mapper',
+          config: {
+            'claim.name': 'groups',
+            'full.path': 'false',
+            'id.token.claim': 'true',
+            'access.token.claim': 'false',
+            'userinfo.token.claim': 'false',
+          },
+        },
+      ],
+    });
+    await idpUser(admin, email);
+    await admin.post(`/${REALM}/groups`, { name: kcGroup });
+    const [kcGroupRow] = await admin.get<{ id: string }[]>(
+      `/${REALM}/groups?search=${kcGroup}&exact=true`,
+    );
+    const [kcUser] = await admin.get<{ id: string }[]>(
+      `/${REALM}/users?email=${encodeURIComponent(email)}&exact=true`,
+    );
+    expect(kcGroupRow).toBeDefined();
+    expect(kcUser).toBeDefined();
+    const kcMembership = `/${REALM}/users/${kcUser?.id ?? ''}/groups/${kcGroupRow?.id ?? ''}`;
+    await admin.put(kcMembership);
+
+    const owner = await signIn(SEED_EMAILS.owner);
+    const createdGroup = await owner.api.post(`/api/organizations/${SEED.orgSlug}/groups`, {
+      headers: write(owner),
+      data: { name: `Claimed ${stamp}` },
+    });
+    expect(createdGroup.status(), await createdGroup.text()).toBe(201);
+    const group = (await createdGroup.json()) as OrgGroup;
+    const conn = await createConnection(owner, {
+      protocol: 'oidc',
+      name: `Keycloak groups ${stamp}`,
+      domains: [domain],
+      oidcIssuer: `${KEYCLOAK}/realms/${REALM}`,
+      oidcClientId: clientId,
+      oidcClientSecret: 'e2e-claim-secret',
+      jit: true,
+      groupsClaim: 'groups',
+    });
+    const mapped = await owner.api.post(
+      `/api/organizations/${SEED.orgSlug}/sso-connections/${conn.id}/group-mappings`,
+      { headers: write(owner), data: { claimValue: kcGroup, groupId: group.id } },
+    );
+    expect(mapped.status(), await mapped.text()).toBe(204);
+
+    const groupNow = async () => (await groupsOf(owner)).find((g) => g.id === group.id);
+    try {
+      const page = await signInWithSso(browser, email);
+      expect(await meOf(page)).toBe(email);
+      expect(await groupNow()).toMatchObject({ managedBy: 'claim' });
+      expect((await groupNow())?.members.map((m) => m.email)).toEqual([email]);
+
+      // The IdP drops the group; the next sign-in takes them out of it.
+      await admin.delete(kcMembership);
+      await signInWithSso(browser, email);
+      expect((await groupNow())?.members).toEqual([]);
+    } finally {
+      await removeConnection(owner, conn.id);
+      // Removing the connection hands the group back to people.
+      expect(await groupNow()).toMatchObject({ managedBy: null });
+      await owner.api.delete(`/api/organizations/${SEED.orgSlug}/groups/${group.id}`, {
+        headers: write(owner),
+      });
+    }
+  });
+
   test('only owners manage connections; an unknown domain has no SSO', async () => {
     const admin = await signIn(SEED_EMAILS.admin);
     const refused = await admin.api.get(`/api/organizations/${SEED.orgSlug}/sso-connections`);
@@ -314,5 +427,160 @@ test.describe('workflow 18 — single sign-on (Keycloak)', () => {
       data: { email: 'nobody@no-sso-here.test' },
     });
     expect(await found.json()).toEqual({ connections: [] });
+  });
+});
+
+// --------------------------------------------------------------------------------- SCIM
+
+const SCIM_ERROR = 'urn:ietf:params:scim:api:messages:2.0:Error';
+
+/** What Okta and Entra do, scripted: a bearer token and `application/scim+json`. */
+async function scimClient(secret: string) {
+  const api = await request.newContext({
+    baseURL: API_URL,
+    extraHTTPHeaders: { authorization: `Bearer ${secret}`, accept: 'application/scim+json' },
+  });
+  const send = (method: 'post' | 'patch' | 'put', path: string, body: unknown) =>
+    api[method](`/api/scim/v2${path}`, {
+      headers: { 'content-type': 'application/scim+json' },
+      data: JSON.stringify(body),
+    });
+  return {
+    get: (path: string) => api.get(`/api/scim/v2${path}`),
+    post: (path: string, body: unknown) => send('post', path, body),
+    patch: (path: string, body: unknown) => send('patch', path, body),
+    delete: (path: string) => api.delete(`/api/scim/v2${path}`),
+  };
+}
+
+test.describe('workflow 18 — SCIM provisioning (roadmap 14b)', () => {
+  test('a scripted IdP provisions, groups and deprovisions; a revoked token is 401', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const stamp = String(Date.now());
+    const email = `scim-${stamp}@scim-e2e.test`;
+    const owner = await signIn(SEED_EMAILS.owner);
+    const conn = await createConnection(owner, {
+      protocol: 'oidc',
+      name: `SCIM ${stamp}`,
+      domains: ['scim-e2e.test'],
+      oidcIssuer: 'https://idp.example.com',
+      oidcClientId: 'schemaloom',
+    });
+    const minted = await owner.api.post(
+      `/api/organizations/${SEED.orgSlug}/sso-connections/${conn.id}/scim-token`,
+      { headers: write(owner) },
+    );
+    expect(minted.status(), await minted.text()).toBe(201);
+    const token = (await minted.json()) as { secret: string; baseUrl: string };
+    expect(token.secret).toMatch(/^slscim_/);
+    expect(token.baseUrl).toBe(`${API_URL}/api/scim/v2`);
+    const scim = await scimClient(token.secret);
+    let userId = '';
+
+    try {
+      expect((await scim.get('/ServiceProviderConfig')).status()).toBe(200);
+      const lookup = await scim.get(
+        `/Users?filter=${encodeURIComponent(`userName eq "${email}"`)}`,
+      );
+      expect(lookup.headers()['content-type']).toContain('application/scim+json');
+      expect(((await lookup.json()) as { totalResults: number }).totalResults).toBe(0);
+
+      const created = await scim.post('/Users', {
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+        userName: email,
+        name: { givenName: 'Sky', familyName: 'Provisioned' },
+        emails: [{ primary: true, value: email, type: 'work' }],
+        active: true,
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      userId = ((await created.json()) as { id: string }).id;
+
+      const pushed = await scim.post('/Groups', {
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
+        displayName: `SCIM team ${stamp}`,
+        members: [{ value: userId }],
+      });
+      expect(pushed.status(), await pushed.text()).toBe(201);
+      const groupId = ((await pushed.json()) as { id: string }).id;
+
+      // In SchemaLoom the group is the IdP's: badge, no rename, no member edits.
+      const page = await signedInPage(browser, SEED_EMAILS.owner);
+      await page.goto(`/${SEED.orgSlug}/settings/groups`);
+      const card = page.getByTestId('org-group').filter({ hasText: `SCIM team ${stamp}` });
+      await expect(card).toContainText('Managed by your identity provider');
+      await expect(card).toContainText('Sky Provisioned');
+      await expect(card.getByRole('button', { name: 'Rename' })).toHaveCount(0);
+      const edit = await owner.api.patch(`/api/organizations/${SEED.orgSlug}/groups/${groupId}`, {
+        headers: write(owner),
+        data: { name: 'Hijacked' },
+      });
+      expect(edit.status()).toBe(409);
+
+      // Okta's deactivation: the membership goes at once.
+      const deactivated = await scim.patch(`/Users/${userId}`, {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+        Operations: [{ op: 'replace', value: { active: false } }],
+      });
+      expect(deactivated.status(), await deactivated.text()).toBe(200);
+      expect(await deactivated.json()).toMatchObject({ active: false });
+      const members = (await (
+        await owner.api.get(`/api/organizations/${SEED.orgSlug}/members`)
+      ).json()) as { userId: string }[];
+      expect(members.some((m) => m.userId === userId)).toBe(false);
+
+      // An owner is never deprovisioned from the IdP.
+      const refused = await scim.delete(`/Users/${owner.userId}`);
+      expect(refused.status()).toBe(409);
+      expect(await refused.json()).toMatchObject({ schemas: [SCIM_ERROR], status: '409' });
+
+      // Deleting the group in the IdP keeps it here as a normal group.
+      expect((await scim.delete(`/Groups/${groupId}`)).status()).toBe(204);
+      expect((await groupsOf(owner)).find((g) => g.id === groupId)).toMatchObject({
+        managedBy: null,
+        members: [],
+      });
+      await owner.api.delete(`/api/organizations/${SEED.orgSlug}/groups/${groupId}`, {
+        headers: write(owner),
+      });
+
+      const revoked = await owner.api.delete(
+        `/api/organizations/${SEED.orgSlug}/sso-connections/${conn.id}/scim-token`,
+        { headers: write(owner) },
+      );
+      expect(revoked.status()).toBe(204);
+      const after = await scim.get('/Users');
+      expect(after.status()).toBe(401);
+      expect(await after.json()).toMatchObject({ schemas: [SCIM_ERROR], status: '401' });
+    } finally {
+      await removeConnection(owner, conn.id);
+    }
+  });
+
+  test('a SCIM token reaches nothing but /api/scim, and cookies never reach SCIM', async () => {
+    const owner = await signIn(SEED_EMAILS.owner);
+    const conn = await createConnection(owner, {
+      protocol: 'oidc',
+      name: `SCIM fence ${String(Date.now())}`,
+      domains: ['scim-fence.test'],
+      oidcIssuer: 'https://idp.example.com',
+      oidcClientId: 'schemaloom',
+    });
+    try {
+      const minted = await owner.api.post(
+        `/api/organizations/${SEED.orgSlug}/sso-connections/${conn.id}/scim-token`,
+        { headers: write(owner) },
+      );
+      const { secret } = (await minted.json()) as { secret: string };
+      const bearer = await request.newContext({
+        baseURL: API_URL,
+        extraHTTPHeaders: { authorization: `Bearer ${secret}` },
+      });
+      expect((await bearer.get('/api/auth/me')).status()).toBe(401);
+      expect((await owner.api.get('/api/scim/v2/Users')).status()).toBe(401);
+    } finally {
+      await removeConnection(owner, conn.id);
+    }
   });
 });

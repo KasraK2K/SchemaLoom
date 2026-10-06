@@ -1,7 +1,9 @@
 import type { ConfigService } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppEnv } from '../config/env';
+import type { GroupsService } from '../organizations/groups.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import { groupsOf } from './sso.protocols';
 import type { SignupPolicy } from './signup-policy';
 import {
   SsoService,
@@ -25,6 +27,7 @@ const conn = (over: Partial<SsoConnectionRecord> = {}): SsoConnectionRecord => (
   samlIdpCert: null,
   jit: false,
   defaultOrgRole: 'member',
+  groupsClaim: null,
   ...over,
 });
 
@@ -113,7 +116,12 @@ function setup(world: World = {}) {
     AppEnv,
     true
   >;
-  const service = new SsoService(prisma, config, signup as unknown as SignupPolicy);
+  const service = new SsoService(
+    prisma,
+    config,
+    signup as unknown as SignupPolicy,
+    {} as GroupsService,
+  );
   return { service, accounts, created, signup, tx };
 }
 
@@ -242,5 +250,85 @@ describe('enforcedConnectionFor (§1.3)', () => {
 
   it('emailDomain is the lower-cased part after the last @', () => {
     expect(emailDomain('a@b@Sub.ACME.com')).toBe('sub.acme.com');
+  });
+});
+
+describe('SsoService.syncClaimGroups — groups from a sign-in claim (roadmap 14b §2)', () => {
+  function sync(mappings: { claimValue: string; groupId: string }[]) {
+    const findMany = vi.fn().mockResolvedValue(mappings);
+    const prisma = { ssoGroupMapping: { findMany } } as unknown as PrismaService;
+    const groups = {
+      addMemberByDirectory: vi.fn().mockResolvedValue(true),
+      removeMemberByDirectory: vi.fn().mockResolvedValue(true),
+    };
+    const config = { get: () => '' } as unknown as ConfigService<AppEnv, true>;
+    const service = new SsoService(
+      prisma,
+      config,
+      {} as SignupPolicy,
+      groups as unknown as GroupsService,
+    );
+    return { service, groups, findMany };
+  }
+
+  const MAPPINGS = [
+    { claimValue: 'data-team', groupId: 'grp_data' },
+    { claimValue: 'analysts', groupId: 'grp_data' },
+    { claimValue: 'ops', groupId: 'grp_ops' },
+  ];
+
+  it('adds the user to mapped groups the claim lists and removes them from the rest', async () => {
+    const { service, groups } = sync(MAPPINGS);
+    await service.syncClaimGroups(conn({ groupsClaim: 'groups' }), 'u1', {
+      ...identity('kim@acme.com'),
+      groups: ['analysts', 'unmapped-team'],
+    });
+    // Either value of a group is enough.
+    expect(groups.addMemberByDirectory).toHaveBeenCalledExactlyOnceWith(
+      ORG,
+      'grp_data',
+      'u1',
+      'sso',
+    );
+    expect(groups.removeMemberByDirectory).toHaveBeenCalledExactlyOnceWith(
+      ORG,
+      'grp_ops',
+      'u1',
+      'sso',
+    );
+  });
+
+  it('never touches a group nobody mapped', async () => {
+    const { service, groups } = sync([]);
+    await service.syncClaimGroups(conn({ groupsClaim: 'groups' }), 'u1', {
+      ...identity('kim@acme.com'),
+      groups: ['data-team'],
+    });
+    expect(groups.addMemberByDirectory).not.toHaveBeenCalled();
+    expect(groups.removeMemberByDirectory).not.toHaveBeenCalled();
+  });
+
+  it('an empty claim removes the user from every mapped group', async () => {
+    const { service, groups } = sync(MAPPINGS);
+    await service.syncClaimGroups(conn({ groupsClaim: 'groups' }), 'u1', {
+      ...identity('kim@acme.com'),
+      groups: [],
+    });
+    expect(groups.addMemberByDirectory).not.toHaveBeenCalled();
+    expect(groups.removeMemberByDirectory).toHaveBeenCalledTimes(2);
+  });
+
+  it('does nothing when the connection has no groups claim', async () => {
+    const { service, groups, findMany } = sync(MAPPINGS);
+    await service.syncClaimGroups(conn(), 'u1', identity('kim@acme.com'));
+    expect(findMany).not.toHaveBeenCalled();
+    expect(groups.addMemberByDirectory).not.toHaveBeenCalled();
+  });
+
+  it('groupsOf reads a list or a single value, and nothing when no claim is set', () => {
+    expect(groupsOf({ groups: ['a', 2, 'b'] }, 'groups')).toEqual(['a', 'b']);
+    expect(groupsOf({ memberOf: 'a' }, 'memberOf')).toEqual(['a']);
+    expect(groupsOf({}, 'groups')).toEqual([]);
+    expect(groupsOf({ groups: ['a'] }, null)).toBeUndefined();
   });
 });

@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
 import { OrgSettingsNav } from '@/features/org-settings/org-settings-nav';
-import { listSsoConnections } from '@/features/org-settings/org-settings-api';
+import { listGroups, listSsoConnections } from '@/features/org-settings/org-settings-api';
 import { SsoSettings } from '@/features/org-settings/sso-settings';
 import { listOrganizations } from '@/features/projects';
 
@@ -12,7 +12,10 @@ export default async function OrgSsoPage({ params }: { params: Promise<{ orgSlug
   const { orgSlug } = await params;
   const org = (await listOrganizations()).find((candidate) => candidate.slug === orgSlug);
   if (org?.orgRole !== 'owner') notFound();
-  const connections = await listSsoConnections(orgSlug);
+  const [connections, groups] = await Promise.all([
+    listSsoConnections(orgSlug),
+    listGroups(orgSlug),
+  ]);
 
   return (
     <AppShell
@@ -34,7 +37,7 @@ export default async function OrgSsoPage({ params }: { params: Promise<{ orgSlug
           Let people sign in to {org.name} through your identity provider (Okta, Entra ID, Google
           Workspace, Keycloak…). An identity provider only signs in people of this organisation.
         </p>
-        <SsoSettings orgSlug={orgSlug} connections={connections} />
+        <SsoSettings orgSlug={orgSlug} connections={connections} groups={groups} />
       </div>
     </AppShell>
   );

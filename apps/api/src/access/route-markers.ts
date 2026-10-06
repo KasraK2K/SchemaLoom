@@ -2,6 +2,7 @@ import { BadRequestException, SetMetadata, type CustomDecorator } from '@nestjs/
 import type { OrgRole, PermissionAtom } from '@schemaloom/contracts';
 import type { Request } from 'express';
 import { IS_PUBLIC_KEY } from '../auth/public.decorator';
+import { RequireScimToken, SCIM_TOKEN_META } from '../auth/scim-token.decorator';
 import type { ResourceRef } from './types';
 
 /**
@@ -70,6 +71,9 @@ export const RequireOrgRole = (param: string, roles: readonly OrgRole[]): Custom
  */
 export const Authenticated = (): CustomDecorator => SetMetadata(AUTHENTICATED_META, true);
 
+/** Roadmap 14b — `@RequireScimToken()`, defined beside `@Public()` in `src/auth`. */
+export { RequireScimToken, SCIM_TOKEN_META };
+
 /** Every marker key, in the order a human would check them. `@Public()` is one of them. */
 export const ROUTE_MARKER_KEYS = [
   IS_PUBLIC_KEY,
@@ -77,6 +81,7 @@ export const ROUTE_MARKER_KEYS = [
   PERM_META,
   PROJECT_ACCESS_META,
   ORG_ROLE_META,
+  SCIM_TOKEN_META,
 ] as const;
 
 export const MARKER_NAMES: Readonly<Record<string, string>> = {
@@ -85,6 +90,7 @@ export const MARKER_NAMES: Readonly<Record<string, string>> = {
   [PERM_META]: '@RequirePermission()/@RequirePermissionAll()',
   [PROJECT_ACCESS_META]: '@RequireProjectAccess()',
   [ORG_ROLE_META]: '@RequireOrgRole()',
+  [SCIM_TOKEN_META]: '@RequireScimToken()',
 };
 
 /**

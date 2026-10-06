@@ -87,6 +87,8 @@ export const ssoConnectionSchema = z
     /** a connection never mints owners or admins */
     defaultOrgRole: z.enum(['member', 'guest']).default('member'),
     enforced: z.boolean().default(false),
+    /** roadmap 14b §2: empty or absent = no group sync at sign-in */
+    groupsClaim: z.string().trim().max(200).optional(),
   })
   .refine(
     (c) =>
@@ -96,6 +98,12 @@ export const ssoConnectionSchema = z
     { message: 'OIDC needs an issuer and a client id; SAML needs a sign-in URL and a certificate' },
   );
 export class SsoConnectionDto extends createZodDto(ssoConnectionSchema) {}
+
+export const ssoGroupMappingSchema = z.object({
+  claimValue: z.string().trim().min(1).max(300),
+  groupId: z.string().min(1).max(100),
+});
+export class SsoGroupMappingDto extends createZodDto(ssoGroupMappingSchema) {}
 
 export const ssoDiscoverSchema = z.object({ email });
 export class SsoDiscoverDto extends createZodDto(ssoDiscoverSchema) {}

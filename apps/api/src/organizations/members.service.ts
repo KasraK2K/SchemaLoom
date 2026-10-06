@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -8,7 +9,21 @@ import type { OrgRole } from '@schemaloom/contracts';
 import { PermissionResolver } from '../access';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { assertRoleAdmin } from './roles.service';
+
+/**
+ * Doc 05 §3.2 — org administration (members, groups, custom roles) is owners and admins. A
+ * non-member gets the same 404 as a missing org. Lives here, not in `roles.service`, so the
+ * auth module can reach the members and groups services without importing the whole org graph.
+ */
+export function assertRoleAdmin(orgRole: OrgRole | null): void {
+  if (orgRole === null) throw new NotFoundException({ code: 'not_found' });
+  if (orgRole !== 'owner' && orgRole !== 'admin') {
+    throw new ForbiddenException({ code: 'forbidden_org_role', required: ['owner', 'admin'] });
+  }
+}
+
+/** Roadmap 14b: a change the IdP made, audited with no actor and `metadata.via`. */
+export type DirectoryVia = 'scim' | 'sso';
 
 export interface MemberView {
   userId: string;
@@ -67,6 +82,18 @@ export function assertMemberChange(
 }
 
 /**
+ * Roadmap 14b §1.3 (Q3): the IdP never deprovisions an owner. Owners are the break-glass
+ * accounts, the same rule as SSO enforcement; demote in SchemaLoom first.
+ */
+export function assertDirectoryMayRemove(target: OrgRole): void {
+  if (target === 'owner')
+    throw new ConflictException({
+      code: 'owner_protected',
+      message: 'Remove the owner role in SchemaLoom first.',
+    });
+}
+
+/**
  * Doc 05 §3.2 org members. Every write follows §9.3: mutate + audit + the target's
  * `User.permGeneration++` in one transaction, then invalidate. The org row is locked
  * `FOR UPDATE` first, so two owners demoting each other at once cannot both pass the
@@ -100,19 +127,17 @@ export class MembersService {
     // Nobody re-ranks themselves: an owner stepping down is another owner's call, and an
     // admin could otherwise demote themselves out of the page they are on.
     if (actorId === targetId) throw new ForbiddenException({ code: 'own_role' });
-    const organizationId = await this.change(
-      actorId,
-      orgSlug,
+    const organizationId = await this.adminOrg(actorId, orgSlug);
+    await this.change(
+      organizationId,
       targetId,
-      role,
+      (tx, target, owners) => assertActor(tx, organizationId, actorId, target, role, owners),
       async (tx, before) => {
         await tx.orgMember.update({
-          where: {
-            organizationId_userId: { organizationId: before.organizationId, userId: targetId },
-          },
+          where: { organizationId_userId: { organizationId, userId: targetId } },
           data: { role },
         });
-        await audit(tx, before.organizationId, actorId, 'org_member.role_changed', targetId, {
+        await audit(tx, organizationId, actorId, 'org_member.role_changed', targetId, {
           before: before.role,
           after: role,
         });
@@ -131,45 +156,91 @@ export class MembersService {
    * in this org do go, so a later re-invite does not silently restore group access.
    */
   async remove(actorId: string, orgSlug: string, targetId: string): Promise<void> {
-    await this.change(actorId, orgSlug, targetId, null, async (tx, before) => {
-      const groups = await tx.groupMember.deleteMany({
-        where: { userId: targetId, group: { organizationId: before.organizationId } },
-      });
-      await tx.orgMember.delete({
-        where: {
-          organizationId_userId: { organizationId: before.organizationId, userId: targetId },
-        },
-      });
-      await audit(tx, before.organizationId, actorId, 'org_member.removed', targetId, {
-        role: before.role,
-        groupMembershipsRemoved: groups.count,
-      });
-    });
+    const organizationId = await this.adminOrg(actorId, orgSlug);
+    await this.change(
+      organizationId,
+      targetId,
+      (tx, target, owners) => assertActor(tx, organizationId, actorId, target, null, owners),
+      (tx, before) => removeRows(tx, organizationId, targetId, before.role, actorId, {}),
+    );
   }
 
-  private async change(
-    actorId: string,
-    orgSlug: string,
+  /**
+   * Roadmap 14b §1.3 — the IdP deprovisions someone: the same removal as `remove`, with no
+   * actor. Owners are refused (`assertDirectoryMayRemove`), checked under the org lock so a
+   * concurrent promotion can't slip past it. `false` when the user wasn't a member.
+   */
+  async removeByDirectory(
+    organizationId: string,
     targetId: string,
-    next: OrgRole | null,
-    write: (
-      tx: Prisma.TransactionClient,
-      before: { organizationId: string; role: OrgRole },
-    ) => Promise<void>,
-  ): Promise<string> {
+    via: DirectoryVia,
+    extra: Record<string, string | boolean> = {},
+  ): Promise<boolean> {
+    const member = await this.prisma.orgMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId: targetId } },
+      select: { id: true },
+    });
+    if (member === null) return false;
+    await this.change(
+      organizationId,
+      targetId,
+      (_tx, target) => {
+        assertDirectoryMayRemove(target);
+        return Promise.resolve();
+      },
+      (tx, before) =>
+        removeRows(tx, organizationId, targetId, before.role, null, { ...extra, via }),
+    );
+    return true;
+  }
+
+  /**
+   * Roadmap 14b §1.3 — the IdP (re)activates someone: they join with the connection's
+   * default role. Old grants come back to life, as for any re-added member (R12.2), so this
+   * bumps `permGeneration` like every membership change. `false` when already a member.
+   */
+  async addByDirectory(
+    organizationId: string,
+    userId: string,
+    role: OrgRole,
+    scimExternalId: string | null,
+    via: DirectoryVia,
+  ): Promise<boolean> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.orgMember.create({ data: { organizationId, userId, role, scimExternalId } });
+        await tx.user.update({ where: { id: userId }, data: { permGeneration: { increment: 1 } } });
+        await audit(tx, organizationId, null, 'org_member.added', userId, { role, via });
+      });
+    } catch (error) {
+      if ((error as { code?: unknown }).code === 'P2002') return false;
+      throw error;
+    }
+    await this.resolver.invalidate({ user: userId });
+    return true;
+  }
+
+  private async adminOrg(actorId: string, orgSlug: string): Promise<string> {
     const actor = await orgMembership(this.prisma, actorId, orgSlug);
     if (actor === null) throw new NotFoundException({ code: 'not_found' });
     assertRoleAdmin(actor.role);
-    const { organizationId } = actor;
+    return actor.organizationId;
+  }
 
+  /**
+   * One membership change: the org row locked, the target re-read under the lock, `check`
+   * (may this happen), `write`, and the target's `permGeneration` bumped in the same
+   * transaction; then the resolver's cache is invalidated.
+   */
+  private async change(
+    organizationId: string,
+    targetId: string,
+    check: (tx: Prisma.TransactionClient, target: OrgRole, owners: number) => Promise<void>,
+    write: (tx: Prisma.TransactionClient, before: { role: OrgRole }) => Promise<void>,
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT 1 FROM organizations WHERE id = ${organizationId} FOR UPDATE`;
-      // Both memberships re-read under the lock: the actor may have been demoted meanwhile.
-      const [me, target, owners] = await Promise.all([
-        tx.orgMember.findUnique({
-          where: { organizationId_userId: { organizationId, userId: actorId } },
-          select: { role: true },
-        }),
+      const [target, owners] = await Promise.all([
         tx.orgMember.findUnique({
           where: { organizationId_userId: { organizationId, userId: targetId } },
           select: { role: true },
@@ -182,13 +253,49 @@ export class MembersService {
           resourceType: 'org_member',
           id: targetId,
         });
-      assertMemberChange(me?.role ?? null, target.role, next, owners);
-      await write(tx, { organizationId, role: target.role });
+      await check(tx, target.role, owners);
+      await write(tx, { role: target.role });
       await tx.user.update({ where: { id: targetId }, data: { permGeneration: { increment: 1 } } });
     });
     await this.resolver.invalidate({ user: targetId });
-    return organizationId;
   }
+}
+
+/** The actor's membership re-read under the lock: they may have been demoted meanwhile. */
+async function assertActor(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorId: string,
+  target: OrgRole,
+  next: OrgRole | null,
+  owners: number,
+): Promise<void> {
+  const me = await tx.orgMember.findUnique({
+    where: { organizationId_userId: { organizationId, userId: actorId } },
+    select: { role: true },
+  });
+  assertMemberChange(me?.role ?? null, target, next, owners);
+}
+
+async function removeRows(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  targetId: string,
+  role: OrgRole,
+  actorId: string | null,
+  extra: Record<string, string | boolean>,
+): Promise<void> {
+  const groups = await tx.groupMember.deleteMany({
+    where: { userId: targetId, group: { organizationId } },
+  });
+  await tx.orgMember.delete({
+    where: { organizationId_userId: { organizationId, userId: targetId } },
+  });
+  await audit(tx, organizationId, actorId, 'org_member.removed', targetId, {
+    role,
+    groupMembershipsRemoved: groups.count,
+    ...extra,
+  });
 }
 
 const MEMBER = {
@@ -214,7 +321,7 @@ function toView(r: {
 function audit(
   tx: Prisma.TransactionClient,
   organizationId: string,
-  actorUserId: string,
+  actorUserId: string | null,
   action: string,
   userId: string,
   metadata: Prisma.InputJsonValue,

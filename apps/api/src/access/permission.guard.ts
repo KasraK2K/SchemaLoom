@@ -20,6 +20,7 @@ import {
   ORG_ROLE_META,
   PERM_META,
   PROJECT_ACCESS_META,
+  SCIM_TOKEN_META,
   extract,
   markerKeysOn,
   readLocatorId,
@@ -77,6 +78,18 @@ export class PermissionGuard implements CanActivate {
       });
     }
     if (marker === IS_PUBLIC_KEY) return true;
+    // Roadmap 14b: `JwtAuthGuard` resolved the token to its connection; the route reads the
+    // org from it and takes no other id. Repeated here so a SCIM route never opens without it.
+    if (marker === SCIM_TOKEN_META) {
+      if (req.scim !== undefined) return true;
+      throw this.deny(req, new UnauthorizedException({ code: 'invalid_token' }), {
+        subjectKey: null,
+        projectId: null,
+        refs: [],
+        atom: null,
+        outcome: 'no_subject',
+      });
+    }
 
     // Step 2 — `JwtAuthGuard` has already 401'd a non-public route with no principal.
     // Repeating it costs one property read and removes the assumption.

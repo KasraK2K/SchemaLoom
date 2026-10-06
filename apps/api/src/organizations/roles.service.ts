@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -16,6 +15,7 @@ import {
 import { PermissionResolver } from '../access';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertRoleAdmin } from './members.service';
 import { slugify } from './organizations.service';
 import type { CreateRoleDto, UpdateRoleDto } from './organizations.dto';
 
@@ -31,14 +31,7 @@ export interface RoleView {
   archived: boolean;
 }
 
-/** Doc 05 §3.2 — custom roles are managed by owners and admins. A non-member gets the
- *  same 404 as a missing org. */
-export function assertRoleAdmin(orgRole: OrgRole | null): void {
-  if (orgRole === null) throw new NotFoundException({ code: 'not_found' });
-  if (orgRole !== 'owner' && orgRole !== 'admin') {
-    throw new ForbiddenException({ code: 'forbidden_org_role', required: ['owner', 'admin'] });
-  }
-}
+export { assertRoleAdmin } from './members.service';
 
 /**
  * Doc 05 §4.2, V1-V4, in that order. V1 first: never validate input on behalf of someone
