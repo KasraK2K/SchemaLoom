@@ -1,34 +1,44 @@
 'use client';
 
-import { Button } from '@schemaloom/ui';
+import { Button, cn } from '@schemaloom/ui';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { aiErrorMessage, draftSchema, type DraftSchemaBody, type DraftSummary } from './ai-api';
+import {
+  aiErrorMessage,
+  draftSchema,
+  type DraftPreview,
+  type DraftSchemaBody,
+  type DraftSummary,
+} from './ai-api';
+
+interface Shown {
+  readonly source: string;
+  readonly summary: DraftSummary | null;
+  readonly preview: DraftPreview | null;
+}
 
 /**
- * Phase 22 — Draft, Refine and one step of Undo over a SQL box its caller owns (the import
- * dialog also fills it from templates and files, and the user may edit it). Refine sends
- * that box back as the draft, so edits are kept; nothing is stored on the server.
+ * Phase 22 — Draft, Refine and one step of Undo over a SQL box its caller owns (the user may
+ * edit it). Refine sends that box back as the draft, so edits are kept; nothing is stored on
+ * the server. 22b: the preview (the canvas's ghosts) travels with the summary, Undo included.
  */
 export function useSchemaDraft(source: string, setSource: (source: string) => void) {
-  const [summary, setSummary] = useState<DraftSummary | null>(null);
+  const [shown, setShown] = useState<Omit<Shown, 'source'>>({ summary: null, preview: null });
   const [drafted, setDrafted] = useState(false);
-  const [previous, setPrevious] = useState<{
-    source: string;
-    summary: DraftSummary | null;
-  } | null>(null);
+  const [previous, setPrevious] = useState<Shown | null>(null);
   const run = useMutation({
     mutationFn: (v: { projectId: string; body: DraftSchemaBody }) =>
       draftSchema(v.projectId, v.body),
     onSuccess: (result, v) => {
-      setPrevious(v.body.revise === undefined ? null : { source: v.body.revise.draft, summary });
+      setPrevious(v.body.revise === undefined ? null : { source: v.body.revise.draft, ...shown });
       setDrafted(true);
-      setSummary(result.summary);
+      setShown({ summary: result.summary, preview: result.preview });
       setSource(result.source);
     },
   });
   return {
-    summary,
+    summary: shown.summary,
+    preview: shown.preview,
     /** a draft arrived, so there is something to refine */
     drafted,
     pending: run.isPending,
@@ -41,22 +51,38 @@ export function useSchemaDraft(source: string, setSource: (source: string) => vo
     undo: () => {
       if (previous === null) return;
       setSource(previous.source);
-      setSummary(previous.summary);
+      setShown({ summary: previous.summary, preview: previous.preview });
       setPrevious(null);
+    },
+    /** Discard: back to an empty box */
+    reset: () => {
+      setSource('');
+      setShown({ summary: null, preview: null });
+      setDrafted(false);
+      setPrevious(null);
+      run.reset();
     },
   };
 }
 
 export type SchemaDraft = ReturnType<typeof useSchemaDraft>;
 
+/** 22b — the panel and the canvas point at the same ghost: a draft key or an existing table id. */
+export interface GhostHover {
+  readonly hovered: string | null;
+  readonly onHover: (key: string | null) => void;
+}
+
 /** The summary first (§1.1 step 2), then Refine and Undo. Lives inside other forms, so its
  *  Enter never submits them. */
 export function DraftReview({
   draft,
   onRefine,
+  hover,
 }: {
   readonly draft: SchemaDraft;
   readonly onRefine: (instruction: string) => Promise<unknown>;
+  readonly hover?: GhostHover;
 }) {
   const [instruction, setInstruction] = useState('');
   const refine = () => {
@@ -73,7 +99,7 @@ export function DraftReview({
       {draft.summary === null ? (
         <p className="text-text-muted">The draft is below. Review it before importing.</p>
       ) : (
-        <SummaryList summary={draft.summary} />
+        <SummaryList summary={draft.summary} preview={draft.preview} hover={hover} />
       )}
       <div className="flex gap-2">
         <input
@@ -117,15 +143,49 @@ export function DraftReview({
   );
 }
 
-function SummaryList({ summary }: { readonly summary: DraftSummary }) {
-  const list = (names: readonly string[]) => names.map((n) => `\`${n}\``).join(', ');
+function SummaryList({
+  summary,
+  preview,
+  hover,
+}: {
+  readonly summary: DraftSummary;
+  readonly preview: DraftPreview | null;
+  readonly hover: GhostHover | undefined;
+}) {
   const plural = (n: number, word: string) => `${String(n)} ${word}${n === 1 ? '' : 's'}`;
+  const keyOf = new Map(preview?.tables.map((t) => [t.name, t.key]));
+  // A name points at its ghost when there is one; hovering either lights the other.
+  const name = (n: string, key = keyOf.get(n)) => (
+    <span
+      key={n}
+      data-ghost-key={key}
+      data-hovered={key !== undefined && hover?.hovered === key}
+      onPointerEnter={key === undefined ? undefined : () => hover?.onHover(key)}
+      onPointerLeave={key === undefined ? undefined : () => hover?.onHover(null)}
+      className={cn(
+        'rounded-sm',
+        key !== undefined && hover !== undefined && 'cursor-default hover:bg-accent-subtle',
+        key !== undefined && hover?.hovered === key && 'bg-accent-subtle',
+      )}
+    >
+      `{n}`
+    </span>
+  );
+  const list = (names: readonly string[]) =>
+    names.flatMap((n, i) => (i === 0 ? [name(n)] : [', ', name(n)]));
+  const added = new Map(
+    preview?.addedColumns.map((a) => [a.columns.map((c) => c.name).join(','), a.entityId]),
+  );
   return (
     <ul aria-label="What the draft does" className="flex flex-col gap-1 text-text">
       <li>
-        {summary.creates.length === 0
-          ? 'Creates no new tables'
-          : `Creates ${plural(summary.creates.length, 'table')}: ${list(summary.creates)}`}
+        {summary.creates.length === 0 ? (
+          'Creates no new tables'
+        ) : (
+          <>
+            Creates {plural(summary.creates.length, 'table')}: {list(summary.creates)}
+          </>
+        )}
       </li>
       {summary.linksTo.length > 0 && <li>Links to existing: {list(summary.linksTo)}</li>}
       {summary.relations.length > 0 && (
@@ -136,97 +196,16 @@ function SummaryList({ summary }: { readonly summary: DraftSummary }) {
       )}
       {summary.addsColumns.map((a) => (
         <li key={a.table}>
-          Adds to `{a.table}`: {list(a.columns)}
+          Adds to {name(a.table, added.get(a.columns.join(',')))}:{' '}
+          {a.columns.map((c) => `\`${c}\``).join(', ')}
         </li>
       ))}
       {summary.existing.length > 0 && (
         <li className="text-text-muted">
-          Already exists, left unchanged except for added columns: {list(summary.existing)}
+          Already exists, left unchanged except for added columns:{' '}
+          {summary.existing.map((n) => `\`${n}\``).join(', ')}
         </li>
       )}
     </ul>
-  );
-}
-
-/**
- * DESIGN §4.4 / Phase 22 §1.1 — "Describe a schema" in the import dialog. The draft lands
- * in the dialog's SQL box; nothing is applied from here. The ordinary import preview (and
- * its additive merge) runs on Import.
- */
-export function DescribeSchema({
-  projectId,
-  draft,
-  tableCount,
-  focus,
-  autoFocus = false,
-}: {
-  readonly projectId: string;
-  readonly draft: SchemaDraft;
-  /** visible tables, for "Build on" */
-  readonly tableCount: number;
-  /** the canvas selection the AI connects to (§1.1 step 1) */
-  readonly focus: readonly { readonly id: string; readonly name: string }[];
-  readonly autoFocus?: boolean;
-}) {
-  const [description, setDescription] = useState('');
-  const body = {
-    description: description.trim(),
-    ...(focus.length === 0 ? {} : { focusEntityIds: focus.map((f) => f.id) }),
-  };
-  const buildOn =
-    focus.length > 0
-      ? `Builds on the ${focus.length === 1 ? 'selected table' : `${String(focus.length)} selected tables`}: ${focus.map((f) => f.name).join(', ')}`
-      : tableCount > 0
-        ? `Builds on your ${tableCount === 1 ? 'table' : `${String(tableCount)} tables`}`
-        : null;
-
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="flex flex-col gap-1 text-xs text-text-muted">
-        Describe a schema
-        <textarea
-          rows={2}
-          autoFocus={autoFocus}
-          value={description}
-          maxLength={10_000}
-          placeholder="e.g. customers, orders and order items for a small shop"
-          onChange={(e) => {
-            setDescription(e.target.value);
-          }}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-text"
-        />
-      </label>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-text-muted">{buildOn}</span>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={description.trim() === '' || draft.pending}
-          onClick={() => {
-            draft.draft(projectId, body).catch(() => undefined);
-          }}
-        >
-          {draft.pending ? 'Drafting…' : 'Draft SQL with AI'}
-        </Button>
-      </div>
-      {draft.error !== null && (
-        <span role="alert" className="text-xs text-danger-text">
-          {draft.error}
-        </span>
-      )}
-      {draft.drafted && (
-        <DraftReview
-          draft={draft}
-          onRefine={(instruction) =>
-            draft.refine(
-              projectId,
-              { ...body, description: body.description || 'Revise this schema.' },
-              instruction,
-            )
-          }
-        />
-      )}
-    </div>
   );
 }

@@ -21,6 +21,11 @@
  *   --sl-row-py      vertical padding of a table card's column row
  *   --sl-header-py   vertical padding of a table card's header
  *   --sl-topbar-h    height of the top bar
+ *
+ * An AI draft previewed on the canvas (roadmap 22b) draws ghost tables with:
+ *   --ghost-opacity  how faded a ghost table is
+ *   --ghost-border   its dashed outline, and the dashed links
+ *   --ghost-area     the tint of the card a draft groups its tables in
  */
 
 :root {
@@ -29,6 +34,10 @@
   --sl-topbar-h: 48px;
   /* The ring on a selected table: the accent, unless the table is in an area. */
   --sl-select: var(--color-accent);
+  /* Studio: a faded card with an accent-tinted dashed outline. */
+  --ghost-opacity: 0.55;
+  --ghost-border: color-mix(in srgb, var(--color-accent) 70%, var(--color-border-strong));
+  --ghost-area: color-mix(in srgb, var(--color-accent) 6%, transparent);
 }
 
 /* ═══════════════════════════════ Blueprint ═══════════════════════════════ */
@@ -45,6 +54,10 @@
   --sl-header-py: 7px;
   --shadow-panel: none;
   --shadow-node: none;
+  /* A pencilled-in outline: the ink colour, fainter paper. */
+  --ghost-opacity: 0.7;
+  --ghost-border: var(--color-border-strong);
+  --ghost-area: transparent;
   --color-area-1: transparent;
   --color-area-2: transparent;
   --color-area-3: transparent;
@@ -118,6 +131,10 @@
   --sl-row-py: 6px;
   --sl-header-py: 10px;
   --sl-topbar-h: 56px;
+  /* A soft accent outline on a translucent card. */
+  --ghost-opacity: 0.6;
+  --ghost-border: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  --ghost-area: color-mix(in srgb, var(--color-accent) 7%, transparent);
   /* Area cards: a soft outline over the tint. */
   --color-area-1-border: color-mix(in srgb, var(--area-hue-1) 35%, var(--color-canvas));
   --color-area-2-border: color-mix(in srgb, var(--area-hue-2) 35%, var(--color-canvas));
@@ -223,6 +240,10 @@
   --sl-row-py: 2px;
   --sl-header-py: 4px;
   --sl-topbar-h: 40px;
+  /* Plain: muted text colour for the dashes, no tint. */
+  --ghost-opacity: 0.6;
+  --ghost-border: var(--color-text-subtle);
+  --ghost-area: transparent;
   --shadow-panel: none;
   --shadow-node: none;
   --color-area-1: transparent;

@@ -277,6 +277,25 @@ describe('the report accounts for every statement (§9.1)', () => {
   });
 });
 
+describe('ALTER TABLE … ADD COLUMN (an AI draft adding to an existing table)', () => {
+  it('adds the column with its type, nullability and inline constraints', async () => {
+    const { model, report } = await importDdl(
+      [
+        'CREATE TABLE customers (id uuid PRIMARY KEY);',
+        'ALTER TABLE customers ADD COLUMN billing_email text NOT NULL UNIQUE;',
+        'ALTER TABLE customers ADD COLUMN id int;',
+      ].join('\n'),
+    );
+    const fields = [...byName(model.objects.field).values()];
+    const added = fields.find((f) => f.name === 'billing_email');
+    expect(added).toMatchObject({ type: { name: 'text' }, isNullable: false });
+    expect(Object.values(model.objects.constraint).some((c) => c.kind === 'unique')).toBe(true);
+    // A column the table already has is reported, not declared twice.
+    expect(fields.filter((f) => f.name === 'id')).toHaveLength(1);
+    expect(report.statements.map((s) => s.status)).toEqual(['applied', 'applied', 'partial']);
+  });
+});
+
 describe('statement splitting', () => {
   it('ignores a semicolon inside a string, a dollar-quote, a comment or parentheses', () => {
     const source = [

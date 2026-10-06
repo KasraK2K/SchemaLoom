@@ -166,6 +166,26 @@ const draftSummarySchema = z.object({
 });
 export type DraftSummary = z.infer<typeof draftSummarySchema>;
 
+/** Phase 22b §2 — the ghosts: new tables by draft key, existing ones by the id the caller sees. */
+const draftPreviewSchema = z.object({
+  tables: z.array(
+    z.object({
+      key: z.string(),
+      name: z.string(),
+      columns: z.array(z.object({ name: z.string(), type: z.string(), pk: z.boolean() })),
+    }),
+  ),
+  addedColumns: z.array(
+    z.object({
+      entityId: z.string(),
+      columns: z.array(z.object({ name: z.string(), type: z.string() })),
+    }),
+  ),
+  links: z.array(z.object({ from: z.string(), to: z.string() })),
+  area: z.string().nullable(),
+});
+export type DraftPreview = z.infer<typeof draftPreviewSchema>;
+
 export interface DraftSchemaBody {
   readonly description: string;
   readonly focusEntityIds?: readonly string[];
@@ -176,12 +196,18 @@ export interface DraftSchemaBody {
 export async function draftSchema(
   projectId: string,
   body: DraftSchemaBody,
-): Promise<{ source: string; importFormat: string; summary: DraftSummary | null }> {
+): Promise<{
+  source: string;
+  importFormat: string;
+  summary: DraftSummary | null;
+  preview: DraftPreview | null;
+}> {
   return z
     .object({
       source: z.string(),
       importFormat: z.string(),
       summary: draftSummarySchema.nullable().default(null),
+      preview: draftPreviewSchema.nullable().default(null),
     })
     .parse(
       await apiFetch<unknown>(`/projects/${projectId}/ai/draft-schema`, {

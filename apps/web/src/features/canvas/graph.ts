@@ -41,6 +41,8 @@ export interface EntityNodeData extends Record<string, unknown> {
   readonly badges: ReadonlyMap<Id, FieldBadges>;
   readonly resolvedTypes: ReadonlyMap<Id, ResolvedType>;
   readonly areaColor: string | null;
+  /** Phase 22b — columns an AI draft would add, drawn as faded rows under the card */
+  readonly pendingColumns?: readonly { readonly name: string; readonly type: string }[];
 }
 
 export type EntityNode = Node<EntityNodeData, typeof ENTITY_NODE_TYPE>;

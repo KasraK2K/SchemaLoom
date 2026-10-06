@@ -8,6 +8,9 @@ import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
  * `scripts/fake-anthropic.ts`: it answers with `invoices` referencing `customers`, and a
  * Refine adds a `status` column. The test checks the request carried the project, and that
  * the imported foreign key points at the EXISTING `customers`, not a copy.
+ *
+ * Phase 22b — the draft shows on the canvas as ghost tables in a ghost "Billing" card (the
+ * fake names that area), Refine replaces them, and Import puts the tables where they were.
  */
 test.describe.configure({ mode: 'serial' });
 
@@ -66,6 +69,22 @@ test.describe('workflow 21 — describe a feature with AI', () => {
     await expect(summary).toContainText('Creates 1 table: `invoices`');
     await expect(summary).toContainText('Links to existing: `customers`');
     await expect(summary).toContainText('invoices.customer_id → customers.id');
+    // 22b — on the canvas: a ghost table in a ghost card, a dashed line to customers.
+    await expect(page.getByTestId('ghost-table')).toHaveCount(1);
+    await expect(page.getByTestId('ghost-table')).toContainText('invoices');
+    await expect(page.getByTestId('ghost-area')).toContainText('Billing');
+    await expect(page.locator('.react-flow__edge-ghostLink')).toHaveCount(1);
+  };
+
+  /** Where React Flow drew a ghost, read from its node wrapper's transform. */
+  const ghostAt = async (page: Page): Promise<{ key: string; x: number; y: number }> => {
+    const key = (await page.getByTestId('ghost-table').getAttribute('data-ghost-key')) ?? '';
+    const transform =
+      (await page.locator(`.react-flow__node[data-id="ghost:${key}"]`).getAttribute('style')) ?? '';
+    const [x, y] = (/translate\(([-\d.]+)px, ?([-\d.]+)px\)/.exec(transform) ?? [])
+      .slice(1)
+      .map(Number);
+    return { key, x: x ?? NaN, y: y ?? NaN };
   };
 
   test('drafts with the project in context, refines, and imports onto customers', async ({
@@ -83,8 +102,16 @@ test.describe('workflow 21 — describe a feature with AI', () => {
     expect(system).toContain('T customers');
     expect(system).toContain('Reuse what exists');
 
+    const first = await ghostAt(page);
+    expect(first.x).toBeGreaterThan(0);
     await page.getByLabel('Refine the draft').fill('add a status column');
     await page.getByRole('button', { name: 'Refine' }).click();
+    // The ghost is replaced by the refined draft's.
+    await expect(page.getByTestId('ghost-table')).toContainText('status');
+    await expect(page.getByTestId('ghost-table')).toHaveCount(1);
+    expect((await ghostAt(page)).key).not.toBe(first.key);
+    // A column added to an existing table shows as a faded row under it.
+    await expect(page.getByTestId('pending-columns')).toContainText('billing_email');
     await page.getByText('Show SQL').click();
     await expect(page.getByRole('textbox', { name: 'SQL' })).toHaveValue(/status text/);
     const refined = (await calls()).slice(before + 1);
@@ -93,18 +120,19 @@ test.describe('workflow 21 — describe a feature with AI', () => {
     expect(JSON.stringify(refined[0]?.messages[1])).toContain('CREATE TABLE invoices');
     expect(JSON.stringify(refined[0]?.messages[2])).toContain('add a status column');
 
+    const ghost = await ghostAt(page);
     await page.getByRole('button', { name: 'Import', exact: true }).click();
-    // The preview may ask whether orders became invoices; Keep both is the default.
-    const done = page.getByRole('button', { name: 'Done' });
-    await expect(async () => {
-      if (await page.getByText('Looks like a rename?').isVisible())
-        await page.getByRole('button', { name: 'Import', exact: true }).click();
-      await expect(done).toBeVisible({ timeout: 1_000 });
-    }).toPass({ timeout: 30_000 });
+    await expect(page.getByTestId('ghost-table')).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.getByRole('complementary', { name: 'Describe with AI' })).toBeHidden();
 
     const ir = await fetchIr(owner, projectId);
     const byName = new Map(Object.values(ir.objects.entity).map((e) => [e.name, e.id]));
     expect([...byName.keys()].sort()).toEqual(['customers', 'invoices', 'orders']);
+    // The table sits where its ghost was, inside the area the draft named.
+    const invoices = ir.objects.entity[byName.get('invoices') ?? ''];
+    expect(invoices?.position).toEqual({ x: ghost.x, y: ghost.y });
+    const billing = Object.values(ir.objects.area).find((a) => a.name === 'Billing');
+    expect(invoices?.areaId).toBe(billing?.id);
     const links = Object.values(ir.objects.link) as unknown as {
       from: { entityId: string };
       to: { entityId: string };
@@ -146,6 +174,11 @@ test.describe('workflow 21 — describe a feature with AI', () => {
     const names = async (id: string) =>
       Object.values((await fetchIr(owner, id)).objects.entity).map((e) => e.name);
     expect(await names(draftId)).toContain('invoices');
+    // The change request's draft gets the ghost's position too, not the origin.
+    const proposed = Object.values((await fetchIr(owner, draftId)).objects.entity).find(
+      (e) => e.name === 'invoices',
+    );
+    expect(proposed?.position).not.toEqual({ x: 0, y: 0 });
     // Nothing reaches the project until the change request is merged.
     expect(await names(main)).toEqual(['customers']);
   });

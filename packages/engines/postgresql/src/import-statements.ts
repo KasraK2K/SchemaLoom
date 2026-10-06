@@ -747,6 +747,25 @@ function alterTable(node: AstNode, ctx: StatementContext): void {
       addIdentity(command, entity, ctx);
       continue;
     }
+    // `ADD COLUMN`: how an AI draft adds to an existing table (DRAFT_SCHEMA_RULES).
+    if (subtype === 'AT_AddColumn') {
+      const column = unwrap(command.def, 'ColumnDef');
+      const name = column === undefined ? undefined : str(column, 'colname');
+      if (column === undefined || name === undefined) {
+        ctx.loss('the added column could not be read');
+        continue;
+      }
+      if (ctx.model.findField(entity, name) !== undefined) {
+        ctx.loss(`the column "${name}" is already declared`);
+        continue;
+      }
+      declareColumn(column, entity, ctx, []);
+      for (const inner of children(column, 'constraints')) {
+        const constraint = unwrap(inner, 'Constraint');
+        if (constraint !== undefined) applyConstraint(constraint, entity, ctx, [], [name]);
+      }
+      continue;
+    }
     if (subtype !== 'AT_AddConstraint') {
       ctx.loss(`${subtype ?? 'an ALTER TABLE action'} is not part of the schema model`);
       continue;

@@ -9,16 +9,9 @@ import {
   DialogTitle,
   cn,
 } from '@schemaloom/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useEngine } from '@/engines';
-import { DescribeSchema, useSchemaDraft } from '@/features/ai/describe-schema';
-import {
-  changeRequestsKey,
-  projectShellQueryOptions,
-  proposeChange,
-} from '@/features/change-requests/change-requests-api';
 import { SshHostKeyNote, readsDatabase } from '@/features/projects/connection-form';
 import {
   detectImportFormat,
@@ -50,6 +43,9 @@ type FieldCandidate = Extract<RenameCandidate, { type: 'field' }>;
  * Phase 6 §5: "From a database" (when the engine declares a connection form) reads the schema
  * on the server, then follows the same preview → renames → import steps. 6c: with a saved
  * connection that tab is "Sync now", and the toolbar's Sync opens the dialog on it.
+ *
+ * Phase 22b: Describe with AI moved to a panel beside the canvas (describe-panel.tsx); the
+ * dialog links to it.
  */
 export function ImportDialog({
   open,
@@ -57,28 +53,21 @@ export function ImportDialog({
   projectId,
   onImported,
   initialFrom = 'sql',
-  tableCount = 0,
-  focus = [],
-  proposeOnly = false,
+  onDescribe,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly projectId: string;
   readonly onImported: () => Promise<void>;
-  /** 'database' for the toolbar's Sync; 'describe' for the empty canvas's Describe card */
-  readonly initialFrom?: 'sql' | 'database' | 'describe';
-  /** Phase 22 §1.1 — "Build on": the visible tables, and the selection the AI connects to */
-  readonly tableCount?: number;
-  readonly focus?: readonly { readonly id: string; readonly name: string }[];
-  /** a protected project (row 10b): the draft can only become a change request */
-  readonly proposeOnly?: boolean;
+  /** 'database' for the toolbar's Sync */
+  readonly initialFrom?: 'sql' | 'database';
+  /** opens the Describe with AI panel instead */
+  readonly onDescribe?: () => void;
 }) {
   const facet = useEngine();
   const formats = facet.capabilities.importFormats;
   const connectionFields = facet.capabilities.connectionFields;
-  const [from, setFrom] = useState<'sql' | 'database'>(
-    initialFrom === 'database' ? 'database' : 'sql',
-  );
+  const [from, setFrom] = useState<'sql' | 'database'>(initialFrom);
   // Phase 12 — "Load a template" fills the SQL box, like Describe does.
   const templates = useQuery({
     queryKey: ['engine-templates', facet.id],
@@ -107,20 +96,12 @@ export function ImportDialog({
   const [candidates, setCandidates] = useState<readonly RenameCandidate[] | null>(null);
   /** Confirmed candidate keys (`type:fromId`). */
   const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(new Set());
-  const draft = useSchemaDraft(source, setSource);
-  const describing = initialFrom === 'describe';
-  // Q5 — offered to everyone who drafts, except inside a change request's own draft.
-  const shell = useQuery({ ...projectShellQueryOptions(projectId), enabled: describing });
-  const canPropose = describing && shell.data?.draft === null;
-  const { orgSlug } = useParams<{ orgSlug?: string }>();
-  const router = useRouter();
-  const queryClient = useQueryClient();
 
   const close = (next: boolean) => {
     if (busy) return;
     onOpenChange(next);
     if (!next) {
-      setFrom(initialFrom === 'database' ? 'database' : 'sql');
+      setFrom(initialFrom);
       choice.reset();
       setNote(null);
       setSourceId(null);
@@ -179,32 +160,11 @@ export function ImportDialog({
     })();
   };
 
-  /** §1.1 step 4 — fork (or reuse) the caller's draft, import there, open it on its canvas. */
-  const propose = () => {
-    setBusy(true);
-    setError(null);
-    void (async () => {
-      try {
-        const request = await proposeChange(projectId);
-        await importInto(request.draftProjectId, source, [], detected);
-        await queryClient.invalidateQueries({ queryKey: changeRequestsKey(projectId) });
-        router.push(
-          `/${encodeURIComponent(orgSlug ?? '')}/p/${encodeURIComponent(request.draftProjectId)}`,
-        );
-      } catch (caught) {
-        if (caught instanceof ApiError && caught.status === 403)
-          setError('Proposing a change needs access to every table and column in the project.');
-        else fail(caught);
-        setBusy(false);
-      }
-    })();
-  };
-
   const sqlBox = (
     <>
       <textarea
         required
-        autoFocus={!describing}
+        autoFocus
         rows={12}
         aria-label={importSourceName(formats)}
         value={source}
@@ -277,9 +237,7 @@ export function ImportDialog({
             ? 'Import from a database'
             : detected === 'prisma'
               ? 'Import a Prisma schema'
-              : initialFrom === 'describe'
-                ? 'Describe with AI'
-                : `Import ${importSourceName(formats)}`}
+              : `Import ${importSourceName(formats)}`}
         </DialogTitle>
         <DialogDescription>
           Adds what the project does not have yet. Existing objects are left unchanged, except for
@@ -403,7 +361,7 @@ export function ImportDialog({
               submitSource();
             }}
           >
-            {readsDatabase(facet.capabilities) && !proposeOnly && (
+            {readsDatabase(facet.capabilities) && (
               <div role="group" aria-label="Import from" className="flex gap-1">
                 {(
                   [
@@ -431,13 +389,18 @@ export function ImportDialog({
               <ConnectionSection choice={choice} fields={connectionFields} disabled={busy} />
             ) : (
               <>
-                <DescribeSchema
-                  projectId={projectId}
-                  draft={draft}
-                  tableCount={tableCount}
-                  focus={focus}
-                  autoFocus={describing}
-                />
+                {onDescribe !== undefined && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close(false);
+                      onDescribe();
+                    }}
+                    className="self-start text-xs text-accent-text underline-offset-2 hover:underline"
+                  >
+                    Or describe it in words and let AI draft it
+                  </button>
+                )}
                 {(templates.data?.length ?? 0) > 0 && (
                   <label className="flex flex-col gap-1 text-xs text-text-muted">
                     Load a template
@@ -468,16 +431,7 @@ export function ImportDialog({
                     </select>
                   </label>
                 )}
-                {describing && draft.drafted ? (
-                  // §1.1 step 2 — summary first, the SQL a click away and still editable.
-                  // Before a draft (a template, a file) the box stays in plain view.
-                  <details className="text-xs text-text-muted">
-                    <summary className="cursor-pointer">Show SQL</summary>
-                    <div className="mt-2 flex flex-col gap-3">{sqlBox}</div>
-                  </details>
-                ) : (
-                  sqlBox
-                )}
+                {sqlBox}
               </>
             )}
             {error !== null && (
@@ -486,38 +440,24 @@ export function ImportDialog({
               </p>
             )}
             <DialogFooter>
-              {canPropose && from === 'sql' && (
-                <Button
-                  type="button"
-                  variant={proposeOnly ? 'primary' : 'outline'}
-                  size="sm"
-                  disabled={busy || source === ''}
-                  title="Import the draft into a change request and review it on a canvas first"
-                  onClick={propose}
-                >
-                  Propose as a change
-                </Button>
-              )}
-              {!proposeOnly && (
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  disabled={
-                    busy ||
-                    (from === 'sql' && source === '') ||
-                    (from === 'database' && choice.saved === undefined)
-                  }
-                >
-                  {busy
-                    ? from === 'database'
-                      ? 'Reading…'
-                      : 'Importing…'
-                    : from === 'database' && choice.saved && !choice.editing
-                      ? 'Sync now'
-                      : 'Import'}
-                </Button>
-              )}
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={
+                  busy ||
+                  (from === 'sql' && source === '') ||
+                  (from === 'database' && choice.saved === undefined)
+                }
+              >
+                {busy
+                  ? from === 'database'
+                    ? 'Reading…'
+                    : 'Importing…'
+                  : from === 'database' && choice.saved && !choice.editing
+                    ? 'Sync now'
+                    : 'Import'}
+              </Button>
             </DialogFooter>
           </form>
         )}

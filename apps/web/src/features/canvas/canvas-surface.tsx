@@ -15,6 +15,7 @@ import {
   useNodesState,
   useReactFlow,
   type Connection,
+  type EdgeChange,
   type EdgeTypes,
   type FinalConnectionState,
   type NodeChange,
@@ -38,13 +39,30 @@ import { fitPadding } from './fit-padding';
 import { cardinalityFor, checkConnection, explainCheck } from './connect';
 import { createLink } from './create-link';
 import { CrowFootDefs } from './crow-foot';
+import { DescribePanel } from './describe-panel';
 import { CanvasEmptyState } from './empty-state';
 import { EntityNode } from './entity-node';
 import { createGeometryAutosave, postGeometry } from './geometry';
+import {
+  GHOST_AREA_NODE_TYPE,
+  GHOST_LINK_EDGE_TYPE,
+  GHOST_NODE_TYPE,
+  buildGhostEdges,
+  buildGhostNodes,
+  ghostNodeId,
+  isGhostNodeId,
+  placeGhosts,
+  type GhostAreaNode as GhostAreaNodeType,
+  type GhostLinkEdge as GhostLinkEdgeType,
+  type GhostNode as GhostNodeType,
+} from './ghost';
+import { GhostAreaNode, GhostHoverContext, GhostLinkEdge, GhostNode } from './ghost-node';
+import type { DraftPreview } from '@/features/ai/ai-api';
+import type { GhostHover } from '@/features/ai/describe-schema';
 import { projectShellQueryOptions } from '@/features/change-requests/change-requests-api';
 import { importSourceName } from '@/features/projects/create-project';
 import { getSavedConnection, savedConnectionKey } from '@/features/projects/saved-connection';
-// Lazy and mounted only while open: it pulls in the connection form and AI describe, and
+// Lazy and mounted only while open: it pulls in the connection form, and
 // its saved-connection query would otherwise fire on every canvas open.
 const ImportDialog = dynamic(() => import('./import-dialog').then((m) => m.ImportDialog), {
   ssr: false,
@@ -83,11 +101,20 @@ import { useCanvasShortcuts } from './use-canvas-shortcuts';
  * `nodeTypes` / `edgeTypes` are module constants. A fresh object per render makes React
  * Flow remount every node, which is the most common way a flow canvas becomes unusable.
  */
-const nodeTypes: NodeTypes = { [ENTITY_NODE_TYPE]: EntityNode, [AREA_NODE_TYPE]: AreaCard };
-const edgeTypes: EdgeTypes = { [LINK_EDGE_TYPE]: LinkEdge };
+const nodeTypes: NodeTypes = {
+  [ENTITY_NODE_TYPE]: EntityNode,
+  [AREA_NODE_TYPE]: AreaCard,
+  [GHOST_NODE_TYPE]: GhostNode,
+  [GHOST_AREA_NODE_TYPE]: GhostAreaNode,
+};
+const edgeTypes: EdgeTypes = { [LINK_EDGE_TYPE]: LinkEdge, [GHOST_LINK_EDGE_TYPE]: GhostLinkEdge };
 
-/** Tables and area cards share one React Flow canvas; only tables are state (cards are derived). */
-type AppNode = EntityNodeType | AreaNodeType;
+/** Tables, area cards and an AI draft's ghosts share one React Flow canvas; only tables are
+ *  state (cards and ghosts are derived). */
+type AppNode = EntityNodeType | AreaNodeType | GhostNodeType | GhostAreaNodeType;
+type AppEdge = LinkEdgeType | GhostLinkEdgeType;
+/** Derived nodes: React Flow's changes to them have nowhere to go. */
+const isDerivedId = (id: string): boolean => isAreaNodeId(id) || isGhostNodeId(id);
 const isTable = (node: AppNode): node is EntityNodeType => node.type === ENTITY_NODE_TYPE;
 const SNAP: [number, number] = [GRID_SIZE, GRID_SIZE];
 
@@ -121,7 +148,7 @@ export function CanvasSurface({
 }) {
   const facet = useEngine();
   const ui = useEngineUi();
-  const flow = useReactFlow<AppNode, LinkEdgeType>();
+  const flow = useReactFlow<AppNode, AppEdge>();
   const queryClient = useQueryClient();
   const t = useTerminology();
   // Phase 10c §1: a protected project is read-only for everyone, layout included. Its
@@ -190,9 +217,18 @@ export function CanvasSurface({
   const [newEntityAt, setNewEntityAt] = useState<Point | null>(null);
   const [importing, setImporting] = useState(false);
   /** 6c — Sync opens the import dialog on its database tab */
-  const [importFrom, setImportFrom] = useState<'sql' | 'database' | 'describe'>('sql');
+  const [importFrom, setImportFrom] = useState<'sql' | 'database'>('sql');
   /** Phase 22 — "Describe something connected to these": the tables the AI builds on */
   const [describeFocus, setDescribeFocus] = useState<readonly string[]>([]);
+  /** Phase 22b — the Describe panel: null until first opened, then kept mounted (Q3) */
+  const [describing, setDescribing] = useState<boolean | null>(null);
+  /** the draft's ghosts, placed once per draft (D4) */
+  const [ghosts, setGhosts] = useState<{
+    preview: DraftPreview;
+    positions: ReadonlyMap<string, Point>;
+  } | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const hover = useMemo<GhostHover>(() => ({ hovered, onHover: setHovered }), [hovered]);
 
   useEffect(() => {
     // Carry `measured` over: a node without it loses its handle bounds, so React Flow
@@ -328,7 +364,7 @@ export function CanvasSurface({
   const connectionContext = useMemo(() => ({ engine: facet, model }), [facet, model]);
 
   const isValid = useCallback(
-    (candidate: Connection | LinkEdgeType) => checkConnection(connectionContext, candidate).ok,
+    (candidate: Connection | AppEdge) => checkConnection(connectionContext, candidate).ok,
     [connectionContext],
   );
 
@@ -456,22 +492,57 @@ export function CanvasSurface({
   // write instead let its mount-time and re-init reports ("nothing selected") wipe any
   // selection made outside the canvas: History's `?select=`, the Queries tab, a notification.
   const selection = useCanvasStore((state) => state.selection);
+  const ghostNodes = useMemo(
+    () => (ghosts === null ? [] : buildGhostNodes(ghosts.preview, ghosts.positions)),
+    [ghosts],
+  );
+  const pendingColumns = useMemo(
+    () => new Map(ghosts?.preview.addedColumns.map((a) => [a.entityId, a.columns])),
+    [ghosts],
+  );
   const shownNodes = useMemo<AppNode[]>(
     () => [
       ...areaNodes,
-      ...nodes.map((node) =>
-        Boolean(node.selected) === selection.has(node.id)
-          ? node
-          : { ...node, selected: selection.has(node.id) },
-      ),
+      ...ghostNodes,
+      ...nodes.map((node) => {
+        const pending = pendingColumns.get(node.id);
+        const shown =
+          pending === undefined
+            ? node
+            : { ...node, data: { ...node.data, pendingColumns: pending } };
+        return Boolean(shown.selected) === selection.has(node.id)
+          ? shown
+          : { ...shown, selected: selection.has(node.id) };
+      }),
     ],
-    [areaNodes, nodes, selection],
+    [areaNodes, ghostNodes, pendingColumns, nodes, selection],
+  );
+  const shownEdges = useMemo<AppEdge[]>(
+    () =>
+      ghosts === null
+        ? edges
+        : [
+            ...edges,
+            ...buildGhostEdges(ghosts.preview, new Set(Object.keys(model.objects.entity))),
+          ],
+    [edges, ghosts, model],
+  );
+  const handleEdgesChange = useCallback(
+    (all: EdgeChange<AppEdge>[]) => {
+      onEdgesChange(
+        all.filter(
+          (change) => !('id' in change && isGhostNodeId(change.id)),
+        ) as EdgeChange<LinkEdgeType>[],
+      );
+    },
+    [onEdgesChange],
   );
   const handleNodesChange = useCallback(
     (all: NodeChange<AppNode>[]) => {
-      // Cards are derived, not state: React Flow's measurements of them have nowhere to go.
+      // Cards and ghosts are derived, not state: React Flow's measurements of them have
+      // nowhere to go.
       const changes = all.filter(
-        (change) => !('id' in change && isAreaNodeId(change.id)),
+        (change) => !('id' in change && isDerivedId(change.id)),
       ) as NodeChange<EntityNodeType>[];
       const picks = changes.filter((change) => change.type === 'select');
       if (picks.length > 0)
@@ -681,14 +752,68 @@ export function CanvasSurface({
   // protected project too, where the draft can only become a change request.
   const protectedProject = !shareLink && shell.data?.requireChangeRequests === true;
   const canDescribe = canImport && (!readOnly || protectedProject);
-  const openImport = useCallback(
-    (from: 'sql' | 'database' | 'describe', focus: readonly string[] = []) => {
-      setDescribeFocus(focus);
-      setImportFrom(from);
-      setImporting(true);
+  const openImport = useCallback((from: 'sql' | 'database') => {
+    setImportFrom(from);
+    setImporting(true);
+  }, []);
+  /** Phase 22b D2 — Describe opens the docked panel; its draft shows as ghosts. */
+  const openDescribe = useCallback((focus: readonly string[] = []) => {
+    setDescribeFocus(focus);
+    setDescribing(true);
+  }, []);
+
+  // D4 — placed once per draft, around the tables as they are now. A newer draft wins.
+  const placing = useRef(0);
+  // Read at placement time, so a table moving or being measured never re-places the draft.
+  const placeAround = useRef({ areaRects, describeFocus });
+  placeAround.current = { areaRects, describeFocus };
+  const onPreview = useCallback(
+    (preview: DraftPreview | null) => {
+      const run = ++placing.current;
+      setHovered(null);
+      if (preview === null) {
+        setGhosts(null);
+        return;
+      }
+      const tables = flow
+        .getNodes()
+        .filter(isTable)
+        .map((node) => ({
+          id: node.id,
+          ...node.position,
+          width: node.measured?.width ?? node.width ?? FALLBACK_NODE_WIDTH,
+          height: node.measured?.height ?? node.height ?? FALLBACK_NODE_HEIGHT,
+        }));
+      const { areaRects: rects, describeFocus: focus } = placeAround.current;
+      const cards = [...rects].map(([id, box]) => ({ id, ...box }));
+      placeGhosts(preview, [...tables, ...cards], focus).then(
+        (positions) => {
+          if (run === placing.current) setGhosts({ preview, positions });
+        },
+        () => {
+          setMessage('Could not place the draft on the canvas.');
+        },
+      );
     },
-    [],
+    [flow],
   );
+  // §1 — the view pans to frame the ghosts and the tables they join.
+  useEffect(() => {
+    if (ghosts === null) return;
+    const ids = [
+      ...[...ghosts.positions.keys()].map(ghostNodeId),
+      ...ghosts.preview.links
+        .flatMap((l) => [l.from, l.to])
+        .filter((id) => !ghosts.positions.has(id)),
+      ...ghosts.preview.addedColumns.map((a) => a.entityId),
+    ];
+    const frame = requestAnimationFrame(() => {
+      void flow.fitView({ nodes: ids.map((id) => ({ id })), padding: 0.3, duration: 200 });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [ghosts, flow]);
 
   const menuItems = useMemo<readonly CanvasMenuItem[]>(() => {
     const entityId = menu?.entityId ?? null;
@@ -746,7 +871,7 @@ export function CanvasSurface({
                 id: 'describe',
                 label: 'Describe with AI',
                 onSelect: () => {
-                  openImport('describe');
+                  openDescribe();
                 },
               },
             ]
@@ -830,7 +955,7 @@ export function CanvasSurface({
                 const selected = [...useCanvasStore.getState().selection].filter(
                   (id) => id in model.objects.entity,
                 );
-                openImport('describe', selected.includes(entityId) ? selected : [entityId]);
+                openDescribe(selected.includes(entityId) ? selected : [entityId]);
               },
             },
           ]
@@ -840,6 +965,7 @@ export function CanvasSurface({
     canImport,
     canDescribe,
     openImport,
+    openDescribe,
     menu,
     runLayout,
     fitView,
@@ -877,15 +1003,17 @@ export function CanvasSurface({
           onSubmit={(name) => createEntity(name, newEntityAt ?? { x: 0, y: 0 })}
         />
       )}
-      {importing && (!readOnly || canDescribe) && (
+      {importing && !readOnly && (
         <ImportDialog
           key={importFrom}
-          initialFrom={readOnly ? 'describe' : importFrom}
-          proposeOnly={readOnly}
-          tableCount={visibleEntities.length}
-          focus={visibleEntities
-            .filter((e) => describeFocus.includes(e.id))
-            .map((e) => ({ id: e.id, name: e.name }))}
+          initialFrom={importFrom}
+          onDescribe={
+            canDescribe
+              ? () => {
+                  openDescribe();
+                }
+              : undefined
+          }
           open
           onOpenChange={setImporting}
           projectId={projectId}
@@ -899,269 +1027,311 @@ export function CanvasSurface({
     </>
   );
 
-  if (nodes.length === 0) {
-    return readOnly ? (
-      <div className="flex h-full items-center justify-center text-sm text-text-subtle">
-        {shareLink
-          ? 'Nothing is shared here yet.'
-          : shell.data === undefined
-            ? null
-            : 'This project is protected. Propose a change to add tables.'}
-      </div>
-    ) : (
-      <>
-        <CanvasEmptyState
-          onNewEntity={() => {
-            setNewEntityAt({ x: 0, y: 0 });
-          }}
-          onImport={
-            canImport
-              ? () => {
-                  openImport('sql');
-                }
-              : undefined
-          }
-          onDescribe={
-            canImport
-              ? () => {
-                  openImport('describe');
-                }
-              : undefined
-          }
-        />
-        {dialogs}
-      </>
+  const panel =
+    describing === null || !canDescribe ? null : (
+      <DescribePanel
+        projectId={projectId}
+        open={describing}
+        focus={visibleEntities
+          .filter((e) => describeFocus.includes(e.id))
+          .map((e) => ({ id: e.id, name: e.name }))}
+        tableCount={visibleEntities.length}
+        proposeOnly={readOnly}
+        positions={ghosts?.positions ?? null}
+        hover={hover}
+        onPreview={onPreview}
+        onClose={() => {
+          setDescribing(false);
+        }}
+        onImported={async (notApplied) => {
+          setDescribing(false);
+          laidOut.current = false;
+          await queryClient.invalidateQueries({ queryKey: irQueryKey(projectId) });
+          if (notApplied > 0)
+            setMessage(
+              `Imported. ${String(notApplied)} statement${notApplied === 1 ? ' was' : 's were'} not applied.`,
+            );
+        }}
+      />
+    );
+
+  // The panel keeps its place in the tree whichever side shows, so a draft survives an
+  // empty canvas turning into a full one and back.
+  const docked = (content: React.ReactNode) => (
+    <AreaCanvasContext.Provider value={areaCanvas}>
+      <GhostHoverContext.Provider value={hover}>
+        <div className="flex size-full">
+          <div className="relative size-full min-w-0 flex-1">{content}</div>
+          {panel}
+        </div>
+      </GhostHoverContext.Provider>
+    </AreaCanvasContext.Provider>
+  );
+
+  if (nodes.length === 0 && describing !== true) {
+    return docked(
+      readOnly ? (
+        <div className="flex h-full items-center justify-center text-sm text-text-subtle">
+          {shareLink
+            ? 'Nothing is shared here yet.'
+            : shell.data === undefined
+              ? null
+              : 'This project is protected. Propose a change to add tables.'}
+        </div>
+      ) : (
+        <>
+          <CanvasEmptyState
+            onNewEntity={() => {
+              setNewEntityAt({ x: 0, y: 0 });
+            }}
+            onImport={
+              canImport
+                ? () => {
+                    openImport('sql');
+                  }
+                : undefined
+            }
+            onDescribe={
+              canImport
+                ? () => {
+                    openDescribe();
+                  }
+                : undefined
+            }
+          />
+          {dialogs}
+        </>
+      ),
     );
   }
 
-  return (
-    <AreaCanvasContext.Provider value={areaCanvas}>
-      <div className="relative size-full">
-        <CrowFootDefs />
-        <ReactFlow<AppNode, LinkEdgeType>
-          nodes={shownNodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={onEdgesChange}
-          nodesDraggable={!readOnly}
-          nodesConnectable={!readOnly}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDrag={onNodeDrag}
-          onNodeDragStop={onNodeDragStop}
-          onConnect={onConnect}
-          onConnectEnd={onConnectEnd}
-          isValidConnection={isValid}
-          onNodeContextMenu={(event, node) => {
-            event.preventDefault();
-            if (isTable(node)) setMenu({ x: event.clientX, y: event.clientY, entityId: node.id });
-          }}
-          onPaneContextMenu={(event) => {
-            event.preventDefault();
-            setMenu({ x: event.clientX, y: event.clientY, entityId: null });
-          }}
-          onEdgeContextMenu={(event, edge) => {
-            event.preventDefault();
-            setMenu({ x: event.clientX, y: event.clientY, entityId: null, linkId: edge.id });
-          }}
-          multiSelectionKeyCode={MULTI_SELECT_KEYS}
-          snapToGrid
-          snapGrid={SNAP}
-          minZoom={0.05}
-          maxZoom={2}
-          fitView
-          fitViewOptions={{ padding: fitPadding(0.1) }}
-          // Item 8: React Flow's own culling. 300 cards is ~4,500 field rows, and the ones
-          // outside the viewport cost nothing if they are never mounted.
-          onlyRenderVisibleElements
-          // Deleting schema is an op with a version check, not a keystroke on a canvas.
-          deleteKeyCode={null}
-          // No "React Flow" link in the corner (owner's call). React Flow is MIT; the
-          // attribution is a request, not a licence term.
-          proOptions={{ hideAttribution: true }}
-        >
-          {/* The canvas grid is the theme's: dots (Studio), a minor and major ruled grid
+  return docked(
+    <>
+      <CrowFootDefs />
+      <ReactFlow<AppNode, AppEdge>
+        nodes={shownNodes}
+        edges={shownEdges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
+        nodesDraggable={!readOnly}
+        nodesConnectable={!readOnly}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
+        onConnect={onConnect}
+        onConnectEnd={onConnectEnd}
+        isValidConnection={isValid}
+        onNodeContextMenu={(event, node) => {
+          event.preventDefault();
+          if (isTable(node)) setMenu({ x: event.clientX, y: event.clientY, entityId: node.id });
+        }}
+        onPaneContextMenu={(event) => {
+          event.preventDefault();
+          setMenu({ x: event.clientX, y: event.clientY, entityId: null });
+        }}
+        onEdgeContextMenu={(event, edge) => {
+          event.preventDefault();
+          if (isGhostNodeId(edge.id)) return;
+          setMenu({ x: event.clientX, y: event.clientY, entityId: null, linkId: edge.id });
+        }}
+        multiSelectionKeyCode={MULTI_SELECT_KEYS}
+        snapToGrid
+        snapGrid={SNAP}
+        minZoom={0.05}
+        maxZoom={2}
+        fitView
+        fitViewOptions={{ padding: fitPadding(0.1) }}
+        // Item 8: React Flow's own culling. 300 cards is ~4,500 field rows, and the ones
+        // outside the viewport cost nothing if they are never mounted.
+        onlyRenderVisibleElements
+        // Deleting schema is an op with a version check, not a keystroke on a canvas.
+        deleteKeyCode={null}
+        // No "React Flow" link in the corner (owner's call). React Flow is MIT; the
+        // attribution is a request, not a licence term.
+        proOptions={{ hideAttribution: true }}
+      >
+        {/* The canvas grid is the theme's: dots (Studio), a minor and major ruled grid
             (Blueprint), none (Float's gradient, Compact). Switched in CSS, so the right one
             shows from the first paint. */}
-          <Background
-            id="dots"
-            variant={BackgroundVariant.Dots}
-            gap={GRID_SIZE}
-            size={1}
-            className="theme-blueprint:hidden theme-float:hidden theme-compact:hidden"
-          />
-          <Background
-            id="lines"
-            variant={BackgroundVariant.Lines}
-            gap={GRID_SIZE + 6}
-            className="hidden theme-blueprint:block"
-          />
-          <Background
-            id="major"
-            variant={BackgroundVariant.Lines}
-            gap={(GRID_SIZE + 6) * 5}
-            color="color-mix(in srgb, var(--color-border-strong) 45%, transparent)"
-            bgColor="transparent"
-            className="hidden theme-blueprint:block"
-          />
-          <MiniMap
-            // Float: the inspector floats over the right edge, so the minimap stacks above
-            // the toolbar on the left, clear of the floating dock.
-            className="overflow-hidden rounded-lg border border-border shadow-panel theme-float:right-auto! theme-float:left-0! theme-float:mb-16! theme-float:ml-[66px]!"
-            pannable
-            zoomable
-            nodeColor={minimapColor}
-            style={{ backgroundColor: 'var(--color-surface-sunken)' }}
-          />
-          <Panel
-            position="top-left"
-            className="theme-float:mt-[calc(var(--sl-topbar-h)+24px)]! theme-float:ml-[66px]!"
-          >
-            <div className="flex flex-col items-start gap-2">
-              <CanvasSearch model={model} />
-              <AreaLegend
-                readOnly={readOnly}
-                cards={areaNodes}
-                onMenu={(data, x, y) => {
-                  setAreaMenu({ x, y, data });
-                }}
-                onPick={(ids) => {
-                  select(ids);
-                  void flow.fitView({
-                    nodes: ids.map((id) => ({ id })),
-                    padding: 0.3,
-                    duration: 200,
-                  });
-                }}
-              />
-            </div>
-          </Panel>
-          <Panel position="bottom-left" className="theme-float:ml-[66px]!">
-            <CanvasToolbar
-              actions={{
-                ...(readOnly
-                  ? {}
-                  : {
-                      add: {
-                        label: t.msg('action.add', 'entity'),
-                        onSelect: () => {
-                          setNewEntityAt(viewportCentre());
-                        },
-                      },
-                      ...(selectedTables.length > 0
-                        ? {
-                            group: {
-                              label: 'Group into area',
-                              title: 'Put the selected tables in a coloured area (Ctrl+G)',
-                              onSelect: () => {
-                                groupSelection(selectedTables);
-                              },
-                            },
-                          }
-                        : {}),
-                      ...(canImport
-                        ? {
-                            import: {
-                              label: `Import ${importSourceName(facet.capabilities.importFormats)}`,
-                              onSelect: () => {
-                                openImport('sql');
-                              },
-                            },
-                          }
-                        : {}),
-                    }),
-                // Phase 22 §1.1: the AI draft lived only inside the import dialog.
-                ...(canDescribe
-                  ? {
-                      describe: {
-                        label: 'Describe with AI',
-                        title: 'Describe tables or a feature and let AI draft them',
-                        onSelect: () => {
-                          openImport('describe');
-                        },
-                      },
-                    }
-                  : {}),
-                ...(readOnly
-                  ? {}
-                  : {
-                      ...(canImport && savedConnection.data
-                        ? {
-                            sync: {
-                              label: 'Sync',
-                              title: "Read the saved database connection and import what's new",
-                              onSelect: () => {
-                                openImport('database');
-                              },
-                            },
-                          }
-                        : {}),
-                      layout: {
-                        label: 'Auto-layout',
-                        onSelect: () => {
-                          runLayout();
-                        },
-                      },
-                    }),
+        <Background
+          id="dots"
+          variant={BackgroundVariant.Dots}
+          gap={GRID_SIZE}
+          size={1}
+          className="theme-blueprint:hidden theme-float:hidden theme-compact:hidden"
+        />
+        <Background
+          id="lines"
+          variant={BackgroundVariant.Lines}
+          gap={GRID_SIZE + 6}
+          className="hidden theme-blueprint:block"
+        />
+        <Background
+          id="major"
+          variant={BackgroundVariant.Lines}
+          gap={(GRID_SIZE + 6) * 5}
+          color="color-mix(in srgb, var(--color-border-strong) 45%, transparent)"
+          bgColor="transparent"
+          className="hidden theme-blueprint:block"
+        />
+        <MiniMap
+          // Float: the inspector floats over the right edge, so the minimap stacks above
+          // the toolbar on the left, clear of the floating dock.
+          className="overflow-hidden rounded-lg border border-border shadow-panel theme-float:right-auto! theme-float:left-0! theme-float:mb-16! theme-float:ml-[66px]!"
+          pannable
+          zoomable
+          nodeColor={minimapColor}
+          style={{ backgroundColor: 'var(--color-surface-sunken)' }}
+        />
+        <Panel
+          position="top-left"
+          className="theme-float:mt-[calc(var(--sl-topbar-h)+24px)]! theme-float:ml-[66px]!"
+        >
+          <div className="flex flex-col items-start gap-2">
+            <CanvasSearch model={model} />
+            <AreaLegend
+              readOnly={readOnly}
+              cards={areaNodes}
+              onMenu={(data, x, y) => {
+                setAreaMenu({ x, y, data });
+              }}
+              onPick={(ids) => {
+                select(ids);
+                void flow.fitView({
+                  nodes: ids.map((id) => ({ id })),
+                  padding: 0.3,
+                  duration: 200,
+                });
               }}
             />
-          </Panel>
-          {message === null ? null : (
-            <Panel position="bottom-center">
-              <button
-                type="button"
-                className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-text-muted shadow-panel"
-                onClick={() => {
-                  setMessage(null);
-                }}
-              >
-                {message}
-              </button>
-            </Panel>
-          )}
-        </ReactFlow>
-        <CanvasMenu
-          target={menu}
-          items={menuItems}
-          onClose={() => {
-            setMenu(null);
-          }}
-        />
-        <AreaMenu
-          projectId={projectId}
-          target={areaMenu}
-          onClose={() => {
-            setAreaMenu(null);
-          }}
-          onRename={(data) => {
-            setEditingArea(data.area.id);
-          }}
-          onColour={(data, token) => {
-            void areaActions.recolour(data.area, token).catch(failed);
-          }}
-          onUngroup={(data) => {
-            void areaActions.ungroup(data.area).catch(failed);
-          }}
-          onShare={(data) => {
-            setSharingArea(data.area.id);
-          }}
-        />
-        {sharingArea !== null && (
-          <WhoHasAccessDialog
-            projectId={projectId}
-            trigger={null}
-            open
-            initialScopeId={sharingArea}
-            onOpenChange={(open) => {
-              if (!open) setSharingArea(null);
+          </div>
+        </Panel>
+        <Panel position="bottom-left" className="theme-float:ml-[66px]!">
+          <CanvasToolbar
+            actions={{
+              ...(readOnly
+                ? {}
+                : {
+                    add: {
+                      label: t.msg('action.add', 'entity'),
+                      onSelect: () => {
+                        setNewEntityAt(viewportCentre());
+                      },
+                    },
+                    ...(selectedTables.length > 0
+                      ? {
+                          group: {
+                            label: 'Group into area',
+                            title: 'Put the selected tables in a coloured area (Ctrl+G)',
+                            onSelect: () => {
+                              groupSelection(selectedTables);
+                            },
+                          },
+                        }
+                      : {}),
+                    ...(canImport
+                      ? {
+                          import: {
+                            label: `Import ${importSourceName(facet.capabilities.importFormats)}`,
+                            onSelect: () => {
+                              openImport('sql');
+                            },
+                          },
+                        }
+                      : {}),
+                  }),
+              // Phase 22 §1.1: the AI draft lived only inside the import dialog.
+              ...(canDescribe
+                ? {
+                    describe: {
+                      label: 'Describe with AI',
+                      title: 'Describe tables or a feature and let AI draft them',
+                      onSelect: () => {
+                        openDescribe();
+                      },
+                    },
+                  }
+                : {}),
+              ...(readOnly
+                ? {}
+                : {
+                    ...(canImport && savedConnection.data
+                      ? {
+                          sync: {
+                            label: 'Sync',
+                            title: "Read the saved database connection and import what's new",
+                            onSelect: () => {
+                              openImport('database');
+                            },
+                          },
+                        }
+                      : {}),
+                    layout: {
+                      label: 'Auto-layout',
+                      onSelect: () => {
+                        runLayout();
+                      },
+                    },
+                  }),
             }}
           />
+        </Panel>
+        {message === null ? null : (
+          <Panel position="bottom-center">
+            <button
+              type="button"
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-text-muted shadow-panel"
+              onClick={() => {
+                setMessage(null);
+              }}
+            >
+              {message}
+            </button>
+          </Panel>
         )}
-        {areaActions.dialog}
-        {dialogs}
-      </div>
-    </AreaCanvasContext.Provider>
+      </ReactFlow>
+      <CanvasMenu
+        target={menu}
+        items={menuItems}
+        onClose={() => {
+          setMenu(null);
+        }}
+      />
+      <AreaMenu
+        projectId={projectId}
+        target={areaMenu}
+        onClose={() => {
+          setAreaMenu(null);
+        }}
+        onRename={(data) => {
+          setEditingArea(data.area.id);
+        }}
+        onColour={(data, token) => {
+          void areaActions.recolour(data.area, token).catch(failed);
+        }}
+        onUngroup={(data) => {
+          void areaActions.ungroup(data.area).catch(failed);
+        }}
+        onShare={(data) => {
+          setSharingArea(data.area.id);
+        }}
+      />
+      {sharingArea !== null && (
+        <WhoHasAccessDialog
+          projectId={projectId}
+          trigger={null}
+          open
+          initialScopeId={sharingArea}
+          onOpenChange={(open) => {
+            if (!open) setSharingArea(null);
+          }}
+        />
+      )}
+      {areaActions.dialog}
+      {dialogs}
+    </>,
   );
 }
 
@@ -1220,4 +1390,8 @@ function AreaLegend({
 }
 
 const minimapColor = (node: AppNode): string =>
-  node.type === AREA_NODE_TYPE ? node.data.border : (node.data.areaColor ?? 'var(--color-border)');
+  node.type === AREA_NODE_TYPE
+    ? node.data.border
+    : node.type === ENTITY_NODE_TYPE
+      ? (node.data.areaColor ?? 'var(--color-border)')
+      : 'var(--ghost-border)';

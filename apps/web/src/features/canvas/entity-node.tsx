@@ -6,6 +6,7 @@ import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useEngine, useEngineUi } from '@/engines';
 import { EntityBody } from './entity-body';
+import { PendingColumns } from './ghost-node';
 import { NodeHandles } from './field-handle';
 import type { EntityNode as EntityNodeType } from './graph';
 import { peerColor, selectPeersOn, usePresenceStore } from './realtime';
@@ -52,6 +53,9 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityNodeType>) {
         onFieldSelect={onFieldSelect}
         onToggleCollapse={onToggleCollapse}
       />
+      {data.pendingColumns === undefined ? null : (
+        <PendingColumns entityId={id} columns={data.pendingColumns} />
+      )}
     </>
   );
 }

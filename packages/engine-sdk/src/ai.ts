@@ -142,6 +142,9 @@ export const DRAFT_SCHEMA_RULES = [
   '- Follow the conventions visible in <schema>: naming case, key type, timestamp columns.',
   '- When asked to revise a draft, change only what the request asks and return the whole',
   '  revised draft.',
+  '- When the description is one module or feature (e.g. "a billing module"), start the',
+  '  draft with one line comment naming it, written exactly as `area: <short name>` after',
+  '  the comment marker. It groups the new tables on the canvas. Otherwise leave it out.',
 ].join('\n');
 
 /** The defaults core passes when a caller does not choose (§13 `maxDocChars`). */

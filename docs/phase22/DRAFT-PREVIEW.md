@@ -1,7 +1,28 @@
 # Phase 22b: preview an AI draft on the canvas
 
-Status: **proposed 2026-10-05**. Roadmap row 22b. Builds on `DESIGN.md` (Describe with AI)
-and, for cards, Phase 23.
+Status: **built** 2026-10-06. Approved with the §6 defaults the same day (Q2 included, since
+Phase 23 is built). Roadmap row 22b. Builds on `DESIGN.md` (Describe with AI) and, for cards,
+Phase 23.
+
+As built, where it differs from or adds to the text below:
+
+- **Placement** is ELK over the ghosts alone; the block then goes to the right of its anchor
+  (the focus, else the tables it links to, else everything) and steps right past any table or
+  card it would overlap. Not one ELK run with the existing tables pinned: layered has no pinned
+  nodes. Ghosts have fixed pixel sizes, so nothing waits on a measurement.
+- **The area (Q2)** comes from the AI: `DRAFT_SCHEMA_RULES` asks for one `-- area: <name>` line
+  when the description is one module, and the server reads it into `preview.area`. Import
+  creates the area, or joins an existing one of the same name.
+- **Import from the panel skips the rename question.** The AI is told never to rename, so a
+  candidate there is a lookalike (`orders` → `invoices`), and "Keep both" was the default.
+  SQL import keeps the question.
+- **`ALTER TABLE … ADD COLUMN`** is now read by the PostgreSQL importer. The Phase 22 rules
+  already asked the AI to add columns that way, but the importer dropped the statement, so
+  "new columns on an existing table" never reached the summary or the import.
+- **A ghost's line to an existing table** is drawn from that table's right side, since ghosts
+  sit to its right; the line carries no direction.
+- Hovering a ghost, or the faded rows under an existing table, lights
+  its name in the summary, and the reverse. Ghost lines and ghosts have no context menu.
 
 Today a draft is read as a summary ("Adds 4 tables, 2 relations…") with SQL behind **Show
 SQL**, inside a dialog that covers the canvas. People want to see the shape first: where the

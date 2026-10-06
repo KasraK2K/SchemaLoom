@@ -27,10 +27,11 @@ const ANSWER = [
 
 // Phase 22 — draft-schema requests (their instructions ask for `<ddl>`) get invoices that
 // reference the project's existing `customers`. A revise (draft sent back as the model's
-// own turn) adds a status column.
+// own turn) adds a status column, and a column on `customers`. The draft names its area (Phase 22b Q2).
 const invoices = (status: boolean): string =>
   [
     '<ddl>',
+    '-- area: Billing',
     'CREATE TABLE invoices (',
     '  id uuid PRIMARY KEY,',
     '  customer_id uuid NOT NULL,',
@@ -39,6 +40,7 @@ const invoices = (status: boolean): string =>
     '  CONSTRAINT invoices_customer_fk FOREIGN KEY (customer_id) REFERENCES customers (id) ON DELETE RESTRICT',
     ');',
     "COMMENT ON TABLE invoices IS 'One row per invoice';",
+    ...(status ? ['ALTER TABLE customers ADD COLUMN billing_email text;'] : []),
     '</ddl>',
   ].join('\n');
 

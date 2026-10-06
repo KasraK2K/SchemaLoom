@@ -602,6 +602,44 @@ describe('AiService.draftSchema', () => {
       relations: [{ from: 'reviews.emp', to: 'ent_emp.fld_emp_name' }],
       linksTo: ['ent_emp'],
     });
+    // Phase 22b — the ghosts: the existing table by its id, the new one by its draft key.
+    const reviews = out.preview?.tables[0];
+    expect(out.preview).toEqual({
+      tables: [
+        {
+          key: reviews?.key,
+          name: 'reviews',
+          columns: [
+            { name: 'id', type: 'integer', pk: true },
+            { name: 'emp', type: 'text', pk: false },
+          ],
+        },
+      ],
+      addedColumns: [{ entityId: 'ent_emp', columns: [{ name: 'badge', type: 'text' }] }],
+      links: [{ from: reviews?.key, to: 'ent_emp' }],
+      area: null,
+    });
+  });
+
+  it('preview: a hidden table never appears by id, and the AI area line is read (22b)', async () => {
+    const answer = [
+      '<ddl>',
+      '-- area: Product reviews',
+      'CREATE TABLE ent_prod (id int PRIMARY KEY);',
+      'CREATE TABLE reviews (id int PRIMARY KEY, prod int,',
+      '  CONSTRAINT reviews_prod_fk FOREIGN KEY (prod) REFERENCES ent_prod (id));',
+      '</ddl>',
+    ].join('\n');
+    const { provider } = providerStub(answer);
+    const { service } = harness({ view: APRIL, provider });
+    const out = await service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'reviews' });
+    expect(out.preview?.area).toBe('Product reviews');
+    expect(out.preview?.tables.map((t) => t.name)).toEqual(['ent_prod', 'reviews']);
+    // The hidden table is a ghost by its draft key, never by the real id.
+    const prod = out.preview?.tables[0]?.key;
+    expect(prod).not.toBe('ent_prod');
+    expect(out.preview?.links).toEqual([{ from: out.preview?.tables[1]?.key, to: prod }]);
+    expect(out.preview?.addedColumns).toEqual([]);
   });
 
   it('an existing table the draft only references is declared in front, so the key survives', async () => {

@@ -124,11 +124,14 @@ test.describe('workflow 14 — templates and the first-run canvas', () => {
     const page = await signedInPage(browser, SEED_EMAILS.owner);
     await page.goto(`/${SEED.orgSlug}/p/${projectId}`);
 
+    // Describe opens the docked panel (22b); closing it brings the first-run cards back.
     await expect(async () => {
       await page.getByRole('button', { name: 'Describe', exact: true }).click();
       await expect(page.getByLabel('Describe a schema')).toBeFocused({ timeout: 1_000 });
     }).toPass({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
 
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     await page.getByLabel('Load a template').selectOption('blog');
     await expect(page.getByRole('textbox', { name: 'SQL' })).toHaveValue(/CREATE TABLE posts/);
   });

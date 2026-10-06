@@ -20,6 +20,7 @@ import {
 } from '@schemaloom/engine-sdk';
 import {
   fieldVisibilityIndex,
+  type Field,
   type FieldVisibilityIndex,
   type RedactedModel,
   type SchemaModel,
@@ -46,7 +47,7 @@ import { renderOrmCode } from '../jobs/orm-code';
 import { SchemaLoader } from '../schema';
 import { ChangeRequestsService, type AgentProposal } from '../snapshots';
 import { AiProvider, type AiResult } from './ai.provider';
-import { draftSummary, type DraftSummary } from './draft-summary';
+import { draftPreview, draftSummary, type DraftPreview, type DraftSummary } from './draft-summary';
 import { aiSettings } from './ai-settings';
 
 /**
@@ -158,6 +159,8 @@ export interface DraftSchemaResult {
   readonly warnings: readonly string[];
   /** Phase 22 — what the importer reads in the draft; null when it can't read it */
   readonly summary: DraftSummary | null;
+  /** Phase 22b — the ghosts the canvas draws; null when the importer can't read the draft */
+  readonly preview: DraftPreview | null;
 }
 
 const notFound = (resourceType: string, id: string): NotFoundException =>
@@ -488,6 +491,15 @@ export class AiService {
       importFormat: parsed.importFormat,
       warnings: parsed.parseWarnings,
       summary: imported === null ? null : draftSummary(view.redacted, imported),
+      preview:
+        imported === null
+          ? null
+          : draftPreview(
+              view.redacted,
+              imported,
+              this.typeNamer(view, imported),
+              this.draftArea(view, parsed.source),
+            ),
     };
   }
 
@@ -534,6 +546,29 @@ export class AiService {
     });
     const comment = engine.capabilities.queryLanguage.lineComment;
     return `${comment} Existing tables this draft refers to. The import leaves them unchanged.\n${renderStatements(result)}\n\n${comment} New\n${source}`;
+  }
+
+  /** A field's type as the engine spells it (`TYPE_CATALOG.format`), so ghosts read like tables. */
+  private typeNamer(view: CallerView, model: SchemaModel): (field: Field) => string {
+    const catalog = this.registry.tryGet(view.redacted.engineId)?.typeCatalog;
+    const customTypes = Object.values(model.objects.customType);
+    return (field) => {
+      if (catalog === undefined) return field.type.name;
+      const namespaceName =
+        model.objects.namespace[model.objects.entity[field.entityId]?.namespaceId ?? '']?.name ??
+        null;
+      return catalog.format(catalog.resolve(field.type, { customTypes, namespaceName }));
+    };
+  }
+
+  /** Q2 — the AI's `-- area: Billing` line (DRAFT_SCHEMA_RULES), read from its own answer. */
+  private draftArea(view: CallerView, source: string): string | null {
+    const comment = this.registry.tryGet(view.redacted.engineId)?.capabilities.queryLanguage
+      .lineComment;
+    if (comment === undefined) return null;
+    const quoted = comment.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const name = new RegExp(`^\\s*${quoted}\\s*area:\\s*(.+)$`, 'im').exec(source)?.[1]?.trim();
+    return name === undefined || name === '' ? null : name.slice(0, 60);
   }
 
   /** The draft through the engine's importer; null when it can't be read (the import
