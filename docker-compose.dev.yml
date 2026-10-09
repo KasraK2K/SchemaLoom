@@ -1,0 +1,17 @@
+# Host ports that only `pnpm dev` (the api and web on this machine) needs. `pnpm infra:up`
+# adds this file; `pnpm app:up` doesn't, so a server that already runs its own Postgres,
+# Redis or mail server doesn't clash with them. Running `pnpm app:up` after `pnpm infra:up`
+# recreates these containers without the ports: run `pnpm infra:up` again before `pnpm dev`.
+services:
+  postgres:
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+  redis:
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+  minio:
+    ports:
+      - '127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001'
+  mailpit:
+    ports:
+      - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'

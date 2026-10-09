@@ -17,11 +17,11 @@
     "test:e2e": "turbo test:e2e",
     "db:migrate": "turbo db:migrate",
     "db:seed": "turbo db:seed",
-    "infra:up": "docker compose up -d postgres redis minio mailpit",
+    "infra:up": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis minio mailpit",
     "infra:down": "docker compose down",
     "app:up": "docker compose up -d --build",
     "app:down": "docker compose down",
-    "app:logs": "docker compose logs -f migrate api web proxy",
+    "app:logs": "docker compose logs -f migrate api worker web proxy",
     "format": "prettier --write ."
   },
   "devDependencies": {

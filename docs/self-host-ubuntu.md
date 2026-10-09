@@ -79,6 +79,9 @@ POSTGRES_PORT=5432
 
 REDIS_URL=redis://redis:6379
 REDIS_KEY_PREFIX=sl:
+# Jobs (imports, exports, mail) run in the separate `worker` container; see step 4.
+PROCESS_ROLE=api
+REALTIME_BUS=redis
 
 JWT_ACCESS_SECRET=$(secret)
 JWT_REFRESH_SECRET=$(secret)
@@ -175,6 +178,22 @@ services:
       redis: { condition: service_healthy }
       minio: { condition: service_started }
 
+  # Runs the jobs, so a large import or export never stalls the api. Same image; more jobs at
+  # once:  docker compose up -d --scale worker=3
+  worker:
+    image: schemaloom-api
+    restart: unless-stopped
+    command: ['node', 'dist/worker.js']
+    env_file: .env
+    environment:
+      PROCESS_ROLE: worker
+    # No HTTP server, so the image's /healthz check doesn't apply.
+    healthcheck: { disable: true }
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+
   migrate:
     image: schemaloom-migrate
     profiles: ['tools']
@@ -216,7 +235,7 @@ docker build -f apps/api/Dockerfile --target migrate -t schemaloom-migrate .
 
 cd /opt/schemaloom
 docker compose run --rm migrate      # prints "All migrations have been successfully applied."
-docker compose up -d api
+docker compose up -d api worker
 curl -s http://127.0.0.1:3001/readyz # {"status":"ok",...}
 ```
 
@@ -299,7 +318,7 @@ Open `https://app.example.com`, sign up, and check that the verification email a
 cd /opt/schemaloom/app && git pull
 docker build -f apps/api/Dockerfile -t schemaloom-api .
 docker build -f apps/api/Dockerfile --target migrate -t schemaloom-migrate .
-cd /opt/schemaloom && docker compose run --rm migrate && docker compose up -d api
+cd /opt/schemaloom && docker compose run --rm migrate && docker compose up -d api worker
 
 cd /opt/schemaloom/app && pnpm install --frozen-lockfile
 NEXT_PUBLIC_API_URL=https://app.example.com NEXT_PUBLIC_APP_URL=https://app.example.com \

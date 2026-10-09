@@ -161,14 +161,23 @@ containers (your data is kept). On Windows, Ctrl+C can leave `node` processes ho
 
 ### 2b. Docker app
 
-| Step | Command         | Why                                                                                                                                                                       |
-| ---- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `pnpm app:up`   | Builds the api and web images, runs the migrations in a one-off `migrate` container, then starts everything behind a proxy on :8080. Rerun after pulling a newer version. |
-| 2    | `pnpm app:logs` | Follows the migrate, api, web and proxy logs. Use it if :8080 doesn't respond.                                                                                            |
-| 3    | `pnpm app:down` | Stops every container. Your data is kept.                                                                                                                                 |
+| Step | Command         | Why                                                                                                                                                                                                                                 |
+| ---- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `pnpm app:up`   | Builds the api and web images, runs the migrations in a one-off `migrate` container, then starts everything behind a proxy on :8080. Imports and exports run in a separate `worker` container. Rerun after pulling a newer version. |
+| 2    | `pnpm app:logs` | Follows the migrate, api, worker, web and proxy logs. Use it if :8080 doesn't respond.                                                                                                                                              |
+| 3    | `pnpm app:down` | Stops every container. Your data is kept.                                                                                                                                                                                           |
 
 Without pnpm, step 1 is `docker compose up -d --build`. The first build takes a few
 minutes. Open <http://localhost:8080>; emails land in Mailpit at <http://localhost:8025>.
+
+**On a server**, the same `pnpm app:up` runs production. Point two DNS names at the machine
+(for example `app.example.com` and `files.example.com`), open ports 80 and 443, and fill in the
+"production" block at the top of `.env` (`APP_URL`, `FILES_URL`, the two `PROXY_*_PORT`
+values, real passwords and secrets, and Mailgun or `APP_SMTP_URL` for email). Caddy gets the
+HTTPS certificates by itself. Postgres, Redis and Mailpit's SMTP port aren't published at all
+(only `pnpm infra:up` publishes them, for `pnpm dev`), so a server's own Postgres or Redis
+doesn't clash.
+More import/export throughput: `docker compose up -d --scale worker=3`.
 
 There is no seed step: sign up to create the first account. The api image includes
 `pg_dump`, so **Read a database** (with SSH tunnels and certificate files) works as is.

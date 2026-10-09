@@ -1,5 +1,8 @@
 name: schemaloom
 
+# Only the proxy is public. MinIO (file links when running locally) and the Mailpit inbox
+# publish on 127.0.0.1. The ports `pnpm dev` needs (Postgres, Redis, SMTP, MinIO console) are
+# in docker-compose.dev.yml, which only `pnpm infra:up` adds.
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,8 +11,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-schemaloom}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-schemaloom}
       POSTGRES_DB: ${POSTGRES_DB:-schemaloom}
-    ports:
-      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -24,8 +25,6 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
-    ports:
-      - '${REDIS_PORT:-6379}:6379'
     volumes:
       - redis-data:/data
     healthcheck:
@@ -52,8 +51,7 @@ services:
       MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY}
       MINIO_DEFAULT_BUCKETS: ${S3_BUCKET:-schemaloom}
     ports:
-      - '${MINIO_PORT:-9000}:9000'
-      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+      - '127.0.0.1:${MINIO_PORT:-9000}:9000'
     volumes:
       - minio-data:/bitnami/minio/data
     healthcheck:
@@ -62,6 +60,8 @@ services:
       timeout: 3s
       retries: 20
 
+  # Catches every email locally. The app only sends here when neither Mailgun nor APP_SMTP_URL
+  # is set in .env, so in production it just sits idle.
   mailpit:
     image: axllent/mailpit:v1.27
     restart: unless-stopped
@@ -73,8 +73,7 @@ services:
       # for 8 seconds, so each sign-up, invite and sign-in link took 8 s locally.
       MP_SMTP_DISABLE_RDNS: 1
     ports:
-      - '${MAILPIT_SMTP_PORT:-1025}:1025'
-      - '${MAILPIT_UI_PORT:-8025}:8025'
+      - '127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025'
 
   # ─── Roadmap 14: an identity provider for the SSO e2e (workflow 18) ─────────────
   #
@@ -125,18 +124,21 @@ services:
       timeout: 3s
       retries: 30
 
-  # ─── Phase 6 §11: the whole app in Docker ────────────────────────────────────
+  # ─── Phase 6 §11: the whole app in Docker (`pnpm app:up`) ─────────────────────
   #
   #   cp .env.example .env            # once; then set the secrets it lists
-  #   docker compose up -d            # the first run builds the images; add --build to update
+  #   pnpm app:up                     # builds the images, migrates, starts everything
   #
-  # Open http://localhost:8080. pg_dump ships in the api image, so "Read a database" works
-  # with nothing installed on the host. Only the proxy publishes a port; `pnpm dev` (api
+  # With no APP_URL in .env it serves http://localhost:8080. For a server, set APP_URL,
+  # FILES_URL and the two PROXY_*_PORT values (.env.example, "production"): Caddy then gets
+  # HTTPS certificates for both hostnames by itself. Jobs (imports, exports, mail) run in `worker`, not the api, so
+  # a big import never stalls requests. pg_dump ships in the api image, so "Read a database"
+  # works with nothing installed on the host. Only the proxy publishes a port; `pnpm dev` (api
   # :3001, web :3000) runs alongside without clashing, and `pnpm infra:up` starts only the
   # services above. A database on this machine is `host.docker.internal`, not `localhost`,
   # from inside the api container.
   migrate:
-    build: { context: ., dockerfile: apps/api/Dockerfile, target: migrate, network: host }
+    build: { context: ., dockerfile: apps/api/Dockerfile, target: migrate }
     env_file: .env
     environment: &app-env
       NODE_ENV: production
@@ -144,28 +146,36 @@ services:
       POSTGRES_PORT: '5432'
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
-      # Presigned download/upload URLs are opened by the browser, on the published port.
-      S3_PUBLIC_URL: http://localhost:${MINIO_PORT:-9000}
-      SMTP_URL: smtp://mailpit:1025
+      # Presigned download/upload URLs are opened by the browser: through the proxy on
+      # FILES_URL, or locally on MinIO's published port.
+      S3_PUBLIC_URL: ${FILES_URL:-http://localhost:${MINIO_PORT:-9000}}
+      # Mailgun in .env wins over this; without it, mail goes to APP_SMTP_URL or Mailpit.
+      SMTP_URL: ${APP_SMTP_URL:-smtp://mailpit:1025}
       # One hostname for both, as every deploy requires (docs/deploy.md).
-      API_PUBLIC_URL: http://localhost:8080
-      WEB_PUBLIC_URL: http://localhost:8080
+      API_PUBLIC_URL: ${APP_URL:-http://localhost:8080}
+      WEB_PUBLIC_URL: ${APP_URL:-http://localhost:8080}
+      CORS_ORIGINS: ${APP_URL:-http://localhost:8080}
       TRUST_PROXY: '1'
       # A local install reads databases on this machine and network (Phase 6 Q3: self-host
       # opts in). Set false in .env to refuse private addresses.
       INTROSPECT_ALLOW_PRIVATE_HOSTS: ${INTROSPECT_ALLOW_PRIVATE_HOSTS:-true}
       # Cookies stay Secure (the api insists in production); browsers accept them on
-      # http://localhost because localhost counts as a secure origin.
+      # http://localhost because localhost counts as a secure origin. On any other host,
+      # APP_URL must be https.
     depends_on:
       postgres: { condition: service_healthy }
 
   api:
-    build: { context: ., dockerfile: apps/api/Dockerfile, network: host }
+    build: { context: ., dockerfile: apps/api/Dockerfile }
     restart: unless-stopped
     env_file: .env
     environment:
       <<: *app-env
       PORT: '3001'
+      # Roadmap 20: HTTP and WebSocket only; `worker` runs the jobs. Overrides .env, whose
+      # PROCESS_ROLE=all is for `pnpm dev`.
+      PROCESS_ROLE: api
+      REALTIME_BUS: redis
     depends_on:
       migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
@@ -175,11 +185,9 @@ services:
       - 'host.docker.internal:host-gateway'
 
   # Roadmap 20 §1: jobs in their own process (long exports or imports no longer share the
-  # api's event loop). Opt-in:  docker compose --profile split up -d
-  # and set PROCESS_ROLE=api and REALTIME_BUS=redis for the api in .env.
+  # api's event loop). More jobs at once:  docker compose up -d --scale worker=3
   worker:
-    build: { context: ., dockerfile: apps/api/Dockerfile, network: host }
-    profiles: ['split']
+    build: { context: ., dockerfile: apps/api/Dockerfile }
     restart: unless-stopped
     command: ['node', 'dist/worker.js']
     env_file: .env
@@ -201,10 +209,10 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-      network: host
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8080
-        NEXT_PUBLIC_APP_URL: http://localhost:8080
+        # Baked into the browser bundle: `pnpm app:up` rebuilds after APP_URL changes.
+        NEXT_PUBLIC_API_URL: ${APP_URL:-http://localhost:8080}
+        NEXT_PUBLIC_APP_URL: ${APP_URL:-http://localhost:8080}
     restart: unless-stopped
     environment:
       # Server components reach the api directly on the compose network.
@@ -220,22 +228,41 @@ services:
       - source: caddyfile
         target: /etc/caddy/Caddyfile
     ports:
-      # Fixed: the public URLs above and the web build args name this port.
-      - '8080:8080'
+      # Same number outside and in: Caddy listens on these (see the Caddyfile's global block).
+      # Production sets 80 and 443, which Let's Encrypt needs.
+      - '${PROXY_HTTP_PORT:-8080}:${PROXY_HTTP_PORT:-8080}'
+      - '${PROXY_HTTPS_PORT:-8443}:${PROXY_HTTPS_PORT:-8443}'
+    volumes:
+      # Certificates and the ACME account. Without it every restart re-issues them and runs
+      # into Let's Encrypt's rate limit.
+      - caddy-data:/data
     depends_on:
       - web
       - api
 
+# An https:// site address makes Caddy obtain and renew its certificate; an http:// one
+# serves plain HTTP. No `encode`: the api compresses its own responses, and compressing the AI
+# assistant's event stream again would buffer it. The files site keeps the Host header, which
+# the presigned URLs are signed for. Locally (no FILES_URL) the browser goes to MinIO directly
+# and that site is unused.
 configs:
   caddyfile:
     content: |
-      :8080 {
+      {
+        http_port ${PROXY_HTTP_PORT:-8080}
+        https_port ${PROXY_HTTPS_PORT:-8443}
+      }
+      ${APP_URL:-http://localhost:8080} {
         @api path /api/* /socket.io/*
         reverse_proxy @api api:3001
         reverse_proxy web:3000
       }
+      ${FILES_URL:-http://files.localhost:8080} {
+        reverse_proxy minio:9000
+      }
 
 volumes:
+  caddy-data:
   postgres-data:
   redis-data:
   minio-data:
