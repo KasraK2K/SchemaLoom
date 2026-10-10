@@ -6,6 +6,7 @@ import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
  * Roadmap 14 (`docs/phase14/DESIGN.md`): the audit log viewer, and single sign-on.
  * Roadmap 14b (`docs/phase14/DIRECTORY-SYNC.md`): SCIM provisioning (a scripted client,
  * since Keycloak has none) and groups from a sign-in claim (Keycloak).
+ * Roadmap 14c (§3): an IdP-initiated SAML response is bounced into a normal sign-in.
  */
 
 interface AuditPage {
@@ -177,7 +178,7 @@ interface Connection {
   id: string;
   name: string;
   hasClientSecret: boolean;
-  sp: { redirectUri?: string; entityId?: string; acsUrl?: string };
+  sp: { redirectUri?: string; entityId?: string; acsUrl?: string; appTileUrl: string };
 }
 
 interface OrgGroup {
@@ -206,6 +207,48 @@ const removeConnection = (owner: Session, id: string) =>
   owner.api.delete(`/api/organizations/${SEED.orgSlug}/sso-connections/${id}`, {
     headers: write(owner),
   });
+
+const clientUuid = async (admin: KeycloakAdmin, clientId = ''): Promise<string> =>
+  (
+    await admin.get<{ id: string }[]>(`/${REALM}/clients?clientId=${encodeURIComponent(clientId)}`)
+  )[0]?.id ?? '';
+
+/** A SAML connection here and its client in Keycloak, from the values the settings page shows. */
+async function samlConnection(stamp: string, email: string, attributes: object = {}) {
+  const admin = await keycloakAdmin();
+  const keys = await admin.get<{
+    keys: { algorithm: string; use: string; certificate?: string }[];
+  }>(`/${REALM}/keys`);
+  const cert = keys.keys.find((k) => k.algorithm === 'RS256' && k.use === 'SIG')?.certificate;
+  expect(cert).toBeDefined();
+
+  const owner = await signIn(SEED_EMAILS.owner);
+  const conn = await createConnection(owner, {
+    protocol: 'saml',
+    name: `Keycloak SAML ${stamp}`,
+    domains: [email.split('@')[1]],
+    samlEntryPoint: `${KEYCLOAK}/realms/${REALM}/protocol/saml`,
+    samlIdpCert: cert,
+    jit: true,
+  });
+  await admin.post(`/${REALM}/clients`, {
+    clientId: conn.sp.entityId,
+    protocol: 'saml',
+    redirectUris: [conn.sp.acsUrl],
+    attributes: {
+      'saml.client.signature': 'false',
+      'saml.assertion.signature': 'true',
+      'saml.server.signature': 'true',
+      saml_force_name_id_format: 'true',
+      saml_name_id_format: 'email',
+      'saml.force.post.binding': 'true',
+      saml_assertion_consumer_url_post: conn.sp.acsUrl,
+      ...attributes,
+    },
+  });
+  await idpUser(admin, email);
+  return { admin, owner, conn };
+}
 
 const meOf = async (page: Page): Promise<string> =>
   ((await (await page.request.get(`${API_URL}/api/auth/me`)).json()) as { email: string }).email;
@@ -286,46 +329,48 @@ test.describe('workflow 18 — single sign-on (Keycloak)', () => {
   test('SAML: a signed assertion signs a new member in', async ({ browser }) => {
     test.setTimeout(120_000);
     const stamp = String(Date.now());
-    const domain = `saml-${stamp}.test`;
-    const email = `sam@${domain}`;
-    const admin = await keycloakAdmin();
-    const keys = await admin.get<{
-      keys: { algorithm: string; use: string; certificate?: string }[];
-    }>(`/${REALM}/keys`);
-    const cert = keys.keys.find((k) => k.algorithm === 'RS256' && k.use === 'SIG')?.certificate;
-    expect(cert).toBeDefined();
-
-    const owner = await signIn(SEED_EMAILS.owner);
-    const conn = await createConnection(owner, {
-      protocol: 'saml',
-      name: `Keycloak SAML ${stamp}`,
-      domains: [domain],
-      samlEntryPoint: `${KEYCLOAK}/realms/${REALM}/protocol/saml`,
-      samlIdpCert: cert,
-      jit: true,
-    });
-    // The IdP side, from the values the settings page shows.
-    await admin.post(`/${REALM}/clients`, {
-      clientId: conn.sp.entityId,
-      protocol: 'saml',
-      redirectUris: [conn.sp.acsUrl],
-      attributes: {
-        'saml.client.signature': 'false',
-        'saml.assertion.signature': 'true',
-        'saml.server.signature': 'true',
-        saml_force_name_id_format: 'true',
-        saml_name_id_format: 'email',
-        'saml.force.post.binding': 'true',
-        saml_assertion_consumer_url_post: conn.sp.acsUrl,
-      },
-    });
-    await idpUser(admin, email);
-
+    const email = `sam@saml-${stamp}.test`;
+    const { admin, owner, conn } = await samlConnection(stamp, email);
+    expect(conn.sp.appTileUrl).toBe(`${API_URL}/api/auth/sso/${conn.id}/start`);
     try {
       const page = await signInWithSso(browser, email);
       expect(await meOf(page)).toBe(email);
     } finally {
       await removeConnection(owner, conn.id);
+      await admin.delete(`/${REALM}/clients/${await clientUuid(admin, conn.sp.entityId)}`);
+    }
+  });
+
+  test('SAML: an unrequested response from the IdP dashboard bounces into a sign-in', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const stamp = String(Date.now());
+    const email = `tile@tile-${stamp}.test`;
+    const tile = `sl-tile-${stamp}`;
+    const { admin, owner, conn } = await samlConnection(stamp, email, {
+      saml_idp_initiated_sso_url_name: tile,
+    });
+    const idpPort = new URL(KEYCLOAK).port;
+    try {
+      // What clicking the tile does: Keycloak signs in and posts, unasked, to our ACS.
+      const page = await (await browser.newContext()).newPage();
+      const acsPosts: string[] = [];
+      page.on('response', (r) => {
+        if (r.url() === conn.sp.acsUrl) acsPosts.push(r.headers().location ?? '');
+      });
+      await page.goto(`${KEYCLOAK}/realms/${REALM}/protocol/saml/clients/${tile}`);
+      await page.locator('#username').fill(email);
+      await page.locator('#password').fill(IDP_PASSWORD);
+      await page.locator('#kc-login').click();
+      await page.waitForURL((url) => url.port !== idpPort && url.pathname !== '/login');
+      expect(await meOf(page)).toBe(email);
+      // First the unrequested post (bounced), then the answer to our own request.
+      expect(acsPosts[0]).toBe(`${API_URL}/api/auth/sso/${conn.id}/start?bounce=1`);
+      expect(acsPosts).toHaveLength(2);
+    } finally {
+      await removeConnection(owner, conn.id);
+      await admin.delete(`/${REALM}/clients/${await clientUuid(admin, conn.sp.entityId)}`);
     }
   });
 

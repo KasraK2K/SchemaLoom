@@ -69,8 +69,13 @@ export const SsoConnectionSchema = z.object({
   defaultOrgRole: z.enum(['member', 'guest', 'admin', 'owner']),
   enforced: z.boolean(),
   sp: z.union([
-    z.object({ redirectUri: z.string() }),
-    z.object({ entityId: z.string(), acsUrl: z.string(), metadataUrl: z.string() }),
+    z.object({ redirectUri: z.string(), appTileUrl: z.string() }),
+    z.object({
+      entityId: z.string(),
+      acsUrl: z.string(),
+      metadataUrl: z.string(),
+      appTileUrl: z.string(),
+    }),
   ]),
   /** Roadmap 14b: directory sync. */
   groupsClaim: z.string().nullable(),

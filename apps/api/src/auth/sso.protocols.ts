@@ -133,6 +133,27 @@ export function samlEndpoints(apiPublicUrl: string, connectionId: string) {
   };
 }
 
+/**
+ * Roadmap 14c §3 — routing hints read from a SAML response that is NOT validated: whether it
+ * answers a request (`InResponseTo` on the Response) and which connection its Audience names
+ * (our entity ID carries the connection id). Nothing here is trusted: an unrequested response
+ * only earns a redirect to the public start route, and a requested one still meets node-saml.
+ */
+export function samlResponseHints(
+  samlResponse: string,
+  apiPublicUrl: string,
+): { readonly requested: boolean; readonly connectionId: string | null } {
+  const xml = Buffer.from(samlResponse, 'base64').toString('utf8');
+  const root = /<(?:[\w-]+:)?Response\s[^>]*>/.exec(xml)?.[0] ?? '';
+  const audience = /<(?:[\w-]+:)?Audience>\s*([^<]*?)\s*</.exec(xml)?.[1] ?? '';
+  const id = /\/api\/auth\/sso\/([\w-]+)\/saml\/metadata$/.exec(audience)?.[1];
+  return {
+    requested: /\sInResponseTo\s*=/.test(root),
+    connectionId:
+      id !== undefined && samlEndpoints(apiPublicUrl, id).entityId === audience ? id : null,
+  };
+}
+
 /** `InResponseTo` bookkeeping in Redis, so a response is accepted once, on any api node. */
 export function redisSamlCache(redis: Redis, ttlSec: number): CacheProvider {
   const k = (key: string) => `sso:saml:req:${key}`;

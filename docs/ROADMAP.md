@@ -73,7 +73,7 @@ a reason to come back every week, then reach more databases and teams.
 | 12c | Org templates ("save this project as a template")                              | `built`    | `docs/phase12/ORG-TEMPLATES.md` §2     | A house schema (audit columns, users, tenants) every new project starts from.                                      |
 | 22b | Preview an AI draft on the canvas (ghost tables)                               | `built`    | `docs/phase22/DRAFT-PREVIEW.md`        | See where the new tables sit and what they connect to before importing.                                            |
 | 14b | SCIM provisioning + IdP group mapping                                          | `built`    | `docs/phase14/DIRECTORY-SYNC.md` §1–§2 | Leavers lose access the moment HR removes them; teams in the directory become groups.                              |
-| 14c | Sign-in from the IdP's dashboard (bounced, never trusted)                      | `proposed` | `docs/phase14/DIRECTORY-SYNC.md` §3    | The Okta or Entra app tile just works, without accepting unrequested assertions.                                   |
+| 14c | Sign-in from the IdP's dashboard (bounced, never trusted)                      | `built`    | `docs/phase14/DIRECTORY-SYNC.md` §3    | The Okta or Entra app tile just works, without accepting unrequested assertions.                                   |
 | 14d | Stream the audit log to a SIEM                                                 | `proposed` | `docs/phase14/AUDIT-STREAMING.md`      | Security teams watch SchemaLoom events in Splunk or Datadog, next to everything else.                              |
 
 **6a/6b verified (2026-09-30)** with pg_dump 18.6 in Docker: the api image builds, the engine's

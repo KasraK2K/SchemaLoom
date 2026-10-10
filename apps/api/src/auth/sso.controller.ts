@@ -37,6 +37,7 @@ import {
   samlClient,
   samlEndpoints,
   samlIdentity,
+  samlResponseHints,
   type OidcPending,
 } from './sso.protocols';
 import {
@@ -59,12 +60,19 @@ interface Pending {
   readonly oidc?: OidcPending;
   /** SAML: echoed back as RelayState, binding the IdP's response to this browser */
   readonly rs?: string;
+  /** started by an ACS bounce (14c): a second unrequested response is refused, not bounced */
+  readonly b?: true;
 }
 
 type ConnectionView = SsoConnectionView & {
   readonly sp:
-    | { readonly redirectUri: string }
-    | { readonly entityId: string; readonly acsUrl: string; readonly metadataUrl: string };
+    | { readonly redirectUri: string; readonly appTileUrl: string }
+    | {
+        readonly entityId: string;
+        readonly acsUrl: string;
+        readonly metadataUrl: string;
+        readonly appTileUrl: string;
+      };
   readonly scimBaseUrl: string;
 };
 
@@ -231,11 +239,16 @@ export class SsoController {
   async start(
     @Param('id') id: string,
     @Query('next') next: unknown,
+    @Query('bounce') bounce: unknown,
     @Res() res: Response,
   ): Promise<void> {
     try {
       const conn = await this.sso.record(id);
-      const base = { cid: conn.id, next: safeNext(next) };
+      const base = {
+        cid: conn.id,
+        next: safeNext(next),
+        ...(bounce === '1' ? { b: true as const } : {}),
+      };
       let url: string;
       let pending: Pending;
       if (conn.protocol === 'oidc') {
@@ -283,7 +296,9 @@ export class SsoController {
   }
 
   /** The IdP's form post. CSRF-exempt (`csrf.middleware.ts`): the signed assertion, the
-   *  one-time InResponseTo and the RelayState matched against `sl_sso` stand in for it. */
+   *  one-time InResponseTo and the RelayState matched against `sl_sso` stand in for it.
+   *  Roadmap 14c: a response nobody here asked for (an IdP dashboard tile) is never
+   *  processed; the browser is sent to the start route once, and the IdP answers that. */
   @Public()
   @ApiExcludeEndpoint()
   @HttpCode(302)
@@ -294,14 +309,18 @@ export class SsoController {
     @Body() body: Record<string, unknown>,
   ): Promise<void> {
     try {
-      const pending = await this.pending(req);
       const response = body.SAMLResponse;
-      if (
-        pending.rs === undefined ||
-        body.RelayState !== pending.rs ||
-        typeof response !== 'string'
-      )
-        throw new UnauthorizedException({ code: 'sso_state' });
+      if (typeof response !== 'string') throw new UnauthorizedException({ code: 'sso_state' });
+      const pending = await this.pending(req).catch(() => null);
+      if (pending?.rs === undefined || body.RelayState !== pending.rs) {
+        const hints = samlResponseHints(response, this.apiPublicUrl);
+        if (hints.requested || hints.connectionId === null || pending?.b === true)
+          throw new UnauthorizedException({ code: 'sso_state' });
+        res.redirect(
+          `${this.apiPublicUrl}/api/auth/sso/${encodeURIComponent(hints.connectionId)}/start?bounce=1`,
+        );
+        return;
+      }
       const conn = await this.sso.record(pending.cid);
       const { profile } = await this.saml(conn).validatePostResponseAsync({
         SAMLResponse: response,
@@ -329,12 +348,14 @@ export class SsoController {
   /** The values the IdP admin needs from our side, shown on the settings page. */
   private withSp(c: SsoConnectionView): ConnectionView {
     const saml = samlEndpoints(this.apiPublicUrl, c.id);
+    // Roadmap 14c: the SP-initiated start route is what an IdP dashboard tile points at.
+    const appTileUrl = `${this.apiPublicUrl}/api/auth/sso/${c.id}/start`;
     return {
       ...c,
       sp:
         c.protocol === 'oidc'
-          ? { redirectUri: `${this.apiPublicUrl}/api/auth/sso/oidc/callback` }
-          : { ...saml, metadataUrl: saml.entityId },
+          ? { redirectUri: `${this.apiPublicUrl}/api/auth/sso/oidc/callback`, appTileUrl }
+          : { ...saml, metadataUrl: saml.entityId, appTileUrl },
       scimBaseUrl: `${this.apiPublicUrl}/api/scim/v2`,
     };
   }

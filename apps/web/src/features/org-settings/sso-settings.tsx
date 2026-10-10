@@ -306,6 +306,8 @@ function SpValues({ sp }: { readonly sp: SsoConnection['sp'] }) {
           ['ACS URL', sp.acsUrl],
           ['Metadata', sp.metadataUrl],
         ];
+  // Roadmap 14c: what Okta's bookmark app or Entra's Sign-on URL takes.
+  rows.push(['App tile URL', sp.appTileUrl]);
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
       {rows.map(([k, v]) => (
