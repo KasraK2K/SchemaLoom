@@ -24,6 +24,9 @@ export const NOTIFICATION_TYPES = [
   'change_request.review_requested',
   'change_request.reviewed',
   'change_request.merged',
+  // Roadmap 14d — audit log streaming (org owners)
+  'audit_stream.failing',
+  'audit_stream.recovered',
 ] as const;
 
 export const notificationTypeSchema = z.enum(NOTIFICATION_TYPES);
@@ -41,6 +44,7 @@ const notificationPrefsShape = {
   emailCommentReplies: z.boolean().default(true),
   emailDrift: z.boolean().default(true),
   emailChangeRequests: z.boolean().default(true),
+  emailAuditStream: z.boolean().default(true),
   inAppDigest: z.enum(['off', 'daily', 'weekly']).default('off'),
 };
 export const notificationPrefsInputSchema = z.object(notificationPrefsShape).strict();
@@ -56,6 +60,7 @@ export const notificationPrefsPatchSchema = z
     emailCommentReplies: z.boolean(),
     emailDrift: z.boolean(),
     emailChangeRequests: z.boolean(),
+    emailAuditStream: z.boolean(),
   })
   .partial()
   .strict();

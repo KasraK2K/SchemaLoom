@@ -372,6 +372,7 @@ model Organization {
   ssoConnections  SsoConnection[]
   workspaceGrants WorkspaceGrant[]
   templates       OrgTemplate[]
+  auditStream     AuditStream?
 
   @@index([deletedAt])
   @@map("organizations")
@@ -1898,4 +1899,36 @@ model SsoGroupMapping {
   @@unique([ssoConnectionId, claimValue])
   @@index([groupId])
   @@map("sso_group_mappings")
+}
+
+/// Roadmap 14d (docs/phase14/AUDIT-STREAMING.md) — the org's audit log, streamed to a SIEM.
+/// One per org (Q1). The cursor is the last delivered audit_log row, `(created_at, id)`.
+model AuditStream {
+  id               String    @id @default(cuid())
+  organizationId   String    @unique @map("organization_id")
+  url              String
+  /// json | splunk_hec | datadog (CHECK in the migration)
+  format           String
+  authHeaderName   String?   @map("auth_header_name")
+  /// AES-256-GCM under SECRETS_ENCRYPTION_KEY (the TOTP helper), never returned.
+  authHeaderEnc    String?   @map("auth_header_enc")
+  signingSecretEnc String    @map("signing_secret_enc")
+  /// Starts at the moment the stream is created (Q2: no backfill).
+  cursorAt         DateTime  @map("cursor_at") @db.Timestamptz(6)
+  cursorId         String?   @map("cursor_id")
+  paused           Boolean   @default(false)
+  /// ok | failing
+  status           String    @default("ok")
+  lastError        String?   @map("last_error")
+  /// Failed attempts in a row; sets the backoff.
+  failures         Int       @default(0)
+  nextAttemptAt    DateTime? @map("next_attempt_at") @db.Timestamptz(6)
+  lastDeliveredAt  DateTime? @map("last_delivered_at") @db.Timestamptz(6)
+  failingSince     DateTime? @map("failing_since") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("audit_streams")
 }

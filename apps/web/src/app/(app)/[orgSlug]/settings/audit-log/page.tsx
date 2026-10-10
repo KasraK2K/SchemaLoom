@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { orgNavItems } from '@/components/app-shell/sidebar';
 import { AuditLog } from '@/features/org-settings/audit-log';
+import { AuditStream } from '@/features/org-settings/audit-stream';
 import { listMembers } from '@/features/org-settings/org-settings-api';
 import { OrgSettingsNav } from '@/features/org-settings/org-settings-nav';
 import { listOrganizations, listProjects } from '@/features/projects';
@@ -41,6 +42,8 @@ export default async function OrgAuditLogPage({
           Sign-ins, membership, access and settings changes in {org.name}, newest first.
           {org.orgRole === 'admin' && ' Events in projects you can’t open are not shown.'}
         </p>
+        {/* Roadmap 14d: owners only, since the stream carries rows admins can't see. */}
+        {org.orgRole === 'owner' && <AuditStream orgSlug={orgSlug} />}
         <AuditLog
           orgSlug={orgSlug}
           people={members.map((m) => ({ id: m.userId, label: `${m.name} (${m.email})` }))}

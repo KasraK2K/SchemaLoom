@@ -373,6 +373,7 @@ Restore into a freshly created database (step 5):
 | Export downloads fail                                 | `S3_PUBLIC_URL` must be `https://files.example.com`, and the Caddy block for it must exist |
 | AI panel says it's not configured                     | `ANTHROPIC_API_KEY` is unset; that's expected without it                                   |
 | "Read a database" says the host is private            | `INTROSPECT_ALLOW_PRIVATE_HOSTS=true` for a database on your own network                   |
+| The audit stream says the endpoint is private         | `AUDIT_STREAM_ALLOW_PRIVATE_HOSTS=true` for a SIEM on your own network                     |
 | "Read a database" says the server is newer            | rebuild the api image with a higher `--build-arg PG_CLIENT_MAJOR=`                         |
 | Sync says the saved connection can't be read          | `SECRETS_ENCRYPTION_KEY` changed: re-enter it with Edit connection (`docs/deploy.md`)      |
 | Web logs "API unreachable"                            | `API_INTERNAL_URL` and `docker compose ps api`                                             |

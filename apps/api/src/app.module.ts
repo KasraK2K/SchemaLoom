@@ -9,6 +9,7 @@ import { AuthModule, JwtAuthGuard } from './auth';
 import { CommentsModule } from './comments';
 import { DocsModule } from './docs';
 import { EnginesModule } from './engines';
+import { AuditStreamModule } from './audit-stream/audit-stream.module';
 import { IntrospectModule } from './introspect';
 import { JobsModule } from './jobs';
 import { NotificationsModule } from './notifications';
@@ -80,6 +81,7 @@ import { RedisModule } from './redis/redis.module';
     RealtimeModule,
     JobsModule,
     IntrospectModule,
+    AuditStreamModule,
     ApiTokensModule,
     ScimModule,
     HealthModule,

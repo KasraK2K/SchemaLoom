@@ -25,6 +25,7 @@ const ACTIONABLE: Partial<
   'comment.mentioned': { icon: MessageSquare, tone: 'accent' },
   'drift.detected': { icon: TriangleAlert, tone: 'warning' },
   'drift.check_failed': { icon: TriangleAlert, tone: 'warning' },
+  'audit_stream.failing': { icon: TriangleAlert, tone: 'warning' },
 };
 
 /**

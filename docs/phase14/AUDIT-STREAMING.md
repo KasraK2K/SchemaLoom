@@ -1,6 +1,6 @@
 # Phase 14d: streaming the audit log to a SIEM
 
-Status: **proposed 2026-10-05**. Roadmap row 14d. Builds on the audit log (`DESIGN.md` §2).
+Status: **built 2026-10-10** (approved with every §6 default). Roadmap row 14d. Builds on the audit log (`DESIGN.md` §2).
 
 A security team wants SchemaLoom's audit events in their own tool (Splunk, Datadog, Elastic,
 Sumo Logic, or a log pipeline), next to everything else they watch, as they happen. Today
@@ -50,6 +50,9 @@ model AuditStream {
   failingSince    DateTime? @map("failing_since") @db.Timestamptz(6)
 }
 ```
+
+As built, ids are cuids (`TEXT`) like every other table, and two more columns hold the
+backoff: `failures` (in a row) and `nextAttemptAt`.
 
 The stream starts at the moment it's created. History before that is in the CSV export (Q2).
 

@@ -111,6 +111,12 @@ export const envSchema = z
       z.stringbool().default(false),
     ),
     PG_DUMP_PATH: optionalStr,
+    // Roadmap 14d: an audit stream's endpoint on a private network (a self-hosted Splunk) is
+    // refused unless the install opts in.
+    AUDIT_STREAM_ALLOW_PRIVATE_HOSTS: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.stringbool().default(false),
+    ),
     // Roadmap 20 §1: who runs the BullMQ workers and schedulers. `all` (default) is one
     // process doing everything; `api` serves HTTP and WebSocket only; `worker` runs only the
     // jobs (`node dist/worker.js`). A split needs the realtime bus, so jobs' events reach

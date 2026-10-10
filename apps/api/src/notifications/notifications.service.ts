@@ -60,6 +60,8 @@ const EMAIL_PREF: Partial<Record<NotificationType, keyof NotificationPrefs>> = {
   'change_request.review_requested': 'emailChangeRequests',
   'change_request.reviewed': 'emailChangeRequests',
   'change_request.merged': 'emailChangeRequests',
+  'audit_stream.failing': 'emailAuditStream',
+  'audit_stream.recovered': 'emailAuditStream',
 };
 
 const PAGE_SIZE = 20;
