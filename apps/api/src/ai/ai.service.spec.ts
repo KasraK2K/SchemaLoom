@@ -1,5 +1,4 @@
-import { HttpException, NotFoundException } from '@nestjs/common';
-import type { ConfigService } from '@nestjs/config';
+import { HttpException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import type { EngineRegistry, QueryValidator } from '@schemaloom/engine-sdk';
 import type { Redis } from 'ioredis';
 import type { Request, Response } from 'express';
@@ -11,7 +10,6 @@ import {
   type ProjectSkeleton,
   type Subject,
 } from '../access';
-import type { AppEnv } from '../config/env';
 import { ENGINE_MANIFEST } from '../engines/engines.manifest';
 import { fakePrisma, type FakePrisma, type Row } from '../schema/fake-prisma';
 import type { DocsService } from '../docs';
@@ -20,8 +18,18 @@ import { PROJECT, baseStore, entityRow, fieldRow, projectRow } from '../schema/f
 import { SchemaLoader } from '../schema/schema-loader.service';
 import { AiController } from './ai.controller';
 import { draftSchemaSchema } from './ai.dto';
-import { AiProvider, type AiRequest } from './ai.provider';
-import { AiService, type DocDraftQueue } from './ai.service';
+import type { AiRouter } from '../ai-integrations/ai-router.service';
+import type { AiProvider, AiRequest, AiTarget } from './ai.provider';
+import { AiService, type DocDraftJobData, type DocDraftQueue } from './ai.service';
+
+const TARGET: AiTarget = {
+  integrationId: 'aii_t',
+  source: 'server',
+  provider: 'anthropic',
+  model: 'claude-sonnet-5-5',
+  apiKey: 'k',
+  baseUrl: null,
+};
 
 /**
  * Doc 05 §12.1's analyst again. `ent_emp.fld_sal` is Restricted and she lacks
@@ -81,10 +89,7 @@ function providerStub(
 ): { provider: AiProvider; requests: AiRequest[] } {
   const requests: AiRequest[] = [];
   const provider = {
-    configured: true,
-    model: 'test-model',
-    assertConfigured: () => undefined,
-    stream: vi.fn((request: AiRequest, onText: (t: string) => void) => {
+    stream: vi.fn((_target: AiTarget, request: AiRequest, onText: (t: string) => void) => {
       requests.push(request);
       // Three-character chunks, so tags straddle chunk boundaries.
       for (let i = 0; i < answer.length; i += 3) onText(answer.slice(i, i + 3));
@@ -119,8 +124,10 @@ function harness(
     seed?: Partial<Record<string, Row[]>>;
     counter?: number;
     settings?: unknown;
+    router?: { resolve: ReturnType<typeof vi.fn>; usableTarget: ReturnType<typeof vi.fn> };
   } = {},
 ): {
+  router: { resolve: ReturnType<typeof vi.fn>; usableTarget: ReturnType<typeof vi.fn> };
   prisma: FakePrisma;
   service: AiService;
   add: ReturnType<typeof vi.fn>;
@@ -163,19 +170,24 @@ function harness(
   const write = vi.fn(() => Promise.resolve({}));
   const propose = vi.fn(() => Promise.resolve({ changeRequestId: 'cr_1' }));
   const changeRequests = { proposeFromAgent: propose };
+  const router = opts.router ?? {
+    resolve: vi.fn().mockResolvedValue(TARGET),
+    usableTarget: vi.fn().mockResolvedValue(TARGET),
+  };
   const service = new AiService(
     prisma.client,
     new SchemaLoader(prisma.client),
     new VisibilityFilter(resolver),
     resolver,
     opts.provider ?? providerStub().provider,
+    router as unknown as AiRouter,
     registry,
     redis,
     queue,
     { write } as unknown as DocsService,
     changeRequests as unknown as ChangeRequestsService,
   );
-  return { prisma, service, add, write, propose };
+  return { router, prisma, service, add, write, propose };
 }
 
 const selection = (entityIds: string[]) => ({ entityIds, fieldIds: [], linkIds: [], areaIds: [] });
@@ -192,42 +204,30 @@ const threadRow = (over: Row = {}): Row => ({
   ...over,
 });
 
-describe('AiService — 503 without a key', () => {
-  it('every route answers 503 once the caller is authorised, and writes nothing', async () => {
-    const config = { get: () => undefined } as unknown as ConfigService<AppEnv, true>;
-    const { service, prisma } = harness({
-      provider: new AiProvider(config),
-      view: { ...MARCH, docsEdit: true },
-      seed: {
-        aiThread: [threadRow()],
-        docDraft: [
-          {
-            id: 'd1',
-            projectId: PROJECT,
-            targetType: 'entity',
-            targetId: 'ent_emp',
-            status: 'pending',
-            content: {},
-            createdAt: new Date(0),
-          },
-        ],
-      },
-    });
+describe('AiService — model resolution via AiRouter', () => {
+  const noModel = () => new ServiceUnavailableException({ code: 'ai_no_model' });
+  const docDraftRow = {
+    id: 'd1',
+    projectId: PROJECT,
+    targetType: 'entity',
+    targetId: 'ent_emp',
+    status: 'pending',
+    content: {},
+    createdAt: new Date(0),
+  };
+
+  it('turns, schema drafts and doc drafts answer 503 ai_no_model and write nothing', async () => {
+    const { service, prisma, router } = harness({ seed: { aiThread: [threadRow()] } });
     const calls = [
-      service.listThreads(ANA, PROJECT, mapOf(ANA)),
-      service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection([]) }),
-      service.getThread(ANA, 'thr_1'),
-      service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'query' }),
-      service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'a shop' }),
-      service.enqueueDocDrafts(ANA, PROJECT, mapOf(ANA), ['ent_emp']),
-      service.listDocDrafts(ANA, PROJECT, mapOf(ANA)),
-      service.rejectDocDraft(ANA, 'd1'),
-      service.acceptDocDraft(ANA, 'd1'),
+      () => service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'query' }),
+      () => service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'a shop' }),
+      () => service.enqueueDocDrafts(ANA, PROJECT, mapOf(ANA), ['ent_emp']),
     ];
     for (const call of calls) {
-      await expect(call).rejects.toMatchObject({
+      router.resolve.mockRejectedValueOnce(noModel());
+      await expect(call()).rejects.toMatchObject({
         status: 503,
-        response: { code: 'ai_not_configured' },
+        response: { code: 'ai_no_model' },
       });
     }
     expect(
@@ -235,9 +235,58 @@ describe('AiService — 503 without a key', () => {
     ).toEqual([]);
   });
 
-  it('a permission refusal is the same with or without a key', async () => {
-    const config = { get: () => undefined } as unknown as ConfigService<AppEnv, true>;
-    const { service } = harness({ provider: new AiProvider(config), view: { ...MARCH, ai: [] } });
+  it('read, create and review routes need no model', async () => {
+    const { service, router } = harness({
+      view: { ...MARCH, docsEdit: true },
+      seed: {
+        aiThread: [threadRow()],
+        docDraft: [docDraftRow, { ...docDraftRow, id: 'd2', targetId: 'ent_prod' }],
+      },
+    });
+    await service.listThreads(ANA, PROJECT, mapOf(ANA));
+    await service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection([]) });
+    await service.getThread(ANA, 'thr_1');
+    await service.listDocDrafts(ANA, PROJECT, mapOf(ANA));
+    await service.rejectDocDraft(ANA, 'd1');
+    await service.acceptDocDraft(ANA, 'd2');
+    expect(router.resolve).not.toHaveBeenCalled();
+  });
+
+  it('resolves the ability after the permission and throttle checks', async () => {
+    const { service, router } = harness({
+      provider: providerStub('<ddl>\nCREATE TABLE shops (id int);\n</ddl>').provider,
+      seed: { aiThread: [threadRow()] },
+    });
+    await service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'query' });
+    expect(router.resolve).toHaveBeenLastCalledWith('usr_ana', PROJECT, 'org_1', 'chat');
+    await service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'a shop' });
+    expect(router.resolve).toHaveBeenLastCalledWith('usr_ana', PROJECT, 'org_1', 'schema_draft');
+    await service.enqueueDocDrafts(ANA, PROJECT, mapOf(ANA), ['ent_emp']);
+    expect(router.resolve).toHaveBeenLastCalledWith('usr_ana', PROJECT, 'org_1', 'doc_drafts');
+
+    const denied = harness({ view: { ...MARCH, ai: [] }, seed: { aiThread: [threadRow()] } });
+    await expect(
+      denied.service.draftSchema(ANA, PROJECT, mapOf(ANA), { description: 'a shop' }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      denied.service.enqueueDocDrafts(ANA, PROJECT, mapOf(ANA), ['ent_emp']),
+    ).rejects.toMatchObject({ status: 403 });
+    const off = harness({
+      settings: { ai: { enabled: false } },
+      seed: { aiThread: [threadRow()] },
+    });
+    await expect(
+      off.service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'query' }),
+    ).rejects.toMatchObject({ status: 403, response: { code: 'ai_disabled' } });
+    const throttled = harness({ counter: 1_000, seed: { aiThread: [threadRow()] } });
+    await expect(
+      throttled.service.prepareTurn(ANA, 'thr_1', { content: 'x', mode: 'query' }),
+    ).rejects.toMatchObject({ status: 429 });
+    for (const h of [denied, off, throttled]) expect(h.router.resolve).not.toHaveBeenCalled();
+  });
+
+  it('a permission refusal is the same with or without a model', async () => {
+    const { service } = harness({ view: { ...MARCH, ai: [] } });
     await expect(
       service.createThread(ANA, PROJECT, mapOf(ANA), { selection: selection(['ent_emp']) }),
     ).rejects.toMatchObject({ status: 403 });
@@ -318,6 +367,7 @@ describe('AiService turns', () => {
     expect(prisma.store.aiMessage?.[1]).toMatchObject({
       touchedEntityIds: ['ent_emp'],
       touchedFieldIds: ['fld_emp_name'],
+      integrationId: 'aii_t',
     });
     // Validated with no probe (L13).
     const input = (validator.validate as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as {
@@ -498,6 +548,26 @@ describe('AiService doc drafts', () => {
     expect(add).not.toHaveBeenCalled();
     await service.enqueueDocDrafts(ANA, PROJECT, mapOf(ANA), ['ent_emp']);
     expect(add).toHaveBeenCalledTimes(1);
+    expect(add.mock.calls[0]?.[1]).toMatchObject({
+      integrationId: 'aii_t',
+      model: 'claude-sonnet-5-5',
+    });
+  });
+
+  it('the job drafts nothing when its model is no longer usable, or was never recorded', async () => {
+    const { provider, requests } = providerStub();
+    const { service, router } = harness({ provider });
+    router.usableTarget.mockResolvedValueOnce(null);
+    const job = { projectId: PROJECT, subject: ANA, entityIds: ['ent_emp'] };
+    expect(
+      await service.runDocDraftJob({ ...job, integrationId: 'aii_t', model: 'm' }, 'job_1'),
+    ).toEqual({ drafted: 0 });
+    expect(router.usableTarget).toHaveBeenCalledWith('usr_ana', PROJECT, 'org_1', 'aii_t', 'm');
+    // Queued before this deploy: no integrationId.
+    expect(await service.runDocDraftJob(job as unknown as DocDraftJobData, 'job_2')).toEqual({
+      drafted: 0,
+    });
+    expect(requests).toEqual([]);
   });
 
   it('the job keeps only suggestions for targets it asked about, replacing a pending one', async () => {
@@ -521,7 +591,13 @@ describe('AiService doc drafts', () => {
     });
     expect(
       await service.runDocDraftJob(
-        { projectId: PROJECT, subject: ANA, entityIds: ['ent_emp'] },
+        {
+          projectId: PROJECT,
+          subject: ANA,
+          entityIds: ['ent_emp'],
+          integrationId: 'aii_t',
+          model: 'claude-sonnet-5-5',
+        },
         'job_1',
       ),
     ).toEqual({ drafted: 1 });
@@ -755,10 +831,9 @@ describe('AiService agent reads (Phase 21 §5)', () => {
       },
     ],
   };
-  const noKey = () =>
-    new AiProvider({ get: () => undefined } as unknown as ConfigService<AppEnv, true>);
+  const noKey = () => providerStub().provider;
 
-  it('works with no API key and never calls a provider; masked columns stay out', async () => {
+  it('needs no model and never calls a provider; masked columns stay out', async () => {
     const { service } = harness({ provider: noKey(), seed: doc });
     const outline = await service.agentOutline(ANA, PROJECT, mapOf(ANA), {});
     expect(outline.lines).toEqual([

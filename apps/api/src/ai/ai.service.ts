@@ -46,7 +46,8 @@ import { identifiersResolved } from '../saved-queries/saved-queries.service';
 import { renderOrmCode } from '../jobs/orm-code';
 import { SchemaLoader } from '../schema';
 import { ChangeRequestsService, type AgentProposal } from '../snapshots';
-import { AiProvider, type AiResult } from './ai.provider';
+import { AiRouter } from '../ai-integrations/ai-router.service';
+import { AiProvider, type AiResult, type AiTarget } from './ai.provider';
 import { draftPreview, draftSummary, type DraftPreview, type DraftSummary } from './draft-summary';
 import { aiSettings } from './ai-settings';
 
@@ -81,6 +82,8 @@ export interface DocDraftJobData {
   readonly projectId: string;
   readonly subject: Subject;
   readonly entityIds: readonly string[];
+  readonly integrationId: string;
+  readonly model: string;
 }
 
 /** DESIGN §4.3 — fixed windows, both failing closed (a Redis error propagates, never admits). */
@@ -149,6 +152,7 @@ export interface PreparedTurn {
   readonly explainQuery: string | null;
   readonly contextEntityIds: readonly string[];
   readonly profile: AiProfile;
+  readonly target: AiTarget;
 }
 
 export type AiStreamEmit = (event: string, data: unknown) => void;
@@ -176,6 +180,7 @@ export class AiService {
     private readonly filter: VisibilityFilter,
     private readonly resolver: PermissionResolver,
     private readonly provider: AiProvider,
+    private readonly router: AiRouter,
     @Inject(ENGINE_REGISTRY) private readonly registry: EngineRegistry,
     @Inject(REDIS_RATELIMIT) private readonly rateLimit: Redis,
     @Inject(AI_DOC_DRAFTS) private readonly drafts: DocDraftQueue,
@@ -191,7 +196,6 @@ export class AiService {
     map: ProjectPermissionMap,
   ): Promise<AiThreadView[]> {
     const view = await this.view(subject, projectId, map);
-    this.provider.assertConfigured();
     const threads = await this.prisma.aiThread.findMany({
       where: { projectId, userId: view.subject.userId },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
@@ -208,7 +212,6 @@ export class AiService {
     id: string,
   ): Promise<AiThreadView & { messages: AiMessageView[] }> {
     const { thread, view, messages } = await this.visibleThread(subject, id);
-    this.provider.assertConfigured();
     const profile = this.registry.tryGet(view.redacted.engineId)?.aiProfile;
     return { ...threadView(thread), messages: messages.map((m) => messageView(m, profile)) };
   }
@@ -223,7 +226,6 @@ export class AiService {
     this.profileFor(view);
     const entityIds = this.contextEntities(view, body.selection.entityIds, { strict: true });
     this.assertAiUse(view, entityIds);
-    this.provider.assertConfigured();
     const thread = await this.prisma.aiThread.create({
       data: {
         projectId,
@@ -260,8 +262,13 @@ export class AiService {
       throw new ConflictException({ code: 'ai_selection_unavailable' });
     }
     this.assertAiUse(view, contextEntityIds);
-    this.provider.assertConfigured();
     await this.throttle(view);
+    const target = await this.router.resolve(
+      view.subject.userId,
+      view.projectId,
+      view.organizationId,
+      'chat',
+    );
     const userContent =
       body.mode === 'explain'
         ? `Explain this query:\n<query>\n${body.content}\n</query>`
@@ -277,6 +284,7 @@ export class AiService {
       explainQuery,
       contextEntityIds,
       profile,
+      target,
     };
   }
 
@@ -330,6 +338,7 @@ export class AiService {
 
     const stream = createTaggedEmitter(emit);
     const result: AiResult = await this.provider.stream(
+      turn.target,
       {
         prefix,
         instructions,
@@ -386,6 +395,7 @@ export class AiService {
           content,
           queryText: query,
           model: result.model,
+          integrationId: turn.target.integrationId,
           tokensIn: result.tokensIn,
           tokensOut: result.tokensOut,
           touchedEntityIds: [...new Set([...used, ...turn.contextEntityIds])],
@@ -419,8 +429,13 @@ export class AiService {
     const view = await this.view(subject, projectId, map);
     const profile = this.profileFor(view);
     this.assertAiUseAtProject(view);
-    this.provider.assertConfigured();
     await this.throttle(view);
+    const target = await this.router.resolve(
+      view.subject.userId,
+      view.projectId,
+      view.organizationId,
+      'schema_draft',
+    );
 
     const usable = new Set(
       this.contextEntities(view, [], { strict: false }).filter((id) =>
@@ -461,6 +476,7 @@ export class AiService {
     }
 
     const result = await this.provider.stream(
+      target,
       {
         prefix,
         instructions: profile.outputInstructions['draft-schema'],
@@ -770,11 +786,22 @@ export class AiService {
     this.profileFor(view);
     const ids = this.contextEntities(view, entityIds, { strict: true });
     this.assertAiUse(view, ids);
-    this.provider.assertConfigured();
     await this.throttle(view);
+    const target = await this.router.resolve(
+      view.subject.userId,
+      view.projectId,
+      view.organizationId,
+      'doc_drafts',
+    );
     const job = await this.drafts.add(
       'ai.doc-drafts',
-      { projectId, subject: view.subject, entityIds: ids },
+      {
+        projectId,
+        subject: view.subject,
+        entityIds: ids,
+        integrationId: target.integrationId,
+        model: target.model,
+      },
       {
         attempts: 1,
         removeOnComplete: { age: 3_600, count: 1_000 },
@@ -786,11 +813,21 @@ export class AiService {
 
   /** The worker. Permissions are re-resolved NOW, not trusted from enqueue time. */
   async runDocDraftJob(data: DocDraftJobData, jobId: string | null): Promise<{ drafted: number }> {
-    if (!this.provider.configured) return { drafted: 0 };
+    // Queued before roadmap 24 shipped: no recorded model. The job is one-shot; re-running is one click.
+    if ((data.integrationId as string | undefined) === undefined) return { drafted: 0 };
     const view = await this.view(data.subject, data.projectId);
     const profile = this.profileFor(view);
     const ids = this.contextEntities(view, data.entityIds, { strict: false });
     this.assertAiUse(view, ids);
+    // Roadmap 24 §3.4: the model picked at enqueue, if the requester may still use it.
+    const target = await this.router.usableTarget(
+      view.subject.userId,
+      view.projectId,
+      view.organizationId,
+      data.integrationId,
+      data.model,
+    );
+    if (target === null) return { drafted: 0 };
 
     const { objects } = view.redacted;
     const targets = new Map<string, 'entity' | 'field'>();
@@ -817,6 +854,7 @@ export class AiService {
       includeDocs: view.includeDocs,
     });
     const result = await this.provider.stream(
+      target,
       {
         prefix: `${profile.buildSystemPrompt({
           projectName: view.projectName,
@@ -865,7 +903,6 @@ export class AiService {
     map: ProjectPermissionMap,
   ): Promise<DocDraftView[]> {
     const view = await this.view(subject, projectId, map);
-    this.provider.assertConfigured();
     const rows = await this.prisma.docDraft.findMany({
       where: { projectId, status: 'pending' },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -875,7 +912,6 @@ export class AiService {
 
   async rejectDocDraft(subject: Subject, id: string): Promise<DocDraftView> {
     const { row, view } = await this.editableDraft(subject, id);
-    this.provider.assertConfigured();
     const updated = await this.prisma.$transaction(async (tx) => {
       // `(targetType, targetId, status)` is unique: an older rejected draft makes room.
       await tx.docDraft.deleteMany({
@@ -893,7 +929,6 @@ export class AiService {
    *  `docs:edit`, sanitises, derives the excerpt and broadcasts — then retires the draft. */
   async acceptDocDraft(subject: Subject, id: string): Promise<DocDraftView> {
     const { row, view } = await this.editableDraft(subject, id);
-    this.provider.assertConfigured();
     await this.docs.write(subject, row.projectId, row.targetType, row.targetId, {
       content: row.content,
       ...(row.structured === null ? {} : { structured: row.structured }),
