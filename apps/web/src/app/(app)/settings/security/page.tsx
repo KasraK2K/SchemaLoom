@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { AccountApiTokens } from '@/features/api-tokens/api-tokens';
 import { SecuritySettings } from '@/features/auth/security-settings';
+import { PersonalAiSection } from '@/features/ai-integrations/personal-ai-section';
 import { NotificationPrefsSection } from '@/features/notifications/notification-prefs';
+import { listOrganizations } from '@/features/projects';
 
 export const metadata: Metadata = { title: 'Account' };
 
@@ -10,7 +12,8 @@ export const metadata: Metadata = { title: 'Account' };
  * Account-level, not org-level: 2FA, devices and notification emails belong to the user,
  * whichever org is active. Renamed "Account" in Phase 4; the URL stays `/settings/security`.
  */
-export default function SecuritySettingsPage() {
+export default async function SecuritySettingsPage() {
+  const orgs = await listOrganizations();
   return (
     <AppShell nav={[]}>
       <div className="mx-auto max-w-2xl p-8">
@@ -18,6 +21,7 @@ export default function SecuritySettingsPage() {
         <div className="flex flex-col gap-10">
           <SecuritySettings />
           <NotificationPrefsSection />
+          <PersonalAiSection orgs={orgs} />
           <AccountApiTokens />
         </div>
       </div>

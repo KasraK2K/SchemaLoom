@@ -12,6 +12,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { z } from 'zod';
+import { AbilityChoices } from '@/features/ai-integrations/ability-choices';
+import { getOptions } from '@/features/ai-integrations/ai-integrations-api';
 import { ProjectApiTokens } from '@/features/api-tokens/api-tokens';
 import { projectShellKey } from '@/features/change-requests/change-requests-api';
 import { SavedConnectionSettings } from '@/features/projects/saved-connection';
@@ -73,6 +75,12 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
   const setProtected = (enabled: boolean) => {
     save.mutate({ path: 'require-change-requests', body: { enabled } });
   };
+  // Who the caller may pick from is `/ai/options`; a project manager may not be an org admin.
+  const aiOptions = useQuery({
+    queryKey: ['ai-options', projectId],
+    queryFn: () => getOptions(projectId),
+    enabled: open && query.data?.ai.enabled === true,
+  });
   const error = query.error ?? save.error;
   const settings = query.data;
 
@@ -143,6 +151,12 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
                 Include documentation in what the AI sees
               </label>
             </fieldset>
+            {settings.ai.enabled && aiOptions.data !== undefined && (
+              <AbilityChoices
+                target={{ kind: 'project', projectId }}
+                integrations={aiOptions.data.integrations}
+              />
+            )}
             <fieldset className="flex flex-col gap-1">
               <legend className="mb-1 text-sm text-text">Change requests</legend>
               <label className="flex items-center gap-2 text-sm text-text">
