@@ -508,6 +508,22 @@ describe('AiService turns', () => {
     const { service } = harness({ seed: { aiThread: [threadRow({ userId: 'usr_ben' })] } });
     await expect(service.getThread(ANA, 'thr_1')).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('the owner renames and deletes a thread; anyone else gets 404 and changes nothing', async () => {
+    const own = harness({ seed: { aiThread: [threadRow()] } });
+    expect((await own.service.renameThread(ANA, 'thr_1', 'Payroll')).title).toBe('Payroll');
+    await own.service.deleteThread(ANA, 'thr_1');
+    expect(own.prisma.store.aiThread).toEqual([]);
+
+    const other = harness({ seed: { aiThread: [threadRow({ userId: 'usr_ben' })] } });
+    await expect(other.service.renameThread(ANA, 'thr_1', 'x')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(other.service.deleteThread(ANA, 'thr_1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(other.prisma.store.aiThread).toHaveLength(1);
+  });
 });
 
 describe('AiController SSE', () => {

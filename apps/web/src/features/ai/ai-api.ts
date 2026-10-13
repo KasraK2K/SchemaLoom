@@ -131,6 +131,22 @@ export async function createThread(
   );
 }
 
+export async function renameThread(threadId: string, title: string): Promise<AiThread> {
+  return aiThreadSchema.parse(
+    await apiFetch<unknown>(`/ai/threads/${threadId}`, { method: 'PATCH', body: { title } }),
+  );
+}
+
+export async function deleteThread(threadId: string): Promise<void> {
+  await apiFetch<unknown>(`/ai/threads/${threadId}`, { method: 'DELETE' });
+}
+
+/** A new thread is named after its first question. */
+export function titleFrom(content: string): string {
+  const line = content.trim().replace(/\s+/g, ' ');
+  return line.length <= 80 ? line : `${line.slice(0, 79)}…`;
+}
+
 export function docDraftsQueryOptions(projectId: string) {
   return queryOptions({
     queryKey: docDraftsKey(projectId),

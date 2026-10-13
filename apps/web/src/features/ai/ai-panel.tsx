@@ -17,13 +17,16 @@ import {
   aiThreadsKey,
   aiThreadsQueryOptions,
   createThread,
+  deleteThread,
   docDraftsKey,
   docDraftsQueryOptions,
   ORMS,
   ormCodeQueryOptions,
   queueDocDrafts,
+  renameThread,
   reviewDocDraft,
   streamMessage,
+  titleFrom,
   type AiMessage,
   type AiMode,
   type OrmId,
@@ -40,24 +43,22 @@ import {
 export function AiPanel({ projectId }: { readonly projectId: string }) {
   const queryClient = useQueryClient();
   const selection = useCanvasStore((s) => s.selection);
-  const [threadId, setThreadId] = useState<string | null>(null);
+  // `id: null` is a conversation not sent yet: it is created on its first question, so an
+  // abandoned "New conversation" leaves nothing behind.
+  const [open, setOpen] = useState<{ id: string | null; entityIds: string[] } | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
   const threads = useQuery(aiThreadsQueryOptions(projectId));
   const { orgSlug } = useParams<{ orgSlug?: string }>();
+  const refreshThreads = () => queryClient.invalidateQueries({ queryKey: aiThreadsKey(projectId) });
 
-  const start = useMutation({
-    mutationFn: () => {
-      const ids = [...selection];
-      return createThread(
-        projectId,
-        ids,
-        ids.length === 0 ? 'Whole schema' : `${String(ids.length)} selected`,
-      );
+  const rename = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) => renameThread(id, title),
+    onSuccess: () => {
+      setRenaming(null);
     },
-    onSuccess: (thread) => {
-      void queryClient.invalidateQueries({ queryKey: aiThreadsKey(projectId) });
-      setThreadId(thread.id);
-    },
+    onSettled: refreshThreads,
   });
+  const remove = useMutation({ mutationFn: deleteThread, onSettled: refreshThreads });
 
   if (threads.error !== null) {
     return (
@@ -67,13 +68,18 @@ export function AiPanel({ projectId }: { readonly projectId: string }) {
     );
   }
 
-  if (threadId !== null) {
+  if (open !== null) {
     return (
       <ThreadView
         projectId={projectId}
-        threadId={threadId}
+        threadId={open.id}
+        entityIds={open.entityIds}
+        onCreated={(id) => {
+          setOpen({ ...open, id });
+          void refreshThreads();
+        }}
         onBack={() => {
-          setThreadId(null);
+          setOpen(null);
         }}
       />
     );
@@ -92,36 +98,99 @@ export function AiPanel({ projectId }: { readonly projectId: string }) {
         </span>
         <Button
           size="sm"
-          disabled={start.isPending}
           onClick={() => {
-            start.mutate();
+            setOpen({ id: null, entityIds: [...selection] });
           }}
         >
           New conversation
         </Button>
       </div>
-      {start.error !== null && (
+      {(rename.error ?? remove.error) !== null && (
         <p role="alert" className="text-xs text-danger-text">
-          <AiErrorText error={start.error} />
+          Could not {rename.error !== null ? 'rename' : 'delete'} that conversation.
         </p>
       )}
       {(threads.data ?? []).length === 0 ? (
         <p className="text-xs text-text-subtle">No conversations yet.</p>
       ) : (
         <ul className="flex flex-col gap-1">
-          {(threads.data ?? []).map((t) => (
-            <li key={t.id}>
-              <button
-                type="button"
-                className="w-full rounded px-2 py-1 text-left text-sm hover:bg-surface-hover"
-                onClick={() => {
-                  setThreadId(t.id);
-                }}
-              >
-                {t.title}
-              </button>
-            </li>
-          ))}
+          {(threads.data ?? []).map((t) =>
+            renaming?.id === t.id ? (
+              <li key={t.id}>
+                <form
+                  className="flex items-center gap-1"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const title = renaming.title.trim();
+                    if (title === '' || title === t.title) setRenaming(null);
+                    else rename.mutate({ id: t.id, title });
+                  }}
+                >
+                  <input
+                    aria-label="Conversation name"
+                    autoFocus
+                    maxLength={200}
+                    value={renaming.title}
+                    onChange={(e) => {
+                      setRenaming({ id: t.id, title: e.target.value });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setRenaming(null);
+                    }}
+                    className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+                  />
+                  <Button type="submit" size="sm" disabled={rename.isPending}>
+                    Save
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setRenaming(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </form>
+              </li>
+            ) : (
+              <li key={t.id} className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-sm hover:bg-surface-hover"
+                  onClick={() => {
+                    setOpen({ id: t.id, entityIds: t.selection.entityIds });
+                  }}
+                >
+                  {t.title}
+                </button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Rename ${t.title}`}
+                  onClick={() => {
+                    rename.reset();
+                    setRenaming({ id: t.id, title: t.title });
+                  }}
+                >
+                  Rename
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Delete ${t.title}`}
+                  disabled={remove.isPending}
+                  onClick={() => {
+                    if (window.confirm(`Delete “${t.title}” and its messages?`))
+                      remove.mutate(t.id);
+                  }}
+                >
+                  Delete
+                </Button>
+              </li>
+            ),
+          )}
         </ul>
       )}
       <DocDrafts projectId={projectId} selection={[...selection]} />
@@ -228,14 +297,22 @@ function ModelsPane({
 function ThreadView({
   projectId,
   threadId,
+  entityIds,
+  onCreated,
   onBack,
 }: {
   readonly projectId: string;
-  readonly threadId: string;
+  /** null until the first question creates the thread */
+  readonly threadId: string | null;
+  readonly entityIds: readonly string[];
+  readonly onCreated: (id: string) => void;
   readonly onBack: () => void;
 }) {
   const queryClient = useQueryClient();
-  const thread = useQuery(aiThreadQueryOptions(threadId));
+  const thread = useQuery({
+    ...aiThreadQueryOptions(threadId ?? ''),
+    enabled: threadId !== null,
+  });
   const exportFormats = useEngine().capabilities.exportFormats;
   const orms = useMemo(
     () => ORMS.filter((o) => exportFormats.some((f) => f.id === o.id)).map((o) => o.id),
@@ -253,9 +330,14 @@ function ThreadView({
     setError(null);
     setLive(NO_LIVE);
     abort.current = new AbortController();
+    let id = threadId;
     try {
+      if (id === null) {
+        id = (await createThread(projectId, entityIds, titleFrom(content))).id;
+        onCreated(id);
+      }
       await streamMessage(
-        threadId,
+        id,
         mode === 'code' && orm !== null ? { content, mode, orm } : { content, mode },
         (event) => {
           if (event.type === 'block-delta' && LIVE_TAGS.has(event.tag)) {
@@ -274,7 +356,7 @@ function ThreadView({
       setError(e);
     } finally {
       setLive(null);
-      void queryClient.invalidateQueries({ queryKey: aiThreadKey(threadId) });
+      if (id !== null) void queryClient.invalidateQueries({ queryKey: aiThreadKey(id) });
     }
   };
 
@@ -297,7 +379,9 @@ function ThreadView({
         <Button size="sm" variant="ghost" onClick={onBack}>
           ← Conversations
         </Button>
-        <span className="truncate text-xs text-text-muted">{thread.data?.title}</span>
+        <span className="truncate text-xs text-text-muted">
+          {threadId === null ? 'New conversation' : thread.data?.title}
+        </span>
       </div>
       {(thread.data?.messages ?? []).map((m) =>
         m.role === 'user' ? (
@@ -378,8 +462,8 @@ function ThreadView({
             </select>
           )}
         </div>
-        {mode === 'code' && orm !== null && thread.data !== undefined && (
-          <ModelsPane projectId={projectId} orm={orm} entityIds={thread.data.selection.entityIds} />
+        {mode === 'code' && orm !== null && (
+          <ModelsPane projectId={projectId} orm={orm} entityIds={entityIds} />
         )}
         <textarea
           aria-label={

@@ -237,6 +237,18 @@ export class AiService {
     return threadView(thread);
   }
 
+  /** The owner renames their thread; anything `getThread` would 404 on, this 404s on too. */
+  async renameThread(subject: Subject, id: string, title: string): Promise<AiThreadView> {
+    await this.visibleThread(subject, id);
+    return threadView(await this.prisma.aiThread.update({ where: { id }, data: { title } }));
+  }
+
+  /** Messages cascade; saved queries made from it keep their text (`ai_thread_id` → null). */
+  async deleteThread(subject: Subject, id: string): Promise<void> {
+    await this.visibleThread(subject, id);
+    await this.prisma.aiThread.deleteMany({ where: { id } });
+  }
+
   // --- one streamed turn --------------------------------------------------------------------
 
   async prepareTurn(

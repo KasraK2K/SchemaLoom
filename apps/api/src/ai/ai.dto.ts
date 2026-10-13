@@ -10,6 +10,9 @@ export const createThreadSchema = z.object({
 });
 export class CreateThreadDto extends createZodDto(createThreadSchema) {}
 
+export const renameThreadSchema = z.object({ title: z.string().trim().min(1).max(200) });
+export class RenameThreadDto extends createZodDto(renameThreadSchema) {}
+
 export const postMessageSchema = z
   .object({
     content: z.string().trim().min(1).max(20_000),

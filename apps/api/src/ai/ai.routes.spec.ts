@@ -37,10 +37,12 @@ describe('AiController route markers', () => {
 
   it('serves exactly the DESIGN §4.2 routes, minus the settings PATCH', () => {
     expect(Object.keys(table).sort()).toEqual([
+      'DELETE /api/ai/threads/:id',
       'GET /api/ai/threads/:id',
       'GET /api/projects/:projectId/agent/outline',
       'GET /api/projects/:projectId/ai/doc-drafts',
       'GET /api/projects/:projectId/ai/threads',
+      'PATCH /api/ai/threads/:id',
       'POST /api/ai/doc-drafts/:id/accept',
       'POST /api/ai/doc-drafts/:id/reject',
       'POST /api/ai/threads/:id/messages',

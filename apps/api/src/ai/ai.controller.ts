@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -28,6 +30,7 @@ import {
   DocDraftsDto,
   DraftSchemaDto,
   PostMessageDto,
+  RenameThreadDto,
 } from './ai.dto';
 import {
   AiService,
@@ -84,6 +87,25 @@ export class AiController {
     @Param('id') id: string,
   ): Promise<AiThreadView & { messages: AiMessageView[] }> {
     return this.ai.getThread(subjectOf(req), id);
+  }
+
+  @ApiOperation({ summary: 'Rename one of the caller’s threads; otherwise 404' })
+  @Authenticated()
+  @Patch('ai/threads/:id')
+  renameThread(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: RenameThreadDto,
+  ): Promise<AiThreadView> {
+    return this.ai.renameThread(subjectOf(req), id, body.title);
+  }
+
+  @ApiOperation({ summary: 'Delete one of the caller’s threads and its messages; otherwise 404' })
+  @Authenticated()
+  @HttpCode(204)
+  @Delete('ai/threads/:id')
+  deleteThread(@Req() req: Request, @Param('id') id: string): Promise<void> {
+    return this.ai.deleteThread(subjectOf(req), id);
   }
 
   /**
