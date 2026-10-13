@@ -179,7 +179,20 @@ async function main(): Promise<void> {
   });
 
   await prisma.organization.create({
-    data: { id: SEED.orgId, name: 'Acme Commerce', slug: 'acme' },
+    data: {
+      id: SEED.orgId,
+      name: 'Acme Commerce',
+      slug: 'acme',
+      // Roadmap 24: the server-default AI integration every org gets (organizations.service).
+      aiIntegrations: {
+        create: {
+          source: 'server',
+          provider: 'anthropic',
+          name: 'Server default',
+          grants: { create: {} },
+        },
+      },
+    },
   });
 
   await prisma.orgMember.createMany({

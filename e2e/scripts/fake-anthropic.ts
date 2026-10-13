@@ -1,4 +1,5 @@
-// A stand-in for the Anthropic Messages API, so the AI panel runs end to end without a key.
+// A stand-in for the Anthropic Messages API and for an OpenAI-compatible server (/v1/models,
+// /v1/chat/completions), so the AI panel runs end to end without a key.
 // The e2e api points `ANTHROPIC_BASE_URL` here (the SDK reads it); the production code is
 // unchanged. Every request body is kept, and `GET /calls` returns them, so a test can check
 // exactly what left the api. The answer is the same Code-mode answer over the seed's
@@ -58,6 +59,33 @@ createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/calls') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(calls));
+    return;
+  }
+  if (req.method === 'GET' && req.url === '/v1/models') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ object: 'list', data: [{ id: 'fake-chat', object: 'model' }] }));
+    return;
+  }
+  if (req.method === 'POST' && req.url === '/v1/chat/completions') {
+    let raw = '';
+    req.on('data', (c: Buffer) => (raw += c.toString()));
+    req.on('end', () => {
+      const request = JSON.parse(raw) as { messages?: { role: string; content: string }[] };
+      calls.push({ openai: true, ...request });
+      const answer = JSON.stringify(request.messages ?? []).includes('<ddl>')
+        ? invoices(false)
+        : ANSWER;
+      const chunk = (delta: object, finish: string | null): string =>
+        `data: ${JSON.stringify({ id: 'cc_fake', object: 'chat.completion.chunk', model: 'fake-chat', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      const half = Math.floor(answer.length / 2);
+      res.write(chunk({ role: 'assistant', content: answer.slice(0, half) }, null));
+      res.write(chunk({ content: answer.slice(half) }, 'stop'));
+      res.write(
+        `data: ${JSON.stringify({ id: 'cc_fake', object: 'chat.completion.chunk', model: 'fake-chat', choices: [], usage: { prompt_tokens: 1, completion_tokens: 1 } })}\n\n`,
+      );
+      res.end('data: [DONE]\n\n');
+    });
     return;
   }
   if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
