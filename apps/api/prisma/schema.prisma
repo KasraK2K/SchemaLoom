@@ -1246,6 +1246,7 @@ model AiMessage {
 
   @@unique([threadId, ordinal])
   @@index([projectId, createdAt])
+  @@index([integrationId])
   @@map("ai_messages")
 }
 
@@ -1998,6 +1999,8 @@ model AiIntegrationGrant {
   createdBy   User?         @relation("AiGrantCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([integrationId])
+  @@index([projectId])
+  @@index([userId])
   @@map("ai_integration_grants")
 }
 
@@ -2021,5 +2024,8 @@ model AiAbilityChoice {
   integration  AiIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, ability])
+  @@index([projectId])
+  @@index([userId])
+  @@index([integrationId])
   @@map("ai_ability_choices")
 }
