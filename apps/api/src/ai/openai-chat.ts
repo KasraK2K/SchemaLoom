@@ -1,3 +1,4 @@
+import type { AiProviderType } from '../ai-integrations/abilities';
 import type { AiRequest, AiResult } from './ai.provider';
 
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
@@ -18,12 +19,14 @@ export interface ChatClient {
  * Roadmap 24 §4.1 — OpenAI, Gemini and OpenAI-compatible servers. The prefix goes first and
  * unchanged so automatic prefix caching can apply. No reasoning_effort (PLAN "narrowings").
  */
-export function toChatBody(model: string, request: AiRequest): object {
+export function toChatBody(provider: AiProviderType, model: string, request: AiRequest): object {
+  // OpenAI renamed the field; Gemini's endpoint and most compatible servers know only the old one.
+  const limit = provider === 'openai' ? 'max_completion_tokens' : 'max_tokens';
   return {
     model,
     stream: true,
     stream_options: { include_usage: true },
-    max_completion_tokens: request.maxTokens ?? 16_000,
+    [limit]: request.maxTokens ?? 16_000,
     messages: [
       { role: 'system', content: request.prefix },
       { role: 'system', content: request.instructions },
@@ -36,12 +39,15 @@ const STOP: Record<string, string> = { content_filter: 'refusal', length: 'max_t
 
 export async function streamChat(
   client: ChatClient,
+  provider: AiProviderType,
   model: string,
   request: AiRequest,
   onText: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<AiResult> {
-  const stream = await client.chat.completions.create(toChatBody(model, request), { signal });
+  const stream = await client.chat.completions.create(toChatBody(provider, model, request), {
+    signal,
+  });
   let text = '';
   let finish: string | null = null;
   let answeredBy = model;

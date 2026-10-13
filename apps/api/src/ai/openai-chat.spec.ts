@@ -22,7 +22,7 @@ function stub(chunks: ChatChunk[]): ChatClient & { bodies: object[] } {
 
 describe('openai-chat (roadmap 24 §4.1)', () => {
   it('puts the cached prefix first and asks for usage', () => {
-    expect(toChatBody('gpt-x', REQUEST)).toEqual({
+    expect(toChatBody('openai', 'gpt-x', REQUEST)).toEqual({
       model: 'gpt-x',
       stream: true,
       stream_options: { include_usage: true },
@@ -35,6 +35,14 @@ describe('openai-chat (roadmap 24 §4.1)', () => {
     });
   });
 
+  it('sends max_tokens to Gemini and compatible servers', () => {
+    for (const provider of ['gemini', 'openai_compatible'] as const) {
+      const body = toChatBody(provider, 'm', REQUEST);
+      expect(body).toMatchObject({ max_tokens: 500, stream_options: { include_usage: true } });
+      expect(body).not.toHaveProperty('max_completion_tokens');
+    }
+  });
+
   it('streams text and maps finish reasons and usage', async () => {
     const client = stub([
       { model: 'gpt-x-2026', choices: [{ delta: { content: 'Hel' }, finish_reason: null }] },
@@ -42,13 +50,13 @@ describe('openai-chat (roadmap 24 §4.1)', () => {
       { model: 'gpt-x-2026', choices: [], usage: { prompt_tokens: 12, completion_tokens: 3 } },
     ]);
     const seen: string[] = [];
-    const result = await streamChat(client, 'gpt-x', REQUEST, (t) => seen.push(t));
+    const result = await streamChat(client, 'openai', 'gpt-x', REQUEST, (t) => seen.push(t));
     expect(seen).toEqual(['Hel', 'lo']);
     expect(result).toEqual({ text: 'Hello', stopReason: 'refusal', model: 'gpt-x-2026', tokensIn: 12, tokensOut: 3 });
   });
 
   it('maps length to max_tokens and missing usage to null', async () => {
-    const result = await streamChat(stub([{ choices: [{ delta: {}, finish_reason: 'length' }] }]), 'gpt-x', REQUEST, () => undefined);
+    const result = await streamChat(stub([{ choices: [{ delta: {}, finish_reason: 'length' }] }]), 'openai', 'gpt-x', REQUEST, () => undefined);
     expect(result).toMatchObject({ stopReason: 'max_tokens', model: 'gpt-x', tokensIn: null, tokensOut: null });
   });
 

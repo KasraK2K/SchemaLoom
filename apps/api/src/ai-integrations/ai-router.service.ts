@@ -141,14 +141,27 @@ export class AiRouter {
     return { input, integrations };
   }
 
+  /** The integration's key in plain text; throws when SECRETS_ENCRYPTION_KEY no longer opens it. */
+  apiKeyOf(row: {
+    source: string;
+    apiKeyEnc: string | null;
+  }): string | null {
+    if (row.source === 'server') return this.config.get('ANTHROPIC_API_KEY', { infer: true }) ?? null;
+    if (row.apiKeyEnc === null) return null;
+    return decryptSecret(
+      row.apiKeyEnc,
+      this.config.get('SECRETS_ENCRYPTION_KEY', { infer: true }),
+    ).toString();
+  }
+
   private target(row: LoadedIntegration, model: string): AiTarget {
-    const key = this.config.get('SECRETS_ENCRYPTION_KEY', { infer: true });
-    const apiKey =
-      row.source === 'server'
-        ? (this.config.get('ANTHROPIC_API_KEY', { infer: true }) ?? null)
-        : row.apiKeyEnc === null
-          ? null
-          : decryptSecret(row.apiKeyEnc, key).toString();
+    let apiKey: string | null;
+    try {
+      apiKey = this.apiKeyOf(row);
+    } catch {
+      // A rotated SECRETS_ENCRYPTION_KEY: the key must be entered again.
+      throw new ServiceUnavailableException({ code: 'ai_integration_undecryptable' });
+    }
     return {
       integrationId: row.id,
       source: row.source,
@@ -156,6 +169,7 @@ export class AiRouter {
       model,
       apiKey,
       baseUrl: row.baseUrl,
+      personal: row.ownerUserId !== null,
     };
   }
 

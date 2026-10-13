@@ -9,7 +9,7 @@ import { readOrgSettings } from '@schemaloom/contracts';
 import { PermissionResolver } from '../access';
 import { AiProvider } from '../ai/ai.provider';
 import { scrubKey } from '../ai/openai-chat';
-import { decryptSecret, encryptSecret } from '../auth/totp';
+import { encryptSecret } from '../auth/totp';
 import type { AppEnv } from '../config/env';
 import type { AiIntegration, Prisma } from '../generated/prisma/client';
 import { resolveCheckedAddress } from '../introspect/address-guard';
@@ -54,10 +54,15 @@ export interface ChoiceView {
   model: string;
   locked: boolean;
 }
+/** What a member may pick from: the `/ai/options` shape, none of the admin fields. */
+export type UsableIntegrationView = Pick<
+  IntegrationView,
+  'id' | 'name' | 'provider' | 'source' | 'personal' | 'models' | 'capabilities'
+>;
 /** `GET /me/ai/choices`: the caller's choices plus what they may pick from. */
 export interface MeChoicesView {
   choices: ChoiceView[];
-  usableIntegrations: IntegrationView[];
+  usableIntegrations: UsableIntegrationView[];
   personalAllowed: boolean;
 }
 
@@ -202,21 +207,24 @@ export class AiIntegrationsService {
     return row;
   }
 
-  private async checkBaseUrl(baseUrl: string | undefined): Promise<void> {
+  /** A personal integration never gets a private host: AI_ALLOW_PRIVATE_HOSTS is for org ones. */
+  private async checkBaseUrl(baseUrl: string | undefined, owner: Owner): Promise<void> {
     if (baseUrl === undefined) return;
     try {
       await resolveCheckedAddress(
         new URL(baseUrl).hostname.replace(/^\[|\]$/g, ''),
-        this.config.get('AI_ALLOW_PRIVATE_HOSTS', { infer: true }),
+        owner.kind === 'org' && this.config.get('AI_ALLOW_PRIVATE_HOSTS', { infer: true }),
       );
     } catch (error) {
       const code = (error as { getResponse?: () => { code?: string } }).getResponse?.().code;
       const isPrivate = code === 'introspect.private_host';
       throw new UnprocessableEntityException({
         code: isPrivate ? 'ai_private_base_url' : 'ai_base_url_unreachable',
-        message: isPrivate
-          ? 'The base URL is on a private network. A self-hosted install can allow it with AI_ALLOW_PRIVATE_HOSTS=true.'
-          : 'Could not find the base URL’s host.',
+        message: !isPrivate
+          ? 'Could not find the base URL’s host.'
+          : owner.kind === 'me'
+            ? 'The base URL is on a private network, which a personal integration can’t use.'
+            : 'The base URL is on a private network. A self-hosted install can allow it with AI_ALLOW_PRIVATE_HOSTS=true.',
       });
     }
   }
@@ -255,7 +263,7 @@ export class AiIntegrationsService {
 
   async create(owner: Owner, input: CreateIntegrationInput): Promise<IntegrationView> {
     const scope = await this.scopeOf(owner);
-    await this.checkBaseUrl(input.baseUrl);
+    await this.checkBaseUrl(input.baseUrl, owner);
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.aiIntegration.create({
         data: {
@@ -292,7 +300,7 @@ export class AiIntegrationsService {
         message: 'Only an OpenAI-compatible integration has a base URL.',
       });
     }
-    await this.checkBaseUrl(input.baseUrl);
+    await this.checkBaseUrl(input.baseUrl, owner);
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.aiIntegration.update({
         where: { id },
@@ -341,26 +349,7 @@ export class AiIntegrationsService {
   /** §4.4: stores the outcome; never changes `allowed_models` by itself. */
   async test(owner: Owner, id: string): Promise<IntegrationView & { fetchedModels: string[] }> {
     const row = await this.row(owner, id);
-    const apiKey =
-      row.source === 'server'
-        ? (this.config.get('ANTHROPIC_API_KEY', { infer: true }) ?? null)
-        : row.apiKeyEnc === null
-          ? null
-          : decryptSecret(row.apiKeyEnc, this.key).toString();
-    let fetchedModels: string[] = [];
-    let outcome: { status: 'ok' | 'failing'; lastError: string | null };
-    try {
-      fetchedModels = await this.provider.listModels({
-        source: row.source === 'server' ? 'server' : 'custom',
-        provider: row.provider as AiProviderType,
-        apiKey,
-        baseUrl: row.baseUrl,
-      });
-      outcome = { status: 'ok', lastError: null };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      outcome = { status: 'failing', lastError: scrubKey(message, apiKey).slice(0, 500) };
-    }
+    const { fetchedModels, outcome } = await this.check(row);
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.aiIntegration.update({
         where: { id },
@@ -377,6 +366,38 @@ export class AiIntegrationsService {
       return next;
     });
     return { ...this.view(updated), fetchedModels };
+  }
+
+  private async check(row: AiIntegration): Promise<{
+    fetchedModels: string[];
+    outcome: { status: 'ok' | 'failing'; lastError: string | null };
+  }> {
+    let apiKey: string | null;
+    try {
+      apiKey = this.router.apiKeyOf(row);
+    } catch {
+      // SECRETS_ENCRYPTION_KEY was rotated: a failed test, not a 500.
+      const lastError = "The saved key can't be decrypted; enter it again.";
+      return { fetchedModels: [], outcome: { status: 'failing', lastError } };
+    }
+    try {
+      const fetchedModels = await this.provider.listModels({
+        source: row.source === 'server' ? 'server' : 'custom',
+        provider: row.provider as AiProviderType,
+        apiKey,
+        baseUrl: row.baseUrl,
+        personal: row.ownerUserId !== null,
+      });
+      return { fetchedModels, outcome: { status: 'ok', lastError: null } };
+    } catch (error) {
+      // One short line only: never a provider response body.
+      const message = error instanceof Error ? error.message : String(error);
+      const line = scrubKey(message, apiKey).split('\n')[0]?.trim() ?? '';
+      return {
+        fetchedModels: [],
+        outcome: { status: 'failing', lastError: line.slice(0, 200) || 'The test failed.' },
+      };
+    }
   }
 
   // --- grants (org integrations only; a personal one never matches → 404) ---------------------
@@ -553,12 +574,16 @@ export class AiIntegrationsService {
       key.organizationId,
       key.projectId,
     );
-    return { choices, usableIntegrations: usable.map((r) => this.view(r)), personalAllowed };
+    const usableIntegrations = usable.map((r): UsableIntegrationView => {
+      const { id, name, provider, source, personal, models, capabilities } = this.view(r);
+      return { id, name, provider, source, personal, models, capabilities };
+    });
+    return { choices, usableIntegrations, personalAllowed };
   }
 
   /**
    * What the member may pick from: granted org integrations (for a project, as the resolver
-   * would; without one, a `*` grant or one naming the member in any project) and, when the
+   * would; without one, a `*` grant or one naming the member in every project) and, when the
    * org's policy allows, their own personal ones of an allowed provider.
    */
   private async usable(
@@ -588,10 +613,11 @@ export class AiIntegrationsService {
       projectId: projectId ?? '',
       integrations: [],
       grants:
+        // A (member, project) grant is that project's alone, not a default.
         projectId === null
-          ? grants
-              .filter((g) => (g.projectId === null && g.userId === null) || g.userId === userId)
-              .map((g) => ({ ...g, projectId: null }))
+          ? grants.filter(
+              (g) => g.projectId === null && (g.userId === null || g.userId === userId),
+            )
           : grants,
       choices: [],
       policy,
@@ -627,15 +653,17 @@ export class AiIntegrationsService {
         : await this.prisma.aiIntegration.findFirst({
             where: { id: input.integrationId, organizationId: key.organizationId },
           });
-    if (integration === null) {
-      throw new UnprocessableEntityException({
+    const notInOrg = () =>
+      new UnprocessableEntityException({
         code: 'ai_integration_not_in_org',
         message: 'That integration is not available here.',
       });
-    }
+    if (integration === null) throw notInOrg();
     const models =
       integration.source === 'server' ? this.router.serverModels() : integration.allowedModels;
     if (!models.includes(input.model)) {
+      // A project manager need not be an org admin: no probing an integration's model list.
+      if (scope.kind === 'project') throw notInOrg();
       throw new UnprocessableEntityException({
         code: 'ai_model_not_allowed',
         message: 'That model is not offered by the integration.',

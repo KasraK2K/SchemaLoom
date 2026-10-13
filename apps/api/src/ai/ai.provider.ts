@@ -37,7 +37,18 @@ export interface AiTarget {
   /** decrypted for this call only; env key for the server row; null for a keyless openai_compatible */
   readonly apiKey: string | null;
   readonly baseUrl: string | null;
+  /** a member's own integration: never reaches a private host, whatever AI_ALLOW_PRIVATE_HOSTS says */
+  readonly personal: boolean;
 }
+
+/** `listModels` (the test-connection button) answers within 10 s or fails (§4.4). */
+type ClientLimits = { timeout: number; maxRetries: number } | Record<string, never>;
+const LIST_LIMITS = { timeout: 10_000, maxRetries: 0 };
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+/** Models that take `fallbacks: "default"` on the Claude API (claude-api skill, 2026-10). */
+const FALLBACK_MODELS = ['claude-fable-5-1', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5'];
+/** Claude 3.x and 4.0–4.5 (Haiku 4.5 included) take no adaptive thinking. */
+const PRE_ADAPTIVE = /^claude-(3|(opus|sonnet|haiku)-4(-[0-5])?(-\d{8}|@|$))/;
 
 /** Test seam: specs build fake clients; production binds nothing and builds real ones per call. */
 export const AI_CLIENT_FACTORIES = Symbol('AI_CLIENT_FACTORIES');
@@ -45,9 +56,19 @@ export interface AiClientFactories {
   readonly openai?: (opts: {
     apiKey: string;
     baseURL?: string;
+    organization: null;
+    project: null;
     fetch?: typeof fetch;
+    timeout?: number;
+    maxRetries?: number;
   }) => ChatClient;
-  readonly anthropic?: (opts: { apiKey: string; baseURL?: string }) => Anthropic;
+  readonly anthropic?: (opts: {
+    apiKey: string;
+    baseURL?: string;
+    authToken?: null;
+    timeout?: number;
+    maxRetries?: number;
+  }) => Anthropic;
 }
 
 /**
@@ -58,8 +79,8 @@ export interface AiClientFactories {
  * A Nest provider so specs override it (`{ provide: AiProvider, useValue: stub }`) and
  * nothing reaches the network in a test.
  *
- * Anthropic branch: Sonnet 5.5 with adaptive thinking and server-side
- * `fallbacks: "default"` (Claude API only for Sonnet 5.5): a policy decline is
+ * Anthropic branch: adaptive thinking (4.6+) and, on the models in FALLBACK_MODELS, server-side
+ * `fallbacks: "default"` (Claude API only): a policy decline is
  * retried on a fallback model inside the same call, and only a refusal of the whole chain
  * comes back as `stop_reason: "refusal"`, which callers must check.
  */
@@ -80,7 +101,14 @@ export class AiProvider {
     try {
       return target.provider === 'anthropic'
         ? await this.streamAnthropic(target, request, onText, signal)
-        : await streamChat(this.chatClient(target), target.model, request, onText, signal);
+        : await streamChat(
+            this.chatClient(target, {}),
+            target.provider,
+            target.model,
+            request,
+            onText,
+            signal,
+          );
     } catch (error) {
       throw this.mapError(error, target.apiKey);
     }
@@ -91,8 +119,8 @@ export class AiProvider {
       const ids: string[] = [];
       const list =
         target.provider === 'anthropic'
-          ? this.anthropic(target).models.list()
-          : this.chatClient(target).models.list();
+          ? this.anthropic(target, LIST_LIMITS).models.list()
+          : this.chatClient(target, LIST_LIMITS).models.list();
       for await (const m of list) ids.push(m.id);
       return ids.sort();
     } catch (error) {
@@ -100,25 +128,36 @@ export class AiProvider {
     }
   }
 
-  private anthropic(target: Pick<AiTarget, 'source' | 'apiKey'>): Anthropic {
+  private anthropic(target: Pick<AiTarget, 'source' | 'apiKey'>, limits: ClientLimits = {}): Anthropic {
     const opts = {
       apiKey: target.apiKey ?? '',
-      ...(target.source === 'custom' ? { baseURL: 'https://api.anthropic.com' } : {}),
+      // A custom key never pairs with an env ANTHROPIC_AUTH_TOKEN or ANTHROPIC_BASE_URL.
+      ...(target.source === 'custom'
+        ? { baseURL: 'https://api.anthropic.com', authToken: null }
+        : {}),
+      ...limits,
     };
     return this.factories.anthropic?.(opts) ?? new Anthropic(opts);
   }
 
-  private chatClient(target: Pick<AiTarget, 'provider' | 'apiKey' | 'baseUrl'>): ChatClient {
+  private chatClient(
+    target: Pick<AiTarget, 'provider' | 'apiKey' | 'baseUrl' | 'personal'>,
+    limits: ClientLimits,
+  ): ChatClient {
+    const allowPrivate =
+      !target.personal && this.config.get('AI_ALLOW_PRIVATE_HOSTS', { infer: true });
     const opts = {
       // A keyless local server still needs a non-empty string for the SDK.
       apiKey: target.apiKey ?? 'none',
+      // Pinned so OPENAI_BASE_URL / OPENAI_ORG_ID / OPENAI_PROJECT_ID never reach a tenant call.
+      ...(target.provider === 'openai' ? { baseURL: OPENAI_BASE_URL } : {}),
       ...(target.provider === 'gemini' ? { baseURL: GEMINI_BASE_URL } : {}),
+      organization: null,
+      project: null,
       ...(target.provider === 'openai_compatible' && target.baseUrl !== null
-        ? {
-            baseURL: target.baseUrl,
-            fetch: guardedFetch(this.config.get('AI_ALLOW_PRIVATE_HOSTS', { infer: true })),
-          }
+        ? { baseURL: target.baseUrl, fetch: guardedFetch(allowPrivate) }
         : {}),
+      ...limits,
     };
     return this.factories.openai?.(opts) ?? new OpenAI(opts);
   }
@@ -133,9 +172,10 @@ export class AiProvider {
       {
         model: target.model,
         max_tokens: request.maxTokens ?? 16_000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
-        thinking: { type: 'adaptive' },
+        ...(FALLBACK_MODELS.some((m) => target.model === m || target.model.startsWith(`${m}-`))
+          ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }
+          : {}),
+        ...(PRE_ADAPTIVE.test(target.model) ? {} : { thinking: { type: 'adaptive' as const } }),
         system: [
           { type: 'text', text: request.prefix, cache_control: { type: 'ephemeral' } },
           { type: 'text', text: request.instructions },

@@ -237,6 +237,7 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
       provider: 'openai',
       apiKey: SK,
       baseUrl: null,
+      personal: false,
     });
     // It never changes allowed_models by itself (§4.4).
     expect(ok.models).toEqual(['gpt-x']);
@@ -253,6 +254,14 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
         .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
     ).toEqual([{ ok: false }, { ok: true }]);
 
+    // Only the first line is kept, at most 200 characters: never a response body.
+    listModels.mockRejectedValueOnce(
+      new Error(`401 ${'x'.repeat(300)}\n{"error":{"message":"body ${SK}"}}`),
+    );
+    const long = await svc.test(org(OWNER), view.id);
+    expect(long.lastError).toBe(`401 ${'x'.repeat(300)}`.slice(0, 200));
+    expect(long.lastError).not.toContain('body');
+
     // The server row tests with the env key.
     await svc.test(org(OWNER), SRV);
     expect(listModels).toHaveBeenLastCalledWith({
@@ -260,7 +269,25 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
       provider: 'anthropic',
       apiKey: 'env-key',
       baseUrl: null,
+      personal: false,
     });
+    // A personal integration is marked so the provider keeps it off private hosts.
+    const mine = await svc.create(me(MEMBER), openai);
+    await svc.test(me(MEMBER), mine.id);
+    expect(listModels).toHaveBeenLastCalledWith(expect.objectContaining({ personal: true }));
+  });
+
+  it('4b. a key the current SECRETS_ENCRYPTION_KEY cannot open fails the test, not the request', async () => {
+    const view = await svc.create(org(OWNER), openai);
+    const rotated = build({ ...ENV, SECRETS_ENCRYPTION_KEY: randomBytes(32).toString('base64') });
+    const result = await rotated.test(org(OWNER), view.id);
+    expect(result).toMatchObject({
+      status: 'failing',
+      lastError: "The saved key can't be decrypted; enter it again.",
+      fetchedModels: [],
+    });
+    expect(listModels).not.toHaveBeenCalled();
+    expect((await audits('ai_integration.tested'))[0]?.metadata).toEqual({ ok: false });
   });
 
   it('5. a private base URL is refused unless AI_ALLOW_PRIVATE_HOSTS', async () => {
@@ -279,6 +306,20 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
     // Moving it onto a private host is refused the same way.
     await expect(
       svc.update(org(OWNER), view.id, { baseUrl: 'http://10.0.0.5:11434/v1' }),
+    ).rejects.toMatchObject({ status: 422, response: { code: 'ai_private_base_url' } });
+
+    // A personal integration never gets a private host, whatever the flag says.
+    const allowing = build({ ...ENV, AI_ALLOW_PRIVATE_HOSTS: true });
+    await expect(allowing.create(me(MEMBER), local)).rejects.toMatchObject({
+      status: 422,
+      response: { code: 'ai_private_base_url' },
+    });
+    const mine = await allowing.create(me(MEMBER), {
+      ...local,
+      baseUrl: 'https://1.1.1.1/v1',
+    });
+    await expect(
+      allowing.update(me(MEMBER), mine.id, { baseUrl: 'http://10.0.0.5:11434/v1' }),
     ).rejects.toMatchObject({ status: 422, response: { code: 'ai_private_base_url' } });
   });
 
@@ -411,6 +452,15 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
         locked: false,
       }),
     ).rejects.toMatchObject({ status: 422, response: { code: 'ai_model_not_allowed' } });
+    // A project manager can't tell a wrong model from a foreign integration (no probing).
+    await expect(
+      svc.putChoice(scopeProject, {
+        ability: 'chat',
+        integrationId: view.id,
+        model: 'gpt-z',
+        locked: false,
+      }),
+    ).rejects.toMatchObject({ status: 422, response: { code: 'ai_integration_not_in_org' } });
     for (const scope of [scopeOrg, scopeProject]) {
       await expect(
         svc.putChoice(scope, {
@@ -608,6 +658,30 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
     expect(await ids(null)).toEqual([granted.id, SRV].sort());
     expect(await ids(PX)).toEqual([granted.id, projectOnly.id, SRV].sort());
     expect(JSON.stringify(off)).not.toContain('sk-test');
+    // The slim /ai/options shape: none of the admin fields.
+    for (const i of off.usableIntegrations) {
+      expect(Object.keys(i).sort()).toEqual(
+        ['capabilities', 'id', 'models', 'name', 'personal', 'provider', 'source'].sort(),
+      );
+      for (const key of ['baseUrl', 'keyHint', 'status', 'lastError', 'lastCheckedAt']) {
+        expect(i).not.toHaveProperty(key);
+      }
+    }
+
+    // A grant naming the member in one project is that project's, not a default.
+    const memberHere = await svc.create(org(OWNER), { ...openai, name: 'Member here' });
+    await svc.addGrant(OWNER, O, memberHere.id, { projectId: PX, userId: MEMBER });
+    expect(await ids(null)).not.toContain(memberHere.id);
+    expect(await ids(PX)).toContain(memberHere.id);
+    await expect(
+      svc.putChoice(scope(null), {
+        ability: 'chat',
+        integrationId: memberHere.id,
+        model: 'gpt-x',
+        locked: false,
+      }),
+    ).rejects.toMatchObject({ status: 422, response: { code: 'ai_integration_not_in_org' } });
+    await svc.remove(org(OWNER), memberHere.id);
 
     await db.organization.update({
       where: { id: O },

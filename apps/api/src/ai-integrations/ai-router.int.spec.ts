@@ -120,6 +120,22 @@ describe.skipIf(url === undefined)('AiRouter (roadmap 24 §3)', () => {
       integrationId: 'aii_air',
       model: 'gpt-x',
       apiKey: 'sk-air',
+      personal: false,
+    });
+  });
+
+  it('answers 503 ai_integration_undecryptable after SECRETS_ENCRYPTION_KEY rotated', async () => {
+    await db.aiIntegrationGrant.create({ data: { integrationId: 'aii_air', projectId: P } });
+    await db.aiAbilityChoice.create({
+      data: { organizationId: O, ability: 'chat', integrationId: 'aii_air', model: 'gpt-x' },
+    });
+    const rotated = new AiRouter(
+      prisma,
+      config({ ...ENV, SECRETS_ENCRYPTION_KEY: randomBytes(32).toString('base64') }),
+    );
+    await expect(rotated.resolve(U, P, O, 'chat')).rejects.toMatchObject({
+      status: 503,
+      response: { code: 'ai_integration_undecryptable' },
     });
   });
 
@@ -213,6 +229,14 @@ describe.skipIf(url === undefined)('AiRouter (roadmap 24 §3)', () => {
     expect(view.abilities.find((a) => a.id === 'doc_drafts')).toMatchObject({
       resolved: { integrationId: SRV, step: 'server' },
       lock: null,
+    });
+    // A personal target is marked so the provider keeps it off private hosts.
+    await db.aiAbilityChoice.create({
+      data: { organizationId: O, ability: 'schema_draft', userId: U, integrationId: 'aii_air_mine', model: 'gpt-p' },
+    });
+    expect(await router.resolve(U, P, O, 'schema_draft')).toMatchObject({
+      integrationId: 'aii_air_mine',
+      personal: true,
     });
   });
 });

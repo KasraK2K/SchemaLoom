@@ -29,6 +29,7 @@ const TARGET: AiTarget = {
   model: 'claude-sonnet-5-5',
   apiKey: 'k',
   baseUrl: null,
+  personal: false,
 };
 
 /**
