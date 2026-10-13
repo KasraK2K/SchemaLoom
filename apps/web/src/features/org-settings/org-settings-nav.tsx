@@ -10,7 +10,15 @@ export function OrgSettingsNav({
   readonly orgSlug: string;
   readonly orgRole: OrgRole;
   readonly current:
-    'members' | 'groups' | 'templates' | 'workspaces' | 'roles' | 'audit-log' | 'sso' | 'general';
+    | 'members'
+    | 'groups'
+    | 'templates'
+    | 'workspaces'
+    | 'roles'
+    | 'audit-log'
+    | 'sso'
+    | 'general'
+    | 'ai';
 }) {
   const tabs = [
     { key: 'members', label: 'Members' },
@@ -19,6 +27,7 @@ export function OrgSettingsNav({
     ...(orgRole === 'owner' || orgRole === 'admin'
       ? [
           { key: 'general', label: 'General' },
+          { key: 'ai', label: 'AI' },
           { key: 'roles', label: 'Roles' },
           { key: 'audit-log', label: 'Audit log' },
         ]

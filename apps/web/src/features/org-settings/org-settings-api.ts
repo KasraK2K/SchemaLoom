@@ -130,6 +130,11 @@ export async function listWorkspaceGrants(
 export const OrgSettingsSchema = z.object({
   allowGuestInvites: z.boolean(),
   defaultAppearance: appearanceInputSchema.nullable(),
+  /** Roadmap 24: whether members may bring their own AI keys, and for which providers. */
+  ai: z.object({
+    allowPersonalIntegrations: z.boolean(),
+    personalProviders: z.array(z.string()),
+  }),
 });
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
 
