@@ -27,12 +27,12 @@ export function ModelPicker({
   });
   const [failed, setFailed] = useState(false);
   const entry = options.data?.abilities.find((a) => a.id === ability);
-  const empty = entry !== undefined && entry.resolved === null;
+  const empty = entry?.resolved === null && entry.lock === null;
   // Same key as the Account page's per-org list, so the two share one fetch.
   const policy = useQuery({
     queryKey: ['ai-integrations', { kind: 'me' }, 'usable', orgSlug],
     queryFn: () => listMyChoices({ kind: 'me', orgSlug, projectId: null }),
-    enabled: empty && entry?.lock === null,
+    enabled: empty,
   });
   if (options.data === undefined || entry === undefined) return null;
   if (entry.resolved === null) {
