@@ -159,11 +159,15 @@ export class AiProvider {
     };
   }
 
+  /** Context-length failures become 422. Anything else with a key in play is rebuilt as a
+   *  fresh Error (message scrubbed, numeric status kept) so the key cannot ride out on the
+   *  stack, the provider body (`.error`), headers or `cause`. */
   private mapError(error: unknown, key: string | null): unknown {
-    const e = error as {
+    const e = (error ?? {}) as {
       code?: unknown;
       error?: { error?: { code?: unknown } };
       message?: unknown;
+      status?: unknown;
     };
     const text = typeof e.message === 'string' ? e.message : '';
     if (
@@ -173,8 +177,11 @@ export class AiProvider {
     ) {
       return new UnprocessableEntityException({ code: 'ai_context_too_small' });
     }
-    if (error instanceof Error && key !== null && text.includes(key))
-      error.message = scrubKey(text, key);
-    return error;
+    if (key === null || key === '') return error;
+    const safe = new Error(
+      scrubKey(typeof e.message === 'string' ? e.message : String(error), key),
+    );
+    if (typeof e.status === 'number') Object.assign(safe, { status: e.status });
+    return safe;
   }
 }
