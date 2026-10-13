@@ -5,6 +5,7 @@ import { useState, type SyntheticEvent } from 'react';
 import {
   AI_PROVIDER_IDS,
   createIntegration,
+  modelsFound,
   providerLabel,
   testIntegration,
   updateIntegration,
@@ -72,7 +73,7 @@ export function IntegrationForm({
       setMessage(
         result.status === 'ok'
           ? {
-              text: `Connected. ${String(result.fetchedModels.length)} models found.`,
+              text: `Connected. ${modelsFound(result.fetchedModels.length)}.`,
               error: false,
             }
           : { text: `The test failed: ${result.lastError ?? 'unknown error'}.`, error: true },

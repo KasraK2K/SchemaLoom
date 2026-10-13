@@ -34,6 +34,9 @@ describe('aiErrorMessage', () => {
     expect(aiErrorMessage(new ApiError(503, 'ai_locked_model_unavailable', ''))).toBe(
       'Your admin set a model for this that is no longer available. Ask them to update it in Settings → AI.',
     );
+    expect(aiErrorMessage(new ApiError(503, 'ai_integration_undecryptable', ''))).toBe(
+      'The saved key for this AI integration can’t be read any more. Whoever manages it needs to enter the key again.',
+    );
     expect(aiErrorMessage(new ApiError(422, 'ai_context_too_small', ''))).toBe(
       'This model can’t take a selection this large. Select fewer tables, or pick a model with a bigger context.',
     );

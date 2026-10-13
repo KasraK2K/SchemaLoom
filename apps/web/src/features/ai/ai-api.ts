@@ -302,6 +302,8 @@ export function aiErrorMessage(error: unknown): string {
       return 'No AI model is available here. An admin can add one in Settings → AI, or you can add your own key if your organisation allows it.';
     if (error.code === 'ai_locked_model_unavailable')
       return 'Your admin set a model for this that is no longer available. Ask them to update it in Settings → AI.';
+    if (error.code === 'ai_integration_undecryptable')
+      return 'The saved key for this AI integration can’t be read any more. Whoever manages it needs to enter the key again.';
     if (error.code === 'ai_context_too_small')
       return 'This model can’t take a selection this large. Select fewer tables, or pick a model with a bigger context.';
     if (error.status === 403) {

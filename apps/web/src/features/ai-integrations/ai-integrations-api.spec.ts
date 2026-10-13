@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { capabilityHints, choicesPath, integrationsPath, stepLabel } from './ai-integrations-api';
+import {
+  capabilityHints,
+  choicesPath,
+  integrationsPath,
+  MeChoicesSchema,
+  modelsFound,
+  stepLabel,
+} from './ai-integrations-api';
 
 describe('ai-integrations-api', () => {
   it('builds the paths per owner', () => {
@@ -27,5 +34,27 @@ describe('ai-integrations-api', () => {
     expect(stepLabel('server')).toBe('Server default');
     expect(stepLabel('org_lock')).toBe('Set by your admin');
     expect(stepLabel('user_project')).toBe('Your choice here');
+  });
+  it('counts models in the singular and plural', () => {
+    expect(modelsFound(1)).toBe('1 model found');
+    expect(modelsFound(3)).toBe('3 models found');
+  });
+  it('reads the slim /me usable list', () => {
+    const parsed = MeChoicesSchema.parse({
+      choices: [],
+      personalAllowed: false,
+      usableIntegrations: [
+        {
+          id: 'i',
+          name: 'N',
+          provider: 'openai',
+          source: 'custom',
+          personal: false,
+          models: ['m'],
+          capabilities: { caching: true, thinking: false, fallback: false },
+        },
+      ],
+    });
+    expect(parsed.usableIntegrations[0]).not.toHaveProperty('keyHint');
   });
 });

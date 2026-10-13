@@ -8,6 +8,7 @@ import {
   capabilityHints,
   deleteIntegration,
   listIntegrations,
+  modelsFound,
   providerLabel,
   testIntegration,
   type Integration,
@@ -113,7 +114,7 @@ export function IntegrationList({
                             setMessage(
                               r.status === 'ok'
                                 ? {
-                                    text: `${i.name}: connected, ${String(r.fetchedModels.length)} models found.`,
+                                    text: `${i.name}: connected, ${modelsFound(r.fetchedModels.length)}.`,
                                     error: false,
                                   }
                                 : {

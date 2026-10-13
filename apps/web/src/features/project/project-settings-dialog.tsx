@@ -154,7 +154,8 @@ export function ProjectSettingsDialog({ projectId }: { readonly projectId: strin
             {settings.ai.enabled && aiOptions.data !== undefined && (
               <AbilityChoices
                 target={{ kind: 'project', projectId }}
-                integrations={aiOptions.data.integrations}
+                // A project default is the org's: never someone's personal integration.
+                integrations={aiOptions.data.integrations.filter((i) => !i.personal)}
               />
             )}
             <fieldset className="flex flex-col gap-1">

@@ -48,9 +48,20 @@ export const ChoiceSchema = z.object({
 });
 export type Choice = z.infer<typeof ChoiceSchema>;
 
+/** What a member may pick from: no admin fields (key hint, base URL, status). */
+const UsableIntegrationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  provider: z.string(),
+  source: z.enum(['server', 'custom']),
+  personal: z.boolean(),
+  models: z.array(z.string()),
+  capabilities: CapabilitiesSchema,
+});
+
 export const MeChoicesSchema = z.object({
   choices: z.array(ChoiceSchema),
-  usableIntegrations: z.array(IntegrationSchema),
+  usableIntegrations: z.array(UsableIntegrationSchema),
   personalAllowed: z.boolean(),
 });
 
@@ -80,17 +91,7 @@ export const OptionsSchema = z.object({
       lock: z.object({ scope: z.enum(['project', 'org']), usable: z.boolean() }).nullable(),
     }),
   ),
-  integrations: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      provider: z.string(),
-      source: z.enum(['server', 'custom']),
-      personal: z.boolean(),
-      models: z.array(z.string()),
-      capabilities: CapabilitiesSchema,
-    }),
-  ),
+  integrations: z.array(UsableIntegrationSchema),
 });
 export type Options = z.infer<typeof OptionsSchema>;
 
@@ -138,6 +139,10 @@ export function choiceBody(
     ? { ...input, orgSlug: target.orgSlug, projectId: target.projectId }
     : input;
 }
+
+/** "1 model found", "3 models found" */
+export const modelsFound = (n: number): string =>
+  `${String(n)} ${n === 1 ? 'model' : 'models'} found`;
 
 export function capabilityHints(c: Capabilities): string[] {
   return [

@@ -5,7 +5,13 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { aiErrorMessage } from '@/features/ai/ai-api';
 import { ApiError } from '@/lib/api-client';
-import { getOptions, listMyChoices, putChoice, stepLabel } from './ai-integrations-api';
+import {
+  clearChoice,
+  getOptions,
+  listMyChoices,
+  putChoice,
+  stepLabel,
+} from './ai-integrations-api';
 
 /**
  * Roadmap 24 §5.4 — which model a feature uses for the caller, in the feature itself. A pick is
@@ -67,13 +73,21 @@ export function ModelPicker({
     (p) => p.integrationId === resolved.integrationId && p.model === resolved.model,
   );
   const provider = options.data.integrations.find((i) => i.id === resolved.integrationId);
-  const choose = (index: number) => {
-    const pair = pairs[index];
-    if (pair === undefined) return;
+  const target = { kind: 'me' as const, orgSlug, projectId };
+  // Only the caller's own choice here can be dropped; the defaults above it stay in settings.
+  const overridden = resolved.step === 'user_project';
+  const choose = (value: string) => {
+    const pair = value === '' || value === 'default' ? undefined : pairs[Number(value)];
+    if (value !== 'default' && pair === undefined) return;
     setFailed(false);
-    putChoice(
-      { kind: 'me', orgSlug, projectId },
-      { ability, integrationId: pair.integrationId, model: pair.model, locked: false },
+    (pair === undefined
+      ? clearChoice(target, ability)
+      : putChoice(target, {
+          ability,
+          integrationId: pair.integrationId,
+          model: pair.model,
+          locked: false,
+        })
     )
       .then(() => queryClient.invalidateQueries({ queryKey: ['ai-options'] }))
       .catch(() => {
@@ -95,9 +109,10 @@ export function ModelPicker({
             className="h-7 rounded-md border border-border bg-surface px-1 text-xs text-text"
             value={current === -1 ? '' : String(current)}
             onChange={(e) => {
-              choose(Number(e.target.value));
+              choose(e.target.value);
             }}
           >
+            {overridden && <option value="default">Use the default</option>}
             {current === -1 && <option value="">{resolved.model}</option>}
             {pairs.map((p, i) => (
               <option key={`${p.integrationId}:${p.model}`} value={String(i)}>
