@@ -6,9 +6,8 @@ import { DocsModule } from '../docs';
 import { BULL_CONNECTION, JobsModule, runsJobs, type BullConnection } from '../jobs';
 import { SchemaModule } from '../schema';
 import { SnapshotsModule } from '../snapshots';
-import { AiRouter } from '../ai-integrations/ai-router.service';
+import { AiIntegrationsModule } from '../ai-integrations';
 import { AiController } from './ai.controller';
-import { AiProvider } from './ai.provider';
 import { AI_DOC_DRAFTS, AI_DOC_DRAFTS_QUEUE, AiService, type DocDraftJobData } from './ai.service';
 
 const queueProvider: Provider = {
@@ -49,8 +48,8 @@ class DocDraftWorker implements OnModuleDestroy {
 
 /** Prisma, access, engines and Redis are `@Global()`. */
 @Module({
-  imports: [SchemaModule, JobsModule, DocsModule, SnapshotsModule],
+  imports: [SchemaModule, JobsModule, DocsModule, SnapshotsModule, AiIntegrationsModule],
   controllers: [AiController],
-  providers: [AiProvider, AiRouter, AiService, queueProvider, DocDraftWorker],
+  providers: [AiService, queueProvider, DocDraftWorker],
 })
 export class AiModule {}

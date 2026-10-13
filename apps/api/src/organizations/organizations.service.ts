@@ -74,7 +74,20 @@ export class OrganizationsService {
       const slug = attempt === 0 ? base : `${base}-${randomBytes(3).toString('hex')}`;
       try {
         const org = await this.prisma.organization.create({
-          data: { name, slug, members: { create: { userId, role: 'owner' } } },
+          data: {
+            name,
+            slug,
+            members: { create: { userId, role: 'owner' } },
+            // Roadmap 24 §2.1: the env key as an integration, granted to everyone, as the migration does.
+            aiIntegrations: {
+              create: {
+                source: 'server',
+                provider: 'anthropic',
+                name: 'Server default',
+                grants: { create: {} },
+              },
+            },
+          },
           select: { id: true, slug: true, name: true },
         });
         return { ...org, orgRole: 'owner' };

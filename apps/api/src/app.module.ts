@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AccessModule } from './access/access.module';
+import { AiIntegrationsModule } from './ai-integrations';
 import { AiModule } from './ai';
 import { ApiTokensModule } from './api-tokens';
 import { AuthModule, JwtAuthGuard } from './auth';
@@ -74,6 +75,7 @@ import { RedisModule } from './redis/redis.module';
     SnapshotsModule,
     SharingModule,
     SavedQueriesModule,
+    AiIntegrationsModule,
     AiModule,
     NotificationsModule,
     CommentsModule,

@@ -64,3 +64,10 @@ export const choiceSchema = z
   .strict();
 export class ChoiceDto extends createZodDto(choiceSchema) {}
 export type ChoiceInput = z.infer<typeof choiceSchema>;
+
+/** `PUT /me/ai/choices`: a choice plus where it applies (the org, and optionally one project). */
+export const myChoiceSchema = choiceSchema.extend({
+  orgSlug: z.string().min(1),
+  projectId: z.string().min(1).nullable().default(null),
+});
+export class MyChoiceDto extends createZodDto(myChoiceSchema) {}
