@@ -26,6 +26,8 @@ const OUTSIDER = 'usr_aii_y';
 const USERS = [OWNER, ADMIN, MEMBER, OUTSIDER];
 const PX = 'prj_aii_x';
 const PY = 'prj_aii_y';
+/** in org O, but the admin can't open it (owners see every project, R13) */
+const PZ = 'prj_aii_z';
 const SRV = `aii_srv_${O}`;
 const SK = 'sk-test-a1b2';
 
@@ -50,6 +52,9 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
   const provider = { listModels } as unknown as AiProvider;
   const resolver = {
     resolveProject: vi.fn((_subject: unknown, projectId: string) => Promise.resolve({ projectId })),
+    resolveProjects: vi.fn((_subject: unknown, ids: string[]) =>
+      Promise.resolve(new Map(ids.map((projectId) => [projectId, { projectId }]))),
+    ),
     canOpenProject: vi.fn((map: { projectId: string }) => map.projectId === PX),
   } as unknown as PermissionResolver;
   const build = (env: Record<string, unknown>) => {
@@ -99,10 +104,11 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
     });
     for (const [orgId, projectId] of [
       [O, PX],
+      [O, PZ],
       [Y, PY],
     ] as const) {
       await db.workspace.create({
-        data: { id: `ws_${projectId}`, organizationId: orgId, name: 'W', slug: 'w' },
+        data: { id: `ws_${projectId}`, organizationId: orgId, name: 'W', slug: projectId },
       });
       await db.project.create({
         data: {
@@ -183,10 +189,10 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
 
   it('3. a key rotation is audited as such; the server row is read-only', async () => {
     const view = await svc.create(org(OWNER), openai);
-    const rotated = await svc.update(org(ADMIN), view.id, { apiKey: 'sk-new-9z9z' });
+    const rotated = await svc.update(org(ADMIN), view.id, { apiKey: 'sk-new-key-9z9z' });
     expect(rotated.keyHint).toBe('9z9z');
     const row = await db.aiIntegration.findUniqueOrThrow({ where: { id: view.id } });
-    expect(decryptSecret(row.apiKeyEnc ?? '', KEY).toString()).toBe('sk-new-9z9z');
+    expect(decryptSecret(row.apiKeyEnc ?? '', KEY).toString()).toBe('sk-new-key-9z9z');
     const [rotation] = await audits('ai_integration.key_rotated');
     expect(rotation).toMatchObject({ resourceId: view.id, actorUserId: ADMIN });
     expect(JSON.stringify(rotation?.metadata)).not.toContain('sk-new');
@@ -194,6 +200,15 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
     const renamed = await svc.update(org(OWNER), view.id, { name: 'Renamed', models: ['gpt-y'] });
     expect(renamed).toMatchObject({ name: 'Renamed', models: ['gpt-y'], keyHint: '9z9z' });
     expect(await audits('ai_integration.updated')).toHaveLength(1);
+
+    // A key under 12 characters gets no hint: four characters would be too much of it.
+    const short = await svc.update(org(OWNER), view.id, { apiKey: 'sk-short1' });
+    expect(short.keyHint).toBeNull();
+    expect(
+      (await db.aiIntegration.findUniqueOrThrow({ where: { id: view.id } })).keyHint,
+    ).toBeNull();
+    const shortCreated = await svc.create(org(OWNER), { ...openai, apiKey: 'sk-12345678' });
+    expect(shortCreated.keyHint).toBeNull();
 
     await expect(
       svc.update(org(OWNER), view.id, { baseUrl: 'https://example.com/v1' }),
@@ -261,6 +276,10 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
     });
     const view = await build({ ...ENV, AI_ALLOW_PRIVATE_HOSTS: true }).create(org(OWNER), local);
     expect(view).toMatchObject({ baseUrl: 'http://127.0.0.1:11434/v1', keyHint: null });
+    // Moving it onto a private host is refused the same way.
+    await expect(
+      svc.update(org(OWNER), view.id, { baseUrl: 'http://10.0.0.5:11434/v1' }),
+    ).rejects.toMatchObject({ status: 422, response: { code: 'ai_private_base_url' } });
   });
 
   it('6. grants stay inside the org and are unique; a personal integration has none', async () => {
@@ -301,11 +320,49 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
     expect(await audits('ai_integration_grant.added')).toHaveLength(3);
     expect(await audits('ai_integration_grant.removed')).toHaveLength(1);
 
+    // Another org's owner can't reach O's integration through their own slug.
+    await expect(svc.listGrants(OUTSIDER, Y, view.id)).rejects.toMatchObject({ status: 404 });
+    await expect(
+      svc.addGrant(OUTSIDER, Y, view.id, { projectId: null, userId: null }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(svc.update(org(OUTSIDER, Y), view.id, { name: 'x' })).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(svc.remove(org(OUTSIDER, Y), view.id)).rejects.toMatchObject({ status: 404 });
+    await expect(svc.test(org(OUTSIDER, Y), view.id)).rejects.toMatchObject({ status: 404 });
+
     const personal = await svc.create(me(OWNER), openai);
     await expect(svc.listGrants(OWNER, O, personal.id)).rejects.toMatchObject({ status: 404 });
     await expect(
       svc.addGrant(OWNER, O, personal.id, { projectId: null, userId: null }),
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('6b. an admin sees no grant on a project they cannot open (R13); the owner does', async () => {
+    const view = await svc.create(org(OWNER), openai);
+    const hidden = await svc.addGrant(OWNER, O, view.id, { projectId: PZ, userId: null });
+    expect(hidden).toMatchObject({ projectId: PZ, projectName: `Project ${PZ}` });
+    const all = await svc.addGrant(ADMIN, O, view.id, { projectId: null, userId: null });
+
+    expect((await svc.listGrants(ADMIN, O, view.id)).map((g) => g.id)).toEqual([all.id]);
+    expect(JSON.stringify(await svc.listGrants(ADMIN, O, view.id))).not.toContain(PZ);
+    await expect(
+      svc.addGrant(ADMIN, O, view.id, { projectId: PZ, userId: MEMBER }),
+    ).rejects.toMatchObject({ status: 404, response: { code: 'not_found' } });
+    // The same 404 as a project that doesn't exist.
+    await expect(
+      svc.addGrant(ADMIN, O, view.id, { projectId: 'prj_aii_missing', userId: null }),
+    ).rejects.toMatchObject({ status: 404, response: { code: 'not_found' } });
+    await expect(svc.removeGrant(ADMIN, O, view.id, hidden.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(await db.aiIntegrationGrant.findUnique({ where: { id: hidden.id } })).not.toBeNull();
+
+    expect((await svc.listGrants(OWNER, O, view.id)).map((g) => g.id).sort()).toEqual(
+      [hidden.id, all.id].sort(),
+    );
+    await svc.removeGrant(OWNER, O, view.id, hidden.id);
+    expect(await db.aiIntegrationGrant.findUnique({ where: { id: hidden.id } })).toBeNull();
   });
 
   it('7. a personal integration is its owner’s alone', async () => {
@@ -425,6 +482,53 @@ describe.skipIf(url === undefined)('AiIntegrationsService (roadmap 24 §3.5)', (
       locked: true,
     });
     expect(project).toMatchObject({ projectId: PX, userId: null, locked: true });
+
+    // Another org's integration is not this org's to choose.
+    const foreign = await svc.create(org(OUTSIDER, Y), openai);
+    for (const scope of [scopeOrg, scopeProject, scopeMe(null)]) {
+      await expect(
+        svc.putChoice(scope, {
+          ability: 'chat',
+          integrationId: foreign.id,
+          model: 'gpt-x',
+          locked: false,
+        }),
+      ).rejects.toMatchObject({ status: 422, response: { code: 'ai_integration_not_in_org' } });
+    }
+
+    // A member picks only what they can use, checked before the model (no probing).
+    for (const model of ['gpt-x', 'no-such-model']) {
+      await expect(
+        svc.putChoice(scopeMe(PX), {
+          ability: 'chat',
+          integrationId: view.id,
+          model,
+          locked: false,
+        }),
+      ).rejects.toMatchObject({ status: 422, response: { code: 'ai_integration_not_in_org' } });
+    }
+    // Personal integrations are off by default.
+    await expect(
+      svc.putChoice(scopeMe(null), {
+        ability: 'chat',
+        integrationId: personal.id,
+        model: 'gpt-p',
+        locked: false,
+      }),
+    ).rejects.toMatchObject({ status: 422, response: { code: 'ai_integration_not_in_org' } });
+    await svc.addGrant(OWNER, O, view.id, { projectId: null, userId: MEMBER });
+    await db.organization.update({
+      where: { id: O },
+      data: { settings: { ai: { allowPersonalIntegrations: true } } },
+    });
+    await expect(
+      svc.putChoice(scopeMe(PX), {
+        ability: 'chat',
+        integrationId: view.id,
+        model: 'no-such-model',
+        locked: false,
+      }),
+    ).rejects.toMatchObject({ status: 422, response: { code: 'ai_model_not_allowed' } });
 
     const mine = await svc.putChoice(scopeMe(null), {
       ability: 'chat',

@@ -82,6 +82,9 @@ interface MeChoiceScope {
 }
 export type ChoiceScope = OrgChoiceScope | ProjectChoiceScope | MeChoiceScope;
 
+/** Four characters of a short key are too much of it: no hint under 12 characters. */
+const keyHint = (apiKey: string | undefined): string | null =>
+  apiKey === undefined || apiKey.length < 12 ? null : apiKey.slice(-4);
 const notFound = (): NotFoundException => new NotFoundException({ code: 'not_found' });
 const readonly = (): ConflictException =>
   new ConflictException({ code: 'ai_server_integration_readonly' });
@@ -157,9 +160,16 @@ export class AiIntegrationsService {
 
   /** owner or admin of the org, else the 404 of a missing org (as AuditStreamService.ownedOrg) */
   private async adminOrg(userId: string, orgSlug: string): Promise<string> {
+    return (await this.adminMember(userId, orgSlug)).organizationId;
+  }
+
+  private async adminMember(
+    userId: string,
+    orgSlug: string,
+  ): Promise<{ organizationId: string; role: string }> {
     const member = await orgMembership(this.prisma, userId, orgSlug);
     if (member === null || (member.role !== 'owner' && member.role !== 'admin')) throw notFound();
-    return member.organizationId;
+    return member;
   }
 
   private async memberOrg(userId: string, orgSlug: string): Promise<string> {
@@ -178,9 +188,14 @@ export class AiIntegrationsService {
   }
 
   private async row(owner: Owner, id: string): Promise<AiIntegration> {
-    const row = await this.prisma.aiIntegration.findFirst({
-      where: { id, ...(await this.scopeOf(owner)) },
-    });
+    return this.rowIn(await this.scopeOf(owner), id);
+  }
+
+  private async rowIn(
+    scope: { organizationId: string } | { ownerUserId: string },
+    id: string,
+  ): Promise<AiIntegration> {
+    const row = await this.prisma.aiIntegration.findFirst({ where: { id, ...scope } });
     if (row === null) throw notFound();
     // With no env key the server row is hidden from everything (§2.1).
     if (row.source === 'server' && this.router.serverModels().length === 0) throw notFound();
@@ -251,7 +266,7 @@ export class AiIntegrationsService {
           baseUrl: input.baseUrl ?? null,
           apiKeyEnc:
             input.apiKey === undefined ? null : encryptSecret(Buffer.from(input.apiKey), this.key),
-          keyHint: input.apiKey?.slice(-4) ?? null,
+          keyHint: keyHint(input.apiKey),
           allowedModels: input.models,
           createdById: owner.userId,
         },
@@ -289,7 +304,7 @@ export class AiIntegrationsService {
             ? {}
             : {
                 apiKeyEnc: encryptSecret(Buffer.from(input.apiKey), this.key),
-                keyHint: input.apiKey.slice(-4),
+                keyHint: keyHint(input.apiKey),
               }),
         },
       });
@@ -366,14 +381,40 @@ export class AiIntegrationsService {
 
   // --- grants (org integrations only; a personal one never matches → 404) ---------------------
 
+  /** The org integration's org, and which projects the caller may see grants on. */
+  private async grantScope(
+    userId: string,
+    orgSlug: string,
+    id: string,
+  ): Promise<{ organizationId: string; openable: (ids: string[]) => Promise<Set<string>> }> {
+    const { organizationId, role } = await this.adminMember(userId, orgSlug);
+    await this.rowIn({ organizationId }, id);
+    // R13: owners see every project; an admin only those they can open. Another project's
+    // grant is invisible, as if it weren't there.
+    const openable = async (ids: string[]): Promise<Set<string>> => {
+      if (role === 'owner' || ids.length === 0) return new Set(ids);
+      const maps = await this.resolver.resolveProjects(
+        { kind: 'user', userId, orgId: organizationId },
+        ids,
+      );
+      return new Set(
+        [...maps].filter(([, map]) => this.resolver.canOpenProject(map)).map(([pid]) => pid),
+      );
+    };
+    return { organizationId, openable };
+  }
+
   async listGrants(userId: string, orgSlug: string, id: string): Promise<GrantView[]> {
-    await this.row({ kind: 'org', userId, orgSlug }, id);
+    const { openable } = await this.grantScope(userId, orgSlug, id);
     const grants = await this.prisma.aiIntegrationGrant.findMany({
       where: { integrationId: id },
       select: GRANT_SELECT,
       orderBy: { createdAt: 'asc' },
     });
-    return grants.map(grantView);
+    const visible = await openable(
+      grants.flatMap((g) => (g.projectId === null ? [] : [g.projectId])),
+    );
+    return grants.filter((g) => g.projectId === null || visible.has(g.projectId)).map(grantView);
   }
 
   async addGrant(
@@ -382,14 +423,14 @@ export class AiIntegrationsService {
     id: string,
     input: GrantInput,
   ): Promise<GrantView> {
-    const { organizationId } = await this.row({ kind: 'org', userId, orgSlug }, id);
-    if (organizationId === null) throw notFound(); // unreachable: an org row has its org
+    const { organizationId, openable } = await this.grantScope(userId, orgSlug, id);
     if (
       input.projectId !== null &&
-      (await this.prisma.project.findFirst({
+      ((await this.prisma.project.findFirst({
         where: { id: input.projectId, organizationId, deletedAt: null },
         select: { id: true },
-      })) === null
+      })) === null ||
+        !(await openable([input.projectId])).has(input.projectId))
     ) {
       throw notFound();
     }
@@ -428,12 +469,17 @@ export class AiIntegrationsService {
   }
 
   async removeGrant(userId: string, orgSlug: string, id: string, grantId: string): Promise<void> {
-    const { organizationId } = await this.row({ kind: 'org', userId, orgSlug }, id);
+    const { organizationId, openable } = await this.grantScope(userId, orgSlug, id);
     const grant = await this.prisma.aiIntegrationGrant.findFirst({
       where: { id: grantId, integrationId: id },
       select: { projectId: true, userId: true },
     });
-    if (grant === null) throw notFound();
+    if (
+      grant === null ||
+      (grant.projectId !== null && !(await openable([grant.projectId])).has(grant.projectId))
+    ) {
+      throw notFound();
+    }
     await this.prisma.$transaction(async (tx) => {
       await tx.aiIntegrationGrant.delete({ where: { id: grantId } });
       await audit(tx, {
@@ -502,7 +548,12 @@ export class AiIntegrationsService {
     });
     const choices = rows.map(choiceView);
     if (scope.kind !== 'me') return choices;
-    return { choices, ...(await this.usable(scope.userId, key.organizationId, key.projectId)) };
+    const { rows: usable, personalAllowed } = await this.usable(
+      scope.userId,
+      key.organizationId,
+      key.projectId,
+    );
+    return { choices, usableIntegrations: usable.map((r) => this.view(r)), personalAllowed };
   }
 
   /**
@@ -514,7 +565,7 @@ export class AiIntegrationsService {
     userId: string,
     organizationId: string,
     projectId: string | null,
-  ): Promise<Omit<MeChoicesView, 'choices'>> {
+  ): Promise<{ rows: AiIntegration[]; personalAllowed: boolean }> {
     const [rows, org] = await Promise.all([
       this.prisma.aiIntegration.findMany({
         where: { OR: [{ organizationId }, { ownerUserId: userId }] },
@@ -546,16 +597,16 @@ export class AiIntegrationsService {
       policy,
       serverModels: this.router.serverModels(),
     };
-    const usableIntegrations = rows
-      .filter((r) =>
+    return {
+      rows: rows.filter((r) =>
         isUsable(input, {
           ...r,
           source: r.source as 'server' | 'custom',
           provider: r.provider as AiProviderType,
         }),
-      )
-      .map((r) => this.view(r));
-    return { usableIntegrations, personalAllowed: policy.allowPersonalIntegrations };
+      ),
+      personalAllowed: policy.allowPersonalIntegrations,
+    };
   }
 
   async putChoice(scope: ChoiceScope, input: ChoiceInput): Promise<ChoiceView> {
@@ -566,16 +617,16 @@ export class AiIntegrationsService {
         message: 'Only an org or project default can be locked.',
       });
     }
-    const integration = await this.prisma.aiIntegration.findFirst({
-      where: {
-        id: input.integrationId,
-        OR: [
-          { organizationId: key.organizationId },
-          ...(scope.kind === 'me' ? [{ ownerUserId: scope.userId }] : []),
-        ],
-      },
-      select: { source: true, allowedModels: true },
-    });
+    // A member picks only from what they can use, checked before the model so an ungranted
+    // integration's model list can't be probed.
+    const integration =
+      scope.kind === 'me'
+        ? ((await this.usable(scope.userId, key.organizationId, key.projectId)).rows.find(
+            (r) => r.id === input.integrationId,
+          ) ?? null)
+        : await this.prisma.aiIntegration.findFirst({
+            where: { id: input.integrationId, organizationId: key.organizationId },
+          });
     if (integration === null) {
       throw new UnprocessableEntityException({
         code: 'ai_integration_not_in_org',
