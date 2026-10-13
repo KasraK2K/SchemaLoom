@@ -16,8 +16,32 @@ As built, where it differs from or adds to the text below:
 - **`keyHint`** is null for keys shorter than 12 characters.
 - **A member's own choice** must name an integration they can use (422
   `ai_integration_not_in_org` otherwise), checked before the model.
-- **`GET /me/ai/choices`** returns `{ choices, usableIntegrations, personalAllowed }`. With no
-  `projectId`, only `*` and member-named grants count.
+- **`GET /me/ai/choices`** returns `{ choices, usableIntegrations, personalAllowed }`;
+  `usableIntegrations` has the slim `/ai/options` shape (`id, name, provider, source, personal,
+models, capabilities`), no base URL, key hint or status. With no `projectId`, only `*` grants
+  and grants naming the member with no project count; a (member, project) grant is that
+  project's alone. The same rule decides what a member may save as an "everywhere" choice.
+- **Personal integrations never reach a private host.** `AI_ALLOW_PRIVATE_HOSTS` applies to org
+  integrations only, both when the base URL is saved and on every call (`AiTarget.personal`).
+- **Test connection** stores only the scrubbed first line of a provider error, at most 200
+  characters, never a response body. It lists models with a 10 s timeout and no retries.
+- **Anthropic parameters.** Adaptive thinking on 4.6+ models (not Haiku 4.5 or older);
+  `fallbacks: "default"` only on the models that take it on the Claude API (Fable 5.1, Opus 5.5,
+  Opus 5, Sonnet 5.5). Custom Anthropic clients set `authToken: null`; OpenAI-SDK clients pin
+  `baseURL` and set `organization`/`project` to null, so no env var reaches a tenant call.
+- **Output limit field.** `max_completion_tokens` for OpenAI; `max_tokens` for Gemini and
+  OpenAI-compatible servers.
+- **A rotated `SECRETS_ENCRYPTION_KEY`.** A call answers 503 `ai_integration_undecryptable`;
+  Test connection marks the integration failing with "The saved key can't be decrypted; enter
+  it again."
+- **"Use the default"** in the model picker clears the member's per-project choice (shown only
+  when that choice is what resolves).
+- **Project defaults** offer only org integrations, and a project manager who names a model the
+  integration doesn't allow gets the same 422 `ai_integration_not_in_org` as for a foreign
+  integration (no probing the model list).
+- **Accepted deviations.** The base-URL field in apps/web checks the `openai_compatible` literal,
+  and apps/web keeps a provider label map (unknown ids fall back to the raw id). `openai` is
+  pinned directly in apps/api/package.json, like `@anthropic-ai/sdk`.
 - **Per-project overrides** are set from the in-feature model picker; the Account page shows
   "everywhere" choices.
 - **`ai_no_model`** links to the Account page for everyone (panels don't know the org role).
@@ -37,28 +61,28 @@ Today `AiProvider` (`apps/api/src/ai/ai.provider.ts`) is Anthropic-only, reads
 
 ## 1. Decisions
 
-| #   | Question                                   | Decision                                                                                                                                                                                           |
-| --- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Providers                                  | `anthropic`, `openai`, `gemini`, `openai_compatible` (custom base URL: Azure OpenAI, OpenRouter, Ollama, vLLM, LM Studio, …).                                                                     |
-| D2  | `.env` key                                 | Stays, as the **server default**: one built-in, read-only integration per org. Absent key = the integration is hidden. It keeps every Anthropic feature.                                         |
-| D3  | `ai:use` vs integration access             | Separate and both required. `ai:use` + the project switch decide whether the AI may see the project; integration access decides which keys/models a call may spend. A personal key never bypasses either. |
-| D4  | Personal integrations                      | Org setting `ai.allowPersonalIntegrations`, **off** by default, owner/admin decides, with an optional provider-type allowlist `ai.personalProviders`.                                             |
-| D5  | Access rules                               | Allow-only grants on an org integration, scoped `*`, project, member, or member-in-project. No deny rules.                                                                                       |
-| D6  | Model per ability                          | Most specific choice wins (§3.2); org and project defaults can be **locked** per ability.                                                                                                       |
-| D7  | Provider layer                             | Two official SDKs behind the existing `AiProvider` boundary: `@anthropic-ai/sdk` (today's path, unchanged) and `openai` (OpenAI, OpenAI-compatible, Gemini via Google's OpenAI-compatible endpoint). |
-| D8  | Model list                                 | Fetched by "Test connection"; the admin ticks the allowed models, or types an id by hand for servers that don't list theirs.                                                                     |
-| D9  | Background jobs                            | Resolve at enqueue as the requester; re-check usability when the job runs.                                                                                                                       |
-| D10 | Budgets / quotas                           | Deferred. Usage is recorded per integration and model (§2.4) so a budget can be added later.                                                                                                     |
-| D11 | MCP (row 21)                               | Unaffected: it uses the developer's own agent, never a server key.                                                                                                                               |
+| #   | Question                       | Decision                                                                                                                                                                                                  |
+| --- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Providers                      | `anthropic`, `openai`, `gemini`, `openai_compatible` (custom base URL: Azure OpenAI, OpenRouter, Ollama, vLLM, LM Studio, …).                                                                             |
+| D2  | `.env` key                     | Stays, as the **server default**: one built-in, read-only integration per org. Absent key = the integration is hidden. It keeps every Anthropic feature.                                                  |
+| D3  | `ai:use` vs integration access | Separate and both required. `ai:use` + the project switch decide whether the AI may see the project; integration access decides which keys/models a call may spend. A personal key never bypasses either. |
+| D4  | Personal integrations          | Org setting `ai.allowPersonalIntegrations`, **off** by default, owner/admin decides, with an optional provider-type allowlist `ai.personalProviders`.                                                     |
+| D5  | Access rules                   | Allow-only grants on an org integration, scoped `*`, project, member, or member-in-project. No deny rules.                                                                                                |
+| D6  | Model per ability              | Most specific choice wins (§3.2); org and project defaults can be **locked** per ability.                                                                                                                 |
+| D7  | Provider layer                 | Two official SDKs behind the existing `AiProvider` boundary: `@anthropic-ai/sdk` (today's path, unchanged) and `openai` (OpenAI, OpenAI-compatible, Gemini via Google's OpenAI-compatible endpoint).      |
+| D8  | Model list                     | Fetched by "Test connection"; the admin ticks the allowed models, or types an id by hand for servers that don't list theirs.                                                                              |
+| D9  | Background jobs                | Resolve at enqueue as the requester; re-check usability when the job runs.                                                                                                                                |
+| D10 | Budgets / quotas               | Deferred. Usage is recorded per integration and model (§2.4) so a budget can be added later.                                                                                                              |
+| D11 | MCP (row 21)                   | Unaffected: it uses the developer's own agent, never a server key.                                                                                                                                        |
 
 What a non-Anthropic provider loses (shown in the UI, §5.4):
 
-| Feature used today                     | Anthropic | OpenAI                         | Gemini             | OpenAI-compatible         |
-| -------------------------------------- | --------- | ------------------------------ | ------------------ | ------------------------- |
-| Prompt caching of the schema prefix    | explicit  | automatic for a stable prefix  | implicit           | server-dependent, usually none |
-| Adaptive thinking                      | yes       | `reasoning_effort` where accepted | `reasoning_effort` where accepted | usually none        |
-| Server-side fallback on a policy decline | yes     | no (a decline is a refusal)    | no                 | no                        |
-| Streaming, usage, refusal detection    | yes       | yes                            | yes                | mostly; usage may be absent |
+| Feature used today                       | Anthropic | OpenAI                            | Gemini                            | OpenAI-compatible              |
+| ---------------------------------------- | --------- | --------------------------------- | --------------------------------- | ------------------------------ |
+| Prompt caching of the schema prefix      | explicit  | automatic for a stable prefix     | implicit                          | server-dependent, usually none |
+| Adaptive thinking                        | yes       | `reasoning_effort` where accepted | `reasoning_effort` where accepted | usually none                   |
+| Server-side fallback on a policy decline | yes       | no (a decline is a refusal)       | no                                | no                             |
+| Streaming, usage, refusal detection      | yes       | yes                               | yes                               | mostly; usage may be absent    |
 
 These rows are from the providers' docs as known on 2026-10-10; re-check each before the
 adapter is written (§4).
@@ -70,19 +94,19 @@ Keys are encrypted with `encryptSecret` (AES-256-GCM under `SECRETS_ENCRYPTION_K
 
 ### 2.1 `ai_integrations`
 
-| column                                   | notes                                                                                                         |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `id`                                     | cuid                                                                                                          |
-| `organization_id` / `owner_user_id`      | exactly one set (CHECK). Org integration, or personal. A personal one belongs to the **user**, not to an org; each org's policy (D4) decides whether it is usable there. Both cascade on delete. |
-| `source`                                 | `server` \| `custom` (CHECK). `server` rows have `organization_id` set and no key.                           |
-| `provider`                               | `anthropic` \| `openai` \| `gemini` \| `openai_compatible` (CHECK)                                            |
-| `name`                                   | display name                                                                                                  |
-| `base_url`                               | `openai_compatible` only (CHECK). Validated like the SIEM endpoint: private/internal hosts refused unless `AI_ALLOW_PRIVATE_HOSTS=true`. |
-| `api_key_enc`                            | null for `server`; optional for `openai_compatible` (a local Ollama needs none); required otherwise           |
-| `key_hint`                               | last 4 characters of the key, for display                                                                     |
-| `allowed_models text[]`                  | non-empty for `custom`                                                                                         |
-| `status`, `last_error`, `last_checked_at` | from "Test connection": `unchecked` \| `ok` \| `failing`                                                     |
-| `created_by`, `created_at`, `updated_at` |                                                                                                               |
+| column                                    | notes                                                                                                                                                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                                      | cuid                                                                                                                                                                                             |
+| `organization_id` / `owner_user_id`       | exactly one set (CHECK). Org integration, or personal. A personal one belongs to the **user**, not to an org; each org's policy (D4) decides whether it is usable there. Both cascade on delete. |
+| `source`                                  | `server` \| `custom` (CHECK). `server` rows have `organization_id` set and no key.                                                                                                               |
+| `provider`                                | `anthropic` \| `openai` \| `gemini` \| `openai_compatible` (CHECK)                                                                                                                               |
+| `name`                                    | display name                                                                                                                                                                                     |
+| `base_url`                                | `openai_compatible` only (CHECK). Validated like the SIEM endpoint: private/internal hosts refused unless `AI_ALLOW_PRIVATE_HOSTS=true`.                                                         |
+| `api_key_enc`                             | null for `server`; optional for `openai_compatible` (a local Ollama needs none); required otherwise                                                                                              |
+| `key_hint`                                | last 4 characters of the key, for display                                                                                                                                                        |
+| `allowed_models text[]`                   | non-empty for `custom`                                                                                                                                                                           |
+| `status`, `last_error`, `last_checked_at` | from "Test connection": `unchecked` \| `ok` \| `failing`                                                                                                                                         |
+| `created_by`, `created_at`, `updated_at`  |                                                                                                                                                                                                  |
 
 **The server row.** One `source='server'`, `provider='anthropic'` row per org, created by the
 migration for every existing org and by org creation for new ones. It exists so grants and
@@ -96,12 +120,12 @@ With no env key it is hidden from every list and is never usable.
 Who may use an **org** integration. A personal integration is usable only by its owner and
 has no grants.
 
-| column           | notes                                   |
-| ---------------- | --------------------------------------- |
-| `integration_id` | FK, cascade                             |
-| `project_id?`    | FK, cascade                             |
-| `user_id?`       | FK, cascade                             |
-| `created_by`, `created_at` |                               |
+| column                     | notes       |
+| -------------------------- | ----------- |
+| `integration_id`           | FK, cascade |
+| `project_id?`              | FK, cascade |
+| `user_id?`                 | FK, cascade |
+| `created_by`, `created_at` |             |
 
 Both null = `*`; project only = everyone with access to that project; user only = that member
 in every project; both = that member in that project. Unique on
@@ -110,16 +134,16 @@ the integration's org (checked on write).
 
 ### 2.3 `ai_ability_choices`
 
-| column            | notes                                                                            |
-| ----------------- | -------------------------------------------------------------------------------- |
-| `ability`         | an id from the ability registry (§3.3); checked on write                        |
-| `organization_id` | FK, cascade                                                                      |
-| `project_id?`     | FK, cascade                                                                      |
-| `user_id?`        | FK, cascade                                                                      |
-| `integration_id`  | FK, cascade                                                                      |
-| `model`           | must be in the integration's models when written                                 |
-| `locked`          | boolean; only on rows with `user_id` null (CHECK)                                |
-| `updated_by`, `updated_at` |                                                                         |
+| column                     | notes                                                    |
+| -------------------------- | -------------------------------------------------------- |
+| `ability`                  | an id from the ability registry (§3.3); checked on write |
+| `organization_id`          | FK, cascade                                              |
+| `project_id?`              | FK, cascade                                              |
+| `user_id?`                 | FK, cascade                                              |
+| `integration_id`           | FK, cascade                                              |
+| `model`                    | must be in the integration's models when written         |
+| `locked`                   | boolean; only on rows with `user_id` null (CHECK)        |
+| `updated_by`, `updated_at` |                                                          |
 
 Scopes: org default (`project_id`, `user_id` null), project default (`project_id`), member
 everywhere (`user_id`), member in project (both). Unique on
@@ -209,12 +233,12 @@ and a reason, as the not-configured case ends today.
 
 ### 3.5 Who manages what
 
-| What                                                                                    | Marker                                                     |
-| --------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| org integrations, their grants, org defaults and locks, personal-integration policy     | `@Authenticated` + the owner/admin check in the service, as `PATCH /organizations/:orgSlug/settings` does today |
-| project defaults and locks                                                              | `@RequirePermission('sharing:manage', { project })`, the atom that guards project settings and the AI switch today |
-| personal integrations and your own choices                                              | `@Authenticated`; only your own rows; another user's id is **404** |
-| what you can use in a project (`/ai/options`)                                           | `@RequireProjectAccess`; lists only what is usable by you, never other people's grants |
+| What                                                                                | Marker                                                                                                             |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| org integrations, their grants, org defaults and locks, personal-integration policy | `@Authenticated` + the owner/admin check in the service, as `PATCH /organizations/:orgSlug/settings` does today    |
+| project defaults and locks                                                          | `@RequirePermission('sharing:manage', { project })`, the atom that guards project settings and the AI switch today |
+| personal integrations and your own choices                                          | `@Authenticated`; only your own rows; another user's id is **404**                                                 |
+| what you can use in a project (`/ai/options`)                                       | `@RequireProjectAccess`; lists only what is usable by you, never other people's grants                             |
 
 Admins manage the org's integrations; that does not widen project visibility (R13): an admin
 granting an integration to a project does not see that project.
@@ -276,18 +300,18 @@ the fetched model ids. It never changes `allowed_models` by itself.
 A new `apps/api/src/ai-integrations` module. Every route carries exactly one marker and is
 listed in a `*.routes.spec.ts`; bodies are zod-validated like `ai.dto.ts`.
 
-| Route                                                                       | Marker                                            |
-| --------------------------------------------------------------------------- | ------------------------------------------------- |
-| `GET, POST /organizations/:orgSlug/ai/integrations`; `PATCH, DELETE …/:id`             | `@Authenticated` + owner/admin (§3.5)             |
-| `POST /organizations/:orgSlug/ai/integrations/:id/test`                                | `@Authenticated` + owner/admin (§3.5)             |
-| `GET, POST /organizations/:orgSlug/ai/integrations/:id/grants`; `DELETE …/grants/:grantId` | `@Authenticated` + owner/admin (§3.5)         |
-| `GET, PUT, DELETE /organizations/:orgSlug/ai/choices` (org defaults, locks)            | `@Authenticated` + owner/admin (§3.5)             |
-| `PATCH /organizations/:orgSlug/settings` (existing): `ai.allowPersonalIntegrations`, `ai.personalProviders` | existing marker            |
-| `GET, PUT, DELETE /projects/:projectId/ai/choices` (project defaults, locks) | `@RequirePermission('sharing:manage', { project: 'projectId' })` |
-| `GET, POST /me/ai/integrations`; `PATCH, DELETE …/:id`; `POST …/:id/test`   | `@Authenticated`                                  |
-| `GET, PUT, DELETE /me/ai/choices` (optional `projectId`)                    | `@Authenticated`                                  |
-| `GET /projects/:projectId/ai/options`                                       | `@RequireProjectAccess('projectId')`              |
-| `GET /ai/abilities`                                                         | `@Authenticated`                                  |
+| Route                                                                                                       | Marker                                                           |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `GET, POST /organizations/:orgSlug/ai/integrations`; `PATCH, DELETE …/:id`                                  | `@Authenticated` + owner/admin (§3.5)                            |
+| `POST /organizations/:orgSlug/ai/integrations/:id/test`                                                     | `@Authenticated` + owner/admin (§3.5)                            |
+| `GET, POST /organizations/:orgSlug/ai/integrations/:id/grants`; `DELETE …/grants/:grantId`                  | `@Authenticated` + owner/admin (§3.5)                            |
+| `GET, PUT, DELETE /organizations/:orgSlug/ai/choices` (org defaults, locks)                                 | `@Authenticated` + owner/admin (§3.5)                            |
+| `PATCH /organizations/:orgSlug/settings` (existing): `ai.allowPersonalIntegrations`, `ai.personalProviders` | existing marker                                                  |
+| `GET, PUT, DELETE /projects/:projectId/ai/choices` (project defaults, locks)                                | `@RequirePermission('sharing:manage', { project: 'projectId' })` |
+| `GET, POST /me/ai/integrations`; `PATCH, DELETE …/:id`; `POST …/:id/test`                                   | `@Authenticated`                                                 |
+| `GET, PUT, DELETE /me/ai/choices` (optional `projectId`)                                                    | `@Authenticated`                                                 |
+| `GET /projects/:projectId/ai/options`                                                                       | `@RequireProjectAccess('projectId')`                             |
+| `GET /ai/abilities`                                                                                         | `@Authenticated`                                                 |
 
 Keys are write-only: responses carry `keyHint` only; `PATCH { apiKey }` rotates. The server
 row is returned with `source: 'server'`, its env models, and no key fields; writes to it

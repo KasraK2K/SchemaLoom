@@ -13,7 +13,11 @@ import { resolveCheckedAddress, type Resolve } from '../introspect/address-guard
 export function guardedFetch(allowPrivate: boolean, resolve?: Resolve): typeof fetch {
   return async (input, init = {}) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
-    const address = await resolveCheckedAddress(url.hostname.replace(/^\[|\]$/g, ''), allowPrivate, resolve);
+    const address = await resolveCheckedAddress(
+      url.hostname.replace(/^\[|\]$/g, ''),
+      allowPrivate,
+      resolve,
+    );
     const lookup = ((_host, options, callback) => {
       const family = address.includes(':') ? 6 : 4;
       if ((options as { all?: boolean }).all) callback(null, [{ address, family }]);
@@ -29,7 +33,12 @@ export function guardedFetch(allowPrivate: boolean, resolve?: Resolve): typeof f
     return new Promise<Response>((resolveResponse, reject) => {
       const req = transport.request(
         url,
-        { method: init.method ?? 'GET', headers: Object.fromEntries(headers), lookup, signal: init.signal ?? undefined },
+        {
+          method: init.method ?? 'GET',
+          headers: Object.fromEntries(headers),
+          lookup,
+          signal: init.signal ?? undefined,
+        },
         (res) => {
           const responseHeaders = new Headers();
           for (const [k, v] of Object.entries(res.headers)) {
@@ -37,7 +46,10 @@ export function guardedFetch(allowPrivate: boolean, resolve?: Resolve): typeof f
             else if (Array.isArray(v)) for (const item of v) responseHeaders.append(k, item);
           }
           resolveResponse(
-            new Response(Readable.toWeb(res), { status: res.statusCode ?? 0, headers: responseHeaders }),
+            new Response(Readable.toWeb(res), {
+              status: res.statusCode ?? 0,
+              headers: responseHeaders,
+            }),
           );
         },
       );

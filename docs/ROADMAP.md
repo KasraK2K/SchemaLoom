@@ -75,7 +75,7 @@ a reason to come back every week, then reach more databases and teams.
 | 14b | SCIM provisioning + IdP group mapping                                          | `built` | `docs/phase14/DIRECTORY-SYNC.md` §1–§2 | Leavers lose access the moment HR removes them; teams in the directory become groups.                              |
 | 14c | Sign-in from the IdP's dashboard (bounced, never trusted)                      | `built` | `docs/phase14/DIRECTORY-SYNC.md` §3    | The Okta or Entra app tile just works, without accepting unrequested assertions.                                   |
 | 14d | Stream the audit log to a SIEM                                                 | `built` | `docs/phase14/AUDIT-STREAMING.md`      | Security teams watch SchemaLoom events in Splunk or Datadog, next to everything else.                              |
-| 24  | AI integrations (org and personal keys, access rules, model per ability)       | `built`    | `docs/phase24/DESIGN.md`            | AI works without a key in `.env`; the company decides who spends which key on which project and ability.           |
+| 24  | AI integrations (org and personal keys, access rules, model per ability)       | `built` | `docs/phase24/DESIGN.md`               | AI works without a key in `.env`; the company decides who spends which key on which project and ability.           |
 
 **6a/6b verified (2026-09-30)** with pg_dump 18.6 in Docker: the api image builds, the engine's
 live spec and workflow 10 pass. That run found pg_dump 17.6+'s `\restrict` lines, which the

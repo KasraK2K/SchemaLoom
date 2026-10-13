@@ -232,7 +232,13 @@ describe.skipIf(url === undefined)('AiRouter (roadmap 24 §3)', () => {
     });
     // A personal target is marked so the provider keeps it off private hosts.
     await db.aiAbilityChoice.create({
-      data: { organizationId: O, ability: 'schema_draft', userId: U, integrationId: 'aii_air_mine', model: 'gpt-p' },
+      data: {
+        organizationId: O,
+        ability: 'schema_draft',
+        userId: U,
+        integrationId: 'aii_air_mine',
+        model: 'gpt-p',
+      },
     });
     expect(await router.resolve(U, P, O, 'schema_draft')).toMatchObject({
       integrationId: 'aii_air_mine',

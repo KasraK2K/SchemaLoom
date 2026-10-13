@@ -29,13 +29,22 @@ export interface ResolveInput {
   readonly integrations: readonly IntegrationRow[];
   readonly grants: readonly GrantRow[];
   readonly choices: readonly ChoiceRow[];
-  readonly policy: { readonly allowPersonalIntegrations: boolean; readonly personalProviders: readonly string[] };
+  readonly policy: {
+    readonly allowPersonalIntegrations: boolean;
+    readonly personalProviders: readonly string[];
+  };
   /** [] when ANTHROPIC_API_KEY is unset: the server row is then never usable */
   readonly serverModels: readonly string[];
 }
-export type ResolutionStep = 'project_lock' | 'org_lock' | 'user_project' | 'user' | 'project' | 'org' | 'server';
+export type ResolutionStep =
+  'project_lock' | 'org_lock' | 'user_project' | 'user' | 'project' | 'org' | 'server';
 export type Resolution =
-  | { readonly kind: 'ok'; readonly integrationId: string; readonly model: string; readonly step: ResolutionStep }
+  | {
+      readonly kind: 'ok';
+      readonly integrationId: string;
+      readonly model: string;
+      readonly step: ResolutionStep;
+    }
   | { readonly kind: 'none' }
   | { readonly kind: 'locked_unavailable'; readonly scope: 'project' | 'org' };
 
@@ -77,10 +86,18 @@ export function resolveChoice(input: ResolveInput): Resolution {
   const P = input.projectId;
   const U = input.userId;
 
-  for (const [scope, row] of [['project', at(P, null)], ['org', at(null, null)]] as const) {
+  for (const [scope, row] of [
+    ['project', at(P, null)],
+    ['org', at(null, null)],
+  ] as const) {
     if (row?.locked !== true) continue;
     if (!ok(row)) return { kind: 'locked_unavailable', scope };
-    return { kind: 'ok', integrationId: row.integrationId, model: row.model, step: `${scope}_lock` };
+    return {
+      kind: 'ok',
+      integrationId: row.integrationId,
+      model: row.model,
+      step: `${scope}_lock`,
+    };
   }
   const steps: readonly [ResolutionStep, ChoiceRow | undefined][] = [
     ['user_project', at(P, U)],
@@ -89,7 +106,8 @@ export function resolveChoice(input: ResolveInput): Resolution {
     ['org', at(null, null)],
   ];
   for (const [step, row] of steps) {
-    if (row !== undefined && ok(row)) return { kind: 'ok', integrationId: row.integrationId, model: row.model, step };
+    if (row !== undefined && ok(row))
+      return { kind: 'ok', integrationId: row.integrationId, model: row.model, step };
   }
   const server = input.integrations.find((i) => i.source === 'server');
   const model = input.serverModels[0];

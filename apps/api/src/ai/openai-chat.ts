@@ -6,12 +6,19 @@ export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta
 /** The streamed chunk fields read here (a subset of the SDK's ChatCompletionChunk). */
 export interface ChatChunk {
   readonly model?: string;
-  readonly choices: readonly { readonly delta: { readonly content?: string | null }; readonly finish_reason: string | null }[];
+  readonly choices: readonly {
+    readonly delta: { readonly content?: string | null };
+    readonly finish_reason: string | null;
+  }[];
   readonly usage?: { readonly prompt_tokens: number; readonly completion_tokens: number } | null;
 }
 /** The subset of the `openai` client used, so specs pass a stub. */
 export interface ChatClient {
-  readonly chat: { readonly completions: { create(body: object, opts?: { signal?: AbortSignal }): Promise<AsyncIterable<ChatChunk>> } };
+  readonly chat: {
+    readonly completions: {
+      create(body: object, opts?: { signal?: AbortSignal }): Promise<AsyncIterable<ChatChunk>>;
+    };
+  };
   readonly models: { list(): AsyncIterable<{ readonly id: string }> };
 }
 
@@ -35,7 +42,11 @@ export function toChatBody(provider: AiProviderType, model: string, request: AiR
   };
 }
 
-const STOP: Record<string, string> = { content_filter: 'refusal', length: 'max_tokens', stop: 'end_turn' };
+const STOP: Record<string, string> = {
+  content_filter: 'refusal',
+  length: 'max_tokens',
+  stop: 'end_turn',
+};
 
 export async function streamChat(
   client: ChatClient,

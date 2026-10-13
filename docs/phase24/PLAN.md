@@ -37,39 +37,41 @@
 ## File map
 
 API (`apps/api`):
-| File | Responsibility |
-| --- | --- |
-| `prisma/schema.prisma` | three models, relations, `AiMessage.integrationId` |
-| `prisma/migrations/20261011100000_ai_integrations/migration.sql` | tables, CHECKs, indexes, server-row backfill |
-| `src/config/env.ts` | `AI_SERVER_MODELS`, `AI_ALLOW_PRIVATE_HOSTS` |
-| `src/ai-integrations/abilities.ts` | ability registry, provider list, capabilities |
-| `src/ai-integrations/resolve.ts` | pure resolution rule |
-| `src/ai-integrations/guarded-fetch.ts` | `fetch` that pins a checked address (SSRF guard for custom base URLs) |
-| `src/ai-integrations/ai-router.service.ts` | loads rows, resolves, decrypts → `AiTarget`; `/ai/options` view |
-| `src/ai-integrations/ai-integrations.service.ts` | CRUD, test, grants, choices, audit |
-| `src/ai-integrations/ai-integrations.dto.ts` | zod bodies |
-| `src/ai-integrations/ai-integrations.controller.ts` | org, `/me`, project, options routes |
-| `src/ai-integrations/ai-integrations.module.ts`, `index.ts` | wiring |
-| `src/ai/openai-chat.ts` | OpenAI-SDK streaming adapter |
-| `src/ai/ai.provider.ts` | `stream(target, …)` dispatch, `listModels(target)` |
-| `src/ai/ai.service.ts` | uses `AiRouter` |
-| `src/organizations/organizations.service.ts` | new org gets its server row + `*` grant |
-| `packages/contracts/src/org-settings.ts` | `ai` policy in org settings |
+
+| File                                                             | Responsibility                                                        |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `prisma/schema.prisma`                                           | three models, relations, `AiMessage.integrationId`                    |
+| `prisma/migrations/20261011100000_ai_integrations/migration.sql` | tables, CHECKs, indexes, server-row backfill                          |
+| `src/config/env.ts`                                              | `AI_SERVER_MODELS`, `AI_ALLOW_PRIVATE_HOSTS`                          |
+| `src/ai-integrations/abilities.ts`                               | ability registry, provider list, capabilities                         |
+| `src/ai-integrations/resolve.ts`                                 | pure resolution rule                                                  |
+| `src/ai-integrations/guarded-fetch.ts`                           | `fetch` that pins a checked address (SSRF guard for custom base URLs) |
+| `src/ai-integrations/ai-router.service.ts`                       | loads rows, resolves, decrypts → `AiTarget`; `/ai/options` view       |
+| `src/ai-integrations/ai-integrations.service.ts`                 | CRUD, test, grants, choices, audit                                    |
+| `src/ai-integrations/ai-integrations.dto.ts`                     | zod bodies                                                            |
+| `src/ai-integrations/ai-integrations.controller.ts`              | org, `/me`, project, options routes                                   |
+| `src/ai-integrations/ai-integrations.module.ts`, `index.ts`      | wiring                                                                |
+| `src/ai/openai-chat.ts`                                          | OpenAI-SDK streaming adapter                                          |
+| `src/ai/ai.provider.ts`                                          | `stream(target, …)` dispatch, `listModels(target)`                    |
+| `src/ai/ai.service.ts`                                           | uses `AiRouter`                                                       |
+| `src/organizations/organizations.service.ts`                     | new org gets its server row + `*` grant                               |
+| `packages/contracts/src/org-settings.ts`                         | `ai` policy in org settings                                           |
 
 Web (`apps/web/src`):
-| File | Responsibility |
-| --- | --- |
-| `features/ai-integrations/ai-integrations-api.ts` | zod schemas + fetchers |
-| `features/ai-integrations/integration-list.tsx` | list + add/edit/test dialog (org and personal) |
-| `features/ai-integrations/grants-editor.tsx` | grants of one org integration |
-| `features/ai-integrations/ability-choices.tsx` | per-ability rows (org, project, personal) |
-| `features/ai-integrations/personal-policy.tsx` | org toggle + provider checklist |
-| `features/ai-integrations/model-picker.tsx` | in-feature picker reading `/ai/options` |
-| `app/(app)/[orgSlug]/settings/ai/page.tsx` | org AI page |
-| `features/org-settings/org-settings-nav.tsx` | "AI" tab |
-| `app/(app)/settings/security/page.tsx` | personal section |
-| `features/project/project-settings-dialog.tsx` | project defaults section |
-| `features/ai/ai-api.ts`, `ai-panel.tsx`, `features/canvas/describe-panel.tsx` | errors, picker |
+
+| File                                                                          | Responsibility                                 |
+| ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| `features/ai-integrations/ai-integrations-api.ts`                             | zod schemas + fetchers                         |
+| `features/ai-integrations/integration-list.tsx`                               | list + add/edit/test dialog (org and personal) |
+| `features/ai-integrations/grants-editor.tsx`                                  | grants of one org integration                  |
+| `features/ai-integrations/ability-choices.tsx`                                | per-ability rows (org, project, personal)      |
+| `features/ai-integrations/personal-policy.tsx`                                | org toggle + provider checklist                |
+| `features/ai-integrations/model-picker.tsx`                                   | in-feature picker reading `/ai/options`        |
+| `app/(app)/[orgSlug]/settings/ai/page.tsx`                                    | org AI page                                    |
+| `features/org-settings/org-settings-nav.tsx`                                  | "AI" tab                                       |
+| `app/(app)/settings/security/page.tsx`                                        | personal section                               |
+| `features/project/project-settings-dialog.tsx`                                | project defaults section                       |
+| `features/ai/ai-api.ts`, `ai-panel.tsx`, `features/canvas/describe-panel.tsx` | errors, picker                                 |
 
 e2e: `e2e/scripts/fake-anthropic.ts` (OpenAI endpoints), `e2e/tests/workflow-24-ai-integrations.spec.ts`.
 
@@ -78,6 +80,7 @@ e2e: `e2e/scripts/fake-anthropic.ts` (OpenAI endpoints), `e2e/tests/workflow-24-
 ### Task 1: Data model, migration, env, org-settings policy
 
 **Files:**
+
 - Modify: `apps/api/prisma/schema.prisma`
 - Create: `apps/api/prisma/migrations/20261011100000_ai_integrations/migration.sql`
 - Modify: `apps/api/src/config/env.ts` (beside `ANTHROPIC_API_KEY`, ~line 97)
@@ -85,6 +88,7 @@ e2e: `e2e/scripts/fake-anthropic.ts` (OpenAI endpoints), `e2e/tests/workflow-24-
 - Test: `packages/contracts/src/org-settings.spec.ts` (create if absent; else add cases)
 
 **Interfaces:**
+
 - Produces: Prisma delegates `aiIntegration`, `aiIntegrationGrant`, `aiAbilityChoice`; `AiMessage.integrationId`; env keys `AI_SERVER_MODELS: string[]`, `AI_ALLOW_PRIVATE_HOSTS: boolean`; `OrgSettings['ai']: { allowPersonalIntegrations: boolean; personalProviders: string[] }`.
 
 - [ ] **Step 1: Write the failing contracts test**
@@ -96,15 +100,27 @@ import { applyOrgSettingsPatch, readOrgSettings } from './org-settings.js';
 
 describe('org settings ai policy (roadmap 24 D4)', () => {
   it('defaults to personal integrations off, any provider', () => {
-    expect(readOrgSettings({}).ai).toEqual({ allowPersonalIntegrations: false, personalProviders: [] });
+    expect(readOrgSettings({}).ai).toEqual({
+      allowPersonalIntegrations: false,
+      personalProviders: [],
+    });
   });
   it('reads a malformed value as the default', () => {
-    expect(readOrgSettings({ ai: { allowPersonalIntegrations: 'yes' } }).ai.allowPersonalIntegrations).toBe(false);
+    expect(
+      readOrgSettings({ ai: { allowPersonalIntegrations: 'yes' } }).ai.allowPersonalIntegrations,
+    ).toBe(false);
   });
   it('patches the policy and refuses an unknown provider', () => {
-    const next = applyOrgSettingsPatch({}, { ai: { allowPersonalIntegrations: true, personalProviders: ['anthropic'] } });
+    const next = applyOrgSettingsPatch(
+      {},
+      { ai: { allowPersonalIntegrations: true, personalProviders: ['anthropic'] } },
+    );
     expect(next.ai).toEqual({ allowPersonalIntegrations: true, personalProviders: ['anthropic'] });
-    expect(() => applyOrgSettingsPatch({}, { ai: { allowPersonalIntegrations: true, personalProviders: ['bedrock'] } } as never)).toThrow();
+    expect(() =>
+      applyOrgSettingsPatch({}, {
+        ai: { allowPersonalIntegrations: true, personalProviders: ['bedrock'] },
+      } as never),
+    ).toThrow();
   });
 });
 ```
@@ -316,11 +332,13 @@ Expected: migration applied, typecheck passes. Then `pnpm --filter @schemaloom/a
 ### Task 2: Ability registry and the pure resolver
 
 **Files:**
+
 - Create: `apps/api/src/ai-integrations/abilities.ts`
 - Create: `apps/api/src/ai-integrations/resolve.ts`
 - Test: `apps/api/src/ai-integrations/resolve.spec.ts`
 
 **Interfaces:**
+
 - Produces:
   - `AI_ABILITIES`, `type AiAbility = 'chat' | 'schema_draft' | 'doc_drafts'`, `AI_ABILITY_IDS`, `isAiAbility(s): s is AiAbility`
   - `type AiProviderType` (= contracts `AI_PROVIDER_IDS[number]`), `PROVIDER_CAPABILITIES: Record<AiProviderType, { caching: boolean; thinking: boolean; fallback: boolean }>`
@@ -368,47 +386,119 @@ import { resolveChoice, type ChoiceRow, type IntegrationRow, type ResolveInput }
 
 const U = 'usr_u';
 const P = 'prj_p';
-const SERVER: IntegrationRow = { id: 'srv', ownerUserId: null, source: 'server', provider: 'anthropic', allowedModels: [] };
-const AZURE: IntegrationRow = { id: 'az', ownerUserId: null, source: 'custom', provider: 'openai_compatible', allowedModels: ['gpt-x', 'gpt-y'] };
-const MINE: IntegrationRow = { id: 'mine', ownerUserId: U, source: 'custom', provider: 'openai', allowedModels: ['gpt-m'] };
+const SERVER: IntegrationRow = {
+  id: 'srv',
+  ownerUserId: null,
+  source: 'server',
+  provider: 'anthropic',
+  allowedModels: [],
+};
+const AZURE: IntegrationRow = {
+  id: 'az',
+  ownerUserId: null,
+  source: 'custom',
+  provider: 'openai_compatible',
+  allowedModels: ['gpt-x', 'gpt-y'],
+};
+const MINE: IntegrationRow = {
+  id: 'mine',
+  ownerUserId: U,
+  source: 'custom',
+  provider: 'openai',
+  allowedModels: ['gpt-m'],
+};
 
 const base = (over: Partial<ResolveInput> = {}): ResolveInput => ({
   userId: U,
   projectId: P,
   integrations: [SERVER, AZURE, MINE],
-  grants: [{ integrationId: 'srv', projectId: null, userId: null }, { integrationId: 'az', projectId: null, userId: null }],
+  grants: [
+    { integrationId: 'srv', projectId: null, userId: null },
+    { integrationId: 'az', projectId: null, userId: null },
+  ],
   choices: [],
   policy: { allowPersonalIntegrations: true, personalProviders: [] },
   serverModels: ['claude-sonnet-5-5'],
   ...over,
 });
-const choice = (c: Partial<ChoiceRow>): ChoiceRow => ({ projectId: null, userId: null, integrationId: 'az', model: 'gpt-x', locked: false, ...c });
+const choice = (c: Partial<ChoiceRow>): ChoiceRow => ({
+  projectId: null,
+  userId: null,
+  integrationId: 'az',
+  model: 'gpt-x',
+  locked: false,
+  ...c,
+});
 
 describe('resolveChoice (roadmap 24 §3.2)', () => {
   it.each([
-    ['project lock', [choice({ projectId: P, locked: true, model: 'gpt-y' }), choice({ projectId: P, userId: U, integrationId: 'mine', model: 'gpt-m' })], 'project_lock', 'gpt-y'],
-    ['org lock beats member choices', [choice({ locked: true }), choice({ userId: U, integrationId: 'mine', model: 'gpt-m' })], 'org_lock', 'gpt-x'],
-    ['member in project', [choice({ projectId: P, userId: U, integrationId: 'mine', model: 'gpt-m' }), choice({ userId: U, model: 'gpt-y' })], 'user_project', 'gpt-m'],
-    ['member everywhere', [choice({ userId: U, model: 'gpt-y' }), choice({ projectId: P })], 'user', 'gpt-y'],
+    [
+      'project lock',
+      [
+        choice({ projectId: P, locked: true, model: 'gpt-y' }),
+        choice({ projectId: P, userId: U, integrationId: 'mine', model: 'gpt-m' }),
+      ],
+      'project_lock',
+      'gpt-y',
+    ],
+    [
+      'org lock beats member choices',
+      [choice({ locked: true }), choice({ userId: U, integrationId: 'mine', model: 'gpt-m' })],
+      'org_lock',
+      'gpt-x',
+    ],
+    [
+      'member in project',
+      [
+        choice({ projectId: P, userId: U, integrationId: 'mine', model: 'gpt-m' }),
+        choice({ userId: U, model: 'gpt-y' }),
+      ],
+      'user_project',
+      'gpt-m',
+    ],
+    [
+      'member everywhere',
+      [choice({ userId: U, model: 'gpt-y' }), choice({ projectId: P })],
+      'user',
+      'gpt-y',
+    ],
     ['project default', [choice({ projectId: P, model: 'gpt-y' }), choice({})], 'project', 'gpt-y'],
     ['org default', [choice({})], 'org', 'gpt-x'],
     ['server default', [], 'server', 'claude-sonnet-5-5'],
   ] as const)('%s wins', (_name, choices, step, model) => {
-    expect(resolveChoice(base({ choices: [...choices] }))).toMatchObject({ kind: 'ok', step, model });
+    expect(resolveChoice(base({ choices: [...choices] }))).toMatchObject({
+      kind: 'ok',
+      step,
+      model,
+    });
   });
 
   it('a project lock outranks an org lock', () => {
-    const r = resolveChoice(base({ choices: [choice({ locked: true }), choice({ projectId: P, locked: true, model: 'gpt-y' })] }));
+    const r = resolveChoice(
+      base({
+        choices: [choice({ locked: true }), choice({ projectId: P, locked: true, model: 'gpt-y' })],
+      }),
+    );
     expect(r).toMatchObject({ step: 'project_lock', model: 'gpt-y' });
   });
 
   it('an unusable lock is an error, never a fall-through', () => {
-    const r = resolveChoice(base({ grants: [{ integrationId: 'srv', projectId: null, userId: null }], choices: [choice({ locked: true })] }));
+    const r = resolveChoice(
+      base({
+        grants: [{ integrationId: 'srv', projectId: null, userId: null }],
+        choices: [choice({ locked: true })],
+      }),
+    );
     expect(r).toEqual({ kind: 'locked_unavailable', scope: 'org' });
   });
 
   it('skips a revoked grant and a removed model', () => {
-    const revoked = resolveChoice(base({ grants: [{ integrationId: 'srv', projectId: null, userId: null }], choices: [choice({})] }));
+    const revoked = resolveChoice(
+      base({
+        grants: [{ integrationId: 'srv', projectId: null, userId: null }],
+        choices: [choice({})],
+      }),
+    );
     expect(revoked).toMatchObject({ step: 'server' });
     const removed = resolveChoice(base({ choices: [choice({ model: 'gone' })] }));
     expect(removed).toMatchObject({ step: 'server' });
@@ -416,7 +506,9 @@ describe('resolveChoice (roadmap 24 §3.2)', () => {
 
   it('matches grants by project, member, and member in project only', () => {
     const only = (g: { projectId: string | null; userId: string | null }) =>
-      resolveChoice(base({ serverModels: [], grants: [{ integrationId: 'az', ...g }], choices: [choice({})] })).kind;
+      resolveChoice(
+        base({ serverModels: [], grants: [{ integrationId: 'az', ...g }], choices: [choice({})] }),
+      ).kind;
     expect(only({ projectId: P, userId: null })).toBe('ok');
     expect(only({ projectId: null, userId: U })).toBe('ok');
     expect(only({ projectId: P, userId: U })).toBe('ok');
@@ -427,14 +519,40 @@ describe('resolveChoice (roadmap 24 §3.2)', () => {
 
   it('personal integrations follow the org policy', () => {
     const mineChoice = [choice({ userId: U, integrationId: 'mine', model: 'gpt-m' })];
-    expect(resolveChoice(base({ choices: mineChoice, policy: { allowPersonalIntegrations: false, personalProviders: [] } }))).toMatchObject({ step: 'server' });
-    expect(resolveChoice(base({ choices: mineChoice, policy: { allowPersonalIntegrations: true, personalProviders: ['anthropic'] } }))).toMatchObject({ step: 'server' });
-    expect(resolveChoice(base({ choices: mineChoice, policy: { allowPersonalIntegrations: true, personalProviders: ['openai'] } }))).toMatchObject({ step: 'user' });
+    expect(
+      resolveChoice(
+        base({
+          choices: mineChoice,
+          policy: { allowPersonalIntegrations: false, personalProviders: [] },
+        }),
+      ),
+    ).toMatchObject({ step: 'server' });
+    expect(
+      resolveChoice(
+        base({
+          choices: mineChoice,
+          policy: { allowPersonalIntegrations: true, personalProviders: ['anthropic'] },
+        }),
+      ),
+    ).toMatchObject({ step: 'server' });
+    expect(
+      resolveChoice(
+        base({
+          choices: mineChoice,
+          policy: { allowPersonalIntegrations: true, personalProviders: ['openai'] },
+        }),
+      ),
+    ).toMatchObject({ step: 'user' });
   });
 
   it('someone else’s personal integration is never usable', () => {
     const theirs: IntegrationRow = { ...MINE, id: 'theirs', ownerUserId: 'usr_other' };
-    const r = resolveChoice(base({ integrations: [SERVER, theirs], choices: [choice({ userId: U, integrationId: 'theirs', model: 'gpt-m' })] }));
+    const r = resolveChoice(
+      base({
+        integrations: [SERVER, theirs],
+        choices: [choice({ userId: U, integrationId: 'theirs', model: 'gpt-m' })],
+      }),
+    );
     expect(r).toMatchObject({ step: 'server' });
   });
 
@@ -480,13 +598,22 @@ export interface ResolveInput {
   readonly integrations: readonly IntegrationRow[];
   readonly grants: readonly GrantRow[];
   readonly choices: readonly ChoiceRow[];
-  readonly policy: { readonly allowPersonalIntegrations: boolean; readonly personalProviders: readonly string[] };
+  readonly policy: {
+    readonly allowPersonalIntegrations: boolean;
+    readonly personalProviders: readonly string[];
+  };
   /** [] when ANTHROPIC_API_KEY is unset: the server row is then never usable */
   readonly serverModels: readonly string[];
 }
-export type ResolutionStep = 'project_lock' | 'org_lock' | 'user_project' | 'user' | 'project' | 'org' | 'server';
+export type ResolutionStep =
+  'project_lock' | 'org_lock' | 'user_project' | 'user' | 'project' | 'org' | 'server';
 export type Resolution =
-  | { readonly kind: 'ok'; readonly integrationId: string; readonly model: string; readonly step: ResolutionStep }
+  | {
+      readonly kind: 'ok';
+      readonly integrationId: string;
+      readonly model: string;
+      readonly step: ResolutionStep;
+    }
   | { readonly kind: 'none' }
   | { readonly kind: 'locked_unavailable'; readonly scope: 'project' | 'org' };
 
@@ -528,10 +655,18 @@ export function resolveChoice(input: ResolveInput): Resolution {
   const P = input.projectId;
   const U = input.userId;
 
-  for (const [scope, row] of [['project', at(P, null)], ['org', at(null, null)]] as const) {
+  for (const [scope, row] of [
+    ['project', at(P, null)],
+    ['org', at(null, null)],
+  ] as const) {
     if (row?.locked !== true) continue;
     if (!ok(row)) return { kind: 'locked_unavailable', scope };
-    return { kind: 'ok', integrationId: row.integrationId, model: row.model, step: `${scope}_lock` };
+    return {
+      kind: 'ok',
+      integrationId: row.integrationId,
+      model: row.model,
+      step: `${scope}_lock`,
+    };
   }
   const steps: readonly [ResolutionStep, ChoiceRow | undefined][] = [
     ['user_project', at(P, U)],
@@ -540,7 +675,8 @@ export function resolveChoice(input: ResolveInput): Resolution {
     ['org', at(null, null)],
   ];
   for (const [step, row] of steps) {
-    if (row !== undefined && ok(row)) return { kind: 'ok', integrationId: row.integrationId, model: row.model, step };
+    if (row !== undefined && ok(row))
+      return { kind: 'ok', integrationId: row.integrationId, model: row.model, step };
   }
   const server = input.integrations.find((i) => i.source === 'server');
   const model = input.serverModels[0];
@@ -560,10 +696,12 @@ export function resolveChoice(input: ResolveInput): Resolution {
 ### Task 3: Guarded fetch for custom base URLs
 
 **Files:**
+
 - Create: `apps/api/src/ai-integrations/guarded-fetch.ts`
 - Test: `apps/api/src/ai-integrations/guarded-fetch.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `resolveCheckedAddress(host, allowPrivate, resolve?)` from `src/introspect/address-guard.ts` (throws 422 `introspect.private_host` / `introspect.unreachable`).
 - Produces: `guardedFetch(allowPrivate: boolean, resolve?: Resolve): typeof fetch` — every request resolves the host once, refuses private addresses unless allowed, and connects to exactly that address (no DNS rebinding between check and connect). Response body is a web `ReadableStream`, so SSE streaming works.
 
@@ -590,11 +728,16 @@ describe('guardedFetch (roadmap 24 §2.1 base_url)', () => {
   afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
   it('refuses a private address without the opt-in', async () => {
-    await expect(guardedFetch(false)(`http://127.0.0.1:${String(port)}/v1/models`)).rejects.toThrow(/private/i);
+    await expect(guardedFetch(false)(`http://127.0.0.1:${String(port)}/v1/models`)).rejects.toThrow(
+      /private/i,
+    );
   });
 
   it('streams from an allowed address and keeps the Host header', async () => {
-    const res = await guardedFetch(true, () => Promise.resolve(['127.0.0.1']))(`http://llm.local:${String(port)}/v1/models`, { method: 'POST', body: '{}' });
+    const res = await guardedFetch(true, () => Promise.resolve(['127.0.0.1']))(
+      `http://llm.local:${String(port)}/v1/models`,
+      { method: 'POST', body: '{}' },
+    );
     expect(res.status).toBe(200);
     expect(await res.text()).toBe(`data: one\n\ndata: POST llm.local:${String(port)}\n\n`);
   });
@@ -621,7 +764,11 @@ import { resolveCheckedAddress, type Resolve } from '../introspect/address-guard
 export function guardedFetch(allowPrivate: boolean, resolve?: Resolve): typeof fetch {
   return async (input, init = {}) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
-    const address = await resolveCheckedAddress(url.hostname.replace(/^\[|\]$/g, ''), allowPrivate, resolve);
+    const address = await resolveCheckedAddress(
+      url.hostname.replace(/^\[|\]$/g, ''),
+      allowPrivate,
+      resolve,
+    );
     const lookup = ((_host, options, callback) => {
       const family = address.includes(':') ? 6 : 4;
       if ((options as { all?: boolean }).all) callback(null, [{ address, family }]);
@@ -633,7 +780,12 @@ export function guardedFetch(allowPrivate: boolean, resolve?: Resolve): typeof f
     return new Promise<Response>((resolveResponse, reject) => {
       const req = transport.request(
         url,
-        { method: init.method ?? 'GET', headers: Object.fromEntries(headers), lookup, signal: init.signal ?? undefined },
+        {
+          method: init.method ?? 'GET',
+          headers: Object.fromEntries(headers),
+          lookup,
+          signal: init.signal ?? undefined,
+        },
         (res) => {
           const responseHeaders = new Headers();
           for (const [k, v] of Object.entries(res.headers)) {
@@ -641,7 +793,10 @@ export function guardedFetch(allowPrivate: boolean, resolve?: Resolve): typeof f
             else if (Array.isArray(v)) for (const item of v) responseHeaders.append(k, item);
           }
           resolveResponse(
-            new Response(Readable.toWeb(res) as ReadableStream, { status: res.statusCode ?? 0, headers: responseHeaders }),
+            new Response(Readable.toWeb(res) as ReadableStream, {
+              status: res.statusCode ?? 0,
+              headers: responseHeaders,
+            }),
           );
         },
       );
@@ -661,11 +816,13 @@ The private-host error message names `INTROSPECT_ALLOW_PRIVATE_HOSTS`; the servi
 ### Task 4: The OpenAI-SDK adapter
 
 **Files:**
+
 - Modify: `apps/api/package.json` (add `openai`)
 - Create: `apps/api/src/ai/openai-chat.ts`
 - Test: `apps/api/src/ai/openai-chat.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `AiRequest`, `AiResult` from `./ai.provider`.
 - Produces:
   - `GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'`
@@ -682,14 +839,34 @@ The private-host error message names `INTROSPECT_ALLOW_PRIVATE_HOSTS`; the servi
 import { describe, expect, it } from 'vitest';
 import { scrubKey, streamChat, toChatBody, type ChatChunk, type ChatClient } from './openai-chat';
 
-const REQUEST = { prefix: 'SYSTEM+SCHEMA', instructions: 'MODE', messages: [{ role: 'user' as const, content: 'hi' }], maxTokens: 500 };
+const REQUEST = {
+  prefix: 'SYSTEM+SCHEMA',
+  instructions: 'MODE',
+  messages: [{ role: 'user' as const, content: 'hi' }],
+  maxTokens: 500,
+};
 
 function stub(chunks: ChatChunk[]): ChatClient & { bodies: object[] } {
   const bodies: object[] = [];
   return {
     bodies,
-    chat: { completions: { create: (body: object) => { bodies.push(body); return Promise.resolve((async function* () { yield* chunks; })()); } } },
-    models: { list: async function* () { yield { id: 'm' }; } },
+    chat: {
+      completions: {
+        create: (body: object) => {
+          bodies.push(body);
+          return Promise.resolve(
+            (async function* () {
+              yield* chunks;
+            })(),
+          );
+        },
+      },
+    },
+    models: {
+      list: async function* () {
+        yield { id: 'm' };
+      },
+    },
   };
 }
 
@@ -711,18 +888,37 @@ describe('openai-chat (roadmap 24 §4.1)', () => {
   it('streams text and maps finish reasons and usage', async () => {
     const client = stub([
       { model: 'gpt-x-2026', choices: [{ delta: { content: 'Hel' }, finish_reason: null }] },
-      { model: 'gpt-x-2026', choices: [{ delta: { content: 'lo' }, finish_reason: 'content_filter' }] },
+      {
+        model: 'gpt-x-2026',
+        choices: [{ delta: { content: 'lo' }, finish_reason: 'content_filter' }],
+      },
       { model: 'gpt-x-2026', choices: [], usage: { prompt_tokens: 12, completion_tokens: 3 } },
     ]);
     const seen: string[] = [];
     const result = await streamChat(client, 'gpt-x', REQUEST, (t) => seen.push(t));
     expect(seen).toEqual(['Hel', 'lo']);
-    expect(result).toEqual({ text: 'Hello', stopReason: 'refusal', model: 'gpt-x-2026', tokensIn: 12, tokensOut: 3 });
+    expect(result).toEqual({
+      text: 'Hello',
+      stopReason: 'refusal',
+      model: 'gpt-x-2026',
+      tokensIn: 12,
+      tokensOut: 3,
+    });
   });
 
   it('maps length to max_tokens and missing usage to null', async () => {
-    const result = await streamChat(stub([{ choices: [{ delta: {}, finish_reason: 'length' }] }]), 'gpt-x', REQUEST, () => undefined);
-    expect(result).toMatchObject({ stopReason: 'max_tokens', model: 'gpt-x', tokensIn: null, tokensOut: null });
+    const result = await streamChat(
+      stub([{ choices: [{ delta: {}, finish_reason: 'length' }] }]),
+      'gpt-x',
+      REQUEST,
+      () => undefined,
+    );
+    expect(result).toMatchObject({
+      stopReason: 'max_tokens',
+      model: 'gpt-x',
+      tokensIn: null,
+      tokensOut: null,
+    });
   });
 
   it('scrubs the key out of provider errors', () => {
@@ -744,12 +940,19 @@ export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta
 /** The streamed chunk fields read here (a subset of the SDK's ChatCompletionChunk). */
 export interface ChatChunk {
   readonly model?: string;
-  readonly choices: readonly { readonly delta: { readonly content?: string | null }; readonly finish_reason: string | null }[];
+  readonly choices: readonly {
+    readonly delta: { readonly content?: string | null };
+    readonly finish_reason: string | null;
+  }[];
   readonly usage?: { readonly prompt_tokens: number; readonly completion_tokens: number } | null;
 }
 /** The subset of the `openai` client used, so specs pass a stub. */
 export interface ChatClient {
-  readonly chat: { readonly completions: { create(body: object, opts?: { signal?: AbortSignal }): Promise<AsyncIterable<ChatChunk>> } };
+  readonly chat: {
+    readonly completions: {
+      create(body: object, opts?: { signal?: AbortSignal }): Promise<AsyncIterable<ChatChunk>>;
+    };
+  };
   readonly models: { list(): AsyncIterable<{ readonly id: string }> };
 }
 
@@ -771,7 +974,11 @@ export function toChatBody(model: string, request: AiRequest): object {
   };
 }
 
-const STOP: Record<string, string> = { content_filter: 'refusal', length: 'max_tokens', stop: 'end_turn' };
+const STOP: Record<string, string> = {
+  content_filter: 'refusal',
+  length: 'max_tokens',
+  stop: 'end_turn',
+};
 
 export async function streamChat(
   client: ChatClient,
@@ -818,10 +1025,12 @@ export function scrubKey(text: string, key: string | null): string {
 ### Task 5: `AiProvider` takes a target
 
 **Files:**
+
 - Modify: `apps/api/src/ai/ai.provider.ts`
 - Test: `apps/api/src/ai/ai.provider.spec.ts` (create)
 
 **Interfaces:**
+
 - Consumes: `streamChat`, `scrubKey`, `GEMINI_BASE_URL`, `ChatClient` (Task 4); `guardedFetch` (Task 3); `AiProviderType` (Task 2).
 - Produces:
 
@@ -836,7 +1045,12 @@ export interface AiTarget {
   readonly baseUrl: string | null;
 }
 class AiProvider {
-  stream(target: AiTarget, request: AiRequest, onText: (t: string) => void, signal?: AbortSignal): Promise<AiResult>;
+  stream(
+    target: AiTarget,
+    request: AiRequest,
+    onText: (t: string) => void,
+    signal?: AbortSignal,
+  ): Promise<AiResult>;
   listModels(target: Omit<AiTarget, 'model' | 'integrationId'>): Promise<string[]>;
 }
 ```
@@ -851,9 +1065,19 @@ import type { ConfigService } from '@nestjs/config';
 import type { AppEnv } from '../config/env';
 import { AiProvider, type AiTarget } from './ai.provider';
 
-const config = { get: (k: string) => (k === 'AI_ALLOW_PRIVATE_HOSTS' ? false : undefined) } as unknown as ConfigService<AppEnv, true>;
+const config = {
+  get: (k: string) => (k === 'AI_ALLOW_PRIVATE_HOSTS' ? false : undefined),
+} as unknown as ConfigService<AppEnv, true>;
 const REQ = { prefix: 'p', instructions: 'i', messages: [{ role: 'user' as const, content: 'q' }] };
-const target = (over: Partial<AiTarget>): AiTarget => ({ integrationId: 'i1', source: 'custom', provider: 'openai', model: 'gpt-x', apiKey: 'sk-secret', baseUrl: null, ...over });
+const target = (over: Partial<AiTarget>): AiTarget => ({
+  integrationId: 'i1',
+  source: 'custom',
+  provider: 'openai',
+  model: 'gpt-x',
+  apiKey: 'sk-secret',
+  baseUrl: null,
+  ...over,
+});
 
 describe('AiProvider dispatch (roadmap 24 §4.1)', () => {
   it('sends openai, gemini and openai_compatible through the chat adapter with the right base URL', async () => {
@@ -861,12 +1085,31 @@ describe('AiProvider dispatch (roadmap 24 §4.1)', () => {
     const provider = new AiProvider(config, {
       openai: (opts) => {
         made.push({ baseURL: opts.baseURL, hasFetch: opts.fetch !== undefined });
-        return { chat: { completions: { create: () => Promise.resolve((async function* () { yield { model: 'gpt-x', choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }; })()) } }, models: { list: async function* () {} } };
+        return {
+          chat: {
+            completions: {
+              create: () =>
+                Promise.resolve(
+                  (async function* () {
+                    yield {
+                      model: 'gpt-x',
+                      choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }],
+                    };
+                  })(),
+                ),
+            },
+          },
+          models: { list: async function* () {} },
+        };
       },
     });
     await provider.stream(target({}), REQ, () => undefined);
     await provider.stream(target({ provider: 'gemini' }), REQ, () => undefined);
-    await provider.stream(target({ provider: 'openai_compatible', baseUrl: 'https://llm.example/v1', apiKey: null }), REQ, () => undefined);
+    await provider.stream(
+      target({ provider: 'openai_compatible', baseUrl: 'https://llm.example/v1', apiKey: null }),
+      REQ,
+      () => undefined,
+    );
     expect(made).toEqual([
       { baseURL: undefined, hasFetch: false },
       { baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/', hasFetch: false },
@@ -875,9 +1118,23 @@ describe('AiProvider dispatch (roadmap 24 §4.1)', () => {
   });
 
   it('maps a context-length error to 422 and scrubs the key from others', async () => {
-    const failing = (error: Error) => new AiProvider(config, { openai: () => ({ chat: { completions: { create: () => Promise.reject(error) } }, models: { list: async function* () {} } }) });
-    await expect(failing(Object.assign(new Error('too long'), { code: 'context_length_exceeded' })).stream(target({}), REQ, () => undefined)).rejects.toMatchObject({ response: { code: 'ai_context_too_small' } });
-    await expect(failing(new Error('key sk-secret is invalid')).stream(target({}), REQ, () => undefined)).rejects.toThrow('key *** is invalid');
+    const failing = (error: Error) =>
+      new AiProvider(config, {
+        openai: () => ({
+          chat: { completions: { create: () => Promise.reject(error) } },
+          models: { list: async function* () {} },
+        }),
+      });
+    await expect(
+      failing(Object.assign(new Error('too long'), { code: 'context_length_exceeded' })).stream(
+        target({}),
+        REQ,
+        () => undefined,
+      ),
+    ).rejects.toMatchObject({ response: { code: 'ai_context_too_small' } });
+    await expect(
+      failing(new Error('key sk-secret is invalid')).stream(target({}), REQ, () => undefined),
+    ).rejects.toThrow('key *** is invalid');
   });
 });
 ```
@@ -898,12 +1155,18 @@ import { GEMINI_BASE_URL, scrubKey, streamChat, type ChatClient } from './openai
 
 // (AiRequest, AiResult unchanged)
 
-export interface AiTarget { /* as in Interfaces above */ }
+export interface AiTarget {
+  /* as in Interfaces above */
+}
 
 /** Test seam: specs build fake clients; production binds nothing and builds real ones per call. */
 export const AI_CLIENT_FACTORIES = Symbol('AI_CLIENT_FACTORIES');
 export interface AiClientFactories {
-  readonly openai?: (opts: { apiKey: string; baseURL?: string; fetch?: typeof fetch }) => ChatClient;
+  readonly openai?: (opts: {
+    apiKey: string;
+    baseURL?: string;
+    fetch?: typeof fetch;
+  }) => ChatClient;
   readonly anthropic?: (opts: { apiKey: string; baseURL?: string }) => Anthropic;
 }
 
@@ -920,7 +1183,12 @@ export class AiProvider {
     @Optional() @Inject(AI_CLIENT_FACTORIES) private readonly factories: AiClientFactories = {},
   ) {}
 
-  async stream(target: AiTarget, request: AiRequest, onText: (t: string) => void, signal?: AbortSignal): Promise<AiResult> {
+  async stream(
+    target: AiTarget,
+    request: AiRequest,
+    onText: (t: string) => void,
+    signal?: AbortSignal,
+  ): Promise<AiResult> {
     try {
       return target.provider === 'anthropic'
         ? await this.streamAnthropic(target, request, onText, signal)
@@ -933,7 +1201,10 @@ export class AiProvider {
   async listModels(target: Omit<AiTarget, 'model' | 'integrationId'>): Promise<string[]> {
     try {
       const ids: string[] = [];
-      const list = target.provider === 'anthropic' ? this.anthropic(target).models.list() : this.chatClient(target).models.list();
+      const list =
+        target.provider === 'anthropic'
+          ? this.anthropic(target).models.list()
+          : this.chatClient(target).models.list();
       for await (const m of list) ids.push(m.id);
       return ids.sort();
     } catch (error) {
@@ -942,7 +1213,10 @@ export class AiProvider {
   }
 
   private anthropic(target: Pick<AiTarget, 'source' | 'apiKey'>): Anthropic {
-    const opts = { apiKey: target.apiKey ?? '', ...(target.source === 'custom' ? { baseURL: 'https://api.anthropic.com' } : {}) };
+    const opts = {
+      apiKey: target.apiKey ?? '',
+      ...(target.source === 'custom' ? { baseURL: 'https://api.anthropic.com' } : {}),
+    };
     return this.factories.anthropic?.(opts) ?? new Anthropic(opts);
   }
 
@@ -952,27 +1226,44 @@ export class AiProvider {
       apiKey: target.apiKey ?? 'none',
       ...(target.provider === 'gemini' ? { baseURL: GEMINI_BASE_URL } : {}),
       ...(target.provider === 'openai_compatible' && target.baseUrl !== null
-        ? { baseURL: target.baseUrl, fetch: guardedFetch(this.config.get('AI_ALLOW_PRIVATE_HOSTS', { infer: true })) }
+        ? {
+            baseURL: target.baseUrl,
+            fetch: guardedFetch(this.config.get('AI_ALLOW_PRIVATE_HOSTS', { infer: true })),
+          }
         : {}),
     };
     return this.factories.openai?.(opts) ?? (new OpenAI(opts) as unknown as ChatClient);
   }
 
-  private async streamAnthropic(target: AiTarget, request: AiRequest, onText: (t: string) => void, signal?: AbortSignal): Promise<AiResult> {
+  private async streamAnthropic(
+    target: AiTarget,
+    request: AiRequest,
+    onText: (t: string) => void,
+    signal?: AbortSignal,
+  ): Promise<AiResult> {
     const stream = this.anthropic(target).beta.messages.stream(
-      { model: target.model, /* …the existing body, unchanged… */ },
+      { model: target.model /* …the existing body, unchanged… */ },
       { signal },
     );
     // …the existing loop and finalMessage mapping, unchanged…
   }
 
   private mapError(error: unknown, key: string | null): unknown {
-    const e = error as { code?: unknown; error?: { error?: { code?: unknown } }; message?: unknown };
+    const e = error as {
+      code?: unknown;
+      error?: { error?: { code?: unknown } };
+      message?: unknown;
+    };
     const text = typeof e.message === 'string' ? e.message : '';
-    if (e.code === 'context_length_exceeded' || e.error?.error?.code === 'context_length_exceeded' || /prompt is too long|maximum context length/i.test(text)) {
+    if (
+      e.code === 'context_length_exceeded' ||
+      e.error?.error?.code === 'context_length_exceeded' ||
+      /prompt is too long|maximum context length/i.test(text)
+    ) {
       return new UnprocessableEntityException({ code: 'ai_context_too_small' });
     }
-    if (error instanceof Error && key !== null && text.includes(key)) error.message = scrubKey(text, key);
+    if (error instanceof Error && key !== null && text.includes(key))
+      error.message = scrubKey(text, key);
     return error;
   }
 }
@@ -987,10 +1278,12 @@ Keep the existing class doc comment's paragraph about Sonnet 5.5, adaptive think
 ### Task 6: `AiRouter` — load, resolve, decrypt
 
 **Files:**
+
 - Create: `apps/api/src/ai-integrations/ai-router.service.ts`
 - Test: `apps/api/src/ai-integrations/ai-router.int.spec.ts` (real Postgres via `DATABASE_URL_TEST`, like `audit-stream.int.spec.ts`)
 
 **Interfaces:**
+
 - Consumes: `resolveChoice`, `isUsable`, `usableModels` (Task 2), `AiTarget` (Task 5), `decryptSecret`, `readOrgSettings` from `@schemaloom/contracts`, `PROVIDER_CAPABILITIES`, `AI_ABILITIES`.
 - Produces:
 
@@ -1000,20 +1293,44 @@ export interface AiOptionsView {
     readonly id: AiAbility;
     readonly label: string;
     readonly strictOutput: boolean;
-    readonly resolved: { readonly integrationId: string; readonly model: string; readonly step: ResolutionStep } | null;
+    readonly resolved: {
+      readonly integrationId: string;
+      readonly model: string;
+      readonly step: ResolutionStep;
+    } | null;
     readonly lock: { readonly scope: 'project' | 'org'; readonly usable: boolean } | null;
   }[];
   readonly integrations: readonly {
-    readonly id: string; readonly name: string; readonly provider: AiProviderType; readonly source: 'server' | 'custom';
-    readonly personal: boolean; readonly models: readonly string[];
-    readonly capabilities: { readonly caching: boolean; readonly thinking: boolean; readonly fallback: boolean };
+    readonly id: string;
+    readonly name: string;
+    readonly provider: AiProviderType;
+    readonly source: 'server' | 'custom';
+    readonly personal: boolean;
+    readonly models: readonly string[];
+    readonly capabilities: {
+      readonly caching: boolean;
+      readonly thinking: boolean;
+      readonly fallback: boolean;
+    };
   }[];
 }
-@Injectable() class AiRouter {
+@Injectable()
+class AiRouter {
   /** 503 ai_no_model / ai_locked_model_unavailable */
-  resolve(userId: string, projectId: string, organizationId: string, ability: AiAbility): Promise<AiTarget>;
+  resolve(
+    userId: string,
+    projectId: string,
+    organizationId: string,
+    ability: AiAbility,
+  ): Promise<AiTarget>;
   /** the job re-check (§3.4): the same target if still usable, else null */
-  usableTarget(userId: string, projectId: string, organizationId: string, integrationId: string, model: string): Promise<AiTarget | null>;
+  usableTarget(
+    userId: string,
+    projectId: string,
+    organizationId: string,
+    integrationId: string,
+    model: string,
+  ): Promise<AiTarget | null>;
   options(userId: string, projectId: string, organizationId: string): Promise<AiOptionsView>;
   /** env models for the server row: [AI_MODEL, ...AI_SERVER_MODELS] deduped, or [] without ANTHROPIC_API_KEY */
   serverModels(): string[];
@@ -1029,17 +1346,37 @@ describe.skipIf(url === undefined)('AiRouter (roadmap 24 §3)', () => {
   // afterAll: delete the org (cascades) and the user.
 
   it('falls back to the server default with the env model', async () => {
-    expect(await router.resolve(U, P, O, 'chat')).toMatchObject({ integrationId: 'aii_srv_org_air', provider: 'anthropic', model: 'claude-sonnet-5-5', apiKey: 'env-key', source: 'server' });
+    expect(await router.resolve(U, P, O, 'chat')).toMatchObject({
+      integrationId: 'aii_srv_org_air',
+      provider: 'anthropic',
+      model: 'claude-sonnet-5-5',
+      apiKey: 'env-key',
+      source: 'server',
+    });
   });
   it('uses a granted org default and decrypts its key', async () => {
     await db.aiIntegrationGrant.create({ data: { integrationId: 'aii_air', projectId: P } });
-    await db.aiAbilityChoice.create({ data: { organizationId: O, ability: 'chat', integrationId: 'aii_air', model: 'gpt-x' } });
-    expect(await router.resolve(U, P, O, 'chat')).toMatchObject({ integrationId: 'aii_air', model: 'gpt-x', apiKey: 'sk-air' });
+    await db.aiAbilityChoice.create({
+      data: { organizationId: O, ability: 'chat', integrationId: 'aii_air', model: 'gpt-x' },
+    });
+    expect(await router.resolve(U, P, O, 'chat')).toMatchObject({
+      integrationId: 'aii_air',
+      model: 'gpt-x',
+      apiKey: 'sk-air',
+    });
   });
-  it('answers 503 ai_no_model without an env key and without grants', async () => { /* routerWithoutKey; grant deleted */ });
-  it('answers 503 ai_locked_model_unavailable for a broken lock', async () => { /* locked org choice on an ungranted integration */ });
-  it('the job re-check returns null after the grant is revoked', async () => { /* usableTarget → null */ });
-  it('options lists only usable integrations and never another user’s personal one', async () => { /* personal row for usr_other */ });
+  it('answers 503 ai_no_model without an env key and without grants', async () => {
+    /* routerWithoutKey; grant deleted */
+  });
+  it('answers 503 ai_locked_model_unavailable for a broken lock', async () => {
+    /* locked org choice on an ungranted integration */
+  });
+  it('the job re-check returns null after the grant is revoked', async () => {
+    /* usableTarget → null */
+  });
+  it('options lists only usable integrations and never another user’s personal one', async () => {
+    /* personal row for usr_other */
+  });
 });
 ```
 
@@ -1057,71 +1394,162 @@ import { decryptSecret } from '../auth/totp';
 import type { AppEnv } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AiTarget } from '../ai/ai.provider';
-import { AI_ABILITIES, PROVIDER_CAPABILITIES, type AiAbility, type AiProviderType } from './abilities';
-import { isUsable, resolveChoice, usableModels, type IntegrationRow, type ResolveInput } from './resolve';
+import {
+  AI_ABILITIES,
+  PROVIDER_CAPABILITIES,
+  type AiAbility,
+  type AiProviderType,
+} from './abilities';
+import {
+  isUsable,
+  resolveChoice,
+  usableModels,
+  type IntegrationRow,
+  type ResolveInput,
+} from './resolve';
 
-const INTEGRATION_SELECT = { id: true, ownerUserId: true, source: true, provider: true, name: true, allowedModels: true, apiKeyEnc: true, baseUrl: true } as const;
+const INTEGRATION_SELECT = {
+  id: true,
+  ownerUserId: true,
+  source: true,
+  provider: true,
+  name: true,
+  allowedModels: true,
+  apiKeyEnc: true,
+  baseUrl: true,
+} as const;
 
 /** Roadmap 24 §3 — every AI ability gets its integration and model here. */
 @Injectable()
 export class AiRouter {
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService<AppEnv, true>) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<AppEnv, true>,
+  ) {}
 
   serverModels(): string[] {
     if (!this.config.get('ANTHROPIC_API_KEY', { infer: true })) return [];
-    return [...new Set([this.config.get('AI_MODEL', { infer: true }), ...this.config.get('AI_SERVER_MODELS', { infer: true })])];
+    return [
+      ...new Set([
+        this.config.get('AI_MODEL', { infer: true }),
+        ...this.config.get('AI_SERVER_MODELS', { infer: true }),
+      ]),
+    ];
   }
 
-  private async load(userId: string, projectId: string, organizationId: string, ability: AiAbility | null) {
+  private async load(
+    userId: string,
+    projectId: string,
+    organizationId: string,
+    ability: AiAbility | null,
+  ) {
     const [integrations, org, choices] = await Promise.all([
-      this.prisma.aiIntegration.findMany({ where: { OR: [{ organizationId }, { ownerUserId: userId }] }, select: INTEGRATION_SELECT }),
-      this.prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { settings: true } }),
+      this.prisma.aiIntegration.findMany({
+        where: { OR: [{ organizationId }, { ownerUserId: userId }] },
+        select: INTEGRATION_SELECT,
+      }),
+      this.prisma.organization.findUniqueOrThrow({
+        where: { id: organizationId },
+        select: { settings: true },
+      }),
       ability === null
         ? Promise.resolve([])
         : this.prisma.aiAbilityChoice.findMany({
-            where: { organizationId, ability, OR: [{ projectId: null }, { projectId }], AND: [{ OR: [{ userId: null }, { userId }] }] },
-            select: { projectId: true, userId: true, integrationId: true, model: true, locked: true },
+            where: {
+              organizationId,
+              ability,
+              OR: [{ projectId: null }, { projectId }],
+              AND: [{ OR: [{ userId: null }, { userId }] }],
+            },
+            select: {
+              projectId: true,
+              userId: true,
+              integrationId: true,
+              model: true,
+              locked: true,
+            },
           }),
     ]);
     const grants = await this.prisma.aiIntegrationGrant.findMany({
-      where: { integrationId: { in: integrations.filter((i) => i.ownerUserId === null).map((i) => i.id) } },
+      where: {
+        integrationId: { in: integrations.filter((i) => i.ownerUserId === null).map((i) => i.id) },
+      },
       select: { integrationId: true, projectId: true, userId: true },
     });
     const input: ResolveInput = {
-      userId, projectId,
+      userId,
+      projectId,
       integrations: integrations as unknown as IntegrationRow[],
-      grants, choices,
+      grants,
+      choices,
       policy: readOrgSettings(org.settings).ai,
       serverModels: this.serverModels(),
     };
     return { input, integrations };
   }
 
-  private target(row: { id: string; source: string; provider: string; apiKeyEnc: string | null; baseUrl: string | null }, model: string): AiTarget {
+  private target(
+    row: {
+      id: string;
+      source: string;
+      provider: string;
+      apiKeyEnc: string | null;
+      baseUrl: string | null;
+    },
+    model: string,
+  ): AiTarget {
     const key = this.config.get('SECRETS_ENCRYPTION_KEY', { infer: true });
     return {
       integrationId: row.id,
       source: row.source as AiTarget['source'],
       provider: row.provider as AiProviderType,
       model,
-      apiKey: row.source === 'server' ? (this.config.get('ANTHROPIC_API_KEY', { infer: true }) ?? null) : row.apiKeyEnc === null ? null : decryptSecret(row.apiKeyEnc, key).toString(),
+      apiKey:
+        row.source === 'server'
+          ? (this.config.get('ANTHROPIC_API_KEY', { infer: true }) ?? null)
+          : row.apiKeyEnc === null
+            ? null
+            : decryptSecret(row.apiKeyEnc, key).toString(),
       baseUrl: row.baseUrl,
     };
   }
 
-  async resolve(userId: string, projectId: string, organizationId: string, ability: AiAbility): Promise<AiTarget> {
+  async resolve(
+    userId: string,
+    projectId: string,
+    organizationId: string,
+    ability: AiAbility,
+  ): Promise<AiTarget> {
     const { input, integrations } = await this.load(userId, projectId, organizationId, ability);
     const r = resolveChoice(input);
     if (r.kind === 'none') throw new ServiceUnavailableException({ code: 'ai_no_model' });
-    if (r.kind === 'locked_unavailable') throw new ServiceUnavailableException({ code: 'ai_locked_model_unavailable', scope: r.scope });
-    return this.target(integrations.find((i) => i.id === r.integrationId)!, r.model);
+    if (r.kind === 'locked_unavailable')
+      throw new ServiceUnavailableException({
+        code: 'ai_locked_model_unavailable',
+        scope: r.scope,
+      });
+    return this.target(
+      integrations.find((i) => i.id === r.integrationId)!,
+      r.model,
+    );
   }
 
-  async usableTarget(userId: string, projectId: string, organizationId: string, integrationId: string, model: string): Promise<AiTarget | null> {
+  async usableTarget(
+    userId: string,
+    projectId: string,
+    organizationId: string,
+    integrationId: string,
+    model: string,
+  ): Promise<AiTarget | null> {
     const { input, integrations } = await this.load(userId, projectId, organizationId, null);
     const row = integrations.find((i) => i.id === integrationId);
     const asRow = row as unknown as IntegrationRow | undefined;
-    if (row === undefined || !isUsable(input, asRow!) || !usableModels(input, asRow!).includes(model)) return null;
+    if (
+      row === undefined ||
+      !isUsable(input, asRow!) ||
+      !usableModels(input, asRow!).includes(model)
+    )
+      return null;
     return this.target(row, model);
   }
 
@@ -1130,11 +1558,25 @@ export class AiRouter {
       AI_ABILITIES.map(async (a) => {
         const { input } = await this.load(userId, projectId, organizationId, a.id);
         const r = resolveChoice(input);
-        const lockRow = input.choices.find((c) => c.locked && c.userId === null && (c.projectId === projectId || c.projectId === null));
-        const lockScope = input.choices.some((c) => c.locked && c.projectId === projectId && c.userId === null) ? 'project' : lockRow ? 'org' : null;
+        const lockRow = input.choices.find(
+          (c) =>
+            c.locked && c.userId === null && (c.projectId === projectId || c.projectId === null),
+        );
+        const lockScope = input.choices.some(
+          (c) => c.locked && c.projectId === projectId && c.userId === null,
+        )
+          ? 'project'
+          : lockRow
+            ? 'org'
+            : null;
         return {
-          id: a.id, label: a.label, strictOutput: a.strictOutput,
-          resolved: r.kind === 'ok' ? { integrationId: r.integrationId, model: r.model, step: r.step } : null,
+          id: a.id,
+          label: a.label,
+          strictOutput: a.strictOutput,
+          resolved:
+            r.kind === 'ok'
+              ? { integrationId: r.integrationId, model: r.model, step: r.step }
+              : null,
           lock: lockScope === null ? null : { scope: lockScope, usable: r.kind === 'ok' },
         };
       }),
@@ -1145,7 +1587,10 @@ export class AiRouter {
       integrations: integrations
         .filter((i) => isUsable(input, i as unknown as IntegrationRow))
         .map((i) => ({
-          id: i.id, name: i.name, provider: i.provider as AiProviderType, source: i.source as 'server' | 'custom',
+          id: i.id,
+          name: i.name,
+          provider: i.provider as AiProviderType,
+          source: i.source as 'server' | 'custom',
           personal: i.ownerUserId !== null,
           models: [...usableModels(input, i as unknown as IntegrationRow)],
           capabilities: PROVIDER_CAPABILITIES[i.provider as AiProviderType],
@@ -1164,12 +1609,14 @@ ponytail: `options` loads once per ability (3 abilities × 4 queries). Fine at t
 ### Task 7: `AiService` uses the router
 
 **Files:**
+
 - Modify: `apps/api/src/ai/ai.service.ts`
 - Modify: `apps/api/src/ai/ai.module.ts` (import `AiIntegrationsModule`, Task 9, or provide `AiRouter` directly here first and move it in Task 9)
 - Modify: `apps/api/src/ai/ai.service.spec.ts`
 - Modify: `apps/web` nothing yet
 
 **Interfaces:**
+
 - Consumes: `AiRouter.resolve`, `AiRouter.usableTarget` (Task 6), `AiProvider.stream(target, …)` (Task 5).
 - Produces: `DocDraftJobData` gains `integrationId: string; model: string`. `AiMessage.integrationId` is written on assistant rows. Read routes no longer throw 503.
 
@@ -1196,9 +1643,15 @@ ponytail: `options` loads once per ability (3 abilities × 4 queries). Fine at t
   - `runDocDraftJob`: replace `if (!this.provider.configured) return { drafted: 0 };` with, after `this.assertAiUse(view, ids);`:
 
 ```ts
-    // Roadmap 24 §3.4: the model picked at enqueue, if the requester may still use it.
-    const target = await this.router.usableTarget(view.subject.userId, view.projectId, view.organizationId, data.integrationId, data.model);
-    if (target === null) return { drafted: 0 };
+// Roadmap 24 §3.4: the model picked at enqueue, if the requester may still use it.
+const target = await this.router.usableTarget(
+  view.subject.userId,
+  view.projectId,
+  view.organizationId,
+  data.integrationId,
+  data.model,
+);
+if (target === null) return { drafted: 0 };
 ```
 
     and pass `target` to `this.provider.stream`. A job enqueued before this deploy has no `integrationId`: treat `data.integrationId === undefined` as `return { drafted: 0 }` (the job is one-shot, and re-running it is one click).
@@ -1212,23 +1665,46 @@ ponytail: `options` loads once per ability (3 abilities × 4 queries). Fine at t
 ### Task 8: Management service and DTOs
 
 **Files:**
+
 - Create: `apps/api/src/ai-integrations/ai-integrations.dto.ts`
 - Create: `apps/api/src/ai-integrations/ai-integrations.service.ts`
 - Test: `apps/api/src/ai-integrations/ai-integrations.int.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `orgMembership`, `encryptSecret`, `resolveCheckedAddress`, `AiProvider.listModels`, `AiRouter.serverModels`, `PermissionResolver` (`resolveProject`, `canOpenProject` from `../access`), `isAiAbility`.
 - Produces (all throw 404 `{ code: 'not_found' }` for anything the caller may not manage):
 
 ```ts
 export interface IntegrationView {
-  id: string; name: string; provider: AiProviderType; source: 'server' | 'custom'; personal: boolean;
-  baseUrl: string | null; keyHint: string | null; models: string[];
-  status: 'unchecked' | 'ok' | 'failing'; lastError: string | null; lastCheckedAt: Date | null;
+  id: string;
+  name: string;
+  provider: AiProviderType;
+  source: 'server' | 'custom';
+  personal: boolean;
+  baseUrl: string | null;
+  keyHint: string | null;
+  models: string[];
+  status: 'unchecked' | 'ok' | 'failing';
+  lastError: string | null;
+  lastCheckedAt: Date | null;
   capabilities: { caching: boolean; thinking: boolean; fallback: boolean };
 }
-export interface GrantView { id: string; projectId: string | null; projectName: string | null; userId: string | null; userName: string | null }
-export interface ChoiceView { ability: AiAbility; projectId: string | null; userId: string | null; integrationId: string; model: string; locked: boolean }
+export interface GrantView {
+  id: string;
+  projectId: string | null;
+  projectName: string | null;
+  userId: string | null;
+  userName: string | null;
+}
+export interface ChoiceView {
+  ability: AiAbility;
+  projectId: string | null;
+  userId: string | null;
+  integrationId: string;
+  model: string;
+  locked: boolean;
+}
 type Owner = { kind: 'org'; userId: string; orgSlug: string } | { kind: 'me'; userId: string };
 class AiIntegrationsService {
   list(owner: Owner): Promise<IntegrationView[]>;
@@ -1245,7 +1721,7 @@ class AiIntegrationsService {
 }
 type ChoiceScope =
   | { kind: 'org'; userId: string; orgSlug: string }
-  | { kind: 'project'; userId: string; projectId: string }        // marker already checked sharing:manage
+  | { kind: 'project'; userId: string; projectId: string } // marker already checked sharing:manage
   | { kind: 'me'; userId: string; orgSlug: string; projectId: string | null };
 ```
 
@@ -1258,34 +1734,61 @@ import { AI_PROVIDER_IDS } from '@schemaloom/contracts';
 import { AI_ABILITY_IDS } from './abilities';
 
 const models = z.array(z.string().trim().min(1).max(200)).min(1).max(50);
-const apiKey = z.string().trim().min(1).max(4000).regex(/^[^\r\n]*$/, 'one line');
+const apiKey = z
+  .string()
+  .trim()
+  .min(1)
+  .max(4000)
+  .regex(/^[^\r\n]*$/, 'one line');
 
 export const createIntegrationSchema = z
   .object({
     provider: z.enum(AI_PROVIDER_IDS),
     name: z.string().trim().min(1).max(100),
-    baseUrl: z.url({ protocol: /^https?$/ }).max(2000).optional(),
+    baseUrl: z
+      .url({ protocol: /^https?$/ })
+      .max(2000)
+      .optional(),
     apiKey: apiKey.optional(),
     models,
   })
-  .refine((b) => (b.provider === 'openai_compatible') === (b.baseUrl !== undefined), { message: 'baseUrl is required for openai_compatible and only there', path: ['baseUrl'] })
-  .refine((b) => b.provider === 'openai_compatible' || b.apiKey !== undefined, { message: 'apiKey is required', path: ['apiKey'] });
+  .refine((b) => (b.provider === 'openai_compatible') === (b.baseUrl !== undefined), {
+    message: 'baseUrl is required for openai_compatible and only there',
+    path: ['baseUrl'],
+  })
+  .refine((b) => b.provider === 'openai_compatible' || b.apiKey !== undefined, {
+    message: 'apiKey is required',
+    path: ['apiKey'],
+  });
 export class CreateIntegrationDto extends createZodDto(createIntegrationSchema) {}
 export type CreateIntegrationInput = z.infer<typeof createIntegrationSchema>;
 
 /** Absent fields are kept; `apiKey` rotates. Provider can't change: delete and re-add. */
 export const updateIntegrationSchema = z
-  .object({ name: z.string().trim().min(1).max(100), baseUrl: z.url({ protocol: /^https?$/ }).max(2000), apiKey, models })
-  .partial().strict();
+  .object({
+    name: z.string().trim().min(1).max(100),
+    baseUrl: z.url({ protocol: /^https?$/ }).max(2000),
+    apiKey,
+    models,
+  })
+  .partial()
+  .strict();
 export class UpdateIntegrationDto extends createZodDto(updateIntegrationSchema) {}
 export type UpdateIntegrationInput = z.infer<typeof updateIntegrationSchema>;
 
-export const grantSchema = z.object({ projectId: z.string().min(1).nullable(), userId: z.string().min(1).nullable() }).strict();
+export const grantSchema = z
+  .object({ projectId: z.string().min(1).nullable(), userId: z.string().min(1).nullable() })
+  .strict();
 export class GrantDto extends createZodDto(grantSchema) {}
 export type GrantInput = z.infer<typeof grantSchema>;
 
 export const choiceSchema = z
-  .object({ ability: z.enum(AI_ABILITY_IDS), integrationId: z.string().min(1), model: z.string().min(1).max(200), locked: z.boolean().default(false) })
+  .object({
+    ability: z.enum(AI_ABILITY_IDS),
+    integrationId: z.string().min(1),
+    model: z.string().min(1).max(200),
+    locked: z.boolean().default(false),
+  })
   .strict();
 export class ChoiceDto extends createZodDto(choiceSchema) {}
 export type ChoiceInput = z.infer<typeof choiceSchema>;
@@ -1362,6 +1865,7 @@ export class AiIntegrationsService {
 ```
 
 Method bodies, in order:
+
 - `list`: `findMany({ where: scope, orderBy: [{ source: 'desc' }, { createdAt: 'asc' }] })`, drop the server row when `serverModels()` is empty, map `view`.
 - `create`: `checkBaseUrl`; in one transaction create `{ ...scope, source: 'custom', provider, name, baseUrl, apiKeyEnc: apiKey && encryptSecret(Buffer.from(apiKey), KEY), keyHint: apiKey?.slice(-4) ?? null, allowedModels: models, createdById: userId }` and audit `ai_integration.created` (`organizationId` = the org, or null for personal).
 - `update`: `row()`; server row → `ConflictException({ code: 'ai_server_integration_readonly' })`; `baseUrl` only when `provider === 'openai_compatible'` (else 422 `ai_base_url_not_allowed`), `checkBaseUrl`; write; audit `ai_integration.key_rotated` when `apiKey` sent, else `ai_integration.updated`.
@@ -1383,6 +1887,7 @@ Method bodies, in order:
 ### Task 9: Controllers, markers, module, new orgs
 
 **Files:**
+
 - Create: `apps/api/src/ai-integrations/ai-integrations.controller.ts`
 - Create: `apps/api/src/ai-integrations/ai-integrations.routes.spec.ts`
 - Create: `apps/api/src/ai-integrations/ai-integrations.module.ts`, `index.ts`
@@ -1391,6 +1896,7 @@ Method bodies, in order:
 - Test: `apps/api/src/organizations/organizations.service.spec.ts` (or its int spec) — new org has its server row and `*` grant
 
 **Interfaces:**
+
 - Consumes: Task 8's service, `AiRouter.options`, `AI_ABILITIES`.
 - Produces: the routes below. `AiIntegrationsModule` exports `AiRouter`.
 
@@ -1425,7 +1931,11 @@ it('serves exactly the roadmap 24 §5.1 routes', () => {
     'PUT /api/projects/:projectId/ai/choices',
   ]);
 });
-it('passes the boot sweep with one marker each', () => { expect(() => { assertRouteTable(routes); }).not.toThrow(); });
+it('passes the boot sweep with one marker each', () => {
+  expect(() => {
+    assertRouteTable(routes);
+  }).not.toThrow();
+});
 it('marks project choices with sharing:manage and options with project access', () => {
   expect(table['PUT /api/projects/:projectId/ai/choices']).toEqual([PERM_META]);
   expect(table['GET /api/projects/:projectId/ai/options']).toEqual([PROJECT_ACCESS_META]);
@@ -1444,35 +1954,61 @@ it('marks project choices with sharing:manage and options with project access', 
 @Controller('organizations/:orgSlug/ai')
 export class OrgAiIntegrationsController {
   constructor(private readonly svc: AiIntegrationsService) {}
-  @Authenticated() @Get('integrations') list(@Req() req: Request, @Param('orgSlug') s: string) { return this.svc.list({ kind: 'org', userId: userIdOf(req), orgSlug: s }); }
-  @Authenticated() @Post('integrations') create(@Req() req: Request, @Param('orgSlug') s: string, @Body() b: CreateIntegrationDto) { return this.svc.create({ kind: 'org', userId: userIdOf(req), orgSlug: s }, b); }
+  @Authenticated() @Get('integrations') list(@Req() req: Request, @Param('orgSlug') s: string) {
+    return this.svc.list({ kind: 'org', userId: userIdOf(req), orgSlug: s });
+  }
+  @Authenticated() @Post('integrations') create(
+    @Req() req: Request,
+    @Param('orgSlug') s: string,
+    @Body() b: CreateIntegrationDto,
+  ) {
+    return this.svc.create({ kind: 'org', userId: userIdOf(req), orgSlug: s }, b);
+  }
   @Authenticated() @Patch('integrations/:id') update(/* … */) {}
   @Authenticated() @HttpCode(204) @Delete('integrations/:id') remove(/* … */) {}
   @Authenticated() @HttpCode(200) @Post('integrations/:id/test') test(/* … */) {}
   @Authenticated() @Get('integrations/:id/grants') grants(/* … */) {}
   @Authenticated() @Post('integrations/:id/grants') addGrant(/* … */) {}
-  @Authenticated() @HttpCode(204) @Delete('integrations/:id/grants/:grantId') removeGrant(/* … */) {}
+  @Authenticated() @HttpCode(204) @Delete('integrations/:id/grants/:grantId') removeGrant(
+    /* … */
+  ) {}
   @Authenticated() @Get('choices') choices(/* … */) {}
   @Authenticated() @Put('choices') putChoice(/* … ChoiceDto */) {}
-  @Authenticated() @HttpCode(204) @Delete('choices') clearChoice(@Query('ability') ability: string /* isAiAbility else 400 */) {}
+  @Authenticated() @HttpCode(204) @Delete('choices') clearChoice(
+    @Query('ability') ability: string /* isAiAbility else 400 */,
+  ) {}
 }
 
 @ApiTags('ai-integrations')
 @Controller('me/ai')
-export class MyAiIntegrationsController { /* integrations CRUD + test with { kind: 'me', userId };
+export class MyAiIntegrationsController {
+  /* integrations CRUD + test with { kind: 'me', userId };
   choices: GET ?orgSlug=&projectId=, PUT body ChoiceDto & { orgSlug, projectId? } (extend choiceSchema with orgSlug: z.string().min(1), projectId: z.string().min(1).nullable().default(null)),
-  DELETE ?orgSlug=&ability=&projectId= */ }
+  DELETE ?orgSlug=&ability=&projectId= */
+}
 
 @ApiTags('ai-integrations')
 @Controller('projects/:projectId/ai')
 export class ProjectAiController {
-  constructor(private readonly svc: AiIntegrationsService, private readonly router: AiRouter, private readonly prisma: PrismaService) {}
-  @RequirePermission('sharing:manage', { project: 'projectId' }) @Get('choices') /* svc.listChoices({ kind: 'project', … }) */
-  @RequirePermission('sharing:manage', { project: 'projectId' }) @Put('choices')
-  @RequirePermission('sharing:manage', { project: 'projectId' }) @HttpCode(204) @Delete('choices')
-  @RequireProjectAccess('projectId') @Get('options')
+  constructor(
+    private readonly svc: AiIntegrationsService,
+    private readonly router: AiRouter,
+    private readonly prisma: PrismaService,
+  ) {}
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @Get('choices') /* svc.listChoices({ kind: 'project', … }) */
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @Put('choices')
+  @RequirePermission('sharing:manage', { project: 'projectId' })
+  @HttpCode(204)
+  @Delete('choices')
+  @RequireProjectAccess('projectId')
+  @Get('options')
   async options(@Req() req: Request, @Param('projectId') projectId: string) {
-    const project = await this.prisma.project.findFirstOrThrow({ where: { id: projectId, deletedAt: null }, select: { organizationId: true } });
+    const project = await this.prisma.project.findFirstOrThrow({
+      where: { id: projectId, deletedAt: null },
+      select: { organizationId: true },
+    });
     return this.router.options(userIdOf(req), projectId, project.organizationId);
   }
 }
@@ -1484,7 +2020,12 @@ Write every elided handler in full: each is one line delegating to the service w
 
 ```ts
 @Module({
-  controllers: [OrgAiIntegrationsController, MyAiIntegrationsController, ProjectAiController, AiAbilitiesController],
+  controllers: [
+    OrgAiIntegrationsController,
+    MyAiIntegrationsController,
+    ProjectAiController,
+    AiAbilitiesController,
+  ],
   providers: [AiIntegrationsService, AiRouter, AiProvider],
   exports: [AiRouter, AiProvider],
 })
@@ -1516,6 +2057,7 @@ Add a test asserting a created org has exactly one `source: 'server'` integratio
 ### Task 10: Web — API client and the org AI page
 
 **Files:**
+
 - Create: `apps/web/src/features/ai-integrations/ai-integrations-api.ts`
 - Create: `apps/web/src/features/ai-integrations/integration-list.tsx`
 - Create: `apps/web/src/features/ai-integrations/grants-editor.tsx`
@@ -1526,6 +2068,7 @@ Add a test asserting a created org has exactly one `source: 'server'` integratio
 - Test: `apps/web/src/features/ai-integrations/ai-integrations-api.spec.ts`
 
 **Interfaces:**
+
 - Consumes: the routes of Task 9, `apiFetch` (`@/lib/api-client`), `Button` (`@schemaloom/ui`), `getOrgSettings`/`OrgSettingsSchema` (`features/org-settings/org-settings-api.ts`).
 - Produces:
   - `IntegrationSchema`, `GrantSchema`, `ChoiceSchema`, `OptionsSchema`, `AbilitySchema` (zod, mirroring Task 8/6 views)
@@ -1543,14 +2086,22 @@ import { capabilityHints, choicesPath, integrationsPath, stepLabel } from './ai-
 
 describe('ai-integrations-api', () => {
   it('builds the paths per owner', () => {
-    expect(integrationsPath({ kind: 'org', orgSlug: 'acme co' })).toBe('/organizations/acme%20co/ai/integrations');
+    expect(integrationsPath({ kind: 'org', orgSlug: 'acme co' })).toBe(
+      '/organizations/acme%20co/ai/integrations',
+    );
     expect(integrationsPath({ kind: 'me' })).toBe('/me/ai/integrations');
     expect(choicesPath({ kind: 'project', projectId: 'p1' })).toBe('/projects/p1/ai/choices');
-    expect(choicesPath({ kind: 'me', orgSlug: 'acme', projectId: 'p1' })).toBe('/me/ai/choices?orgSlug=acme&projectId=p1');
+    expect(choicesPath({ kind: 'me', orgSlug: 'acme', projectId: 'p1' })).toBe(
+      '/me/ai/choices?orgSlug=acme&projectId=p1',
+    );
   });
   it('words what a provider lacks', () => {
     expect(capabilityHints({ caching: true, thinking: true, fallback: true })).toEqual([]);
-    expect(capabilityHints({ caching: false, thinking: false, fallback: false })).toEqual(['No prompt caching', 'No extended thinking', 'No fallback on refusal']);
+    expect(capabilityHints({ caching: false, thinking: false, fallback: false })).toEqual([
+      'No prompt caching',
+      'No extended thinking',
+      'No fallback on refusal',
+    ]);
   });
   it('labels where a choice came from', () => {
     expect(stepLabel('server')).toBe('Server default');
@@ -1582,18 +2133,20 @@ describe('ai-integrations-api', () => {
 ### Task 11: Web — personal integrations and project defaults
 
 **Files:**
+
 - Create: `apps/web/src/features/ai-integrations/personal-ai-section.tsx`
 - Modify: `apps/web/src/app/(app)/settings/security/page.tsx`
 - Modify: `apps/web/src/features/project/project-settings-dialog.tsx`
 
 **Interfaces:**
+
 - Consumes: Task 10 components and fetchers, `listOrganizations` (`@/features/projects`).
 
 - [ ] **Step 1: `PersonalAiSection`** (client component): heading "AI integrations"; `IntegrationList base={{ kind: 'me' }}`; then, for each org from `listOrganizations()`, a sub-section "{org.name}" that reads `getOrgSettings` only when the user is owner/admin — members can't read org settings, so instead derive the policy from the org-scoped options: call `listChoices({ kind: 'me', orgSlug, projectId: null })` and show `AbilityChoices target={{ kind: 'me', orgSlug, projectId: null }}` with `integrations` = the user's personal integrations plus the org integrations the API reports usable. Add an endpoint-free note when no personal integration is usable in that org: "{org.name} doesn't allow personal AI keys; your choices here use the org's integrations." (The `/me/ai/choices` GET returns `{ choices, usableIntegrations, personalAllowed }`; add `usableIntegrations` and `personalAllowed` to Task 8's `listChoices` for the `me` scope — computed with `isUsable` over the org's grants for `(projectId ?? any, userId)`; update Task 8's spec case 8 accordingly.)
 
 - [ ] **Step 2: Account page.** Add `<PersonalAiSection />` after `<NotificationPrefsSection />` in `settings/security/page.tsx`.
 
-- [ ] **Step 3: Project dialog.** Under the existing AI toggles in `project-settings-dialog.tsx`, add a "Models" sub-heading and `<AbilityChoices target={{ kind: 'project', projectId }} integrations={…} />`, where `integrations` comes from `GET /organizations/:slug/ai/integrations` for admins, else from the project's `/ai/options` (the project manager may not be an org admin; options lists what *they* can use, which is the honest set for them to pick from). Only render it when the AI switch is on.
+- [ ] **Step 3: Project dialog.** Under the existing AI toggles in `project-settings-dialog.tsx`, add a "Models" sub-heading and `<AbilityChoices target={{ kind: 'project', projectId }} integrations={…} />`, where `integrations` comes from `GET /organizations/:slug/ai/integrations` for admins, else from the project's `/ai/options` (the project manager may not be an org admin; options lists what _they_ can use, which is the honest set for them to pick from). Only render it when the AI switch is on.
 
 - [ ] **Step 4: Run** web typecheck + lint + unit tests; browser-check both screens as in Task 10 Step 7 (owner, then the seed member).
 
@@ -1604,12 +2157,14 @@ describe('ai-integrations-api', () => {
 ### Task 12: Web — model picker in the features, new error messages
 
 **Files:**
+
 - Create: `apps/web/src/features/ai-integrations/model-picker.tsx`
 - Modify: `apps/web/src/features/ai/ai-api.ts` (`aiErrorMessage`)
 - Modify: `apps/web/src/features/ai/ai-api.spec.ts`
 - Modify: `apps/web/src/features/ai/ai-panel.tsx`, `apps/web/src/features/canvas/describe-panel.tsx`, and the doc-draft trigger (find it with `graphify query "where are AI doc drafts requested in the web app"`)
 
 **Interfaces:**
+
 - Consumes: `getOptions`, `putChoice`, `stepLabel`, `capabilityHints`.
 - Produces: `ModelPicker({ projectId, orgSlug, ability })` — renders `"{model} · {stepLabel}"`; a `<select>` of usable integration/model pairs; selecting one calls `putChoice({ kind: 'me', orgSlug, projectId }, { ability, integrationId, model })` then invalidates `['ai-options', projectId]`. Locked → disabled, text "Set by your admin". `strictOutput` ability on a provider whose `capabilities.fallback` is false → small hint "This model may not follow the strict output format; check the result." No model → nothing rendered (the error path covers it).
 
@@ -1617,9 +2172,15 @@ describe('ai-integrations-api', () => {
 
 ```ts
 it('words the roadmap 24 errors', () => {
-  expect(aiErrorMessage(new ApiError(503, 'ai_no_model', ''))).toBe('No AI model is available here. An admin can add one in Settings → AI, or you can add your own key if your organisation allows it.');
-  expect(aiErrorMessage(new ApiError(503, 'ai_locked_model_unavailable', ''))).toBe('Your admin set a model for this that is no longer available. Ask them to update it in Settings → AI.');
-  expect(aiErrorMessage(new ApiError(422, 'ai_context_too_small', ''))).toBe('This model can’t take a selection this large. Select fewer tables, or pick a model with a bigger context.');
+  expect(aiErrorMessage(new ApiError(503, 'ai_no_model', ''))).toBe(
+    'No AI model is available here. An admin can add one in Settings → AI, or you can add your own key if your organisation allows it.',
+  );
+  expect(aiErrorMessage(new ApiError(503, 'ai_locked_model_unavailable', ''))).toBe(
+    'Your admin set a model for this that is no longer available. Ask them to update it in Settings → AI.',
+  );
+  expect(aiErrorMessage(new ApiError(422, 'ai_context_too_small', ''))).toBe(
+    'This model can’t take a selection this large. Select fewer tables, or pick a model with a bigger context.',
+  );
 });
 ```
 
@@ -1636,6 +2197,7 @@ Replace the existing `ai_not_configured` expectation with the `ai_no_model` one 
 ### Task 13: e2e — fake OpenAI endpoints and workflow 24
 
 **Files:**
+
 - Modify: `e2e/scripts/fake-anthropic.ts`
 - Modify: `e2e/playwright.config.ts` (api env `AI_ALLOW_PRIVATE_HOSTS: 'true'`)
 - Create: `e2e/tests/workflow-24-ai-integrations.spec.ts`
@@ -1643,29 +2205,33 @@ Replace the existing `ai_not_configured` expectation with the `ai_no_model` one 
 - [ ] **Step 1: Fake OpenAI.** In `fake-anthropic.ts`, before the `/v1/messages` check, handle:
 
 ```ts
-  if (req.method === 'GET' && req.url === '/v1/models') {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ object: 'list', data: [{ id: 'fake-chat', object: 'model' }] }));
-    return;
-  }
-  if (req.method === 'POST' && req.url === '/v1/chat/completions') {
-    let raw = '';
-    req.on('data', (c: Buffer) => (raw += c.toString()));
-    req.on('end', () => {
-      const request = JSON.parse(raw) as { messages?: { role: string; content: string }[] };
-      calls.push({ openai: true, ...request });
-      const answer = JSON.stringify(request.messages ?? []).includes('<ddl>') ? invoices(false) : ANSWER;
-      const chunk = (delta: object, finish: string | null) =>
-        `data: ${JSON.stringify({ id: 'cc_fake', object: 'chat.completion.chunk', model: 'fake-chat', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
-      res.writeHead(200, { 'content-type': 'text/event-stream' });
-      const half = Math.floor(answer.length / 2);
-      res.write(chunk({ role: 'assistant', content: answer.slice(0, half) }, null));
-      res.write(chunk({ content: answer.slice(half) }, 'stop'));
-      res.write(`data: ${JSON.stringify({ id: 'cc_fake', object: 'chat.completion.chunk', model: 'fake-chat', choices: [], usage: { prompt_tokens: 1, completion_tokens: 1 } })}\n\n`);
-      res.end('data: [DONE]\n\n');
-    });
-    return;
-  }
+if (req.method === 'GET' && req.url === '/v1/models') {
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ object: 'list', data: [{ id: 'fake-chat', object: 'model' }] }));
+  return;
+}
+if (req.method === 'POST' && req.url === '/v1/chat/completions') {
+  let raw = '';
+  req.on('data', (c: Buffer) => (raw += c.toString()));
+  req.on('end', () => {
+    const request = JSON.parse(raw) as { messages?: { role: string; content: string }[] };
+    calls.push({ openai: true, ...request });
+    const answer = JSON.stringify(request.messages ?? []).includes('<ddl>')
+      ? invoices(false)
+      : ANSWER;
+    const chunk = (delta: object, finish: string | null) =>
+      `data: ${JSON.stringify({ id: 'cc_fake', object: 'chat.completion.chunk', model: 'fake-chat', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+    res.writeHead(200, { 'content-type': 'text/event-stream' });
+    const half = Math.floor(answer.length / 2);
+    res.write(chunk({ role: 'assistant', content: answer.slice(0, half) }, null));
+    res.write(chunk({ content: answer.slice(half) }, 'stop'));
+    res.write(
+      `data: ${JSON.stringify({ id: 'cc_fake', object: 'chat.completion.chunk', model: 'fake-chat', choices: [], usage: { prompt_tokens: 1, completion_tokens: 1 } })}\n\n`,
+    );
+    res.end('data: [DONE]\n\n');
+  });
+  return;
+}
 ```
 
 Update the file header to say it also stands in for an OpenAI-compatible server.
@@ -1678,9 +2244,14 @@ import { FAKE_ANTHROPIC_URL, signedInPage, signIn, write } from '../fixtures/api
 import { SEED, SEED_EMAILS } from '../fixtures/seed-ids';
 
 test.describe('workflow 24: AI integrations', () => {
-  test.skip(process.env.CI === undefined && process.env.E2E_FAKE_AI === undefined, 'needs the fake AI (see workflow 3)');
+  test.skip(
+    process.env.CI === undefined && process.env.E2E_FAKE_AI === undefined,
+    'needs the fake AI (see workflow 3)',
+  );
 
-  test('an admin adds, grants and locks an integration; the lock wins over a personal key', async ({ browser }) => {
+  test('an admin adds, grants and locks an integration; the lock wins over a personal key', async ({
+    browser,
+  }) => {
     const admin = await signIn(SEED_EMAILS.admin);
     const owner = await signIn(SEED_EMAILS.owner);
     const analyst = await signIn(SEED_EMAILS.analyst);
@@ -1688,54 +2259,137 @@ test.describe('workflow 24: AI integrations', () => {
     const project = SEED.projectId;
 
     // The server row's `*` grant would serve everyone; take it away for this test, restore after.
-    const list = (await (await admin.api.get(`${org}/ai/integrations`)).json()) as { id: string; source: string }[];
+    const list = (await (await admin.api.get(`${org}/ai/integrations`)).json()) as {
+      id: string;
+      source: string;
+    }[];
     const server = list.find((i) => i.source === 'server')!;
-    const grants = (await (await admin.api.get(`${org}/ai/integrations/${server.id}/grants`)).json()) as { id: string; projectId: null; userId: null }[];
+    const grants = (await (
+      await admin.api.get(`${org}/ai/integrations/${server.id}/grants`)
+    ).json()) as { id: string; projectId: null; userId: null }[];
     const everyone = grants.find((g) => g.projectId === null && g.userId === null)!;
-    await admin.api.delete(`${org}/ai/integrations/${server.id}/grants/${everyone.id}`, { headers: write(admin) });
+    await admin.api.delete(`${org}/ai/integrations/${server.id}/grants/${everyone.id}`, {
+      headers: write(admin),
+    });
 
     let integrationId = '';
     try {
       const created = await admin.api.post(`${org}/ai/integrations`, {
         headers: write(admin),
-        data: { provider: 'openai_compatible', name: 'Fake LLM', baseUrl: `${FAKE_ANTHROPIC_URL}/v1`, models: ['fake-chat'] },
+        data: {
+          provider: 'openai_compatible',
+          name: 'Fake LLM',
+          baseUrl: `${FAKE_ANTHROPIC_URL}/v1`,
+          models: ['fake-chat'],
+        },
       });
       expect(created.status()).toBe(201);
       integrationId = ((await created.json()) as { id: string }).id;
-      const tested = await admin.api.post(`${org}/ai/integrations/${integrationId}/test`, { headers: write(admin) });
-      expect(((await tested.json()) as { status: string; fetchedModels: string[] })).toMatchObject({ status: 'ok', fetchedModels: ['fake-chat'] });
+      const tested = await admin.api.post(`${org}/ai/integrations/${integrationId}/test`, {
+        headers: write(admin),
+      });
+      expect((await tested.json()) as { status: string; fetchedModels: string[] }).toMatchObject({
+        status: 'ok',
+        fetchedModels: ['fake-chat'],
+      });
 
-      await admin.api.post(`${org}/ai/integrations/${integrationId}/grants`, { headers: write(admin), data: { projectId: project, userId: analyst.userId } });
-      await admin.api.put(`${org}/ai/choices`, { headers: write(admin), data: { ability: 'chat', integrationId, model: 'fake-chat', locked: true } });
+      await admin.api.post(`${org}/ai/integrations/${integrationId}/grants`, {
+        headers: write(admin),
+        data: { projectId: project, userId: analyst.userId },
+      });
+      await admin.api.put(`${org}/ai/choices`, {
+        headers: write(admin),
+        data: { ability: 'chat', integrationId, model: 'fake-chat', locked: true },
+      });
 
       // The analyst's chat goes to the fake OpenAI endpoint.
-      const thread = (await (await analyst.api.post(`/api/projects/${project}/ai/threads`, { headers: write(analyst), data: { title: 'w24', selection: { entityIds: [SEED.entities.orders], fieldIds: [], linkIds: [], areaIds: [] } } })).json()) as { id: string };
-      const before = ((await (await fetch(`${FAKE_ANTHROPIC_URL}/calls`)).json()) as { openai?: boolean }[]).length;
-      const sent = await analyst.api.post(`/api/ai/threads/${thread.id}/messages`, { headers: write(analyst), data: { content: 'orders over 100', mode: 'query' } });
+      const thread = (await (
+        await analyst.api.post(`/api/projects/${project}/ai/threads`, {
+          headers: write(analyst),
+          data: {
+            title: 'w24',
+            selection: {
+              entityIds: [SEED.entities.orders],
+              fieldIds: [],
+              linkIds: [],
+              areaIds: [],
+            },
+          },
+        })
+      ).json()) as { id: string };
+      const before = (
+        (await (await fetch(`${FAKE_ANTHROPIC_URL}/calls`)).json()) as { openai?: boolean }[]
+      ).length;
+      const sent = await analyst.api.post(`/api/ai/threads/${thread.id}/messages`, {
+        headers: write(analyst),
+        data: { content: 'orders over 100', mode: 'query' },
+      });
       expect(sent.status()).toBe(200);
-      const calls = (await (await fetch(`${FAKE_ANTHROPIC_URL}/calls`)).json()) as { openai?: boolean }[];
+      const calls = (await (await fetch(`${FAKE_ANTHROPIC_URL}/calls`)).json()) as {
+        openai?: boolean;
+      }[];
       expect(calls.slice(before).some((c) => c.openai === true)).toBe(true);
 
       // The owner has no grant on it and the server row is ungranted: no model.
-      const options = (await (await owner.api.get(`/api/projects/${project}/ai/options`)).json()) as { abilities: { id: string; lock: { usable: boolean } | null }[] };
-      expect(options.abilities.find((a) => a.id === 'chat')?.lock).toEqual({ scope: 'org', usable: false });
+      const options = (await (
+        await owner.api.get(`/api/projects/${project}/ai/options`)
+      ).json()) as { abilities: { id: string; lock: { usable: boolean } | null }[] };
+      expect(options.abilities.find((a) => a.id === 'chat')?.lock).toEqual({
+        scope: 'org',
+        usable: false,
+      });
       const page = await signedInPage(browser, SEED_EMAILS.owner);
       await page.goto(`/${SEED.orgSlug}/p/${project}`);
       // open the AI panel and ask (use the same selectors workflow 3 uses), then:
-      await expect(page.getByText('Your admin set a model for this that is no longer available.')).toBeVisible();
+      await expect(
+        page.getByText('Your admin set a model for this that is no longer available.'),
+      ).toBeVisible();
 
       // Personal keys allowed; the analyst adds one and picks it, the org lock still wins.
-      await admin.api.patch(`${org}/settings`, { headers: write(admin), data: { ai: { allowPersonalIntegrations: true, personalProviders: [] } } });
-      const mine = (await (await analyst.api.post('/api/me/ai/integrations', { headers: write(analyst), data: { provider: 'openai', name: 'Mine', apiKey: 'sk-e2e-mine', models: ['gpt-mine'] } })).json()) as { id: string };
-      await analyst.api.put('/api/me/ai/choices', { headers: write(analyst), data: { orgSlug: SEED.orgSlug, projectId: project, ability: 'chat', integrationId: mine.id, model: 'gpt-mine' } });
-      const after = (await (await analyst.api.get(`/api/projects/${project}/ai/options`)).json()) as { abilities: { id: string; resolved: { integrationId: string; step: string } | null }[] };
-      expect(after.abilities.find((a) => a.id === 'chat')?.resolved).toMatchObject({ integrationId, step: 'org_lock' });
+      await admin.api.patch(`${org}/settings`, {
+        headers: write(admin),
+        data: { ai: { allowPersonalIntegrations: true, personalProviders: [] } },
+      });
+      const mine = (await (
+        await analyst.api.post('/api/me/ai/integrations', {
+          headers: write(analyst),
+          data: { provider: 'openai', name: 'Mine', apiKey: 'sk-e2e-mine', models: ['gpt-mine'] },
+        })
+      ).json()) as { id: string };
+      await analyst.api.put('/api/me/ai/choices', {
+        headers: write(analyst),
+        data: {
+          orgSlug: SEED.orgSlug,
+          projectId: project,
+          ability: 'chat',
+          integrationId: mine.id,
+          model: 'gpt-mine',
+        },
+      });
+      const after = (await (
+        await analyst.api.get(`/api/projects/${project}/ai/options`)
+      ).json()) as {
+        abilities: { id: string; resolved: { integrationId: string; step: string } | null }[];
+      };
+      expect(after.abilities.find((a) => a.id === 'chat')?.resolved).toMatchObject({
+        integrationId,
+        step: 'org_lock',
+      });
       await analyst.api.delete(`/api/me/ai/integrations/${mine.id}`, { headers: write(analyst) });
     } finally {
-      await admin.api.patch(`${org}/settings`, { headers: write(admin), data: { ai: { allowPersonalIntegrations: false, personalProviders: [] } } });
+      await admin.api.patch(`${org}/settings`, {
+        headers: write(admin),
+        data: { ai: { allowPersonalIntegrations: false, personalProviders: [] } },
+      });
       await admin.api.delete(`${org}/ai/choices?ability=chat`, { headers: write(admin) });
-      if (integrationId !== '') await admin.api.delete(`${org}/ai/integrations/${integrationId}`, { headers: write(admin) });
-      await admin.api.post(`${org}/ai/integrations/${server.id}/grants`, { headers: write(admin), data: { projectId: null, userId: null } });
+      if (integrationId !== '')
+        await admin.api.delete(`${org}/ai/integrations/${integrationId}`, {
+          headers: write(admin),
+        });
+      await admin.api.post(`${org}/ai/integrations/${server.id}/grants`, {
+        headers: write(admin),
+        data: { projectId: null, userId: null },
+      });
     }
   });
 });
@@ -1752,6 +2406,7 @@ Fill in the AI-panel opening steps by copying them from `workflow-3-analyst-repo
 ### Task 14: Docs, rule, roadmap, full check
 
 **Files:**
+
 - Modify: `.env.example` (AI block), `docs/deploy.md`, `docs/self-host-ubuntu.md`
 - Modify: `CLAUDE.md` ("Rules that are easy to break")
 - Modify: `docs/ROADMAP.md` (row 24 → `built`)

@@ -108,11 +108,11 @@ Then edit it:
   region, also set `MAILGUN_API_URL=https://api.eu.mailgun.net`. To use another provider, delete
   the two Mailgun lines and set `SMTP_URL` instead.
   Sign-up, invitations and password resets all send email, so set this up first.
-- **Optional:** add `ANTHROPIC_API_KEY=...` as a server-wide AI default. Without it, orgs add their own
-  integrations in Settings → AI; `AI_ALLOW_PRIVATE_HOSTS=true` lets them reach a model server on your
-  own network. Stored AI keys are encrypted with `SECRETS_ENCRYPTION_KEY`, so rotating it means
-  re-entering them. Also `GOOGLE_CLIENT_ID` and
-  `GOOGLE_CLIENT_SECRET` for Google sign-in (callback
+- **Optional:** add `ANTHROPIC_API_KEY=...` as a server-wide AI default. Without it, orgs add
+  their own integrations in Settings → AI; `AI_ALLOW_PRIVATE_HOSTS=true` lets an org integration
+  (never a personal one) reach a model server on your own network. Stored AI keys are encrypted
+  with `SECRETS_ENCRYPTION_KEY`, so rotating it means re-entering them. Also add
+  `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` for Google sign-in (callback
   `https://app.example.com/api/auth/google/callback`).
 - **`COOKIE_DOMAIN`:** leave it unset. With one host, every cookie stays host-only.
 - **Who can sign up:** by default (`SIGNUP_MODE=invite`) only the first person to sign up gets

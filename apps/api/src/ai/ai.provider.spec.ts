@@ -118,7 +118,9 @@ describe('AiProvider dispatch (roadmap 24 §4.1)', () => {
     });
     const local = { provider: 'openai_compatible' as const, baseUrl: 'http://127.0.0.1:9/v1' };
     await provider.listModels(target({ ...local, personal: true }));
-    await provider.stream(target({ ...local, personal: true }), REQ, () => undefined).catch(() => undefined);
+    await provider
+      .stream(target({ ...local, personal: true }), REQ, () => undefined)
+      .catch(() => undefined);
     for (const f of fetches) {
       await expect(f('http://127.0.0.1:9/v1/models')).rejects.toMatchObject({
         response: { code: 'introspect.private_host' },
@@ -235,7 +237,12 @@ describe('AiProvider dispatch (roadmap 24 §4.1)', () => {
           },
         }) as never,
     });
-    for (const model of ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-haiku-4-5']) {
+    for (const model of [
+      'claude-sonnet-5-5',
+      'claude-opus-5-5',
+      'claude-haiku-5-5',
+      'claude-haiku-4-5',
+    ]) {
       await provider
         .stream(target({ provider: 'anthropic', model }), REQ, () => undefined)
         .catch(() => undefined);

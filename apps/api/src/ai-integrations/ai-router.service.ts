@@ -142,11 +142,9 @@ export class AiRouter {
   }
 
   /** The integration's key in plain text; throws when SECRETS_ENCRYPTION_KEY no longer opens it. */
-  apiKeyOf(row: {
-    source: string;
-    apiKeyEnc: string | null;
-  }): string | null {
-    if (row.source === 'server') return this.config.get('ANTHROPIC_API_KEY', { infer: true }) ?? null;
+  apiKeyOf(row: { source: string; apiKeyEnc: string | null }): string | null {
+    if (row.source === 'server')
+      return this.config.get('ANTHROPIC_API_KEY', { infer: true }) ?? null;
     if (row.apiKeyEnc === null) return null;
     return decryptSecret(
       row.apiKeyEnc,

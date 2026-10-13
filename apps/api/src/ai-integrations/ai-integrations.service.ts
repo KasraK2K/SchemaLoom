@@ -615,9 +615,7 @@ export class AiIntegrationsService {
       grants:
         // A (member, project) grant is that project's alone, not a default.
         projectId === null
-          ? grants.filter(
-              (g) => g.projectId === null && (g.userId === null || g.userId === userId),
-            )
+          ? grants.filter((g) => g.projectId === null && (g.userId === null || g.userId === userId))
           : grants,
       choices: [],
       policy,

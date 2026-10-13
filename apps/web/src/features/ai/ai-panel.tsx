@@ -284,7 +284,9 @@ function ThreadView({
         <Button size="sm" variant="ghost" onClick={onBack}>
           ← Conversations
         </Button>
-        <p className="text-xs text-text-muted"><AiErrorText error={thread.error} /></p>
+        <p className="text-xs text-text-muted">
+          <AiErrorText error={thread.error} />
+        </p>
       </div>
     );
   }

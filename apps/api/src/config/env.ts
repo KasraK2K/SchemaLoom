@@ -93,7 +93,8 @@ export const envSchema = z
     S3_SECRET_ACCESS_KEY: z.string().min(1),
     S3_PUBLIC_URL: optionalStr,
 
-    // Phase 5: without a key every AI route answers 503 ai_not_configured
+    // Optional (roadmap 24): the key backs the server integration only. Without it AI still
+    // works once an org adds an integration; with nothing usable a call answers 503 ai_no_model.
     ANTHROPIC_API_KEY: optionalStr,
     AI_MODEL: z.preprocess(
       (v) => (v === '' ? undefined : v),

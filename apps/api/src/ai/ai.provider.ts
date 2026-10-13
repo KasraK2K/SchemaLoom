@@ -46,7 +46,12 @@ type ClientLimits = { timeout: number; maxRetries: number } | Record<string, nev
 const LIST_LIMITS = { timeout: 10_000, maxRetries: 0 };
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 /** Models that take `fallbacks: "default"` on the Claude API (claude-api skill, 2026-10). */
-const FALLBACK_MODELS = ['claude-fable-5-1', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5'];
+const FALLBACK_MODELS = [
+  'claude-fable-5-1',
+  'claude-opus-5-5',
+  'claude-opus-5',
+  'claude-sonnet-5-5',
+];
 /** Claude 3.x and 4.0–4.5 (Haiku 4.5 included) take no adaptive thinking. */
 const PRE_ADAPTIVE = /^claude-(3|(opus|sonnet|haiku)-4(-[0-5])?(-\d{8}|@|$))/;
 
@@ -128,7 +133,10 @@ export class AiProvider {
     }
   }
 
-  private anthropic(target: Pick<AiTarget, 'source' | 'apiKey'>, limits: ClientLimits = {}): Anthropic {
+  private anthropic(
+    target: Pick<AiTarget, 'source' | 'apiKey'>,
+    limits: ClientLimits = {},
+  ): Anthropic {
     const opts = {
       apiKey: target.apiKey ?? '',
       // A custom key never pairs with an env ANTHROPIC_AUTH_TOKEN or ANTHROPIC_BASE_URL.
