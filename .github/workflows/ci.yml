@@ -124,7 +124,7 @@ jobs:
           MP_SMTP_AUTH_ACCEPT_ANY: 1
           MP_SMTP_AUTH_ALLOW_INSECURE: 1
           MP_SMTP_DISABLE_RDNS: 1
-        ports: ['1025:1025', '8025:8025']
+        ports: ['2525:1025', '8025:8025']
       # Same image as the compose `mysql` profile. 11.4 makes its own TLS certificate, which
       # the test's sslmode REQUIRED needs.
       mariadb:
@@ -149,7 +149,7 @@ jobs:
       CSRF_SECRET: ci-e2e-csrf-secret-0000000000000000000000000000
       SECRETS_ENCRYPTION_KEY: Y2ktZTJlLXNlY3JldHMtZW5jcnlwdGlvbi1rZXktMzI=
       MAIL_FROM: SchemaLoom <no-reply@schemaloom.local>
-      SMTP_URL: smtp://localhost:1025
+      SMTP_URL: smtp://localhost:2525
       S3_ENDPOINT: http://localhost:9000
       S3_BUCKET: schemaloom
       S3_ACCESS_KEY_ID: schemaloom

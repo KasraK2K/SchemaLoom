@@ -1787,7 +1787,7 @@ services:
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
     ports:
-      - '${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '${MAILPIT_SMTP_PORT:-2525}:1025'
       - '${MAILPIT_UI_PORT:-8025}:8025'
 
 volumes:
@@ -1801,7 +1801,7 @@ volumes:
 | `postgres` 16 | 5432 | The application database: users, orgs, projects, entities/fields/links, docs, grants, snapshots. Not the database being *modelled* — SchemaLoom never connects to a user's database in Phase 1. |
 | `redis` 7 | 6379 | `PermissionResolver` effective-permission cache + invalidation, rate limiting, BullMQ queues (export render, email, DDL import apply), and the Socket.IO adapter from Phase 4. `noeviction` because losing a queue job silently is worse than an OOM error — **safe only because §4.4 requires an explicit TTL on every cache and rate-limit key**, so nothing on this instance grows without bound. One instance, three clients, three key prefixes (§4.4); not three containers. |
 | `minio` | 9000 (S3 API), 9001 (console) | S3-compatible object storage for avatars and generated export files. `StorageModule.ensureBucket()` creates the bucket at boot, so there is no bucket-provisioning sidecar container. |
-| `mailpit` | 1025 (SMTP), 8025 (web UI) | Catches every outgoing email in dev — verification, magic link, password reset, invites. The `MailModule` SMTP provider points here when Mailgun is not configured. |
+| `mailpit` | 2525 (SMTP; 1025 in the container), 8025 (web UI) | Catches every outgoing email in dev — verification, magic link, password reset, invites. The `MailModule` SMTP provider points here when Mailgun is not configured. |
 
 **Credentials and ports both come from `.env`, never from literals.** An earlier draft
 hardcoded `POSTGRES_USER/PASSWORD/DB` and the MinIO root pair while the api read a
@@ -1891,7 +1891,7 @@ through `dotenv-cli` (a devDependency, ~40 kB):
 | `MAIL_FROM` | **yes** | — | e.g. `SchemaLoom <no-reply@schemaloom.dev>`. |
 | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` | no | — | Both-or-neither. When present, `MailModule` binds `EmailProvider` to Mailgun's HTTP API. (Replaced Resend, 2026-09-29.) |
 | `MAILGUN_API_URL` | no | `https://api.mailgun.net` | `https://api.eu.mailgun.net` for an EU-region domain. |
-| `SMTP_URL` | no | — | When Mailgun is not configured, must be set; locally `smtp://localhost:1025` (mailpit). Boot fails if neither is set. |
+| `SMTP_URL` | no | — | When Mailgun is not configured, must be set; locally `smtp://localhost:2525` (mailpit). Boot fails if neither is set. |
 | `S3_ENDPOINT` | **yes** | — | `http://localhost:9000` locally. |
 | `S3_BUCKET` | **yes** | — | `schemaloom` locally. |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | **yes** | — | Also read by **compose** as MinIO's root credentials (§10), so they cannot drift. |

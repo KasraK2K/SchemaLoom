@@ -1,7 +1,7 @@
 import { createTransport, type Transporter } from 'nodemailer';
 import type { EmailMessage, EmailProvider } from './email-provider';
 
-/** Bound when Mailgun is not configured. Locally `smtp://localhost:1025` (mailpit). */
+/** Bound when Mailgun is not configured. Locally `smtp://localhost:2525` (mailpit). */
 export class SmtpEmailProvider implements EmailProvider {
   private readonly transport: Transporter;
 

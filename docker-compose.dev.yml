@@ -14,4 +14,4 @@ services:
       - '127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001'
   mailpit:
     ports:
-      - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '127.0.0.1:${MAILPIT_SMTP_PORT:-2525}:1025'
