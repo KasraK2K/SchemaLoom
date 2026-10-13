@@ -100,6 +100,23 @@ export const envSchema = z
       z.string().default('claude-sonnet-5-5'),
     ),
 
+    /** Roadmap 24 §6: more models offered from the server key; AI_MODEL is always first. */
+    AI_SERVER_MODELS: z.preprocess(
+      (v) =>
+        typeof v === 'string' && v.trim() !== ''
+          ? v
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [],
+      z.array(z.string().min(1).max(200)).max(20),
+    ),
+    /** Roadmap 24: an OpenAI-compatible base URL on a private address (a LAN Ollama). */
+    AI_ALLOW_PRIVATE_HOSTS: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.stringbool().default(false),
+    ),
+
     // Phase 6 §3: reading a live database. Private hosts are refused unless a self-hosted
     // install opts in. PG_DUMP_PATH is read by the PostgreSQL engine (PATH when unset).
     INTROSPECTION_ENABLED: z.preprocess(

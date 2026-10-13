@@ -1,20 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { applyOrgSettingsPatch, orgSettingsPatchSchema, readOrgSettings } from './org-settings.js';
 
+const AI_OFF = { allowPersonalIntegrations: false, personalProviders: [] };
 const GRAPHITE = { theme: 'blueprint', variant: 'graphite', mode: 'system' } as const;
 
 describe('org settings (docs/phase17/ORG-DEFAULT.md)', () => {
   it('a partial patch keeps the keys it does not send', () => {
-    const stored = { allowGuestInvites: false, defaultAppearance: null };
+    const stored = { allowGuestInvites: false, defaultAppearance: null, ai: AI_OFF };
     expect(applyOrgSettingsPatch(stored, { defaultAppearance: GRAPHITE })).toEqual({
       allowGuestInvites: false,
       defaultAppearance: GRAPHITE,
+      ai: AI_OFF,
     });
     expect(
       applyOrgSettingsPatch({ defaultAppearance: GRAPHITE }, { allowGuestInvites: false }),
     ).toEqual({
       allowGuestInvites: false,
       defaultAppearance: GRAPHITE,
+      ai: AI_OFF,
     });
   });
 
@@ -24,8 +27,13 @@ describe('org settings (docs/phase17/ORG-DEFAULT.md)', () => {
     ).toEqual({
       allowGuestInvites: true,
       defaultAppearance: null,
+      ai: AI_OFF,
     });
-    expect(readOrgSettings(null)).toEqual({ allowGuestInvites: true, defaultAppearance: null });
+    expect(readOrgSettings(null)).toEqual({
+      allowGuestInvites: true,
+      defaultAppearance: null,
+      ai: AI_OFF,
+    });
   });
 
   it('a variant that belongs to another theme is refused', () => {
@@ -41,6 +49,33 @@ describe('org settings (docs/phase17/ORG-DEFAULT.md)', () => {
     ).toEqual({
       allowGuestInvites: true,
       defaultAppearance: null,
+      ai: AI_OFF,
     });
+  });
+});
+
+describe('org settings ai policy (roadmap 24 D4)', () => {
+  it('defaults to personal integrations off, any provider', () => {
+    expect(readOrgSettings({}).ai).toEqual({
+      allowPersonalIntegrations: false,
+      personalProviders: [],
+    });
+  });
+  it('reads a malformed value as the default', () => {
+    expect(
+      readOrgSettings({ ai: { allowPersonalIntegrations: 'yes' } }).ai.allowPersonalIntegrations,
+    ).toBe(false);
+  });
+  it('patches the policy and refuses an unknown provider', () => {
+    const next = applyOrgSettingsPatch(
+      {},
+      { ai: { allowPersonalIntegrations: true, personalProviders: ['anthropic'] } },
+    );
+    expect(next.ai).toEqual({ allowPersonalIntegrations: true, personalProviders: ['anthropic'] });
+    expect(() =>
+      applyOrgSettingsPatch({}, {
+        ai: { allowPersonalIntegrations: true, personalProviders: ['bedrock'] },
+      } as never),
+    ).toThrow();
   });
 });

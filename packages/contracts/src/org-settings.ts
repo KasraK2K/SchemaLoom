@@ -1,6 +1,19 @@
 import { z } from 'zod';
 import { appearanceInputSchema } from './appearance.js';
 
+/** Roadmap 24 D1. Kept here (not in the api) so the web reads the same list. */
+export const AI_PROVIDER_IDS = ['anthropic', 'openai', 'gemini', 'openai_compatible'] as const;
+
+/** Roadmap 24 D4: personal AI integrations are off until an owner or admin allows them. */
+const aiPolicyInput = z
+  .object({
+    allowPersonalIntegrations: z.boolean().default(false),
+    /** empty = any provider */
+    personalProviders: z.array(z.enum(AI_PROVIDER_IDS)).max(4).default([]),
+  })
+  .strict();
+const AI_POLICY_DEFAULT = { allowPersonalIntegrations: false, personalProviders: [] };
+
 /**
  * `organizations.settings` (doc 02 §7). Same split as `projects.settings`: `Input` (.strict())
  * is what a write must satisfy, `Stored` (.strip()) reads a row back so a renamed key or a
@@ -13,11 +26,13 @@ export const orgSettingsInputSchema = z
   .object({
     allowGuestInvites: z.boolean().default(true),
     defaultAppearance: appearanceInputSchema.nullable().default(null),
+    ai: aiPolicyInput.default(AI_POLICY_DEFAULT),
   })
   .strict();
 export const orgSettingsStoredSchema = z.object({
   allowGuestInvites: z.boolean().catch(true).default(true),
   defaultAppearance: appearanceInputSchema.nullable().catch(null).default(null),
+  ai: aiPolicyInput.catch(AI_POLICY_DEFAULT).default(AI_POLICY_DEFAULT),
 });
 export type OrgSettings = z.infer<typeof orgSettingsInputSchema>;
 
@@ -26,6 +41,7 @@ export const orgSettingsPatchSchema = z
   .object({
     allowGuestInvites: z.boolean(),
     defaultAppearance: appearanceInputSchema.nullable(),
+    ai: aiPolicyInput,
   })
   .partial()
   .strict();
