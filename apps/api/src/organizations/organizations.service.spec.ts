@@ -365,11 +365,20 @@ describe('OrganizationsService settings (docs/phase17/ORG-DEFAULT.md §2)', () =
       const out = await h.service.updateSettings(USER, 'acme', {
         defaultAppearance: GRAPHITE,
       } as never);
-      expect(out).toEqual({ allowGuestInvites: false, defaultAppearance: GRAPHITE });
+      expect(out).toEqual({
+        allowGuestInvites: false,
+        defaultAppearance: GRAPHITE,
+        ai: { allowPersonalIntegrations: false, personalProviders: [] },
+      });
       expect(h.update).toHaveBeenCalledWith({
         where: { id: ORG },
         data: {
-          settings: { allowGuestInvites: false, somethingElse: 1, defaultAppearance: GRAPHITE },
+          settings: {
+            allowGuestInvites: false,
+            somethingElse: 1,
+            defaultAppearance: GRAPHITE,
+            ai: { allowPersonalIntegrations: false, personalProviders: [] },
+          },
         },
       });
       expect(h.audit).toHaveBeenCalledWith({
