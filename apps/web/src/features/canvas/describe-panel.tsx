@@ -6,6 +6,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from '@/engines';
+import { ModelPicker } from '@/features/ai-integrations/model-picker';
 import type { DraftPreview } from '@/features/ai/ai-api';
 import { DraftReview, useSchemaDraft, type GhostHover } from '@/features/ai/describe-schema';
 import {
@@ -182,6 +183,9 @@ export function DescribePanel({
           className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-text"
         />
       </label>
+      {orgSlug !== undefined && (
+        <ModelPicker projectId={projectId} orgSlug={orgSlug} ability="schema_draft" />
+      )}
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-text-muted">{buildOn}</span>
         <Button

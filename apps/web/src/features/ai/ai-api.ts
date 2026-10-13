@@ -298,8 +298,12 @@ export async function streamMessage(
 /** The three statuses DESIGN §4.4 names, in words. */
 export function aiErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 503 && error.code === 'ai_not_configured')
-      return 'AI is not configured on this server.';
+    if (error.code === 'ai_no_model')
+      return 'No AI model is available here. An admin can add one in Settings → AI, or you can add your own key if your organisation allows it.';
+    if (error.code === 'ai_locked_model_unavailable')
+      return 'Your admin set a model for this that is no longer available. Ask them to update it in Settings → AI.';
+    if (error.code === 'ai_context_too_small')
+      return 'This model can’t take a selection this large. Select fewer tables, or pick a model with a bigger context.';
     if (error.status === 403) {
       return error.code === 'ai_disabled'
         ? 'AI is turned off for this project.'

@@ -19,14 +19,23 @@ describe('createSseParser', () => {
 
 describe('aiErrorMessage', () => {
   it('names the three statuses DESIGN §4.4 asks for', () => {
-    expect(aiErrorMessage(new ApiError(503, 'ai_not_configured', ''))).toBe(
-      'AI is not configured on this server.',
+    expect(aiErrorMessage(new ApiError(503, 'ai_no_model', ''))).toBe(
+      'No AI model is available here. An admin can add one in Settings → AI, or you can add your own key if your organisation allows it.',
     );
     expect(aiErrorMessage(new ApiError(403, 'forbidden', ''))).toBe(
       'You don’t have AI access for this selection.',
     );
     expect(aiErrorMessage(new ApiError(429, 'ai_rate_limited', '', { retryAfter: 125 }))).toBe(
       'Too many AI requests. Try again in 3 min.',
+    );
+  });
+
+  it('words the other roadmap 24 errors', () => {
+    expect(aiErrorMessage(new ApiError(503, 'ai_locked_model_unavailable', ''))).toBe(
+      'Your admin set a model for this that is no longer available. Ask them to update it in Settings → AI.',
+    );
+    expect(aiErrorMessage(new ApiError(422, 'ai_context_too_small', ''))).toBe(
+      'This model can’t take a selection this large. Select fewer tables, or pick a model with a bigger context.',
     );
   });
 });

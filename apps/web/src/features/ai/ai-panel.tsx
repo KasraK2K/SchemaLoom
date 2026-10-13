@@ -3,7 +3,9 @@
 import { Button } from '@schemaloom/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useEngine } from '@/engines';
+import { AiErrorText, ModelPicker } from '@/features/ai-integrations/model-picker';
 import { irQueryOptions } from '@/features/canvas/ir-query';
 import { useCanvasStore } from '@/features/canvas/store';
 import { createSavedQuery, savedQueriesKey, validateQuery } from '@/features/queries/queries-api';
@@ -41,6 +43,7 @@ export function AiPanel({ projectId }: { readonly projectId: string }) {
   const selection = useCanvasStore((s) => s.selection);
   const [threadId, setThreadId] = useState<string | null>(null);
   const threads = useQuery(aiThreadsQueryOptions(projectId));
+  const { orgSlug } = useParams<{ orgSlug?: string }>();
 
   const start = useMutation({
     mutationFn: () => {
@@ -58,7 +61,11 @@ export function AiPanel({ projectId }: { readonly projectId: string }) {
   });
 
   if (threads.error !== null) {
-    return <p className="p-2 text-xs text-text-muted">{aiErrorMessage(threads.error)}</p>;
+    return (
+      <p className="p-2 text-xs text-text-muted">
+        <AiErrorText error={threads.error} />
+      </p>
+    );
   }
 
   if (threadId !== null) {
@@ -75,6 +82,9 @@ export function AiPanel({ projectId }: { readonly projectId: string }) {
 
   return (
     <div className="flex flex-col gap-3 p-2 text-sm">
+      {orgSlug !== undefined && (
+        <ModelPicker projectId={projectId} orgSlug={orgSlug} ability="chat" />
+      )}
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-text-muted">
           {selection.size === 0
@@ -93,7 +103,7 @@ export function AiPanel({ projectId }: { readonly projectId: string }) {
       </div>
       {start.error !== null && (
         <p role="alert" className="text-xs text-danger-text">
-          {aiErrorMessage(start.error)}
+          <AiErrorText error={start.error} />
         </p>
       )}
       {(threads.data ?? []).length === 0 ? (
@@ -516,6 +526,7 @@ function DocDrafts({
   readonly selection: readonly string[];
 }) {
   const queryClient = useQueryClient();
+  const { orgSlug } = useParams<{ orgSlug?: string }>();
   const drafts = useQuery(docDraftsQueryOptions(projectId));
   const { data: model } = useQuery(irQueryOptions(projectId));
   const label = (type: 'entity' | 'field', id: string): string => {
@@ -549,9 +560,14 @@ function DocDrafts({
           Draft docs with AI
         </Button>
       </div>
+      {orgSlug !== undefined && (
+        <ModelPicker projectId={projectId} orgSlug={orgSlug} ability="doc_drafts" />
+      )}
       {queue.isSuccess && <p className="text-xs text-text-muted">Drafting in the background…</p>}
       {queue.error !== null && (
-        <p className="text-xs text-danger-text">{aiErrorMessage(queue.error)}</p>
+        <p className="text-xs text-danger-text">
+          <AiErrorText error={queue.error} />
+        </p>
       )}
       {review.error !== null && (
         <p className="text-xs text-danger-text">Could not review that draft.</p>
