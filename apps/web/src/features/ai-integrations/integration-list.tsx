@@ -2,7 +2,7 @@
 
 import { Button } from '@schemaloom/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { orgAdminMessage } from '@/features/org-settings/messages';
 import {
   capabilityHints,
@@ -30,6 +30,7 @@ export function IntegrationList({
   readonly base: IntegrationBase;
   readonly expand?: (integration: Integration) => ReactNode;
 }) {
+  const headingId = useId();
   const queryKey = ['ai-integrations', base];
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey, queryFn: () => listIntegrations(base) });
@@ -45,11 +46,11 @@ export function IntegrationList({
 
   return (
     <section
-      aria-labelledby={`ai-integrations-${base.kind}`}
+      aria-labelledby={headingId}
       className="mb-8 flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
     >
       <div className="flex items-center justify-between gap-2">
-        <h2 id={`ai-integrations-${base.kind}`} className="text-sm font-semibold text-text">
+        <h2 id={headingId} className="text-sm font-semibold text-text">
           Integrations
         </h2>
         <Button

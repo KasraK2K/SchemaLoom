@@ -12,7 +12,6 @@ import { createSavedQuery, savedQueriesKey, validateQuery } from '@/features/que
 import { ValidationNotes, marksOf } from '@/features/queries/queries-panel';
 import { SqlEditor } from '@/features/queries/sql-editor';
 import {
-  aiErrorMessage,
   aiThreadKey,
   aiThreadQueryOptions,
   aiThreadsKey,
@@ -246,7 +245,7 @@ function ThreadView({
   const [mode, setMode] = useState<AiMode>('query');
   const [content, setContent] = useState('');
   const [live, setLive] = useState<Live | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -266,13 +265,13 @@ function ThreadView({
               [tag]: (prev ?? NO_LIVE)[tag] + event.text,
             }));
           }
-          if (event.type === 'error') setError(aiErrorMessage(null));
+          if (event.type === 'error') setError(new Error('stream error'));
           if (event.type === 'done') setContent('');
         },
         abort.current.signal,
       );
     } catch (e: unknown) {
-      setError(aiErrorMessage(e));
+      setError(e);
     } finally {
       setLive(null);
       void queryClient.invalidateQueries({ queryKey: aiThreadKey(threadId) });
@@ -285,7 +284,7 @@ function ThreadView({
         <Button size="sm" variant="ghost" onClick={onBack}>
           ← Conversations
         </Button>
-        <p className="text-xs text-text-muted">{aiErrorMessage(thread.error)}</p>
+        <p className="text-xs text-text-muted"><AiErrorText error={thread.error} /></p>
       </div>
     );
   }
@@ -332,7 +331,7 @@ function ThreadView({
       )}
       {error !== null && (
         <p role="alert" className="text-xs text-danger-text">
-          {error}
+          <AiErrorText error={error} />
         </p>
       )}
       <form

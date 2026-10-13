@@ -43,6 +43,8 @@ export function useSchemaDraft(source: string, setSource: (source: string) => vo
     drafted,
     pending: run.isPending,
     error: run.error === null ? null : aiErrorMessage(run.error),
+    /** the raw error, for callers that add a link */
+    rawError: run.error,
     draft: (projectId: string, body: Omit<DraftSchemaBody, 'revise'>) =>
       run.mutateAsync({ projectId, body }),
     refine: (projectId: string, body: Omit<DraftSchemaBody, 'revise'>, instruction: string) =>

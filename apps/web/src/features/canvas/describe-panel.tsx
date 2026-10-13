@@ -6,7 +6,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from '@/engines';
-import { ModelPicker } from '@/features/ai-integrations/model-picker';
+import { AiErrorText, ModelPicker } from '@/features/ai-integrations/model-picker';
 import type { DraftPreview } from '@/features/ai/ai-api';
 import { DraftReview, useSchemaDraft, type GhostHover } from '@/features/ai/describe-schema';
 import {
@@ -202,7 +202,7 @@ export function DescribePanel({
       </div>
       {draft.error !== null && (
         <span role="alert" className="text-xs text-danger-text">
-          {draft.error}
+          <AiErrorText error={draft.rawError} />
         </span>
       )}
       {draft.drafted && (

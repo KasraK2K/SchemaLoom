@@ -14,7 +14,6 @@ function OrgChoices({ org }: { readonly org: { slug: string; name: string } }) {
   });
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium text-text">{org.name}</h3>
       {usable.data?.personalAllowed === false && (
         <p className="text-sm text-text-muted">
           {org.name} doesn’t allow personal AI keys; your choices here use the org’s integrations.
@@ -23,6 +22,7 @@ function OrgChoices({ org }: { readonly org: { slug: string; name: string } }) {
       <AbilityChoices
         target={{ kind: 'me', orgSlug: org.slug, projectId: null }}
         integrations={usable.data?.usableIntegrations ?? []}
+        title={`${org.name}: model for each feature`}
       />
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { Button } from '@schemaloom/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { z } from 'zod';
 import { apiFetch } from '@/lib/api-client';
 import { orgAdminMessage } from '@/features/org-settings/messages';
@@ -19,6 +19,7 @@ const PolicySchema = z.object({
  * PATCH replaces the whole `ai` object, so both fields go every time.
  */
 export function PersonalPolicy({ orgSlug }: { readonly orgSlug: string }) {
+  const headingId = useId();
   const path = `/organizations/${encodeURIComponent(orgSlug)}/settings`;
   const queryKey = ['org-settings', orgSlug];
   const queryClient = useQueryClient();
@@ -50,10 +51,10 @@ export function PersonalPolicy({ orgSlug }: { readonly orgSlug: string }) {
 
   return (
     <section
-      aria-labelledby="ai-personal"
+      aria-labelledby={headingId}
       className="mb-8 flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
     >
-      <h2 id="ai-personal" className="text-sm font-semibold text-text">
+      <h2 id={headingId} className="text-sm font-semibold text-text">
         Personal AI keys
       </h2>
       {settings.isPending ? (

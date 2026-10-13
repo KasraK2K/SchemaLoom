@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { aiErrorMessage } from '@/features/ai/ai-api';
 import { ApiError } from '@/lib/api-client';
-import { getOptions, putChoice, stepLabel } from './ai-integrations-api';
+import { getOptions, listMyChoices, putChoice, stepLabel } from './ai-integrations-api';
 
 /**
  * Roadmap 24 §5.4 — which model a feature uses for the caller, in the feature itself. A pick is
@@ -27,7 +27,38 @@ export function ModelPicker({
   });
   const [failed, setFailed] = useState(false);
   const entry = options.data?.abilities.find((a) => a.id === ability);
-  if (options.data === undefined || entry?.resolved == null) return null;
+  const empty = entry !== undefined && entry.resolved === null;
+  // Same key as the Account page's per-org list, so the two share one fetch.
+  const policy = useQuery({
+    queryKey: ['ai-integrations', { kind: 'me' }, 'usable', orgSlug],
+    queryFn: () => listMyChoices({ kind: 'me', orgSlug, projectId: null }),
+    enabled: empty && entry?.lock === null,
+  });
+  if (options.data === undefined || entry === undefined) return null;
+  if (entry.resolved === null) {
+    if (entry.lock !== null)
+      return (
+        <span className="text-xs text-text-muted">
+          Your admin set a model for this that is no longer available.
+        </span>
+      );
+    if (policy.data === undefined) return null;
+    return (
+      <span className="text-xs text-text-muted">
+        {policy.data.personalAllowed ? (
+          <>
+            No AI model is available here. Add your own key in{' '}
+            <Link href="/settings/security" className="underline">
+              Account settings
+            </Link>
+            .
+          </>
+        ) : (
+          'Ask an admin to add an AI integration.'
+        )}
+      </span>
+    );
+  }
   const { resolved, lock } = entry;
   const pairs = options.data.integrations.flatMap((i) =>
     i.models.map((model) => ({ integrationId: i.id, name: i.name, model })),
@@ -44,7 +75,7 @@ export function ModelPicker({
       { kind: 'me', orgSlug, projectId },
       { ability, integrationId: pair.integrationId, model: pair.model, locked: false },
     )
-      .then(() => queryClient.invalidateQueries({ queryKey: ['ai-options', projectId] }))
+      .then(() => queryClient.invalidateQueries({ queryKey: ['ai-options'] }))
       .catch(() => {
         setFailed(true);
       });

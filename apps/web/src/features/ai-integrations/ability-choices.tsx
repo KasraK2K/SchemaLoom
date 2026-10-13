@@ -2,7 +2,7 @@
 
 import { Button } from '@schemaloom/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { orgAdminMessage } from '@/features/org-settings/messages';
 import {
   clearChoice,
@@ -48,7 +48,7 @@ function AbilityRow({
   const { busy, message, run } = useRun(refresh);
   const models = integrations.find((i) => i.id === integrationId)?.models ?? [];
   const ready = integrationId === '' || model !== '';
-  const idBase = `choice-${ability.id}`;
+  const idBase = useId();
 
   const save = () => {
     void run(async () => {
@@ -148,9 +148,11 @@ function OrgLocks({ options }: { readonly options: Options }) {
 export function AbilityChoices({
   target,
   integrations,
+  title = 'Model for each feature',
 }: {
   readonly target: ChoiceTarget;
   readonly integrations: readonly Pickable[];
+  readonly title?: string;
 }) {
   const queryKey = ['ai-choices', target];
   const queryClient = useQueryClient();
@@ -161,23 +163,29 @@ export function AbilityChoices({
       target.kind === 'me' ? (await listMyChoices(target)).choices : listChoices(target),
   });
   const options = useQuery({
-    queryKey: ['ai-options', target],
+    queryKey: ['ai-options', target.kind === 'project' ? target.projectId : ''],
     queryFn: () => getOptions(target.kind === 'project' ? target.projectId : ''),
     enabled: target.kind === 'project',
   });
   // Kept here, not in the row: a save remounts the row (see its key).
   const [notices, setNotices] = useState<Record<string, string>>({});
-  const refresh = () => queryClient.invalidateQueries({ queryKey });
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey }),
+      // The model pickers read what each feature resolves to.
+      queryClient.invalidateQueries({ queryKey: ['ai-options'] }),
+    ]);
   const scopeProject = target.kind === 'org' ? null : target.projectId;
+  const headingId = useId();
   const failure = abilities.error ?? choices.error;
 
   return (
     <section
-      aria-labelledby="ai-choices"
+      aria-labelledby={headingId}
       className="mb-8 flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
     >
-      <h2 id="ai-choices" className="text-sm font-semibold text-text">
-        Model for each feature
+      <h2 id={headingId} className="text-sm font-semibold text-text">
+        {title}
       </h2>
       {failure !== null ? (
         <p role="alert" className="text-sm text-danger-text">
