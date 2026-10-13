@@ -113,7 +113,7 @@ so a second copy started at the same time just waits. Then roll out `schemaloom-
 | `S3_*`                                                                             | the bucket. `S3_PUBLIC_URL` is the address browsers use for presigned URLs. The api creates the bucket on boot if it doesn't exist.                                                                                                                                                                 |
 | `MAILGUN_API_KEY` + `MAILGUN_DOMAIN`, or `SMTP_URL`                                | mail. Mailgun wins when both are set; `MAILGUN_API_URL=https://api.eu.mailgun.net` for an EU-region domain                                                                                                                                                                                          |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `SECRETS_ENCRYPTION_KEY` | fresh values, generated as `.env.example` shows. Don't copy them from dev.                                                                                                                                                                                                                          |
-| `ANTHROPIC_API_KEY`                                                                | optional. Without it, the AI routes answer 503.                                                                                                                                                                                                                                                     |
+| `ANTHROPIC_API_KEY`                                                                | optional. With it, every org gets a "Server default" AI integration; without it, AI works once an org adds its own (Settings → AI). Also `AI_MODEL`, `AI_SERVER_MODELS`.                                                                                                                            |
 | `INTROSPECT_ALLOW_PRIVATE_HOSTS`                                                   | "Read a database" refuses private and internal addresses (RFC 1918, loopback, link-local, the cloud metadata address) unless this is `true`. Keep it `false` on a service open to the internet. The api image ships `pg_dump` (`PG_CLIENT_MAJOR` build arg); MySQL and MariaDB need no client tool. |
 | `AUDIT_STREAM_ALLOW_PRIVATE_HOSTS`                                                 | optional, default `false`. An org's audit stream (Settings → Audit log → Stream to a SIEM) refuses an endpoint on a private or internal address unless this is `true`, e.g. a self-hosted Splunk on your own network. The worker process sends the batches, so it needs outbound HTTPS to the SIEM. |
 | `INTROSPECTION_ENABLED`                                                            | optional, default `true`. `false` removes "Read a database" and the drift check (their routes answer 404).                                                                                                                                                                                          |
@@ -129,6 +129,10 @@ re-encryption job. After the change, Sync and Compare answer "can't be read with
 key" (409 `connection.undecryptable`), and a project manager re-enters the connection's
 passwords and keys with **Edit connection**. Keep the key in your secret store, not only in the
 server's `.env`.
+
+### AI integrations
+
+`ANTHROPIC_API_KEY` is optional. Orgs add their own integrations in Settings → AI; set `AI_ALLOW_PRIVATE_HOSTS=true` to let them point at a model server on your own network (e.g. Ollama). Stored AI keys are encrypted with `SECRETS_ENCRYPTION_KEY`, so rotating that key makes them unreadable and they must be re-entered.
 
 ## 3. The web app
 

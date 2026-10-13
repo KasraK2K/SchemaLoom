@@ -60,6 +60,9 @@ DEV database.
 - **Only org owners see every project (R13, amended 2026-09-29).** Org admins manage the org
   but see only projects they are granted, like members. Don't reintroduce `'admin'` into a
   project-visibility check.
+- **A new AI feature registers an ability** in `apps/api/src/ai-integrations/abilities.ts` and
+  calls `AiRouter.resolve(…, abilityId)` after its permission checks; it never reads an AI key
+  or model from env, and it calls the provider only through `AiProvider.stream(target, …)`.
 - **All schema data leaves through `VisibilityFilter`**. `LiveIr` (unredacted) never
   leaves `src/snapshots`. All schema writes go through `SchemaWriter`; there is no second
   mutation path.

@@ -1,6 +1,28 @@
 # Phase 24: AI integrations (roadmap 24)
 
-Status: **approved** 2026-10-10. Decisions §1 were made in the design session the same day. Plan: `docs/phase24/PLAN.md`.
+Status: **built** 2026-10-13. Decisions §1 were made in the design session the same day. Plan: `docs/phase24/PLAN.md`.
+
+As built, where it differs from or adds to the text below:
+
+- **Seven deliberate narrowings.** No per-model context table: a provider's context-length error
+  is mapped to 422 `ai_context_too_small`. No `reasoning_effort`. Test connection lists models
+  only. `DocDraft` gets no column (the job payload carries `{ integrationId, model }`). User
+  choices live on the Account page (`/settings/security`), not a new route. Project defaults are a
+  section of the project settings dialog. An org policy change is audited by the existing
+  settings audit row, not a new `org.ai_policy_changed` action.
+- **Provider errors.** When a key is present, the api rethrows a fresh error carrying only the
+  scrubbed message and status; the stack, body and headers are dropped.
+- **R13.** An admin sees, adds and removes only grants on projects they can open; owners see all.
+- **`keyHint`** is null for keys shorter than 12 characters.
+- **A member's own choice** must name an integration they can use (422
+  `ai_integration_not_in_org` otherwise), checked before the model.
+- **`GET /me/ai/choices`** returns `{ choices, usableIntegrations, personalAllowed }`. With no
+  `projectId`, only `*` and member-named grants count.
+- **Per-project overrides** are set from the in-feature model picker; the Account page shows
+  "everywhere" choices.
+- **`ai_no_model`** links to the Account page for everyone (panels don't know the org role).
+- **The e2e seed** creates the server-default row the way `OrganizationsService.create` does.
+- **The `openai` SDK** is pinned to 7.23.0.
 
 The goal: AI works without an `ANTHROPIC_API_KEY` in `.env`. An org adds its own AI
 integrations in the dashboard and decides who may use them, per project, per member, per

@@ -108,8 +108,11 @@ Then edit it:
   region, also set `MAILGUN_API_URL=https://api.eu.mailgun.net`. To use another provider, delete
   the two Mailgun lines and set `SMTP_URL` instead.
   Sign-up, invitations and password resets all send email, so set this up first.
-- **Optional:** add `ANTHROPIC_API_KEY=...` for the AI assistant, and
-  `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` for Google sign-in (callback
+- **Optional:** add `ANTHROPIC_API_KEY=...` as a server-wide AI default. Without it, orgs add their own
+  integrations in Settings → AI; `AI_ALLOW_PRIVATE_HOSTS=true` lets them reach a model server on your
+  own network. Stored AI keys are encrypted with `SECRETS_ENCRYPTION_KEY`, so rotating it means
+  re-entering them. Also `GOOGLE_CLIENT_ID` and
+  `GOOGLE_CLIENT_SECRET` for Google sign-in (callback
   `https://app.example.com/api/auth/google/callback`).
 - **`COOKIE_DOMAIN`:** leave it unset. With one host, every cookie stays host-only.
 - **Who can sign up:** by default (`SIGNUP_MODE=invite`) only the first person to sign up gets
@@ -371,7 +374,7 @@ Restore into a freshly created database (step 5):
 | The api keeps restarting                              | `docker compose logs api`: an invalid setting is listed by name at boot                    |
 | Every visitor hits the share-link rate limit together | `TRUST_PROXY=1` is missing                                                                 |
 | Export downloads fail                                 | `S3_PUBLIC_URL` must be `https://files.example.com`, and the Caddy block for it must exist |
-| AI panel says it's not configured                     | `ANTHROPIC_API_KEY` is unset; that's expected without it                                   |
+| AI panel says no model is set up                      | No server key and no org integration yet: add one in Settings → AI                         |
 | "Read a database" says the host is private            | `INTROSPECT_ALLOW_PRIVATE_HOSTS=true` for a database on your own network                   |
 | The audit stream says the endpoint is private         | `AUDIT_STREAM_ALLOW_PRIVATE_HOSTS=true` for a SIEM on your own network                     |
 | "Read a database" says the server is newer            | rebuild the api image with a higher `--build-arg PG_CLIENT_MAJOR=`                         |
