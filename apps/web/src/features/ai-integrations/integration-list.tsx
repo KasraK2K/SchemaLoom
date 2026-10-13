@@ -34,7 +34,7 @@ export function IntegrationList({
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey, queryFn: () => listIntegrations(base) });
   const refresh = () => queryClient.invalidateQueries({ queryKey });
-  const { busy, message, run } = useRun(refresh);
+  const { busy, message, setMessage, run } = useRun(refresh);
   // 'new', the id of the integration being edited, or null.
   const [editing, setEditing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export function IntegrationList({
                   {i.status === 'failing' && i.lastError !== null && (
                     <p className="text-xs text-danger-text">{i.lastError}</p>
                   )}
-                  {!server && editing !== i.id && (
+                  {editing !== i.id && (
                     <div className="flex flex-wrap gap-2">
                       <Button
                         type="button"
@@ -108,22 +108,35 @@ export function IntegrationList({
                         disabled={busy}
                         onClick={() => {
                           void run(async () => {
-                            await testIntegration(base, i.id);
+                            const r = await testIntegration(base, i.id);
+                            setMessage(
+                              r.status === 'ok'
+                                ? {
+                                    text: `${i.name}: connected, ${String(r.fetchedModels.length)} models found.`,
+                                    error: false,
+                                  }
+                                : {
+                                    text: `${i.name}: ${r.lastError ?? 'the test failed'}.`,
+                                    error: true,
+                                  },
+                            );
                           });
                         }}
                       >
                         Test
                       </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditing(i.id);
-                        }}
-                      >
-                        Edit
-                      </Button>
+                      {!server && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditing(i.id);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      )}
                       {expand !== undefined && (
                         <Button
                           type="button"
@@ -137,46 +150,47 @@ export function IntegrationList({
                           Access
                         </Button>
                       )}
-                      {confirming === i.id ? (
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="danger"
-                            disabled={busy}
-                            onClick={() => {
-                              setConfirming(null);
-                              void run(() => deleteIntegration(base, i.id));
-                            }}
-                          >
-                            Delete
-                          </Button>
+                      {!server &&
+                        (confirming === i.id ? (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              disabled={busy}
+                              onClick={() => {
+                                setConfirming(null);
+                                void run(() => deleteIntegration(base, i.id));
+                              }}
+                            >
+                              Delete
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setConfirming(null);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                            <span className="self-center text-xs text-text-muted">
+                              Choices that use it stop working.
+                            </span>
+                          </>
+                        ) : (
                           <Button
                             type="button"
                             size="sm"
                             variant="ghost"
                             onClick={() => {
-                              setConfirming(null);
+                              setConfirming(i.id);
                             }}
                           >
-                            Cancel
+                            Delete
                           </Button>
-                          <span className="self-center text-xs text-text-muted">
-                            Choices that use it stop working.
-                          </span>
-                        </>
-                      ) : (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setConfirming(i.id);
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      )}
+                        ))}
                     </div>
                   )}
                   {editing === i.id && (

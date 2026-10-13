@@ -31,12 +31,16 @@ function AbilityRow({
   choice,
   integrations,
   refresh,
+  notice,
+  onNotice,
 }: {
   readonly target: ChoiceTarget;
   readonly ability: Ability;
   readonly choice: Choice | undefined;
   readonly integrations: readonly Pickable[];
   readonly refresh: () => Promise<unknown>;
+  readonly notice: string | undefined;
+  readonly onNotice: (text: string) => void;
 }) {
   const [integrationId, setIntegrationId] = useState(choice?.integrationId ?? '');
   const [model, setModel] = useState(choice?.model ?? '');
@@ -50,6 +54,8 @@ function AbilityRow({
     void run(async () => {
       if (integrationId === '') await clearChoice(target, ability.id);
       else await putChoice(target, { ability: ability.id, integrationId, model, locked });
+    }).then((ok) => {
+      if (ok) onNotice(integrationId === '' ? 'Cleared.' : 'Saved.');
     });
   };
 
@@ -109,6 +115,11 @@ function AbilityRow({
         </Button>
       </div>
       <Message message={message} />
+      {notice !== undefined && message === null && (
+        <p role="status" className="text-sm text-text">
+          {notice}
+        </p>
+      )}
     </li>
   );
 }
@@ -154,6 +165,8 @@ export function AbilityChoices({
     queryFn: () => getOptions(target.kind === 'project' ? target.projectId : ''),
     enabled: target.kind === 'project',
   });
+  // Kept here, not in the row: a save remounts the row (see its key).
+  const [notices, setNotices] = useState<Record<string, string>>({});
   const refresh = () => queryClient.invalidateQueries({ queryKey });
   const scopeProject = target.kind === 'org' ? null : target.projectId;
   const failure = abilities.error ?? choices.error;
@@ -171,7 +184,7 @@ export function AbilityChoices({
           {orgAdminMessage(failure)}
         </p>
       ) : abilities.data === undefined || choices.data === undefined ? (
-        <p className="text-sm text-text-subtle">Loading�</p>
+        <p className="text-sm text-text-subtle">Loading…</p>
       ) : (
         <>
           {options.data !== undefined && <OrgLocks options={options.data} />}
@@ -189,6 +202,10 @@ export function AbilityChoices({
                   choice={choice}
                   integrations={integrations}
                   refresh={refresh}
+                  notice={notices[a.id]}
+                  onNotice={(text) => {
+                    setNotices((n) => ({ ...n, [a.id]: text }));
+                  }}
                 />
               );
             })}
